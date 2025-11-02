@@ -1,0 +1,277 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ============================================================================
+    // EVENTS (Calendar)
+    // ============================================================================
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.createdBy == request.auth.uid);
+    }
+
+    // ============================================================================
+    // AUDIT TRAILS
+    // ============================================================================
+    match /auditTrails/{auditId} {
+      // Readable by authenticated users (used in Right Info Panel)
+      allow read: if isAuthenticated();
+      // Create-only endpoint; no updates or deletes by regular users
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Helper function to check if user is administrator
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdministrator == true;
+    }
+
+    // Helper function to get user's profile ID
+    function getUserProfileId() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null && userDoc.data != null ? userDoc.data.profileId : null;
+    }
+
+    // Helper function to get user's profile
+    function getUserProfile() {
+      let profileId = getUserProfileId();
+      return profileId != null ? get(/databases/$(database)/documents/personProfiles/$(profileId)) : null;
+    }
+
+    // Helper function to check if user can view a project
+    // Simplified visibility check - allows all authenticated users to see projects
+    function canViewProject(projectData) {
+      return isAuthenticated();
+    }
+
+    // ============================================================================
+    // USERS COLLECTION
+    // ============================================================================
+    match /users/{userId} {
+      // All authenticated users can read all user profiles (for collaboration)
+      allow read: if isAuthenticated();
+      
+      // Users can update their own profile (limited fields)
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // User creation handled by Auth triggers
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // PERSON PROFILES COLLECTION
+    // ============================================================================
+    match /personProfiles/{profileId} {
+      // All authenticated users can read all profiles (for network building)
+      allow read: if isAuthenticated();
+      
+      // Users can create their own profile
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own profile, admins can update any
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+      
+      // Only admins can delete profiles
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // ORGANISATIONS (Shared Reference Data)
+    // ============================================================================
+    match /organisations/{orgId} {
+      // All authenticated users can read organisations
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create an organisation
+      allow create: if isAuthenticated();
+      
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+      
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // INSTITUTES (Shared Reference Data)
+    // ============================================================================
+    match /institutes/{instituteId} {
+      // All authenticated users can read institutes
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create an institute
+      allow create: if isAuthenticated();
+      
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+      
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // LABS (Shared Reference Data)
+    // ============================================================================
+    match /labs/{labId} {
+      // All authenticated users can read labs
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create a lab
+      allow create: if isAuthenticated();
+      
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+      
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // FUNDERS (Shared Reference Data)
+    // ============================================================================
+    match /funders/{funderId} {
+      // All authenticated users can read funders
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create a funder
+      allow create: if isAuthenticated();
+      
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || 
+        isAdmin()
+      );
+      
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // PROJECTS COLLECTION
+    // ============================================================================
+    match /projects/{projectId} {
+      // Users can read projects based on visibility settings
+      allow read: if isAuthenticated() && canViewProject(resource.data);
+      
+      // Any authenticated user can create a project
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      
+      // Creator, PI, or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        resource.data.principalInvestigatorId == getUserProfileId() ||
+        isAdmin()
+      );
+      
+      // Creator, PI, or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        resource.data.principalInvestigatorId == getUserProfileId() ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // WORKPACKAGES COLLECTION
+    // ============================================================================
+    match /workpackages/{workpackageId} {
+      // Users can read workpackages if they can see the associated project
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create a workpackage
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // ORDERS COLLECTION
+    // ============================================================================
+    match /orders/{orderId} {
+      // All authenticated users can read orders
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create an order
+      allow create: if isAuthenticated();
+      
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // INVENTORY COLLECTION
+    // ============================================================================
+    match /inventory/{itemId} {
+      // All authenticated users can read inventory
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create inventory items
+      allow create: if isAuthenticated();
+      
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // DEFAULT DENY (catch-all)
+    // ============================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

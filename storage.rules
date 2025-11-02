@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Project files - only project members can access
+    match /projects/{projectId}/{allPaths=**} {
+      // Allow read if user is project member
+      allow read: if isAuthenticated() && 
+        firestore.exists(/databases/(default)/documents/memberships/$(projectId + '_' + request.auth.uid));
+      // Allow write if user is project Owner/PI
+      allow write: if isAuthenticated() && 
+        (firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['Owner', 'PI']) ||
+         firestore.exists(/databases/(default)/documents/memberships/$(projectId + '_' + request.auth.uid)));
+    }
+
+    // Safety vault - restricted to SafetyOfficer, Owner, PI
+    match /safety/{allPaths=**} {
+      allow read: if isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['SafetyOfficer', 'Owner', 'PI']);
+      allow write: if isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['SafetyOfficer']);
+    }
+
+    // Templates - all authenticated users can read, only Owner/PI can write
+    match /templates/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['Owner', 'PI']);
+    }
+
+    // User avatars - users can read/write their own
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // General documents - based on document metadata
+    match /documents/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['Owner', 'PI', 'Member']);
+    }
+  }
+}
+

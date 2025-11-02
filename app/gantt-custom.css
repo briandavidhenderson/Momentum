@@ -1,0 +1,168 @@
+/* Custom Gantt Chart Styling - Light Mode */
+
+/* Override default table styles */
+.gantt-container {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Style the grid to be less table-like */
+._3jLuT {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  background: hsl(var(--surface-2)) !important;
+}
+
+/* Task list styling */
+._2vQhZ {
+  background: hsl(var(--surface-2)) !important;
+  border-right: 2px solid hsl(var(--border)) !important;
+  border-radius: 12px 0 0 12px !important;
+}
+
+/* Task list rows */
+._1xfOj {
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  transition: background-color 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+  color: hsl(var(--foreground)) !important;
+}
+
+._1xfOj:hover {
+  background-color: hsl(var(--accent)) !important;
+}
+
+/* Project rows - bold and prominent */
+._1xfOj[style*="font-weight"] {
+  background: hsl(var(--surface-2)) !important;
+  font-weight: 600 !important;
+  border-left: 4px solid hsl(var(--brand-500)) !important;
+  padding-left: 8px !important;
+  color: hsl(var(--brand-700)) !important;
+}
+
+/* Task rows - indented */
+._1xfOj:not([style*="font-weight"]) {
+  padding-left: 32px !important;
+  background-color: hsl(var(--secondary)) !important;
+  border-left: 2px solid hsl(var(--border)) !important;
+  margin-left: 4px;
+}
+
+/* Calendar header */
+._1cK-_ {
+  background: hsl(var(--brand-500)) !important;
+  color: white !important;
+  border-radius: 0 12px 0 0 !important;
+  font-weight: 600 !important;
+  padding: 12px 0 !important;
+}
+
+/* Calendar grid */
+._2AmPk {
+  background-color: hsl(var(--gray-50)) !important;
+  border-radius: 0 0 12px 0 !important;
+}
+
+/* Vertical grid lines */
+._2jDki {
+  border-left: 1px solid hsl(var(--border)) !important;
+}
+
+/* Horizontal grid lines */
+._2gUUo {
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+/* Task bars - rounded with text inside */
+._3lLk3 {
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  background-clip: padding-box !important;
+  opacity: 0.95 !important;
+}
+
+/* Add text inside task bars */
+._3lLk3 text {
+  fill: white !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 2px 6px rgba(0, 0, 0, 0.6) !important;
+  paint-order: stroke fill !important;
+  stroke: rgba(0, 0, 0, 0.4) !important;
+  stroke-width: 0.5px !important;
+}
+
+/* Project bars - more prominent */
+._36T48 {
+  border-radius: 10px !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5) !important;
+  height: 32px !important;
+  opacity: 0.95 !important;
+}
+
+._36T48 text {
+  fill: white !important;
+  font-weight: 800 !important;
+  font-size: 14px !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 2px 8px rgba(0, 0, 0, 0.7) !important;
+  paint-order: stroke fill !important;
+  stroke: rgba(0, 0, 0, 0.5) !important;
+  stroke-width: 0.5px !important;
+}
+
+/* Progress bars */
+._1azpu {
+  border-radius: 6px !important;
+}
+
+/* Today line - vibrant */
+._16l16 {
+  stroke: hsl(var(--danger-500)) !important;
+  stroke-width: 3 !important;
+  stroke-dasharray: 6 4 !important;
+}
+
+/* Remove harsh borders */
+._3jLuT * {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Smooth scrollbar */
+._3jLuT::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+._3jLuT::-webkit-scrollbar-track {
+  background: hsl(var(--secondary));
+  border-radius: 10px;
+}
+
+._3jLuT::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border-radius: 10px;
+}
+
+._3jLuT::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground));
+}
+
+/* Task text */
+._39Qch {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Project text */
+._2Hn12 {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--brand-700)) !important;
+}
+
+/* Add spacing between projects and their tasks */
+._1xfOj._3yL8x {
+  margin-top: 8px !important;
+}
+
