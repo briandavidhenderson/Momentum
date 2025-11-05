@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { User, Lock, Mail, LogIn, UserPlus } from "lucide-react"
 import { User as UserType } from "@/lib/types"
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { createUser } from "@/lib/firestoreService"
 
@@ -21,6 +21,7 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [verificationSent, setVerificationSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,24 +47,36 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
         // Sign in with Firebase Auth
         const userCredential = await signInWithEmailAndPassword(auth, email, password)
         const user = userCredential.user
-        
+
+        // Check if email is verified
+        if (!user.emailVerified) {
+          setError(
+            "Please verify your email before signing in. Check your inbox for the verification link. " +
+            "If you didn't receive it, try signing up again to resend the verification email."
+          )
+          return
+        }
+
         // Call onLogin with uid, email, and displayName (or email as fallback)
         onLogin(user.uid, user.email || email, user.displayName || email)
       } else {
         // Sign up with Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, email, password)
         const user = userCredential.user
-        
+
         // Update Firebase Auth profile with display name
         await updateProfile(user, {
           displayName: fullName
         })
-        
+
+        // Send verification email
+        await sendEmailVerification(user)
+        setVerificationSent(true)
+
         // Create user document in Firestore
         await createUser(user.uid, email, fullName)
-        
-        // Call onSignup
-        onSignup(user.uid, email, fullName)
+
+        // Note: Don't call onSignup yet - wait for email verification
       }
     } catch (error: any) {
       console.error("Authentication error:", error)
@@ -104,7 +117,35 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {verificationSent && (
+            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md text-green-700 text-sm space-y-2">
+              <p className="font-semibold">✓ Verification Email Sent!</p>
+              <p>
+                We&apos;ve sent a verification link to <strong>{email}</strong>.
+                Please check your inbox and click the link to verify your email address.
+              </p>
+              <p className="text-xs">
+                After verifying, you can sign in with your credentials.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => {
+                  setVerificationSent(false)
+                  setIsLogin(true)
+                  setEmail("")
+                  setPassword("")
+                }}
+              >
+                Go to Sign In
+              </Button>
+            </div>
+          )}
+
+          {!verificationSent && (
+            <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
                 <Label htmlFor="fullName" className="flex items-center gap-2 mb-2">
@@ -173,24 +214,27 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
               )}
             </Button>
           </form>
+          )}
 
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLogin(!isLogin)
-                setError("")
-                setFullName("")
-                setEmail("")
-                setPassword("")
-              }}
-              className="text-sm text-brand-500 hover:text-brand-600 font-medium"
-            >
-              {isLogin
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Sign in"}
-            </button>
-          </div>
+          {!verificationSent && (
+            <div className="mt-6 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogin(!isLogin)
+                  setError("")
+                  setFullName("")
+                  setEmail("")
+                  setPassword("")
+                }}
+                className="text-sm text-brand-500 hover:text-brand-600 font-medium"
+              >
+                {isLogin
+                  ? "Don't have an account? Sign up"
+                  : "Already have an account? Sign in"}
+              </button>
+            </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-4">

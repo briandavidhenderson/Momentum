@@ -6,15 +6,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ProfileProject, FUNDING_ACCOUNTS, ProjectVisibility } from "@/lib/types"
-import { Building2, FolderKanban } from "lucide-react"
+import { ProfileProject, FUNDING_ACCOUNTS, ProjectVisibility, Funder } from "@/lib/types"
+import { Building2, FolderKanban, Plus } from "lucide-react"
+import { subscribeToFunders } from "@/lib/firestoreService"
+import { FunderCreationDialog } from "./FunderCreationDialog"
 
 interface ProjectCreationDialogProps {
   open: boolean
   onClose: () => void
   onCreateRegular: () => void
-  onCreateMaster: (masterProject: ProfileProject) => void
+  onCreateMaster: (masterProject: ProfileProject & { funderId?: string }) => void
   currentUserProfileId: string | null
+  currentUserId: string
+  organisationId?: string
 }
 
 export function ProjectCreationDialog({
@@ -23,6 +27,8 @@ export function ProjectCreationDialog({
   onCreateRegular,
   onCreateMaster,
   currentUserProfileId,
+  currentUserId,
+  organisationId,
 }: ProjectCreationDialogProps) {
   const [step, setStep] = useState<"choose" | "master-details">("choose")
   const [formData, setFormData] = useState<Partial<ProfileProject>>({
@@ -37,6 +43,12 @@ export function ProjectCreationDialog({
     fundedBy: [],
     visibility: "lab",
   })
+
+  // P0-1: Funder selection state
+  const [funders, setFunders] = useState<Funder[]>([])
+  const [selectedFunderId, setSelectedFunderId] = useState<string | null>(null)
+  const [showFunderDialog, setShowFunderDialog] = useState(false)
+  const [funderError, setFunderError] = useState<string | null>(null)
 
   // Reset when dialog opens
   useEffect(() => {
@@ -54,15 +66,54 @@ export function ProjectCreationDialog({
         fundedBy: [],
         visibility: "lab",
       })
+      setSelectedFunderId(null)
+      setFunderError(null)
     }
   }, [open])
 
+  // P0-1: Load funders when master project step is reached
+  useEffect(() => {
+    if (step === "master-details" && open) {
+      const unsubscribe = subscribeToFunders(
+        (loadedFunders) => {
+          setFunders(loadedFunders)
+
+          // P0-1: Auto-prompt if no funders exist
+          if (loadedFunders.length === 0 && !showFunderDialog) {
+            setShowFunderDialog(true)
+          }
+        },
+        organisationId
+      )
+
+      return () => unsubscribe()
+    }
+  }, [step, open, organisationId, showFunderDialog])
+
+  // P0-1: Handler for funder creation
+  const handleFunderCreated = (funderId: string) => {
+    setSelectedFunderId(funderId)
+    setFunderError(null)
+    setShowFunderDialog(false)
+  }
+
   const handleCreateMasterProject = () => {
+    // P0-1: Validate funder selection
+    if (!selectedFunderId) {
+      setFunderError("Please select a funder for this master project")
+      return
+    }
+
     if (!formData.name?.trim()) {
       alert("Please enter a project name")
       return
     }
-    onCreateMaster(formData as ProfileProject)
+
+    // P0-2: Pass funderId with project data
+    onCreateMaster({
+      ...(formData as ProfileProject),
+      funderId: selectedFunderId,
+    })
     onClose()
   }
 
@@ -148,6 +199,51 @@ export function ProjectCreationDialog({
                 placeholder="e.g., NSF-2024-12345"
                 className="mt-1"
               />
+            </div>
+
+            {/* P0-1: Funder Selection */}
+            <div>
+              <Label htmlFor="funder">
+                Funder <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2 mt-1">
+                <select
+                  id="funder"
+                  value={selectedFunderId || ""}
+                  onChange={(e) => {
+                    setSelectedFunderId(e.target.value || null)
+                    setFunderError(null)
+                  }}
+                  className={`flex-1 px-3 py-2 border rounded-lg bg-background ${
+                    funderError ? "border-red-500" : "border-border"
+                  }`}
+                >
+                  <option value="">Select a funder...</option>
+                  {funders.map((funder) => (
+                    <option key={funder.id} value={funder.id}>
+                      {funder.name}
+                      {funder.programme ? ` (${funder.programme})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowFunderDialog(true)}
+                  className="shrink-0"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New Funder
+                </Button>
+              </div>
+              {funderError && (
+                <p className="text-red-500 text-sm mt-1">{funderError}</p>
+              )}
+              {funders.length === 0 && !showFunderDialog && (
+                <p className="text-amber-600 text-sm mt-1">
+                  No funders available. Click &ldquo;New Funder&rdquo; to create one.
+                </p>
+              )}
             </div>
 
             <div>
@@ -258,6 +354,15 @@ export function ProjectCreationDialog({
           </div>
         )}
       </DialogContent>
+
+      {/* P0-1: Funder Creation Dialog */}
+      <FunderCreationDialog
+        isOpen={showFunderDialog}
+        onClose={() => setShowFunderDialog(false)}
+        onFunderCreated={handleFunderCreated}
+        currentUserId={currentUserId}
+        organisationId={organisationId}
+      />
     </Dialog>
   )
 }

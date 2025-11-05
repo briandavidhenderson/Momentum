@@ -15,9 +15,28 @@ import {
   addDoc,
   writeBatch,
   serverTimestamp,
+  runTransaction,
 } from "firebase/firestore"
 import { db } from "./firebase"
-import { PersonProfile, ProfileProject, Project, Workpackage, Order, InventoryItem, CalendarEvent, AuditTrail } from "./types"
+import {
+  PersonProfile,
+  ProfileProject,
+  Project,
+  Workpackage,
+  Order,
+  InventoryItem,
+  CalendarEvent,
+  AuditTrail,
+  LabPoll,
+  EquipmentDevice,
+  ELNExperiment,
+  Organisation,
+  Institute,
+  Lab,
+  Funder,
+  FundingAccount,
+  MasterProject,
+} from "./types"
 
 // ============================================================================
 // USER MANAGEMENT
@@ -61,6 +80,48 @@ export async function updateUser(uid: string, updates: Partial<FirestoreUser>): 
 // ============================================================================
 
 export async function createProfile(userId: string, profileData: Omit<PersonProfile, 'id'>): Promise<string> {
+  // Validate required fields
+  if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+    throw new Error("userId is required and must be a non-empty string")
+  }
+  
+  if (!profileData.firstName || typeof profileData.firstName !== 'string' || profileData.firstName.trim() === '') {
+    throw new Error("firstName is required")
+  }
+  
+  if (!profileData.lastName || typeof profileData.lastName !== 'string' || profileData.lastName.trim() === '') {
+    throw new Error("lastName is required")
+  }
+  
+  if (!profileData.email || typeof profileData.email !== 'string' || profileData.email.trim() === '') {
+    throw new Error("email is required")
+  }
+  
+  if (!profileData.organisation || typeof profileData.organisation !== 'string' || profileData.organisation.trim() === '') {
+    throw new Error("organisation is required")
+  }
+  
+  if (!profileData.institute || typeof profileData.institute !== 'string' || profileData.institute.trim() === '') {
+    throw new Error("institute is required")
+  }
+  
+  if (!profileData.lab || typeof profileData.lab !== 'string' || profileData.lab.trim() === '') {
+    throw new Error("lab is required")
+  }
+  
+  // Validate array fields
+  if (profileData.researchInterests && !Array.isArray(profileData.researchInterests)) {
+    throw new Error("researchInterests must be an array")
+  }
+  
+  if (profileData.qualifications && !Array.isArray(profileData.qualifications)) {
+    throw new Error("qualifications must be an array")
+  }
+  
+  if (profileData.fundedBy && !Array.isArray(profileData.fundedBy)) {
+    throw new Error("fundedBy must be an array")
+  }
+  
   try {
     const profileRef = doc(collection(db, "personProfiles"))
     const profileId = profileRef.id
@@ -82,9 +143,13 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
     console.log("Updating user document:", userId)
     
     await setDoc(userRef, { profileId }, { merge: true })
-    
+
     console.log("User document updated successfully")
-    
+
+    // Note: Lab membership is now tracked via PersonProfile.labId
+    // No need to update lab.members array (removed in new Lab interface)
+    // Lab member count will be calculated by querying profiles with matching labId
+
     return profileId
   } catch (error: any) {
     console.error("Error in createProfile:", error)
@@ -94,18 +159,85 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   }
 }
 
+/**
+ * Retry helper with exponential backoff
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 100
+): Promise<T | null> {
+  let delay = initialDelay
+  let lastError: any = null
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error: any) {
+      lastError = error
+      // Don't retry on permission errors or not-found errors
+      if (error?.code === 'permission-denied' || error?.code === 'not-found') {
+        throw error
+      }
+      // Retry on transient errors (network issues, etc.)
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay))
+        delay *= 2
+      }
+    }
+  }
+  
+  throw lastError
+}
+
 export async function getProfile(profileId: string): Promise<PersonProfile | null> {
-  const profileRef = doc(db, "personProfiles", profileId)
-  const profileSnap = await getDoc(profileRef)
-  if (!profileSnap.exists()) return null
-  return profileSnap.data() as PersonProfile
+  if (!profileId) {
+    console.warn("getProfile called with undefined or empty profileId")
+    return null
+  }
+  
+  try {
+    return await retryWithBackoff(async () => {
+      const profileRef = doc(db, "personProfiles", profileId)
+      const profileSnap = await getDoc(profileRef)
+      if (!profileSnap.exists()) {
+        console.log("Profile document does not exist:", profileId)
+        return null
+      }
+      return profileSnap.data() as PersonProfile
+    })
+  } catch (error: any) {
+    console.error("Error fetching profile by profileId:", error)
+    // Log the specific error code to help debug permission issues
+    if (error?.code === 'permission-denied') {
+      console.warn("Permission denied when fetching profile - this should not happen for own profile")
+    }
+    return null
+  }
 }
 
 export async function getProfileByUserId(userId: string): Promise<PersonProfile | null> {
-  const q = query(collection(db, "personProfiles"), where("userId", "==", userId))
-  const querySnapshot = await getDocs(q)
-  if (querySnapshot.empty) return null
-  return querySnapshot.docs[0].data() as PersonProfile
+  if (!userId) {
+    console.warn("getProfileByUserId called with undefined or empty userId")
+    return null
+  }
+  
+  try {
+    return await retryWithBackoff(async () => {
+      const q = query(collection(db, "personProfiles"), where("userId", "==", userId))
+      const querySnapshot = await getDocs(q)
+      if (querySnapshot.empty) return null
+      return querySnapshot.docs[0].data() as PersonProfile
+    })
+  } catch (error: any) {
+    console.error("Error fetching profile by userId:", error)
+    // If permission denied, it might be because user doesn't have a lab yet
+    // but they should still be able to read their own profile (handled by Firestore rules)
+    if (error?.code === 'permission-denied') {
+      console.warn("Permission denied when fetching profile by userId - this should not happen for own profile")
+    }
+    return null
+  }
 }
 
 export async function getAllProfiles(): Promise<PersonProfile[]> {
@@ -113,62 +245,146 @@ export async function getAllProfiles(): Promise<PersonProfile[]> {
   return querySnapshot.docs.map(doc => doc.data() as PersonProfile)
 }
 
+/**
+ * Helper function to find a user's profile by trying multiple methods
+ * Tries profileId first (from user document), then userId query
+ * Also repairs user/profile sync if there's a mismatch
+ * Returns null if no profile is found
+ */
+export async function findUserProfile(userId: string, profileId: string | null | undefined): Promise<PersonProfile | null> {
+  if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+    console.warn("findUserProfile called with invalid userId")
+    return null
+  }
+  
+  let profile: PersonProfile | null = null
+  
+  // First, try to get profile by profileId if it exists in user document
+  if (profileId) {
+    try {
+      profile = await getProfile(profileId)
+      if (profile) {
+        console.log("✓ Found profile by profileId:", profile.id)
+        // Verify the profile's userId matches - repair if mismatch
+        if (profile.userId !== userId) {
+          console.warn(`Profile userId mismatch: profile.userId=${profile.userId}, expected=${userId}. Repairing...`)
+          await repairUserProfileSync(userId, profile.id)
+        }
+        return profile
+      } else {
+        console.log("✗ Profile not found by profileId:", profileId)
+      }
+    } catch (error) {
+      console.error("Error fetching profile by profileId:", error)
+    }
+  } else {
+    console.log("No profileId in user document, trying userId lookup")
+  }
+  
+  // If not found by profileId, try by userId
+  if (!profile) {
+    try {
+      profile = await getProfileByUserId(userId)
+      if (profile) {
+        console.log("✓ Found profile by userId:", profile.id)
+        // Repair: Update user document with profileId if it's missing or incorrect
+        if (!profileId || profileId !== profile.id) {
+          console.log(`Repairing user/profile sync: user.profileId=${profileId}, actual=${profile.id}`)
+          await repairUserProfileSync(userId, profile.id)
+        }
+        return profile
+      } else {
+        console.log("✗ Profile not found by userId:", userId)
+      }
+    } catch (error) {
+      console.error("Error fetching profile by userId:", error)
+    }
+  }
+  
+  return profile
+}
+
+/**
+ * Repairs the sync between user and profile documents
+ * Updates the user document's profileId to match the actual profile
+ */
+async function repairUserProfileSync(userId: string, profileId: string): Promise<void> {
+  try {
+    const userRef = doc(db, "users", userId)
+    await setDoc(userRef, { profileId }, { merge: true })
+    console.log(`✓ Repaired user/profile sync: user ${userId} -> profile ${profileId}`)
+  } catch (error) {
+    console.error("Error repairing user/profile sync:", error)
+    // Don't throw - this is a repair operation, not critical path
+  }
+}
+
 export async function updateProfile(profileId: string, updates: Partial<PersonProfile>): Promise<void> {
   const profileRef = doc(db, "personProfiles", profileId)
+
+  // Note: Lab membership is now tracked via PersonProfile.labId
+  // No need to update lab.members array (removed in new Lab interface)
+  // Lab member count will be calculated by querying profiles with matching labId
+
+  // Update the profile
   await updateDoc(profileRef, updates)
 }
 
 export function subscribeToProfiles(callback: (profiles: PersonProfile[]) => void): Unsubscribe {
-  const q = collection(db, "personProfiles")
-  return onSnapshot(q, (snapshot) => {
-    const profiles = snapshot.docs.map(doc => doc.data() as PersonProfile)
-    callback(profiles)
-  })
+  try {
+    const q = collection(db, "personProfiles")
+    return onSnapshot(q, 
+      (snapshot) => {
+        const profiles = snapshot.docs.map(doc => {
+          const data = doc.data()
+          // Validate required fields
+          if (!data.firstName || !data.lastName) {
+            console.warn(`Profile ${doc.id} is missing firstName or lastName:`, data)
+          }
+          return data as PersonProfile
+        })
+        console.log(`subscribeToProfiles: Loaded ${profiles.length} profiles`)
+        callback(profiles)
+      },
+      (error) => {
+        console.error("Error in subscribeToProfiles:", error)
+        console.error("Error code:", error?.code)
+        console.error("Error message:", error?.message)
+        // Don't throw - just log the error and return empty array
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up profiles subscription:", error)
+    // Return a no-op unsubscribe function that calls callback with empty array
+    callback([])
+    return () => {}
+  }
 }
 
 // ============================================================================
 // ORGANISATIONS, INSTITUTES, LABS (Shared Reference Data)
 // ============================================================================
 
-export interface Organisation {
-  id: string
-  name: string
-  createdBy: string
-  createdAt: Timestamp
-  institutes: string[]
-}
+// Organisation, Institute, Lab interfaces are now imported from ./types
+// These provide comprehensive organizational hierarchy structure
 
-export interface Institute {
-  id: string
-  name: string
-  organisationId: string
-  createdBy: string
-  createdAt: Timestamp
-  labs: string[]
-}
-
-export interface Lab {
-  id: string
-  name: string
-  instituteId: string
-  organisationId: string
-  createdBy: string
-  createdAt: Timestamp
-  members: string[]
-}
-
-export async function createOrganisation(name: string, userId: string): Promise<string> {
+/**
+ * Creates a new organisation (university, research institute, etc.)
+ * @returns The ID of the newly created organisation
+ */
+export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'createdAt'>): Promise<string> {
   const orgRef = doc(collection(db, "organisations"))
   const orgId = orgRef.id
-  
+
   await setDoc(orgRef, {
+    ...orgData,
     id: orgId,
-    name,
-    createdBy: userId,
-    createdAt: serverTimestamp(),
-    institutes: [],
+    createdAt: new Date().toISOString(),
+    memberCount: 0,
+    instituteCount: 0,
   })
-  
+
   return orgId
 }
 
@@ -184,29 +400,32 @@ export function subscribeToOrganisations(callback: (orgs: Organisation[]) => voi
   })
 }
 
-export async function createInstitute(name: string, orgId: string, userId: string): Promise<string> {
+/**
+ * Creates a new institute (department, school, faculty)
+ * @returns The ID of the newly created institute
+ */
+export async function createInstitute(instituteData: Omit<Institute, 'id' | 'createdAt'>): Promise<string> {
   const instituteRef = doc(collection(db, "institutes"))
   const instituteId = instituteRef.id
-  
+
   await setDoc(instituteRef, {
+    ...instituteData,
     id: instituteId,
-    name,
-    organisationId: orgId,
-    createdBy: userId,
-    createdAt: serverTimestamp(),
-    labs: [],
+    createdAt: new Date().toISOString(),
+    memberCount: 0,
+    labCount: 0,
   })
-  
-  // Update organisation's institutes array
-  const orgRef = doc(db, "organisations", orgId)
+
+  // Update organisation's institute count
+  const orgRef = doc(db, "organisations", instituteData.organisationId)
   const orgSnap = await getDoc(orgRef)
   if (orgSnap.exists()) {
     const orgData = orgSnap.data() as Organisation
     await updateDoc(orgRef, {
-      institutes: [...(orgData.institutes || []), instituteId],
+      instituteCount: (orgData.instituteCount || 0) + 1,
     })
   }
-  
+
   return instituteId
 }
 
@@ -232,30 +451,32 @@ export function subscribeToInstitutes(orgId: string | null, callback: (institute
   })
 }
 
-export async function createLab(name: string, instituteId: string, organisationId: string, userId: string): Promise<string> {
+/**
+ * Creates a new lab (research group/laboratory)
+ * @returns The ID of the newly created lab
+ */
+export async function createLab(labData: Omit<Lab, 'id' | 'createdAt'>): Promise<string> {
   const labRef = doc(collection(db, "labs"))
   const labId = labRef.id
-  
+
   await setDoc(labRef, {
+    ...labData,
     id: labId,
-    name,
-    instituteId,
-    organisationId,
-    createdBy: userId,
-    createdAt: serverTimestamp(),
-    members: [],
+    createdAt: new Date().toISOString(),
+    memberCount: 0,
+    activeProjectCount: 0,
   })
-  
-  // Update institute's labs array
-  const instituteRef = doc(db, "institutes", instituteId)
+
+  // Update institute's lab count
+  const instituteRef = doc(db, "institutes", labData.instituteId)
   const instituteSnap = await getDoc(instituteRef)
   if (instituteSnap.exists()) {
     const instituteData = instituteSnap.data() as Institute
     await updateDoc(instituteRef, {
-      labs: [...(instituteData.labs || []), labId],
+      labCount: (instituteData.labCount || 0) + 1,
     })
   }
-  
+
   return labId
 }
 
@@ -285,42 +506,297 @@ export function subscribeToLabs(instituteId: string | null, callback: (labs: Lab
 // FUNDERS (Shared Reference Data)
 // ============================================================================
 
-export interface Funder {
-  id: string
-  name: string
-  createdBy: string
-  createdAt: Timestamp
-}
+// Funder interface is now imported from ./types
 
-export async function createFunder(name: string, userId: string): Promise<string> {
+/**
+ * Creates a new funder (funding body/organization)
+ * @returns The ID of the newly created funder
+ */
+/**
+ * P0-1: Create a new funder
+ * Handles Date to Timestamp conversion for Firestore
+ */
+export async function createFunder(funderData: Omit<Funder, 'id' | 'createdAt'>): Promise<string> {
   const funderRef = doc(collection(db, "funders"))
   const funderId = funderRef.id
-  
-  await setDoc(funderRef, {
+
+  const dataToSave: any = {
+    ...funderData,
     id: funderId,
-    name,
-    createdBy: userId,
-    createdAt: serverTimestamp(),
-  })
-  
+    createdAt: new Date().toISOString(),
+  }
+
+  // Convert Date fields to Timestamps for Firestore
+  if (funderData.startDate) {
+    dataToSave.startDate = Timestamp.fromDate(funderData.startDate)
+  }
+  if (funderData.endDate) {
+    dataToSave.endDate = Timestamp.fromDate(funderData.endDate)
+  }
+
+  await setDoc(funderRef, dataToSave)
+
   return funderId
 }
 
-export async function getFunders(): Promise<Funder[]> {
-  const querySnapshot = await getDocs(collection(db, "funders"))
-  return querySnapshot.docs.map(doc => doc.data() as Funder)
+/**
+ * P0-1: Get all funders, optionally filtered by organisation
+ */
+export async function getFunders(orgId?: string): Promise<Funder[]> {
+  const fundersRef = collection(db, "funders")
+
+  let q = query(fundersRef)
+  if (orgId) {
+    q = query(fundersRef, where("organisationId", "==", orgId))
+  }
+
+  const querySnapshot = await getDocs(q)
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data()
+    // Convert Timestamps back to Dates
+    return {
+      ...data,
+      startDate: data.startDate?.toDate(),
+      endDate: data.endDate?.toDate(),
+    } as Funder
+  })
 }
 
-export function subscribeToFunders(callback: (funders: Funder[]) => void): Unsubscribe {
-  return onSnapshot(collection(db, "funders"), (snapshot) => {
-    const funders = snapshot.docs.map(doc => doc.data() as Funder)
+/**
+ * P0-1: Subscribe to funders with real-time updates
+ */
+export function subscribeToFunders(callback: (funders: Funder[]) => void, orgId?: string): Unsubscribe {
+  const fundersRef = collection(db, "funders")
+
+  let q = query(fundersRef)
+  if (orgId) {
+    q = query(fundersRef, where("organisationId", "==", orgId))
+  }
+
+  return onSnapshot(q, (snapshot) => {
+    const funders = snapshot.docs.map(doc => {
+      const data = doc.data()
+      return {
+        ...data,
+        startDate: data.startDate?.toDate(),
+        endDate: data.endDate?.toDate(),
+      } as Funder
+    })
     callback(funders)
   })
 }
 
 // ============================================================================
-// PROJECT MANAGEMENT
+// FUNDING ACCOUNTS
 // ============================================================================
+
+/**
+ * Creates a new funding account linked to a master project
+ * @returns The ID of the newly created account
+ */
+export async function createFundingAccount(accountData: Omit<FundingAccount, 'id' | 'createdAt'>): Promise<string> {
+  const accountRef = doc(collection(db, "accounts"))
+  const accountId = accountRef.id
+
+  await setDoc(accountRef, {
+    ...accountData,
+    id: accountId,
+    createdAt: new Date().toISOString(),
+    spentAmount: 0,
+    committedAmount: 0,
+    remainingBudget: accountData.totalBudget || 0,
+  })
+
+  return accountId
+}
+
+/**
+ * Gets all funding accounts, optionally filtered by project or funder
+ */
+export async function getFundingAccounts(filters?: {
+  masterProjectId?: string
+  funderId?: string
+}): Promise<FundingAccount[]> {
+  let q = collection(db, "accounts")
+
+  if (filters?.masterProjectId) {
+    q = query(q as any, where("masterProjectId", "==", filters.masterProjectId)) as any
+  }
+  if (filters?.funderId) {
+    q = query(q as any, where("funderId", "==", filters.funderId)) as any
+  }
+
+  const querySnapshot = await getDocs(q)
+  return querySnapshot.docs.map(doc => doc.data() as FundingAccount)
+}
+
+/**
+ * Updates a funding account
+ */
+export async function updateFundingAccount(accountId: string, updates: Partial<FundingAccount>): Promise<void> {
+  const accountRef = doc(db, "accounts", accountId)
+  const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
+  await updateDoc(accountRef, updateData)
+}
+
+/**
+ * Deletes a funding account
+ */
+export async function deleteFundingAccount(accountId: string): Promise<void> {
+  await deleteDoc(doc(db, "accounts", accountId))
+}
+
+/**
+ * Subscribes to funding accounts with optional filters
+ */
+export function subscribeToFundingAccounts(
+  filters: { masterProjectId?: string; funderId?: string } | null,
+  callback: (accounts: FundingAccount[]) => void
+): Unsubscribe {
+  let q = collection(db, "accounts")
+
+  if (filters?.masterProjectId) {
+    q = query(q as any, where("masterProjectId", "==", filters.masterProjectId)) as any
+  }
+  if (filters?.funderId) {
+    q = query(q as any, where("funderId", "==", filters.funderId)) as any
+  }
+
+  return onSnapshot(q, (snapshot) => {
+    const accounts = snapshot.docs.map(doc => doc.data() as FundingAccount)
+    callback(accounts)
+  })
+}
+
+// ============================================================================
+// MASTER PROJECTS
+// ============================================================================
+
+/**
+ * Creates a new master project (major research grant/program)
+ * @returns The ID of the newly created master project
+ */
+export async function createMasterProject(projectData: Omit<MasterProject, 'id' | 'createdAt'>): Promise<string> {
+  const projectRef = doc(collection(db, "masterProjects"))
+  const projectId = projectRef.id
+
+  await setDoc(projectRef, {
+    ...projectData,
+    id: projectId,
+    createdAt: new Date().toISOString(),
+    spentAmount: 0,
+    committedAmount: 0,
+    remainingBudget: projectData.totalBudget || 0,
+    progress: 0,
+    workpackageIds: [],
+  })
+
+  // Update lab's active project count
+  const labRef = doc(db, "labs", projectData.labId)
+  const labSnap = await getDoc(labRef)
+  if (labSnap.exists()) {
+    const labData = labSnap.data() as Lab
+    await updateDoc(labRef, {
+      activeProjectCount: (labData.activeProjectCount || 0) + 1,
+    })
+  }
+
+  return projectId
+}
+
+/**
+ * Gets all master projects, optionally filtered by lab, funder, or person
+ */
+export async function getMasterProjects(filters?: {
+  labId?: string
+  funderId?: string
+  personId?: string  // Returns projects where person is a team member
+}): Promise<MasterProject[]> {
+  let q = collection(db, "masterProjects")
+
+  if (filters?.labId) {
+    q = query(q as any, where("labId", "==", filters.labId)) as any
+  }
+  if (filters?.funderId) {
+    q = query(q as any, where("funderId", "==", filters.funderId)) as any
+  }
+  if (filters?.personId) {
+    // Query for projects where person is in teamMemberIds array
+    q = query(q as any, where("teamMemberIds", "array-contains", filters.personId)) as any
+  }
+
+  const querySnapshot = await getDocs(q)
+  return querySnapshot.docs.map(doc => doc.data() as MasterProject)
+}
+
+/**
+ * Updates a master project
+ */
+export async function updateMasterProject(projectId: string, updates: Partial<MasterProject>): Promise<void> {
+  const projectRef = doc(db, "masterProjects", projectId)
+  const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
+  await updateDoc(projectRef, updateData)
+}
+
+/**
+ * Deletes a master project and all associated data (accounts, workpackages, etc.)
+ */
+export async function deleteMasterProject(projectId: string): Promise<void> {
+  const batch = writeBatch(db)
+
+  // Delete the project
+  const projectRef = doc(db, "masterProjects", projectId)
+  batch.delete(projectRef)
+
+  // Find and delete all associated accounts
+  const accountsQuery = query(collection(db, "accounts"), where("masterProjectId", "==", projectId))
+  const accountsSnapshot = await getDocs(accountsQuery)
+  accountsSnapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref)
+  })
+
+  // Find and delete all associated workpackages
+  const workpackagesQuery = query(collection(db, "workpackages"), where("masterProjectId", "==", projectId))
+  const workpackagesSnapshot = await getDocs(workpackagesQuery)
+  workpackagesSnapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref)
+  })
+
+  // Commit the batch
+  await batch.commit()
+}
+
+/**
+ * Subscribes to master projects with optional filters
+ */
+export function subscribeToMasterProjects(
+  filters: { labId?: string; funderId?: string; personId?: string } | null,
+  callback: (projects: MasterProject[]) => void
+): Unsubscribe {
+  let q = collection(db, "masterProjects")
+
+  if (filters?.labId) {
+    q = query(q as any, where("labId", "==", filters.labId)) as any
+  }
+  if (filters?.funderId) {
+    q = query(q as any, where("funderId", "==", filters.funderId)) as any
+  }
+  if (filters?.personId) {
+    q = query(q as any, where("teamMemberIds", "array-contains", filters.personId)) as any
+  }
+
+  return onSnapshot(q, (snapshot) => {
+    const projects = snapshot.docs.map(doc => doc.data() as MasterProject)
+    callback(projects)
+  })
+}
+
+// ============================================================================
+// PROJECT MANAGEMENT (LEGACY)
+// ============================================================================
+
+// NOTE: The following Project/ProfileProject functions are kept for backward compatibility
+// New code should use MasterProject functions above
 
 export interface FirestoreProject {
   id: string
@@ -336,16 +812,25 @@ export interface FirestoreProject {
   fundedBy?: string[]
   visibility?: string
   createdBy: string
+  labId?: string
   createdAt: Timestamp
 }
 
-export async function createProject(projectData: Omit<Project, 'id'> & { createdBy: string }): Promise<string> {
+export async function createProject(projectData: Omit<Project, 'id'> & { createdBy: string; labId?: string }): Promise<string> {
   const projectRef = doc(collection(db, "projects"))
   const projectId = projectRef.id
+  
+  // Get labId from user's profile if not provided
+  let labId: string | undefined = projectData.labId
+  if (!labId) {
+    const profile = await getProfileByUserId(projectData.createdBy)
+    labId = profile?.lab || undefined
+  }
   
   await setDoc(projectRef, {
     ...projectData,
     id: projectId,
+    labId: labId,
     start: Timestamp.fromDate(projectData.start),
     end: Timestamp.fromDate(projectData.end),
     createdAt: serverTimestamp(),
@@ -389,17 +874,37 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 export function subscribeToProjects(userId: string, callback: (projects: Project[]) => void): Unsubscribe {
-  return onSnapshot(collection(db, "projects"), async (snapshot) => {
-    const projects = snapshot.docs.map(doc => {
-      const data = doc.data() as FirestoreProject
-      return {
-        ...data,
-        start: data.start.toDate(),
-        end: data.end.toDate(),
-      } as Project
-    })
-    callback(projects)
-  })
+  if (!userId) {
+    console.warn("subscribeToProjects called with undefined or empty userId")
+    // Return a no-op unsubscribe function
+    return () => {}
+  }
+  
+  try {
+    return onSnapshot(
+      collection(db, "projects"), 
+      async (snapshot) => {
+        const projects = snapshot.docs.map(doc => {
+          const data = doc.data() as FirestoreProject
+          return {
+            ...data,
+            start: data.start.toDate(),
+            end: data.end.toDate(),
+          } as Project
+        })
+        callback(projects)
+      },
+      (error) => {
+        console.error("Error in subscribeToProjects:", error)
+        // Don't throw - just log the error and return empty array
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up projects subscription:", error)
+    // Return a no-op unsubscribe function
+    return () => {}
+  }
 }
 
 // ============================================================================
@@ -482,7 +987,7 @@ export async function deleteWorkpackage(wpId: string): Promise<void> {
 
 export function subscribeToWorkpackages(profileProjectId: string, callback: (wps: Workpackage[]) => void): Unsubscribe {
   const q = query(collection(db, "workpackages"), where("profileProjectId", "==", profileProjectId))
-  
+
   return onSnapshot(q, (snapshot) => {
     const wps = snapshot.docs.map(doc => {
       const data = doc.data() as FirestoreWorkpackage
@@ -499,6 +1004,85 @@ export function subscribeToWorkpackages(profileProjectId: string, callback: (wps
     })
     callback(wps)
   })
+}
+
+// ============================================================================
+// TODO MANAGEMENT (for Task Subtasks)
+// ============================================================================
+
+/**
+ * Update a workpackage with recalculated progress after todo changes
+ * This updates the entire workpackage including nested tasks, subtasks, and todos
+ */
+export async function updateWorkpackageWithProgress(wpId: string, workpackage: Workpackage): Promise<void> {
+  const wpRef = doc(db, "workpackages", wpId)
+
+  // Convert dates to Timestamps
+  const updateData: any = {
+    ...workpackage,
+    start: Timestamp.fromDate(workpackage.start),
+    end: Timestamp.fromDate(workpackage.end),
+    tasks: workpackage.tasks.map(task => ({
+      ...task,
+      start: Timestamp.fromDate(task.start),
+      end: Timestamp.fromDate(task.end),
+      subtasks: task.subtasks?.map(subtask => ({
+        ...subtask,
+        start: Timestamp.fromDate(subtask.start),
+        end: Timestamp.fromDate(subtask.end),
+      })),
+    })),
+  }
+
+  await updateDoc(wpRef, updateData)
+}
+
+/**
+ * Update a project with recalculated progress after todo changes
+ * For legacy projects without workpackages (tasks directly in project)
+ */
+export async function updateProjectWithProgress(projectId: string, project: Project): Promise<void> {
+  const projectRef = doc(db, "projects", projectId)
+
+  // Convert dates to Timestamps
+  const updateData: any = {
+    ...project,
+    start: Timestamp.fromDate(project.start),
+    end: Timestamp.fromDate(project.end),
+  }
+
+  if (project.tasks) {
+    updateData.tasks = project.tasks.map(task => ({
+      ...task,
+      start: Timestamp.fromDate(task.start),
+      end: Timestamp.fromDate(task.end),
+      subtasks: task.subtasks?.map(subtask => ({
+        ...subtask,
+        start: Timestamp.fromDate(subtask.start),
+        end: Timestamp.fromDate(subtask.end),
+      })),
+    }))
+  }
+
+  if (project.workpackages) {
+    updateData.workpackages = project.workpackages.map(wp => ({
+      ...wp,
+      start: Timestamp.fromDate(wp.start),
+      end: Timestamp.fromDate(wp.end),
+      tasks: wp.tasks.map(task => ({
+        ...task,
+        start: Timestamp.fromDate(task.start),
+        end: Timestamp.fromDate(task.end),
+        subtasks: task.subtasks?.map(subtask => ({
+          ...subtask,
+          start: Timestamp.fromDate(subtask.start),
+          end: Timestamp.fromDate(subtask.end),
+        })),
+      })),
+    }))
+  }
+
+  await updateDoc(projectRef, updateData)
 }
 
 // ============================================================================
@@ -779,5 +1363,487 @@ export function subscribeToAuditTrails(entityType: AuditTrail['entityType'], ent
       }) as AuditTrail)
     callback(entries)
   })
+}
+
+// ============================================================================
+// CASCADING DELETES
+// ============================================================================
+
+/**
+ * Deletes a user and their associated profile
+ * Ensures consistency: no user without a profile, no profile without a user
+ * Also removes user from lab's members array if applicable
+ */
+export async function deleteUserCascade(userId: string): Promise<void> {
+  const batch = writeBatch(db)
+  
+  try {
+    // Get user document
+    const userRef = doc(db, "users", userId)
+    const userSnap = await getDoc(userRef)
+    
+    if (!userSnap.exists()) {
+      console.warn(`User ${userId} not found. Nothing to delete.`)
+      return
+    }
+    
+    const userData = userSnap.data() as FirestoreUser
+    const profileId = userData.profileId
+    
+    // Get profile if it exists
+    if (profileId) {
+      const profileRef = doc(db, "personProfiles", profileId)
+      const profileSnap = await getDoc(profileRef)
+      
+      if (profileSnap.exists()) {
+        // Note: Lab membership is now tracked via PersonProfile.labId
+        // No need to update lab.members array (removed in new Lab interface)
+
+        // Delete profile
+        batch.delete(profileRef)
+      }
+    }
+    
+    // Delete user
+    batch.delete(userRef)
+    
+    // Commit the batch - this is atomic, so either all succeed or all fail
+    await batch.commit()
+    
+    // Verify deletions succeeded (batch commit is atomic, but verify for logging)
+    try {
+      const verifyUserSnap = await getDoc(userRef)
+      const verifyProfileSnap = profileId ? await getDoc(doc(db, "personProfiles", profileId)) : null
+      
+      if (verifyUserSnap.exists()) {
+        console.warn(`Warning: User ${userId} still exists after batch commit`)
+        throw new Error(`Failed to delete user ${userId}`)
+      }
+      
+      if (profileId && verifyProfileSnap?.exists()) {
+        console.warn(`Warning: Profile ${profileId} still exists after batch commit`)
+        throw new Error(`Failed to delete profile ${profileId}`)
+      }
+      
+      console.log(`Successfully deleted user ${userId} and associated profile`)
+    } catch (verifyError: any) {
+      // If verification fails, log error but don't throw (batch already committed)
+      if (verifyError?.message?.includes('Failed to delete')) {
+        console.error("Deletion verification failed:", verifyError)
+        throw verifyError
+      }
+      // Other verification errors (permission, network) are non-fatal
+      console.warn("Deletion verification incomplete (non-fatal):", verifyError)
+    }
+  } catch (error) {
+    console.error("Error in deleteUserCascade:", error)
+    throw error
+  }
+}
+
+/**
+ * Deletes a profile and its associated user
+ * Ensures consistency: no user without a profile, no profile without a user
+ */
+export async function deleteProfileCascade(profileId: string): Promise<void> {
+  // Validate input
+  if (!profileId || typeof profileId !== 'string' || profileId.trim() === '') {
+    throw new Error("profileId is required and must be a non-empty string")
+  }
+
+  const batch = writeBatch(db)
+
+  try {
+    // Get profile document
+    const profileRef = doc(db, "personProfiles", profileId)
+    const profileSnap = await getDoc(profileRef)
+
+    if (!profileSnap.exists()) {
+      console.warn(`Profile ${profileId} not found. Nothing to delete.`)
+      return
+    }
+
+    const profileData = profileSnap.data() as PersonProfile
+    const userId = profileData.userId
+
+    // Note: Lab membership is now tracked via PersonProfile.labId
+    // No need to update lab.members array (removed in new Lab interface)
+
+    // Delete profile
+    batch.delete(profileRef)
+    
+    // Get and delete user if it exists
+    if (userId) {
+      const userRef = doc(db, "users", userId)
+      const userSnap = await getDoc(userRef)
+      
+      if (userSnap.exists()) {
+        batch.delete(userRef)
+      }
+    }
+    
+    // Commit the batch - this is atomic, so either all succeed or all fail
+    await batch.commit()
+    
+    // Verify deletions succeeded
+    try {
+      const verifyProfileSnap = await getDoc(profileRef)
+      const verifyUserSnap = userId ? await getDoc(doc(db, "users", userId)) : null
+      
+      if (verifyProfileSnap.exists()) {
+        console.warn(`Warning: Profile ${profileId} still exists after batch commit`)
+        throw new Error(`Failed to delete profile ${profileId}`)
+      }
+      
+      if (userId && verifyUserSnap?.exists()) {
+        console.warn(`Warning: User ${userId} still exists after batch commit`)
+        throw new Error(`Failed to delete user ${userId}`)
+      }
+      
+      console.log(`Successfully deleted profile ${profileId} and associated user`)
+    } catch (verifyError: any) {
+      // If verification fails, log error but don't throw (batch already committed)
+      if (verifyError?.message?.includes('Failed to delete')) {
+        console.error("Deletion verification failed:", verifyError)
+        throw verifyError
+      }
+      // Other verification errors (permission, network) are non-fatal
+      console.warn("Deletion verification incomplete (non-fatal):", verifyError)
+    }
+  } catch (error) {
+    console.error("Error in deleteProfileCascade:", error)
+    throw error
+  }
+}
+
+/**
+ * Deletes a profile project and all associated workpackages
+ * Uses batched writes for atomicity
+ */
+export async function deleteProfileProjectCascade(projectId: string): Promise<void> {
+  const batch = writeBatch(db)
+
+  // Delete the project
+  const projectRef = doc(db, "profileProjects", projectId)
+  batch.delete(projectRef)
+
+  // Find and delete all associated workpackages
+  const workpackagesQuery = query(
+    collection(db, "workpackages"),
+    where("profileProjectId", "==", projectId)
+  )
+  const workpackagesSnapshot = await getDocs(workpackagesQuery)
+  
+  workpackagesSnapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref)
+  })
+
+  // Commit the batch
+  await batch.commit()
+}
+
+/**
+ * Deletes a single workpackage (alias for deleteWorkpackage above)
+ * This is used by the cascading delete function
+ */
+export async function deleteWorkpackageCascade(workpackageId: string): Promise<void> {
+  const workpackageRef = doc(db, "workpackages", workpackageId)
+  await deleteDoc(workpackageRef)
+}
+
+/**
+ * Deletes multiple entities in a batch
+ */
+export async function batchDelete(
+  collection: string,
+  ids: string[]
+): Promise<void> {
+  if (ids.length === 0) return
+
+  const batch = writeBatch(db)
+  ids.forEach((id) => {
+    const docRef = doc(db, collection, id)
+    batch.delete(docRef)
+  })
+  await batch.commit()
+}
+
+// ============================================================================
+// DAY-TO-DAY TASKS
+// ============================================================================
+
+export interface FirestoreDayToDayTask {
+  id: string
+  title: string
+  description?: string
+  status: "todo" | "working" | "done"
+  importance: string
+  assigneeId?: string
+  dueDate?: Timestamp | null
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  createdBy: string
+  tags?: string[]
+  linkedProjectId?: string
+  linkedTaskId?: string
+  order: number
+}
+
+export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<string> {
+  const taskRef = doc(collection(db, "dayToDayTasks"))
+  const taskId = taskRef.id
+  
+  await setDoc(taskRef, {
+    ...taskData,
+    id: taskId,
+    dueDate: taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  
+  return taskId
+}
+
+export async function updateDayToDayTask(taskId: string, updates: Partial<any>): Promise<void> {
+  const taskRef = doc(db, "dayToDayTasks", taskId)
+  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
+  
+  if (updates.dueDate) {
+    updateData.dueDate = Timestamp.fromDate(updates.dueDate)
+  }
+  
+  await updateDoc(taskRef, updateData)
+}
+
+export async function deleteDayToDayTask(taskId: string): Promise<void> {
+  await deleteDoc(doc(db, "dayToDayTasks", taskId))
+}
+
+export function subscribeToDayToDayTasks(userId: string, callback: (tasks: any[]) => void): Unsubscribe {
+  if (!userId) {
+    console.warn("subscribeToDayToDayTasks called with undefined or empty userId")
+    // Return a no-op unsubscribe function
+    return () => {}
+  }
+  
+  try {
+    const q = query(collection(db, "dayToDayTasks"), where("createdBy", "==", userId))
+    
+    return onSnapshot(q, 
+      (snapshot) => {
+        const tasks = snapshot.docs.map(doc => {
+          const data = doc.data() as FirestoreDayToDayTask
+          return {
+            ...data,
+            dueDate: data.dueDate ? data.dueDate.toDate() : undefined,
+            createdAt: data.createdAt.toDate(),
+            updatedAt: data.updatedAt.toDate(),
+          }
+        })
+        callback(tasks)
+      },
+      (error) => {
+        console.error("Error in subscribeToDayToDayTasks:", error)
+        // Don't throw - just log the error and return empty array
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up day-to-day tasks subscription:", error)
+    // Return a no-op unsubscribe function
+    return () => {}
+  }
+}
+
+// ============================================================================
+// LAB POLLS
+// ============================================================================
+
+export async function createLabPoll(pollData: Omit<LabPoll, 'id'>): Promise<string> {
+  const pollRef = doc(collection(db, "labPolls"))
+  const pollId = pollRef.id
+  
+  await setDoc(pollRef, {
+    ...pollData,
+    id: pollId,
+    createdAt: serverTimestamp(),
+  })
+  
+  return pollId
+}
+
+export async function updateLabPoll(pollId: string, updates: Partial<LabPoll>): Promise<void> {
+  const pollRef = doc(db, "labPolls", pollId)
+  await updateDoc(pollRef, updates)
+}
+
+export async function deleteLabPoll(pollId: string): Promise<void> {
+  await deleteDoc(doc(db, "labPolls", pollId))
+}
+
+export function subscribeToLabPolls(labId: string | null, callback: (polls: LabPoll[]) => void): Unsubscribe {
+  if (!labId) {
+    console.warn("subscribeToLabPolls called with undefined or empty labId")
+    callback([])
+    return () => {}
+  }
+  
+  try {
+    const q = query(
+      collection(db, "labPolls"),
+      where("labId", "==", labId),
+      orderBy("createdAt", "desc")
+    )
+    
+    return onSnapshot(q, 
+      (snapshot) => {
+        const polls = snapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+          } as LabPoll
+        })
+        callback(polls)
+      },
+      (error) => {
+        console.error("Error in subscribeToLabPolls:", error)
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up lab polls subscription:", error)
+    return () => {}
+  }
+}
+
+// ============================================================================
+// EQUIPMENT
+// ============================================================================
+
+export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>): Promise<string> {
+  const equipmentRef = doc(collection(db, "equipment"))
+  const equipmentId = equipmentRef.id
+  
+  await setDoc(equipmentRef, {
+    ...equipmentData,
+    id: equipmentId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  
+  return equipmentId
+}
+
+export async function updateEquipment(equipmentId: string, updates: Partial<EquipmentDevice>): Promise<void> {
+  const equipmentRef = doc(db, "equipment", equipmentId)
+  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
+  await updateDoc(equipmentRef, updateData)
+}
+
+export async function deleteEquipment(equipmentId: string): Promise<void> {
+  await deleteDoc(doc(db, "equipment", equipmentId))
+}
+
+export function subscribeToEquipment(labId: string | null, callback: (equipment: EquipmentDevice[]) => void): Unsubscribe {
+  if (!labId) {
+    console.warn("subscribeToEquipment called with undefined or empty labId")
+    callback([])
+    return () => {}
+  }
+  
+  try {
+    const q = query(
+      collection(db, "equipment"),
+      where("labId", "==", labId),
+      orderBy("name", "asc")
+    )
+    
+    return onSnapshot(q, 
+      (snapshot) => {
+        const equipment = snapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+          } as EquipmentDevice
+        })
+        callback(equipment)
+      },
+      (error) => {
+        console.error("Error in subscribeToEquipment:", error)
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up equipment subscription:", error)
+    return () => {}
+  }
+}
+
+// ============================================================================
+// ELECTRONIC LAB NOTEBOOK (ELN)
+// ============================================================================
+
+export async function createELNExperiment(experimentData: Omit<ELNExperiment, 'id'>): Promise<string> {
+  const experimentRef = doc(collection(db, "elnExperiments"))
+  const experimentId = experimentRef.id
+  
+  await setDoc(experimentRef, {
+    ...experimentData,
+    id: experimentId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+  
+  return experimentId
+}
+
+export async function updateELNExperiment(experimentId: string, updates: Partial<ELNExperiment>): Promise<void> {
+  const experimentRef = doc(db, "elnExperiments", experimentId)
+  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
+  await updateDoc(experimentRef, updateData)
+}
+
+export async function deleteELNExperiment(experimentId: string): Promise<void> {
+  await deleteDoc(doc(db, "elnExperiments", experimentId))
+}
+
+export function subscribeToELNExperiments(userId: string, callback: (experiments: ELNExperiment[]) => void): Unsubscribe {
+  if (!userId) {
+    console.warn("subscribeToELNExperiments called with undefined or empty userId")
+    callback([])
+    return () => {}
+  }
+  
+  try {
+    const q = query(
+      collection(db, "elnExperiments"),
+      where("createdBy", "==", userId),
+      orderBy("createdAt", "desc")
+    )
+    
+    return onSnapshot(q, 
+      (snapshot) => {
+        const experiments = snapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+          } as ELNExperiment
+        })
+        callback(experiments)
+      },
+      (error) => {
+        console.error("Error in subscribeToELNExperiments:", error)
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up ELN experiments subscription:", error)
+    return () => {}
+  }
 }
 

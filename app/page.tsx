@@ -3,24 +3,34 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { GanttChart } from "@/components/GanttChart"
-import { Project, Task, Person, ImportanceLevel, Order, OrderStatus, InventoryItem, InventoryLevel, FUNDING_ACCOUNTS, CATEGORIES, PersonProfile, Deliverable, User, Workpackage, ProfileProject, CalendarEvent, Subtask } from "@/lib/types"
+import { Project, Task, Person, ImportanceLevel, Order, OrderStatus, InventoryItem, InventoryLevel, FUNDING_ACCOUNTS, CATEGORIES, PersonProfile, Deliverable, User, Workpackage, ProfileProject, CalendarEvent, Subtask, EquipmentDevice, LabPoll, ELNExperiment, MasterProject } from "@/lib/types"
+import { DayToDayTask } from "@/lib/dayToDayTypes"
 import { onAuthStateChanged, signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
-import { getUser, getProfileByUserId, updateProfile } from "@/lib/firestoreService"
+import { getUser, getProfileByUserId, getProfile, findUserProfile, updateProfile, deleteProfileProjectCascade, deleteProject as deleteProjectFromFirestore, subscribeToProjects, createProject, createWorkpackage, createDayToDayTask, updateDayToDayTask, deleteDayToDayTask, subscribeToDayToDayTasks, subscribeToLabPolls, createLabPoll, updateLabPoll, deleteLabPoll, subscribeToEquipment, createEquipment, updateEquipment, subscribeToELNExperiments, createELNExperiment, updateELNExperiment, deleteELNExperiment } from "@/lib/firestoreService"
 import { PeopleView } from "@/components/PeopleView"
 import { ProfileManagement } from "@/components/ProfileManagement"
 import { PersonalProfilePage } from "@/components/PersonalProfilePage"
+import ViewSwitcher from "@/components/ViewSwitcher"
 import { DeliverablesWidget } from "@/components/DeliverablesWidget"
 import { AuthPage } from "@/components/AuthPage"
-import { ProfileSetupPage } from "@/components/ProfileSetupPage"
+import OnboardingFlow from "@/components/OnboardingFlow"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog"
 import { UpcomingEventsPanel } from "@/components/UpcomingEventsPanel"
 import { EventDialog } from "@/components/EventDialog"
+import { DeletionConfirmationDialog } from "@/components/DeletionConfirmationDialog"
+import { DayToDayBoard } from "@/components/DayToDayBoard"
+import { EquipmentStatusPanel } from "@/components/EquipmentStatusPanel"
+import { LabPollPanel } from "@/components/LabPollPanel"
+import { ElectronicLabNotebook } from "@/components/ElectronicLabNotebook"
+import { TaskDetailPanel } from "@/components/TaskDetailPanel"
+import { calculateDeletionImpact, deleteMasterProject, deleteRegularProject, DeletionImpact } from "@/lib/projectDeletion"
 import { profiles } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
+import { personProfilesToPeople, getPersonDisplayName, findPersonProfileById } from "@/lib/personHelpers"
 import { Task as GanttTask } from "gantt-task-react"
-import { Plus, Users, Trash2, Check, X, GripVertical, Edit, Package, Maximize2, LogOut, ChevronDown, ChevronRight } from "lucide-react"
+import { Plus, Users, Trash2, Check, X, GripVertical, Edit, Package, Maximize2, LogOut, ChevronDown, ChevronRight, FileText } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
@@ -1061,9 +1071,20 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'orders' | 'inventory'>('orders')
   const [orderDialogOpen, setOrderDialogOpen] = useState(false)
   const [editingOrder, setEditingOrder] = useState<Order | undefined>()
-  const [mainView, setMainView] = useState<'projects' | 'people' | 'profiles' | 'myprofile'>('myprofile')
+  const [mainView, setMainView] = useState<'projects' | 'people' | 'profiles' | 'myprofile' | 'daytoday' | 'eln'>('myprofile')
   const [deliverablesWidgetTask, setDeliverablesWidgetTask] = useState<Task | null>(null)
+  const [taskDetailPanelOpen, setTaskDetailPanelOpen] = useState(false)
+  const [taskDetailPanelTask, setTaskDetailPanelTask] = useState<Task | null>(null)
+  const [taskDetailPanelWorkpackageId, setTaskDetailPanelWorkpackageId] = useState<string | null>(null)
+  const [taskDetailPanelProjectId, setTaskDetailPanelProjectId] = useState<string | null>(null)
+  const [deletionDialogOpen, setDeletionDialogOpen] = useState(false)
+  const [deletionImpact, setDeletionImpact] = useState<DeletionImpact | null>(null)
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
   const [deliverablesWidgetPosition, setDeliverablesWidgetPosition] = useState({ x: 0, y: 0 })
+  const [dayToDayTasks, setDayToDayTasks] = useState<DayToDayTask[]>([])
+  const [equipment, setEquipment] = useState<EquipmentDevice[]>([])
+  const [polls, setPolls] = useState<LabPoll[]>([])
+  const [elnExperiments, setElnExperiments] = useState<ELNExperiment[]>([])
   const [mounted, setMounted] = useState(false)
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null) // For personal pages
   const [currentUser, setCurrentUser] = useState<User | null>(null) // Current authenticated user
@@ -1155,16 +1176,29 @@ export default function Home() {
     return { ...task, helpers: [...(task.helpers || []), personId] }
   }
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false)
+
   // Prevent hydration mismatch by only rendering after mount
   useEffect(() => {
     setMounted(true)
+    isMountedRef.current = true
     
     // Listen to Firebase Auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Check if component is still mounted before proceeding
+        if (!isMountedRef.current) return
+        
+        setIsLoadingProfile(true)
         try {
           // User is signed in, fetch user data from Firestore
           const userData = await getUser(firebaseUser.uid)
+          
+          // Check if component unmounted during async operation
+          if (!isMountedRef.current) return
+          
           if (userData) {
             const user: User = {
               id: userData.uid,
@@ -1177,21 +1211,101 @@ export default function Home() {
             }
             setCurrentUser(user)
             
-            // Load user's profile
-            if (userData.profileId) {
-              const profile = await getProfileByUserId(userData.uid)
-              if (profile) {
-                setCurrentUserProfile(profile)
-                setCurrentUserProfileId(profile.id)
-                setAuthState(profile.profileComplete ? 'app' : 'setup')
-              } else {
-                setAuthState('setup')
-              }
+            // Check if user has a profile - if they do, they're a returning user and should skip setup
+            console.log("Checking for profile - userData.profileId:", userData.profileId, "userId:", userData.uid)
+            
+            const profile = await findUserProfile(userData.uid, userData.profileId)
+            
+            // Check if component unmounted during async operation
+            if (!isMountedRef.current) return
+            
+            if (profile) {
+              // User has a profile - they're a returning user, go straight to app
+              console.log("Returning user detected - going to app, skipping setup")
+              setCurrentUserProfile(profile)
+              setCurrentUserProfileId(profile.id)
+              setAuthState('app')
             } else {
+              // User doesn't have a profile - they need to complete setup
+              console.log("New user detected - no profile found, showing setup page")
               setAuthState('setup')
             }
           } else {
             // User document doesn't exist yet (new signup), create temporary user from Firebase Auth
+            // Check if they have a profile anyway (edge case)
+            if (!isMountedRef.current) return
+            const profile = await findUserProfile(firebaseUser.uid, null)
+            if (!isMountedRef.current) return
+            if (profile) {
+              // They have a profile but no user doc - create user doc and go to app
+              const user: User = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || "User",
+                passwordHash: "",
+                profileId: profile.id,
+                createdAt: new Date().toISOString(),
+                isAdministrator: false,
+              }
+              setCurrentUser(user)
+              setCurrentUserProfile(profile)
+              setCurrentUserProfileId(profile.id)
+              setAuthState('app')
+            } else {
+              // No profile - new user needs setup
+              const tempUser: User = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || "User",
+                passwordHash: "",
+                profileId: null,
+                createdAt: new Date().toISOString(),
+                isAdministrator: false,
+              }
+              setCurrentUser(tempUser)
+              setAuthState('setup')
+            }
+          }
+        } catch (error) {
+          if (!isMountedRef.current) return
+          console.error("Error loading user data:", error)
+          setIsLoadingProfile(false)
+          // On error, check if profile exists first
+          try {
+            const profile = await findUserProfile(firebaseUser.uid, null)
+            if (!isMountedRef.current) return
+            if (profile) {
+              // They have a profile - go to app
+              const tempUser: User = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || "User",
+                passwordHash: "",
+                profileId: profile.id,
+                createdAt: new Date().toISOString(),
+                isAdministrator: false,
+              }
+              setCurrentUser(tempUser)
+              setCurrentUserProfile(profile)
+              setCurrentUserProfileId(profile.id)
+              setAuthState('app')
+            } else {
+              // No profile - go to setup
+              const tempUser: User = {
+                id: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || "User",
+                passwordHash: "",
+                profileId: null,
+                createdAt: new Date().toISOString(),
+                isAdministrator: false,
+              }
+              setCurrentUser(tempUser)
+              setAuthState('setup')
+            }
+          } catch (profileError) {
+            // If profile check also fails, default to setup
+            if (!isMountedRef.current) return
             const tempUser: User = {
               id: firebaseUser.uid,
               email: firebaseUser.email || "",
@@ -1204,70 +1318,75 @@ export default function Home() {
             setCurrentUser(tempUser)
             setAuthState('setup')
           }
-        } catch (error) {
-          console.error("Error loading user data:", error)
-          // Create temporary user from Firebase Auth for setup
-          const tempUser: User = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email || "",
-            fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || "User",
-            passwordHash: "",
-            profileId: null,
-            createdAt: new Date().toISOString(),
-            isAdministrator: false,
+        } finally {
+          if (isMountedRef.current) {
+            setIsLoadingProfile(false)
           }
-          setCurrentUser(tempUser)
-          setAuthState('setup')
         }
       } else {
         // User is signed out
-        setCurrentUser(null)
-        setCurrentUserProfile(null)
-        setCurrentUserProfileId(null)
-        setAuthState('auth')
+        if (isMountedRef.current) {
+          setCurrentUser(null)
+          setCurrentUserProfile(null)
+          setCurrentUserProfileId(null)
+          setAuthState('auth')
+          setIsLoadingProfile(false)
+        }
       }
     })
     
-    return () => unsubscribe()
+    return () => {
+      isMountedRef.current = false
+      unsubscribe()
+    }
   }, [])
   
   // Load profiles (including custom ones from localStorage)
   const allProfiles = useProfiles()
   
   // Check profile from static profiles after they load
+  // Note: This is for backward compatibility with localStorage profiles
+  // This should only run if we're still in setup state and haven't found a profile yet
+  // AND we're not currently loading from Firestore
   useEffect(() => {
-    if (currentUser && !currentUserProfile && allProfiles.length > 0) {
+    // Only check localStorage profiles if:
+    // 1. We're in setup state
+    // 2. We have a user
+    // 3. We don't have a profile yet
+    // 4. Profiles are loaded
+    // 5. We're not currently loading from Firestore (to prevent race condition)
+    if (
+      authState === 'setup' && 
+      currentUser && 
+      !currentUserProfile && 
+      allProfiles.length > 0 && 
+      !isLoadingProfile &&
+      isMountedRef.current
+    ) {
       const profile = allProfiles.find(p => p.userId === currentUser.id || p.id === currentUser.profileId)
-      if (profile) {
+      if (profile && isMountedRef.current) {
+        // User has a profile - they're a returning user, go to app
+        console.log("Found profile in localStorage/static profiles:", profile.id)
         setCurrentUserProfile(profile)
         setCurrentUserProfileId(profile.id)
-        if (profile.profileComplete) {
-          setAuthState('app')
-        } else {
-          setAuthState('setup')
-        }
+        setAuthState('app')
       }
     }
-  }, [allProfiles, currentUser, currentUserProfile])
+  }, [allProfiles, currentUser, currentUserProfile, authState, isLoadingProfile])
 
+  // Note: These callbacks are required by AuthPage's interface but authentication
+  // and state updates are handled by the onAuthStateChanged listener (line 1182).
+  // AuthPage calls these after successful auth, but no additional action is needed here.
   const handleLogin = async (uid: string, email: string, fullName: string) => {
-    try {
-      // Firebase Auth handles the authentication
-      // The onAuthStateChanged listener will handle the state updates
-      // This function is now mostly a placeholder for the AuthPage callback
-    } catch (error) {
-      console.error("Login error:", error)
-    }
+    // Authentication handled by Firebase Auth in AuthPage component
+    // State updates handled by onAuthStateChanged listener
+    // No additional action required
   }
 
   const handleSignup = async (uid: string, email: string, fullName: string) => {
-    try {
-      // Firebase Auth and Firestore user creation handled in AuthPage
-      // The onAuthStateChanged listener will handle the state updates
-      // This function is now mostly a placeholder for the AuthPage callback
-    } catch (error) {
-      console.error("Signup error:", error)
-    }
+    // Authentication and user creation handled by Firebase Auth and Firestore in AuthPage
+    // State updates handled by onAuthStateChanged listener
+    // No additional action required
   }
 
   const handleSignOut = async () => {
@@ -1318,12 +1437,18 @@ export default function Home() {
     useSensor(KeyboardSensor)
   )
 
-  // Convert profiles to Person format for compatibility
-  const people: Person[] = allProfiles.map((profile, index) => ({
-    id: profile.id,
-    name: `${profile.firstName} ${profile.lastName}`,
-    color: getColorForProfile(profile, index)
-  }))
+  // Convert PersonProfiles to Person format for UI display
+  // Note: Person is UI-only. All ID fields store PersonProfile IDs, not Person IDs.
+  const people: Person[] = personProfilesToPeople(allProfiles)
+  
+  // Debug logging
+  useEffect(() => {
+    if (allProfiles.length === 0) {
+      console.warn("No profiles loaded. Check Firestore subscription and permissions.")
+    } else {
+      console.log(`Loaded ${allProfiles.length} profiles:`, allProfiles.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`, lab: p.lab })))
+    }
+  }, [allProfiles])
 
   // Filter projects based on current user and visibility settings
   const visibleProjects = currentUserProfileId
@@ -1664,6 +1789,24 @@ export default function Home() {
       setInventory(inventoryWithDates)
     }
 
+    const storedEquipment = localStorage.getItem("gantt-equipment")
+    if (storedEquipment) {
+      const parsed = JSON.parse(storedEquipment)
+      setEquipment(parsed)
+    }
+
+    const storedPolls = localStorage.getItem("gantt-polls")
+    if (storedPolls) {
+      const parsed = JSON.parse(storedPolls)
+      setPolls(parsed)
+    }
+
+    const storedELN = localStorage.getItem("gantt-eln-experiments")
+    if (storedELN) {
+      const parsed = JSON.parse(storedELN)
+      setElnExperiments(parsed)
+    }
+
     if (storedEvents) {
       const parsed = JSON.parse(storedEvents)
       const eventsWithDates = parsed.map((event: any) => ({
@@ -1713,6 +1856,24 @@ export default function Home() {
   }, [inventory])
 
   useEffect(() => {
+    if (equipment.length > 0 || localStorage.getItem("gantt-equipment")) {
+      localStorage.setItem("gantt-equipment", JSON.stringify(equipment))
+    }
+  }, [equipment])
+
+  useEffect(() => {
+    if (polls.length > 0 || localStorage.getItem("gantt-polls")) {
+      localStorage.setItem("gantt-polls", JSON.stringify(polls))
+    }
+  }, [polls])
+
+  useEffect(() => {
+    if (elnExperiments.length > 0 || localStorage.getItem("gantt-eln-experiments")) {
+      localStorage.setItem("gantt-eln-experiments", JSON.stringify(elnExperiments))
+    }
+  }, [elnExperiments])
+
+  useEffect(() => {
     if (manualEvents.length > 0 || localStorage.getItem("gantt-events")) {
       const serialized = manualEvents.map((event) => ({
         ...event,
@@ -1724,6 +1885,125 @@ export default function Home() {
       localStorage.setItem("gantt-events", JSON.stringify(serialized))
     }
   }, [manualEvents])
+
+  // Subscribe to Firestore projects (real-time sync)
+  useEffect(() => {
+    // Only set up subscriptions if we have a valid user with an ID and are in app state
+    // Also wait for profile to be loaded to ensure proper filtering
+    if (!currentUser || !currentUser.id || authState !== 'app' || !isMountedRef.current) {
+      return
+    }
+
+    // Wait for profile to be loaded before setting up subscriptions to avoid filtering issues
+    if (!currentUserProfile && isLoadingProfile) {
+      return
+    }
+
+    console.log("Setting up Firestore subscriptions for user:", currentUser.id)
+
+    let unsubProjects: (() => void) | null = null
+    let unsubDayToDayTasks: (() => void) | null = null
+    let unsubLabPolls: (() => void) | null = null
+    let unsubEquipment: (() => void) | null = null
+    let unsubELNExperiments: (() => void) | null = null
+
+    try {
+      // Subscribe to regular projects
+      unsubProjects = subscribeToProjects(currentUser.id, (firestoreProjects) => {
+        if (!isMountedRef.current) return
+        
+        console.log("Received projects from Firestore:", firestoreProjects.length)
+        
+        // Filter projects by lab if currentUserProfile is available
+        const userLab = currentUserProfile?.lab
+        const filteredProjects = userLab
+          ? firestoreProjects.filter(p => {
+              // Firestore rules handle server-side filtering, but add client-side filtering as backup
+              // Projects should have labId set, but filter by creator's lab if not
+              const project = p as any
+              if (project.labId) {
+                return project.labId === userLab
+              }
+              // If project doesn't have labId yet, only show if created by current user
+              return project.createdBy === currentUser.id
+            })
+          : firestoreProjects
+        
+        // Convert profile projects from currentUserProfile to Project format
+        let profileProjects: Project[] = []
+        if (currentUserProfile && currentUserProfile.projects) {
+          profileProjects = currentUserProfile.projects.map((pp) => ({
+            id: `profile-${pp.id}`,
+            name: pp.name,
+            kind: "master" as const,
+            start: new Date(pp.startDate),
+            end: new Date(pp.endDate),
+            progress: 0,
+            color: "#3b82f6",
+            importance: "medium" as ImportanceLevel,
+            notes: pp.notes,
+            profileProjectId: pp.id,
+            principalInvestigatorId: pp.principalInvestigatorId,
+            fundedBy: pp.fundedBy,
+            status: pp.status === "active" ? "in-progress" : pp.status === "completed" ? "done" : "not-started",
+          }))
+        }
+        
+        // Merge Firestore projects with profile projects
+        if (isMountedRef.current) {
+          setProjects([...filteredProjects, ...profileProjects])
+        }
+      })
+
+      // Subscribe to day-to-day tasks
+      unsubDayToDayTasks = subscribeToDayToDayTasks(currentUser.id, (tasks) => {
+        if (!isMountedRef.current) return
+        console.log("Received day-to-day tasks from Firestore:", tasks.length)
+        setDayToDayTasks(tasks)
+      })
+
+      // Subscribe to Lab Polls
+      if (currentUserProfile?.lab) {
+        unsubLabPolls = subscribeToLabPolls(currentUserProfile.lab, (polls) => {
+          if (!isMountedRef.current) return
+          console.log("Received lab polls from Firestore:", polls.length)
+          setPolls(polls)
+        })
+      }
+
+      // Subscribe to Equipment
+      if (currentUserProfile?.lab) {
+        unsubEquipment = subscribeToEquipment(currentUserProfile.lab, (equipment) => {
+          if (!isMountedRef.current) return
+          console.log("Received equipment from Firestore:", equipment.length)
+          setEquipment(equipment)
+        })
+      }
+
+      // Subscribe to ELN Experiments
+      unsubELNExperiments = subscribeToELNExperiments(currentUser.id, (experiments) => {
+        if (!isMountedRef.current) return
+        console.log("Received ELN experiments from Firestore:", experiments.length)
+        setElnExperiments(experiments)
+      })
+    } catch (error) {
+      console.error("Error setting up Firestore subscriptions:", error)
+      // Clean up any subscriptions that were created
+      if (unsubProjects) unsubProjects()
+      if (unsubDayToDayTasks) unsubDayToDayTasks()
+      if (unsubLabPolls) unsubLabPolls()
+      if (unsubEquipment) unsubEquipment()
+      if (unsubELNExperiments) unsubELNExperiments()
+    }
+
+    return () => {
+      if (unsubProjects) unsubProjects()
+      if (unsubDayToDayTasks) unsubDayToDayTasks()
+      if (unsubLabPolls) unsubLabPolls()
+      if (unsubEquipment) unsubEquipment()
+      if (unsubELNExperiments) unsubELNExperiments()
+    }
+  }, [currentUser, currentUserProfile, authState, isLoadingProfile])
 
   // Auto-remove received orders after 7 days
   useEffect(() => {
@@ -1747,11 +2027,16 @@ export default function Home() {
     setProjectCreationDialogOpen(true)
   }
 
-  const handleCreateRegularProject = () => {
+  const handleCreateRegularProject = async () => {
+    if (!currentUser) {
+      alert("Please log in first")
+      return
+    }
+
     const today = new Date()
     const nextWeek = new Date(today)
     nextWeek.setDate(today.getDate() + 7)
-    
+
     // Vibrant, saturated colors that work well in dark mode
     const colors = [
       "#3b82f6", // bright blue
@@ -1766,20 +2051,30 @@ export default function Home() {
       "#6366f1", // indigo
     ]
     const randomColor = colors[Math.floor(Math.random() * colors.length)]
-    
-    const newProject: Project = {
-      id: `project-${Date.now()}`,
+
+    const newProjectData = {
       name: `New Project ${projects.length + 1}`,
+      kind: "regular" as const,
       start: today,
       end: nextWeek,
       progress: 0,
       color: randomColor,
-      importance: "medium",
+      importance: "medium" as ImportanceLevel,
       tasks: [],
       notes: "",
       isExpanded: true,
+      createdBy: currentUser.id,
+      labId: currentUserProfile?.lab,
     }
-    setProjects((prev) => [...prev, newProject])
+
+    try {
+      await createProject(newProjectData as any)
+      // Firestore subscription will update state
+      setProjectCreationDialogOpen(false)
+    } catch (error) {
+      console.error("Error creating project:", error)
+      alert("Failed to create project. Please try again.")
+    }
   }
 
   const handleCreateMasterProject = async (masterProject: ProfileProject) => {
@@ -1852,32 +2147,43 @@ export default function Home() {
     }
   }
 
-  const handleAddWorkpackage = (projectId: string) => {
+  const handleAddWorkpackage = async (projectId: string) => {
     const project = projects.find(p => p.id === projectId)
     if (!project || !project.profileProjectId) {
       alert("Can only add workpackages to master projects from profiles")
       return
     }
-    
+
+    if (!currentUser) {
+      alert("Please log in first")
+      return
+    }
+
     const wpStart = new Date(project.start)
     const wpEnd = new Date(project.start)
     wpEnd.setDate(wpStart.getDate() + 30) // Default 30 days
-    
+
     const existingWPs = workpackages.filter(w => w.profileProjectId === project.profileProjectId)
-    const newWorkpackage: Workpackage = {
-      id: `wp-${Date.now()}`,
+    const newWorkpackageData = {
       name: `Workpackage ${existingWPs.length + 1}`,
       profileProjectId: project.profileProjectId,
       start: wpStart,
       end: wpEnd,
       progress: 0,
-      importance: "medium",
+      importance: "medium" as ImportanceLevel,
       notes: "",
       tasks: [],
       isExpanded: true,
+      createdBy: currentUser.id,
     }
-    
-    setWorkpackages(prev => [...prev, newWorkpackage])
+
+    try {
+      await createWorkpackage(newWorkpackageData)
+      // Firestore subscription will update state
+    } catch (error) {
+      console.error("Error creating workpackage:", error)
+      alert("Failed to create workpackage. Please try again.")
+    }
   }
 
   const handleAddTaskToWorkpackage = (workpackageId: string) => {
@@ -1962,6 +2268,219 @@ export default function Home() {
     )
   }
 
+  // Todo handlers for task management
+  const handleToggleTodo = async (
+    projectId: string,
+    workpackageId: string | null,
+    taskId: string,
+    subtaskId: string,
+    todoId: string
+  ) => {
+    const { toggleTodoAndRecalculate } = require("@/lib/progressCalculation")
+    const { updateWorkpackageWithProgress, updateProjectWithProgress } = require("@/lib/firestoreService")
+
+    if (workpackageId) {
+      // Update in workpackages
+      setWorkpackages(prev =>
+        prev.map(wp => {
+          if (wp.id !== workpackageId) return wp
+          const updatedTasks = wp.tasks.map(task => {
+            if (task.id !== taskId) return task
+            const updatedSubtasks = task.subtasks?.map(subtask => {
+              if (subtask.id !== subtaskId) return subtask
+              const updatedTodos = subtask.todos?.map(todo => {
+                if (todo.id !== todoId) return todo
+                return {
+                  ...todo,
+                  completed: !todo.completed,
+                  completedAt: !todo.completed ? new Date().toISOString() : undefined,
+                  completedBy: !todo.completed ? currentUserProfile?.id : undefined,
+                }
+              })
+              return { ...subtask, todos: updatedTodos }
+            })
+            return { ...task, subtasks: updatedSubtasks }
+          })
+          const mockProject = { workpackages: [{ ...wp, tasks: updatedTasks }] }
+          const recalculated = toggleTodoAndRecalculate(mockProject, workpackageId, taskId, subtaskId, todoId)
+          return recalculated.workpackages![0]
+        })
+      )
+
+      // Persist to Firestore
+      const workpackage = workpackages.find(wp => wp.id === workpackageId)
+      if (workpackage) {
+        try {
+          const mockProject = { workpackages: [workpackage] }
+          const recalculated = toggleTodoAndRecalculate(mockProject, workpackageId, taskId, subtaskId, todoId)
+          await updateWorkpackageWithProgress(workpackageId, recalculated.workpackages![0])
+        } catch (error) {
+          console.error("Error updating workpackage with todos:", error)
+          alert("Failed to save changes. Please try again.")
+        }
+      }
+    } else {
+      // Update in projects (legacy structure)
+      let updatedProject: Project | undefined
+      setProjects(prev =>
+        prev.map(project => {
+          if (project.id !== projectId) return project
+          updatedProject = toggleTodoAndRecalculate(project, null, taskId, subtaskId, todoId)
+          return updatedProject!
+        })
+      )
+
+      // Persist to Firestore
+      if (updatedProject) {
+        try {
+          await updateProjectWithProgress(projectId, updatedProject)
+        } catch (error) {
+          console.error("Error updating project with todos:", error)
+          alert("Failed to save changes. Please try again.")
+        }
+      }
+    }
+  }
+
+  const handleAddTodo = async (
+    projectId: string,
+    workpackageId: string | null,
+    taskId: string,
+    subtaskId: string,
+    text: string
+  ) => {
+    const { addTodoAndRecalculate } = require("@/lib/progressCalculation")
+    const { updateWorkpackageWithProgress, updateProjectWithProgress } = require("@/lib/firestoreService")
+
+    if (workpackageId) {
+      // Update in workpackages
+      setWorkpackages(prev =>
+        prev.map(wp => {
+          if (wp.id !== workpackageId) return wp
+          const mockProject = { workpackages: [wp] }
+          const recalculated = addTodoAndRecalculate(mockProject, workpackageId, taskId, subtaskId, text)
+          return recalculated.workpackages![0]
+        })
+      )
+
+      // Persist to Firestore
+      const workpackage = workpackages.find(wp => wp.id === workpackageId)
+      if (workpackage) {
+        try {
+          const mockProject = { workpackages: [workpackage] }
+          const recalculated = addTodoAndRecalculate(mockProject, workpackageId, taskId, subtaskId, text)
+          await updateWorkpackageWithProgress(workpackageId, recalculated.workpackages![0])
+        } catch (error) {
+          console.error("Error adding todo:", error)
+          alert("Failed to add todo. Please try again.")
+        }
+      }
+    } else {
+      // Update in projects (legacy structure)
+      let updatedProject: Project | undefined
+      setProjects(prev =>
+        prev.map(project => {
+          if (project.id !== projectId) return project
+          updatedProject = addTodoAndRecalculate(project, null, taskId, subtaskId, text)
+          return updatedProject!
+        })
+      )
+
+      // Persist to Firestore
+      if (updatedProject) {
+        try {
+          await updateProjectWithProgress(projectId, updatedProject)
+        } catch (error) {
+          console.error("Error adding todo:", error)
+          alert("Failed to add todo. Please try again.")
+        }
+      }
+    }
+  }
+
+  const handleDeleteTodo = async (
+    projectId: string,
+    workpackageId: string | null,
+    taskId: string,
+    subtaskId: string,
+    todoId: string
+  ) => {
+    const { updateProjectProgress } = require("@/lib/progressCalculation")
+    const { updateWorkpackageWithProgress, updateProjectWithProgress } = require("@/lib/firestoreService")
+
+    if (workpackageId) {
+      // Update in workpackages
+      setWorkpackages(prev =>
+        prev.map(wp => {
+          if (wp.id !== workpackageId) return wp
+          const updatedTasks = wp.tasks.map(task => {
+            if (task.id !== taskId) return task
+            const updatedSubtasks = task.subtasks?.map(subtask => {
+              if (subtask.id !== subtaskId) return subtask
+              const updatedTodos = subtask.todos?.filter(todo => todo.id !== todoId)
+              return { ...subtask, todos: updatedTodos }
+            })
+            return { ...task, subtasks: updatedSubtasks }
+          })
+          const mockProject = { workpackages: [{ ...wp, tasks: updatedTasks }] }
+          const recalculated = updateProjectProgress(mockProject)
+          return recalculated.workpackages![0]
+        })
+      )
+
+      // Persist to Firestore
+      const workpackage = workpackages.find(wp => wp.id === workpackageId)
+      if (workpackage) {
+        try {
+          const updatedTasks = workpackage.tasks.map(task => {
+            if (task.id !== taskId) return task
+            const updatedSubtasks = task.subtasks?.map(subtask => {
+              if (subtask.id !== subtaskId) return subtask
+              const updatedTodos = subtask.todos?.filter(todo => todo.id !== todoId)
+              return { ...subtask, todos: updatedTodos }
+            })
+            return { ...task, subtasks: updatedSubtasks }
+          })
+          const mockProject = { workpackages: [{ ...workpackage, tasks: updatedTasks }] }
+          const recalculated = updateProjectProgress(mockProject)
+          await updateWorkpackageWithProgress(workpackageId, recalculated.workpackages![0])
+        } catch (error) {
+          console.error("Error deleting todo:", error)
+          alert("Failed to delete todo. Please try again.")
+        }
+      }
+    } else {
+      // Update in projects (legacy structure)
+      let updatedProject: Project | undefined
+      setProjects(prev =>
+        prev.map(project => {
+          if (project.id !== projectId) return project
+          const updatedTasks = project.tasks?.map(task => {
+            if (task.id !== taskId) return task
+            const updatedSubtasks = task.subtasks?.map(subtask => {
+              if (subtask.id !== subtaskId) return subtask
+              const updatedTodos = subtask.todos?.filter(todo => todo.id !== todoId)
+              return { ...subtask, todos: updatedTodos }
+            })
+            return { ...task, subtasks: updatedSubtasks }
+          })
+          updatedProject = updateProjectProgress({ ...project, tasks: updatedTasks })
+          return updatedProject!
+        })
+      )
+
+      // Persist to Firestore
+      if (updatedProject) {
+        try {
+          await updateProjectWithProgress(projectId, updatedProject)
+        } catch (error) {
+          console.error("Error deleting todo:", error)
+          alert("Failed to delete todo. Please try again.")
+        }
+      }
+    }
+  }
+
   const handleWorkpackageNameChange = (workpackageId: string, newName: string) => {
     setWorkpackages(prev =>
       prev.map(wp =>
@@ -1972,6 +2491,36 @@ export default function Home() {
 
   const handleTaskNameChangeInWorkpackage = (workpackageId: string, taskId: string, newName: string) => {
     updateTaskInWorkpackage(workpackageId, taskId, (task) => ({ ...task, name: newName }))
+  }
+
+  const handleTaskDeleteFromWorkpackage = (workpackageId: string, taskId: string) => {
+    removeTaskInWorkpackage(workpackageId, taskId)
+  }
+
+  const handleTaskRemoveAssigneeFromWorkpackage = (workpackageId: string, taskId: string, personId: string) => {
+    updateTaskInWorkpackage(workpackageId, taskId, (task) => {
+      if (task.primaryOwner === personId) {
+        const helpers = task.helpers || []
+        return {
+          ...task,
+          primaryOwner: helpers[0] || undefined,
+          helpers: helpers.slice(1),
+        }
+      }
+      const updatedHelpers = (task.helpers || []).filter((id) => id !== personId)
+      if (updatedHelpers.length === (task.helpers || []).length) {
+        return task
+      }
+      return { ...task, helpers: updatedHelpers }
+    })
+  }
+
+  const handleTaskImportanceChangeInWorkpackage = (workpackageId: string, taskId: string, importance: ImportanceLevel) => {
+    updateTaskInWorkpackage(workpackageId, taskId, (task) => ({ ...task, importance }))
+  }
+
+  const handleTaskNotesChangeInWorkpackage = (workpackageId: string, taskId: string, notes: string) => {
+    updateTaskInWorkpackage(workpackageId, taskId, (task) => ({ ...task, notes }))
   }
 
   const handleProjectNameChange = (projectId: string, newName: string) => {
@@ -2136,8 +2685,135 @@ export default function Home() {
   }
 
   const handleDeleteProject = (projectId: string) => {
-    if (confirm("Are you sure you want to delete this project and all its tasks?")) {
-      setProjects((prev) => prev.filter((p) => p.id !== projectId))
+    const project = projects.find((p) => p.id === projectId)
+    if (!project) return
+
+    // Calculate deletion impact
+    const impact = calculateDeletionImpact(project, workpackages)
+    
+    // Show confirmation dialog
+    setDeletionImpact(impact)
+    setProjectToDelete(projectId)
+    setDeletionDialogOpen(true)
+  }
+
+  const confirmDeleteProject = async () => {
+    if (!projectToDelete) return
+
+    const project = projects.find((p) => p.id === projectToDelete)
+    if (!project) return
+
+    const isMaster = project.profileProjectId !== undefined || project.kind === "master"
+
+    try {
+      if (isMaster) {
+        // Delete from Firestore first (ProfileProject)
+        if (project.profileProjectId) {
+          await deleteProfileProjectCascade(project.profileProjectId)
+        }
+        
+        // Update local state
+        const result = deleteMasterProject(projectToDelete, projects, workpackages)
+        setProjects(result.projects)
+        setWorkpackages(result.workpackages)
+      } else {
+        // Delete from Firestore first (regular project)
+        await deleteProjectFromFirestore(projectToDelete)
+        
+        // Update local state
+        const result = deleteRegularProject(projectToDelete, projects)
+        setProjects(result.projects)
+      }
+      
+      // Clear from localStorage cache
+      localStorage.removeItem(`project-${projectToDelete}`)
+      
+    } catch (error) {
+      console.error("Error deleting project:", error)
+      alert("Failed to delete project. Please try again.")
+      return
+    }
+
+    // Close dialog and reset state
+    setDeletionDialogOpen(false)
+    setDeletionImpact(null)
+    setProjectToDelete(null)
+  }
+
+  const cancelDeleteProject = () => {
+    setDeletionDialogOpen(false)
+    setDeletionImpact(null)
+    setProjectToDelete(null)
+  }
+
+  // Day-to-Day Task Handlers
+  const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, "id" | "createdAt" | "updatedAt" | "order">) => {
+    if (!currentUser) {
+      alert("Please sign in to create tasks.")
+      return
+    }
+    
+    try {
+      const order = dayToDayTasks.length
+      await createDayToDayTask({
+        ...task,
+        createdBy: currentUser.id,
+        order,
+      })
+      // Success - Firestore subscription will update UI
+    } catch (error: any) {
+      console.error("Error creating day-to-day task:", error)
+      const errorMsg = error?.code === 'permission-denied' 
+        ? "You don't have permission to create tasks. Please check your account."
+        : error?.message?.includes('network') || navigator.onLine === false
+        ? "Network error. Please check your connection and try again."
+        : "Failed to create task. Please try again."
+      alert(errorMsg)
+    }
+  }
+
+  const handleUpdateDayToDayTask = async (taskId: string, updates: Partial<DayToDayTask>) => {
+    try {
+      await updateDayToDayTask(taskId, updates)
+      // Success - Firestore subscription will update UI
+    } catch (error: any) {
+      console.error("Error updating day-to-day task:", error)
+      const errorMsg = error?.code === 'permission-denied'
+        ? "You don't have permission to update this task."
+        : error?.message?.includes('network') || navigator.onLine === false
+        ? "Network error. Your changes weren't saved. Please check your connection."
+        : "Failed to update task. Please try again."
+      alert(errorMsg)
+    }
+  }
+
+  const handleDeleteDayToDayTask = async (taskId: string) => {
+    try {
+      await deleteDayToDayTask(taskId)
+      // Success - Firestore subscription will update UI
+    } catch (error: any) {
+      console.error("Error deleting day-to-day task:", error)
+      const errorMsg = error?.code === 'permission-denied'
+        ? "You don't have permission to delete this task."
+        : error?.message?.includes('network') || navigator.onLine === false
+        ? "Network error. Please check your connection and try again."
+        : "Failed to delete task. Please try again."
+      alert(errorMsg)
+    }
+  }
+
+  const handleMoveDayToDayTask = async (taskId: string, newStatus: "todo" | "working" | "done") => {
+    try {
+      await updateDayToDayTask(taskId, { status: newStatus })
+      // Success - Firestore subscription will update UI
+    } catch (error: any) {
+      console.error("Error moving day-to-day task:", error)
+      const errorMsg = error?.code === 'permission-denied'
+        ? "You don't have permission to move this task."
+        : error?.message?.includes('network') || navigator.onLine === false
+        ? "Network error. The task wasn't moved. Please check your connection."
+        : "Failed to move task. Please try again."
+      alert(errorMsg)
     }
   }
 
@@ -2148,8 +2824,21 @@ export default function Home() {
   }
 
   const handleCreateOrder = () => {
-    if (people.length === 0) {
-      alert("Please add at least one person before creating orders")
+    // Try to use current user's profile ID first, then fall back to people array
+    let createdById: string | undefined
+    
+    if (currentUserProfileId) {
+      createdById = currentUserProfileId
+    } else if (people.length > 0) {
+      createdById = people[0].id
+    } else {
+      alert("Unable to create order: No user profile found. Please ensure you are logged in and have completed your profile setup.")
+      console.error("handleCreateOrder: No profile available", {
+        currentUserProfileId,
+        peopleCount: people.length,
+        allProfilesCount: allProfiles.length,
+        currentUser: currentUser?.id
+      })
       return
     }
 
@@ -2157,11 +2846,23 @@ export default function Home() {
       id: `order-${Date.now()}`,
       productName: "",
       catNum: "",
+      supplier: "",
+      // Temporary placeholders - will be selected during order creation
+      accountId: "temp_account_placeholder",
+      accountName: "Select Account",
+      funderId: "temp_funder_placeholder",
+      funderName: "Select Funder",
+      masterProjectId: "temp_project_placeholder",
+      masterProjectName: "Select Project",
+      priceExVAT: 0,
+      currency: "GBP",
       status: "to-order",
-      createdBy: people[0].id, // Default to first person for now
+      orderedBy: createdById,
+      createdBy: createdById,
       createdDate: new Date(),
     }
-    setOrders((prev) => [...prev, newOrder])
+    setEditingOrder(newOrder)
+    setOrderDialogOpen(true)
   }
 
   const handleDeleteOrder = (orderId: string) => {
@@ -2216,11 +2917,18 @@ export default function Home() {
   }
 
   const handleSaveOrder = (updatedOrder: Order) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === updatedOrder.id ? updatedOrder : o
-      )
-    )
+    setOrders((prev) => {
+      const existingIndex = prev.findIndex((o) => o.id === updatedOrder.id)
+      if (existingIndex >= 0) {
+        // Update existing order
+        return prev.map((o) =>
+          o.id === updatedOrder.id ? updatedOrder : o
+        )
+      } else {
+        // Add new order
+        return [...prev, updatedOrder]
+      }
+    })
     setOrderDialogOpen(false)
     setEditingOrder(undefined)
   }
@@ -2231,13 +2939,24 @@ export default function Home() {
       id: `order-${Date.now()}`,
       productName: item.productName,
       catNum: item.catNum,
+      supplier: "",
+      // Use account from inventory item, or placeholder
+      accountId: item.chargeToAccount || "temp_account_placeholder",
+      accountName: "Select Account",
+      funderId: "temp_funder_placeholder",
+      funderName: "Select Funder",
+      masterProjectId: "temp_project_placeholder",
+      masterProjectName: "Select Project",
+      priceExVAT: item.priceExVAT || 0,
+      currency: "GBP",
       status: "to-order",
+      orderedBy: people[0]?.id || "",
       createdBy: people[0]?.id || "",
       createdDate: new Date(),
-      chargeToAccount: item.chargeToAccount,
       category: item.category,
       subcategory: item.subcategory,
-      priceExVAT: item.priceExVAT,
+      // Legacy field for backward compatibility
+      chargeToAccount: item.chargeToAccount,
     }
     setOrders((prev) => [...prev, newOrder])
 
@@ -2447,32 +3166,63 @@ export default function Home() {
   }
 
   const handleDateChange = (task: GanttTask) => {
+    const newStart = task.start
+    const newEnd = task.end
+
     if (task.type === "project") {
+      // Update project dates
       setProjects((prev) =>
         prev.map((p) =>
           p.id === task.id
-            ? { ...p, start: task.start, end: task.end }
+            ? { ...p, start: newStart, end: newEnd }
             : p
         )
       )
+      
+      // Also update workpackage dates if this is a master project
+      setWorkpackages((prev) =>
+        prev.map((wp) =>
+          wp.profileProjectId === task.id
+            ? { ...wp, start: newStart, end: newEnd }
+            : wp
+        )
+      )
+    } else if (task.type === "task") {
+      // Update task dates in both projects and workpackages
+      updateTaskEverywhere(task.id, (t) => ({ ...t, start: newStart, end: newEnd }))
     } else {
+      // Handle other types (workpackage, subtask, etc.)
+      // Update projects
       setProjects((prev) =>
         prev.map((p) => (p.tasks ? {
           ...p,
           tasks: p.tasks.map((t) =>
             t.id === task.id
-              ? { ...t, start: task.start, end: task.end }
+              ? { ...t, start: newStart, end: newEnd }
               : t
           ),
         } : p))
       )
+      
+      // Update workpackages
+      setWorkpackages((prev) =>
+        prev.map((wp) => ({
+          ...wp,
+          tasks: wp.tasks.map((t) =>
+            t.id === task.id
+              ? { ...t, start: newStart, end: newEnd }
+              : t
+          ),
+        }))
+      )
     }
   }
 
-  const getPersonName = (personId?: string) => {
-    if (!personId) return "Unassigned"
-    const person = people.find((p) => p.id === personId)
-    return person?.name || "Unknown"
+  // Get display name for a PersonProfile ID
+  // Note: personId parameter is actually a PersonProfile ID, not a Person ID
+  const getPersonName = (personProfileId?: string) => {
+    if (!personProfileId) return "Unassigned"
+    return getPersonDisplayName(allProfiles, personProfileId)
   }
 
   const getImportanceBadge = (importance: ImportanceLevel) => {
@@ -2555,7 +3305,7 @@ export default function Home() {
   }
 
   if (authState === 'setup' && currentUser) {
-    return <ProfileSetupPage user={currentUser} onComplete={handleProfileSetupComplete} />
+    return <OnboardingFlow user={currentUser} onComplete={handleProfileSetupComplete} />
   }
 
   const handleGanttContextAction = (payload: GanttContextActionPayload) => {
@@ -2667,11 +3417,42 @@ export default function Home() {
       }
       case "open-details": {
         if (payload.targetType === "task") {
-          const task = workpackages.flatMap((wp) => wp.tasks).find((t) => t.id === payload.targetId)
-            || projects.flatMap((project) => project.tasks || []).find((t) => t?.id === payload.targetId)
-          if (task) {
-            setDeliverablesWidgetTask(task)
-            setDeliverablesWidgetPosition({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 150 })
+          // Find the task and its context (workpackage/project)
+          let foundTask: Task | undefined
+          let foundWorkpackageId: string | null = null
+          let foundProjectId: string | null = null
+
+          // Search in workpackages first
+          for (const wp of workpackages) {
+            const task = wp.tasks.find((t) => t.id === payload.targetId)
+            if (task) {
+              foundTask = task
+              foundWorkpackageId = wp.id
+              // Find the project this workpackage belongs to
+              foundProjectId = projects.find(p =>
+                p.workpackages?.some(w => w.id === wp.id)
+              )?.id || null
+              break
+            }
+          }
+
+          // If not found, search in projects directly (legacy structure)
+          if (!foundTask) {
+            for (const project of projects) {
+              const task = project.tasks?.find((t) => t?.id === payload.targetId)
+              if (task) {
+                foundTask = task
+                foundProjectId = project.id
+                break
+              }
+            }
+          }
+
+          if (foundTask) {
+            setTaskDetailPanelTask(foundTask)
+            setTaskDetailPanelWorkpackageId(foundWorkpackageId)
+            setTaskDetailPanelProjectId(foundProjectId)
+            setTaskDetailPanelOpen(true)
           }
         }
         break
@@ -2692,7 +3473,7 @@ export default function Home() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <main className="min-h-screen bg-background p-4">
+      <main className="min-h-screen bg-background p-4 pb-8">
         <div className="max-w-[2000px] mx-auto space-y-4">
           {/* Header */}
           <div className="flex flex-col gap-4">
@@ -2750,6 +3531,24 @@ export default function Home() {
                 People
               </Button>
               <Button
+                onClick={() => setMainView('daytoday')}
+                variant={mainView === 'daytoday' ? 'default' : 'outline'}
+                size="lg"
+                className={mainView === 'daytoday' ? 'bg-brand-500 text-white' : ''}
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Day to Day
+              </Button>
+              <Button
+                onClick={() => setMainView('eln')}
+                variant={mainView === 'eln' ? 'default' : 'outline'}
+                size="lg"
+                className={mainView === 'eln' ? 'bg-brand-500 text-white' : ''}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Lab Notebook
+              </Button>
+              <Button
                 onClick={() => setMainView('myprofile')}
                 variant={mainView === 'myprofile' ? 'default' : 'outline'}
                 size="lg"
@@ -2788,18 +3587,87 @@ export default function Home() {
           {/* Conditional Content Based on Main View */}
           {mainView === 'projects' ? (
             <>
-          {/* Upcoming Events Panel */}
-          <UpcomingEventsPanel
-            events={upcomingEvents}
-            onCreateEvent={handleCreateEvent}
-            onSelectEvent={handleSelectEvent}
-            getPersonName={getPersonName}
-          />
-          
+          {/* Lab Polls and Upcoming Events */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Lab Polls Panel */}
+            {currentUserProfile && (
+              <LabPollPanel
+                polls={polls}
+                currentUserProfile={currentUserProfile}
+                people={people}
+                onCreatePoll={async (newPoll) => {
+                  try {
+                    const { id, ...pollData } = newPoll
+                    await createLabPoll(pollData)
+                    // Firestore subscription will update state
+                  } catch (error) {
+                    console.error("Error creating poll:", error)
+                    alert("Failed to create poll. Please try again.")
+                  }
+                }}
+                onRespondToPoll={async (pollId, optionIds) => {
+                  try {
+                    const poll = polls.find(p => p.id === pollId)
+                    if (!poll) return
+                    
+                    const existingResponseIndex = poll.responses?.findIndex(r => r.userId === currentUserProfile?.id) ?? -1
+                    const newResponse = {
+                      userId: currentUserProfile?.id || '',
+                      selectedOptionIds: optionIds,
+                      respondedAt: new Date().toISOString(),
+                    }
+                    
+                    const updatedResponses = poll.responses || []
+                    if (existingResponseIndex >= 0) {
+                      updatedResponses[existingResponseIndex] = newResponse
+                    } else {
+                      updatedResponses.push(newResponse)
+                    }
+                    
+                    await updateLabPoll(pollId, { responses: updatedResponses })
+                    // Firestore subscription will update state
+                  } catch (error) {
+                    console.error("Error responding to poll:", error)
+                    alert("Failed to update poll response. Please try again.")
+                  }
+                }}
+                onDeletePoll={async (pollId) => {
+                  if (confirm("Are you sure you want to delete this poll?")) {
+                    try {
+                      await deleteLabPoll(pollId)
+                      // Firestore subscription will update state
+                    } catch (error) {
+                      console.error("Error deleting poll:", error)
+                      alert("Failed to delete poll. Please try again.")
+                    }
+                  }
+                }}
+              />
+            )}
+            
+            {/* Upcoming Events Panel */}
+            <UpcomingEventsPanel
+              events={upcomingEvents}
+              onCreateEvent={handleCreateEvent}
+              onSelectEvent={handleSelectEvent}
+              getPersonName={getPersonName}
+            />
+          </div>
+
+          {/* Master Projects View Switcher */}
+          {currentUserProfile && (
+            <ViewSwitcher
+              currentProfile={currentUserProfile}
+              onViewChange={(view) => {
+                console.log("View changed to:", view)
+              }}
+            />
+          )}
+
           {/* Top Section: Team Members + Gantt Chart */}
-          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4">
             {/* Team Members - From JSON Profiles */}
-            <div className="card-monday">
+            <div className="card-monday hidden xl:block">
               <h2 className="text-lg font-bold text-foreground mb-3">Lab Personnel</h2>
               <p className="text-xs text-muted-foreground mb-3">
                 Drag to assign to projects & tasks
@@ -3001,15 +3869,15 @@ export default function Home() {
                               <Badge className="ml-auto bg-white text-brand-600">{categoryItems.length}</Badge>
                             </div>
                             
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
+                            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                              <table className="w-full text-sm min-w-[640px]">
                                 <thead>
                                   <tr className="bg-gray-100 border-b border-border">
                                     <th className="text-left p-2 font-semibold text-foreground">Product Name</th>
-                                    <th className="text-left p-2 font-semibold text-foreground">CAT#</th>
-                                    <th className="text-left p-2 font-semibold text-foreground min-w-[150px]">Level</th>
-                                    <th className="text-left p-2 font-semibold text-foreground">Account</th>
-                                    <th className="text-right p-2 font-semibold text-foreground">Price (ex VAT)</th>
+                                    <th className="text-left p-2 font-semibold text-foreground hidden md:table-cell">CAT#</th>
+                                    <th className="text-left p-2 font-semibold text-foreground min-w-[120px]">Level</th>
+                                    <th className="text-left p-2 font-semibold text-foreground hidden lg:table-cell">Account</th>
+                                    <th className="text-right p-2 font-semibold text-foreground hidden md:table-cell">Price</th>
                                     <th className="text-center p-2 font-semibold text-foreground">Actions</th>
                                   </tr>
                                 </thead>
@@ -3037,7 +3905,7 @@ export default function Home() {
                                             <div className="text-xs text-muted-foreground">{item.subcategory}</div>
                                           )}
                                         </td>
-                                        <td className="p-2 font-mono text-xs text-muted-foreground">{item.catNum}</td>
+                                        <td className="p-2 font-mono text-xs text-muted-foreground hidden md:table-cell">{item.catNum}</td>
                                         <td className="p-2">
                                           <div className="space-y-1">
                                             <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
@@ -3060,10 +3928,10 @@ export default function Home() {
                                             </select>
                                           </div>
                                         </td>
-                                        <td className="p-2 text-xs text-muted-foreground">
+                                        <td className="p-2 text-xs text-muted-foreground hidden lg:table-cell">
                                           {account ? `${account.name}` : "-"}
                                         </td>
-                                        <td className="p-2 text-right font-semibold text-foreground">
+                                        <td className="p-2 text-right font-semibold text-foreground hidden md:table-cell">
                                           £{item.priceExVAT?.toFixed(2) || "0.00"}
                                         </td>
                                         <td className="p-2 text-center">
@@ -3095,15 +3963,15 @@ export default function Home() {
                             <Badge className="ml-auto bg-white text-gray-700">{inventory.filter(item => !item.category).length}</Badge>
                           </div>
                           
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
+                          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                            <table className="w-full text-sm min-w-[640px]">
                               <thead>
                                 <tr className="bg-gray-100 border-b border-border">
                                   <th className="text-left p-2 font-semibold text-foreground">Product Name</th>
-                                  <th className="text-left p-2 font-semibold text-foreground">CAT#</th>
-                                  <th className="text-left p-2 font-semibold text-foreground min-w-[150px]">Level</th>
-                                  <th className="text-left p-2 font-semibold text-foreground">Account</th>
-                                  <th className="text-right p-2 font-semibold text-foreground">Price (ex VAT)</th>
+                                  <th className="text-left p-2 font-semibold text-foreground hidden md:table-cell">CAT#</th>
+                                  <th className="text-left p-2 font-semibold text-foreground min-w-[120px]">Level</th>
+                                  <th className="text-left p-2 font-semibold text-foreground hidden lg:table-cell">Account</th>
+                                  <th className="text-right p-2 font-semibold text-foreground hidden md:table-cell">Price</th>
                                   <th className="text-center p-2 font-semibold text-foreground">Actions</th>
                                 </tr>
                               </thead>
@@ -3126,7 +3994,7 @@ export default function Home() {
                                   return (
                                     <tr key={item.id} className={`border-b border-border hover:bg-gray-50 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                                       <td className="p-2 font-medium text-foreground">{item.productName}</td>
-                                      <td className="p-2 font-mono text-xs text-muted-foreground">{item.catNum}</td>
+                                      <td className="p-2 font-mono text-xs text-muted-foreground hidden md:table-cell">{item.catNum}</td>
                                       <td className="p-2">
                                         <div className="space-y-1">
                                           <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
@@ -3149,10 +4017,10 @@ export default function Home() {
                                           </select>
                                         </div>
                                       </td>
-                                      <td className="p-2 text-xs text-muted-foreground">
+                                      <td className="p-2 text-xs text-muted-foreground hidden lg:table-cell">
                                         {account ? `${account.name}` : "-"}
                                       </td>
-                                      <td className="p-2 text-right font-semibold text-foreground">
+                                      <td className="p-2 text-right font-semibold text-foreground hidden md:table-cell">
                                         £{item.priceExVAT?.toFixed(2) || "0.00"}
                                       </td>
                                       <td className="p-2 text-center">
@@ -3178,10 +4046,135 @@ export default function Home() {
                 </div>
               )}
             </div>
+            
+            {/* Equipment Status Panel */}
+            {currentUserProfile && (
+              <EquipmentStatusPanel
+                equipment={equipment}
+                inventory={inventory}
+                orders={orders}
+                masterProjects={(currentUserProfile?.projects || []).map(pp => ({
+                  id: pp.id,
+                  name: pp.name,
+                  description: pp.description,
+                  labId: currentUserProfile?.lab || '',
+                  labName: currentUserProfile?.lab || '',
+                  instituteId: currentUserProfile?.institute || '',
+                  instituteName: currentUserProfile?.institute || '',
+                  organisationId: currentUserProfile?.organisation || '',
+                  organisationName: currentUserProfile?.organisation || '',
+                  grantName: pp.grantName,
+                  grantNumber: pp.grantNumber,
+                  totalBudget: pp.budget,
+                  currency: "GBP",
+                  startDate: pp.startDate,
+                  endDate: pp.endDate,
+                  funderId: pp.fundedBy?.[0] || '',
+                  funderName: '',
+                  accountIds: pp.fundedBy || [],
+                  principalInvestigatorIds: pp.principalInvestigatorId ? [pp.principalInvestigatorId] : [],
+                  coPIIds: [],
+                  teamMemberIds: [],
+                  teamRoles: {},
+                  workpackageIds: [],
+                  status: pp.status as any || 'active',
+                  progress: 0,
+                  visibility: pp.visibility as any || 'lab',
+                  tags: pp.tags,
+                  notes: pp.notes,
+                  createdAt: new Date().toISOString(),
+                  createdBy: currentUserProfile?.userId || currentUserProfile?.id || '',
+                } as MasterProject))}
+                currentUserProfile={currentUserProfile}
+                onEquipmentUpdate={async (updatedEquipment) => {
+                  try {
+                    // Create or update each equipment item in Firestore
+                    const promises = updatedEquipment.map(async (eq) => {
+                      // Check if this is a new device (not in existing equipment array)
+                      const existingDevice = equipment.find(e => e.id === eq.id)
+
+                      if (!existingDevice) {
+                        // New device - create it
+                        const { id, ...deviceData } = eq
+                        await createEquipment(deviceData)
+                      } else {
+                        // Existing device - update it
+                        await updateEquipment(eq.id, eq)
+                      }
+                    })
+                    await Promise.all(promises)
+                    // Firestore subscription will update state
+                  } catch (error) {
+                    console.error("Error creating/updating equipment:", error)
+                    alert("Failed to save equipment. Please try again.")
+                    // Fallback to local state
+                    setEquipment(updatedEquipment)
+                  }
+                }}
+                onInventoryUpdate={setInventory}
+                onOrderCreate={(newOrder) => {
+                  setOrders([...orders, newOrder])
+                }}
+                onTaskCreate={async (newTask) => {
+                  try {
+                    await createDayToDayTask(newTask)
+                    // Firestore subscription will update state
+                  } catch (error) {
+                    console.error("Error creating task:", error)
+                    alert("Failed to create task. Please try again.")
+                    // Fallback to local state
+                    setDayToDayTasks([...dayToDayTasks, newTask])
+                  }
+                }}
+              />
+            )}
           </div>
             </>
           ) : mainView === 'people' ? (
-            <PeopleView />
+            <PeopleView currentUserProfile={currentUserProfile} />
+          ) : mainView === 'daytoday' ? (
+            <DayToDayBoard
+              tasks={dayToDayTasks}
+              people={people}
+              onCreateTask={handleCreateDayToDayTask}
+              onUpdateTask={handleUpdateDayToDayTask}
+              onDeleteTask={handleDeleteDayToDayTask}
+              onMoveTask={handleMoveDayToDayTask}
+            />
+          ) : mainView === 'eln' ? (
+            <ElectronicLabNotebook
+              experiments={elnExperiments}
+              currentUserProfile={currentUserProfile}
+              onExperimentsUpdate={async (updatedExperiments) => {
+                try {
+                  // Update each experiment in Firestore
+                  const updatePromises = updatedExperiments.map(async (exp) => {
+                    if (exp.id && exp.createdBy === currentUser?.id) {
+                      await updateELNExperiment(exp.id, exp)
+                    } else if (!exp.id && currentUser?.id) {
+                      // New experiment - create in Firestore
+                      const { id, ...experimentData } = exp
+                      await createELNExperiment({
+                        ...experimentData,
+                        createdBy: currentUser.id,
+                        labId: currentUserProfile?.lab || "temp_lab_placeholder",
+                        labName: currentUserProfile?.lab || "Unknown Lab",
+                        // Temporary placeholders until proper project selection is implemented
+                        masterProjectId: "temp_project_placeholder",
+                        masterProjectName: "No Project Selected",
+                      })
+                    }
+                  })
+                  await Promise.all(updatePromises)
+                  // Firestore subscription will update state
+                } catch (error) {
+                  console.error("Error updating ELN experiments:", error)
+                  alert("Failed to save experiment. Please try again.")
+                  // Fallback to local state
+                  setElnExperiments(updatedExperiments)
+                }
+              }}
+            />
           ) : mainView === 'myprofile' ? (
             <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />
           ) : (
@@ -3221,6 +4214,75 @@ export default function Home() {
             setEditingEvent(null)
           }}
         />
+
+        <DeletionConfirmationDialog
+          open={deletionDialogOpen}
+          impact={deletionImpact}
+          onConfirm={confirmDeleteProject}
+          onCancel={cancelDeleteProject}
+        />
+
+        {/* Task Detail Panel Dialog */}
+        {taskDetailPanelOpen && taskDetailPanelTask && taskDetailPanelProjectId && (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setTaskDetailPanelOpen(false)}
+          >
+            <div
+              className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
+                <h1 className="text-xl font-bold text-gray-900">Task Details</h1>
+                <button
+                  onClick={() => setTaskDetailPanelOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl font-bold leading-none"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-6">
+                <TaskDetailPanel
+                  task={taskDetailPanelTask}
+                  profiles={allProfiles}
+                  onToggleTodo={(subtaskId, todoId) =>
+                    handleToggleTodo(
+                      taskDetailPanelProjectId,
+                      taskDetailPanelWorkpackageId,
+                      taskDetailPanelTask.id,
+                      subtaskId,
+                      todoId
+                    )
+                  }
+                  onAddTodo={(subtaskId, text) =>
+                    handleAddTodo(
+                      taskDetailPanelProjectId,
+                      taskDetailPanelWorkpackageId,
+                      taskDetailPanelTask.id,
+                      subtaskId,
+                      text
+                    )
+                  }
+                  onDeleteTodo={(subtaskId, todoId) =>
+                    handleDeleteTodo(
+                      taskDetailPanelProjectId,
+                      taskDetailPanelWorkpackageId,
+                      taskDetailPanelTask.id,
+                      subtaskId,
+                      todoId
+                    )
+                  }
+                  onAddSubtask={(name) => {
+                    handleAddSubtask(taskDetailPanelTask.id)
+                    // Note: The subtask name will be "New Subtask" by default
+                    // Could enhance handleAddSubtask to accept a name parameter
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <DragOverlay>
@@ -3261,6 +4323,8 @@ export default function Home() {
         onCreateRegular={handleCreateRegularProject}
         onCreateMaster={handleCreateMasterProject}
         currentUserProfileId={currentUserProfileId}
+        currentUserId={currentUser?.id || ""}
+        organisationId={currentUserProfile?.organisation}
       />
     </DndContext>
   )
