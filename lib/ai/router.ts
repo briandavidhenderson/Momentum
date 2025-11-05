@@ -22,6 +22,7 @@ import type {
 } from './types'
 
 import { OpenAIProvider } from './providers/openai'
+import { GeminiProvider } from './providers/gemini'
 
 /**
  * AI Router Configuration
@@ -334,10 +335,23 @@ export class AIRouter {
 }
 
 /**
- * Default router instance
+ * Default router instance with Gemini provider
  * Can be imported and used directly
  */
-export const defaultRouter = new AIRouter()
+const geminiKey = 'AIzaSyDhpoQh3TcaXfoAzpAXjKNMck7Djj6Mi9o'
+const geminiProvider = new GeminiProvider(geminiKey)
+const openaiProvider = new OpenAIProvider() // Fallback for STT
+
+export const defaultRouter = new AIRouter({
+  providers: [geminiProvider, openaiProvider],
+  defaultProvider: 'Gemini',
+  fallbackOrder: {
+    stt: ['OpenAI'], // Gemini doesn't support STT, use OpenAI
+    ocr: ['Gemini', 'OpenAI'],
+    vlm: ['Gemini', 'OpenAI'],
+    llm: ['Gemini', 'OpenAI'],
+  }
+})
 
 /**
  * Convenience functions using default router

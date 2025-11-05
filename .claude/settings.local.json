@@ -11,7 +11,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(firebase functions:config:set:*)"
     ],
     "deny": [],
     "ask": []
