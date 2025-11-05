@@ -53,7 +53,11 @@ function DroppableBar({
         outline: isOver ? "3px solid #3b82f6" : "none",
         outlineOffset: "2px",
         borderRadius: "8px",
+        backgroundColor: isOver ? "rgba(59, 130, 246, 0.1)" : "transparent",
+        transition: "all 0.2s ease-in-out",
+        boxShadow: isOver ? "0 4px 12px rgba(59, 130, 246, 0.3)" : "none",
       }}
+      title={isOver ? "Drop to assign person" : undefined}
     >
       {children}
     </div>

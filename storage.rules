@@ -7,30 +7,34 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // Helper function to check if user is administrator
+    function isAdmin() {
+      return isAuthenticated() && 
+             firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAdministrator == true;
+    }
+
     // Project files - only project members can access
     match /projects/{projectId}/{allPaths=**} {
       // Allow read if user is project member
       allow read: if isAuthenticated() && 
         firestore.exists(/databases/(default)/documents/memberships/$(projectId + '_' + request.auth.uid));
-      // Allow write if user is project Owner/PI
+      // Allow write if user is admin or project member
       allow write: if isAuthenticated() && 
-        (firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['Owner', 'PI']) ||
+        (isAdmin() ||
          firestore.exists(/databases/(default)/documents/memberships/$(projectId + '_' + request.auth.uid)));
     }
 
-    // Safety vault - restricted to SafetyOfficer, Owner, PI
+    // Safety vault - restricted to admins
     match /safety/{allPaths=**} {
-      allow read: if isAuthenticated() && 
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['SafetyOfficer', 'Owner', 'PI']);
-      allow write: if isAuthenticated() && 
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['SafetyOfficer']);
+      allow read: if isAuthenticated() && isAdmin();
+      allow write: if isAuthenticated() && isAdmin();
     }
 
-    // Templates - all authenticated users can read, only Owner/PI can write
+    // Templates - all authenticated users can read, admins can write
     match /templates/{allPaths=**} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && 
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['Owner', 'PI']);
+      allow write: if isAuthenticated() && isAdmin();
     }
 
     // User avatars - users can read/write their own
@@ -39,11 +43,10 @@ service firebase.storage {
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // General documents - based on document metadata
+    // General documents - authenticated users can read, admins can write
     match /documents/{allPaths=**} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && 
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.roles.hasAny(['Owner', 'PI', 'Member']);
+      allow write: if isAuthenticated() && isAdmin();
     }
   }
 }

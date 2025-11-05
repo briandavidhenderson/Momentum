@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -268,22 +269,56 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       firstName: formData.firstName!,
       lastName: formData.lastName!,
       email: formData.email!,
+      phone: formData.phone || "",
+      officeLocation: formData.officeLocation || "",
+
+      // New organizational hierarchy fields (temporary placeholders)
+      organisationId: `org_${formData.organisation!.toLowerCase().replace(/\s+/g, '_')}`,
+      organisationName: formData.organisation!,
+      instituteId: `inst_${formData.institute!.toLowerCase().replace(/\s+/g, '_')}`,
+      instituteName: formData.institute!,
+      labId: `lab_${formData.lab!.toLowerCase().replace(/\s+/g, '_')}`,
+      labName: formData.lab!,
+
+      // Position (new enum-based + legacy string)
+      positionLevel: formData.position?.includes("PhD") ? "phd_student" as any :
+                     formData.position?.includes("Postdoc") ? "postdoc_research_associate" as any :
+                     formData.position?.includes("Professor") ? "professor" as any :
+                     "research_assistant" as any,
+      positionDisplayName: formData.position || "Unknown",
       position: formData.position || "",
+
+      // Reporting structure
+      reportsToId: formData.reportsTo || null,
+
+      // PI status
+      isPrincipalInvestigator: (formData.principalInvestigatorProjects?.length || 0) > 0,
+
+      // Project membership
+      masterProjectIds: [],
+      masterProjectRoles: {},
+
+      // Legacy fields (for backward compatibility)
       organisation: formData.organisation!,
       institute: formData.institute!,
       lab: formData.lab!,
       reportsTo: formData.reportsTo || null,
       fundedBy: formData.fundedBy || [],
+      projects: formData.projects || [],
+      principalInvestigatorProjects: formData.principalInvestigatorProjects || [],
+
+      // Dates
       startDate: formData.startDate || new Date().toISOString().split("T")[0],
-      phone: formData.phone || "",
-      officeLocation: formData.officeLocation || "",
+
+      // Research profile
       researchInterests: formData.researchInterests || [],
       qualifications: formData.qualifications || [],
       notes: formData.notes || "",
-      projects: formData.projects || [],
-      principalInvestigatorProjects: formData.principalInvestigatorProjects || [],
+
+      // Account
       userId: formData.userId,
       profileComplete: formData.profileComplete !== undefined ? formData.profileComplete : true,
+      onboardingComplete: false, // Will be true after new onboarding flow
       isAdministrator: formData.isAdministrator || false,
     }
 
@@ -1332,4 +1367,3 @@ function ProjectDialog({
     </Dialog>
   )
 }
-

@@ -1,14 +1,14 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
 import "./gantt-custom.css"
-
-const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Momentum",
   description: "Offline-first application",
 }
+
+
+import { AppWrapper } from "@/lib/AppContext";
 
 export default function RootLayout({
   children,
@@ -17,8 +17,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        {children}
+      <body className="font-sans">
+        <AppWrapper>{children}</AppWrapper>
       </body>
     </html>
   )

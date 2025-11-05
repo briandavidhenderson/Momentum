@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { PersonProfile } from "./types"
 import { subscribeToProfiles } from "./firestoreService"
 
@@ -10,15 +10,24 @@ import { subscribeToProfiles } from "./firestoreService"
  */
 export function useProfiles(): PersonProfile[] {
   const [allProfiles, setAllProfiles] = useState<PersonProfile[]>([])
+  const isMountedRef = useRef(true)
 
   useEffect(() => {
+    isMountedRef.current = true
+    
     // Subscribe to real-time profile updates from Firestore
     const unsubscribe = subscribeToProfiles((profiles) => {
-      setAllProfiles(profiles)
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setAllProfiles(profiles)
+      }
     })
     
     // Clean up subscription on unmount
-    return () => unsubscribe()
+    return () => {
+      isMountedRef.current = false
+      unsubscribe()
+    }
   }, [])
 
   return allProfiles

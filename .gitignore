@@ -16,3 +16,15 @@ build/
 
 # Logs
 *.log
+# Next.js build output
+.next/
+out/
+
+# Firebase local/cache + compiled functions
+.firebase/
+firebase/functions/lib/
+
+# Environment files
+.env.local
+.env
+.env.*

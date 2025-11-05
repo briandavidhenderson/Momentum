@@ -114,7 +114,7 @@ export function UpcomingEventsPanel({
         ))}
       </div>
 
-      <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[50vh] md:max-h-[420px] overflow-y-auto pr-1">
         {filtered.length === 0 ? (
           <EmptyState range={activeRange} />
         ) : (

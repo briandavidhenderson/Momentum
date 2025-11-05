@@ -50,10 +50,23 @@ service cloud.firestore {
       return profileId != null ? get(/databases/$(database)/documents/personProfiles/$(profileId)) : null;
     }
 
+    // Helper function to get user's lab
+    function getUserLab() {
+      let userProfile = getUserProfile();
+      return userProfile != null && userProfile.data != null ? userProfile.data.lab : null;
+    }
+
     // Helper function to check if user can view a project
-    // Simplified visibility check - allows all authenticated users to see projects
+    // Projects are scoped to labs - users can only see projects created by users in their lab
+    // Note: Projects should have a 'labId' field set when created. If not present, 
+    //       the project is visible to all authenticated users (fallback behavior)
     function canViewProject(projectData) {
-      return isAuthenticated();
+      return isAuthenticated() && (
+        isAdmin() ||
+        (projectData.labId != null && projectData.labId == getUserLab()) ||
+        projectData.createdBy == request.auth.uid ||
+        projectData.labId == null  // Fallback: allow if labId not set (will be filtered client-side)
+      );
     }
 
     // ============================================================================
@@ -77,18 +90,19 @@ service cloud.firestore {
     // PERSON PROFILES COLLECTION
     // ============================================================================
     match /personProfiles/{profileId} {
-      // All authenticated users can read all profiles (for network building)
+      // Users can read profiles (lab filtering done client-side to avoid circular dependency)
+      // Note: This allows reading all profiles, but client-side code should filter by lab
       allow read: if isAuthenticated();
-      
+
       // Users can create their own profile
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      
+
       // Users can update their own profile, admins can update any
       allow update: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || 
+        resource.data.userId == request.auth.uid ||
         isAdmin()
       );
-      
+
       // Only admins can delete profiles
       allow delete: if isAdmin();
     }
@@ -159,41 +173,124 @@ service cloud.firestore {
     match /funders/{funderId} {
       // All authenticated users can read funders
       allow read: if isAuthenticated();
-      
+
       // Any authenticated user can create a funder
       allow create: if isAuthenticated();
-      
+
       // Creator or admin can update
       allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || 
+        resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );
-      
+
       // Only admin can delete
       allow delete: if isAdmin();
     }
 
     // ============================================================================
-    // PROJECTS COLLECTION
+    // FUNDING ACCOUNTS
+    // ============================================================================
+    // Helper function to check if user is a member of a master project
+    function isProjectMember(projectId) {
+      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      return project != null && project.data != null && (
+        getUserProfileId() in project.data.teamMemberIds
+      );
+    }
+
+    // Helper function to check if user is PI of a master project
+    function isProjectPI(projectId) {
+      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      return project != null && project.data != null && (
+        getUserProfileId() in project.data.principalInvestigatorIds
+      );
+    }
+
+    match /accounts/{accountId} {
+      // Users can read accounts for projects they're a member of
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectMember(resource.data.masterProjectId)
+      );
+
+      // PIs can create accounts for their projects
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectPI(request.resource.data.masterProjectId)
+      );
+
+      // PIs or admins can update accounts
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectPI(resource.data.masterProjectId)
+      );
+
+      // Only PIs or admins can delete accounts
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectPI(resource.data.masterProjectId)
+      );
+    }
+
+    // ============================================================================
+    // MASTER PROJECTS
+    // ============================================================================
+    // Helper function to check if user is member of project's lab
+    function isLabMember(labId) {
+      let userProfile = getUserProfile();
+      return userProfile != null && userProfile.data != null && userProfile.data.labId == labId;
+    }
+
+    match /masterProjects/{projectId} {
+      // Users can read projects if they are:
+      // - A member of the project's lab
+      // - A member of the project team
+      // - An admin
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isLabMember(resource.data.labId) ||
+        getUserProfileId() in resource.data.teamMemberIds
+      );
+
+      // PIs and lab members can create projects
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isLabMember(request.resource.data.labId)
+      );
+
+      // PIs or admins can update projects
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        getUserProfileId() in resource.data.principalInvestigatorIds
+      );
+
+      // Only PIs or admins can delete projects
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        getUserProfileId() in resource.data.principalInvestigatorIds
+      );
+    }
+
+    // ============================================================================
+    // PROJECTS COLLECTION (LEGACY)
     // ============================================================================
     match /projects/{projectId} {
-      // Users can read projects based on visibility settings
-      allow read: if isAuthenticated() && canViewProject(resource.data);
-      
+      // Users can read projects (lab filtering done client-side)
+      // Simplified to avoid circular dependency with getUserLab()
+      allow read: if isAuthenticated();
+
       // Any authenticated user can create a project
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-      
-      // Creator, PI, or admin can update
+
+      // Creator or admin can update
       allow update: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
-        resource.data.principalInvestigatorId == getUserProfileId() ||
         isAdmin()
       );
-      
-      // Creator, PI, or admin can delete
+
+      // Creator or admin can delete
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
-        resource.data.principalInvestigatorId == getUserProfileId() ||
         isAdmin()
       );
     }
@@ -261,6 +358,91 @@ service cloud.firestore {
       );
       
       // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // DAY-TO-DAY TASKS
+    // ============================================================================
+    match /dayToDayTasks/{taskId} {
+      // Users can read their own tasks
+      allow read: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      
+      // Users can create their own tasks
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      
+      // Users can update their own tasks
+      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      
+      // Users can delete their own tasks
+      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // ============================================================================
+    // LAB POLLS
+    // ============================================================================
+    match /labPolls/{pollId} {
+      // Users can read polls (lab filtering done client-side or in query)
+      allow read: if isAuthenticated();
+
+      // Users can create polls
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // EQUIPMENT
+    // ============================================================================
+    match /equipment/{equipmentId} {
+      // Users can read equipment (lab filtering done in query)
+      allow read: if isAuthenticated();
+
+      // Users can create equipment
+      allow create: if isAuthenticated();
+
+      // Users or admin can update
+      allow update: if isAuthenticated();
+
+      // Users or admin can delete
+      allow delete: if isAuthenticated();
+    }
+
+    // ============================================================================
+    // ELN EXPERIMENTS
+    // ============================================================================
+    match /elnExperiments/{experimentId} {
+      // Users can read their own experiments
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Users can create their own experiments
+      allow create: if isAuthenticated() && 
+        request.resource.data.createdBy == request.auth.uid;
+      
+      // Users can update their own experiments
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Users can delete their own experiments
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isAdmin()

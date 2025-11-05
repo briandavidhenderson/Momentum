@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { PersonProfile, FUNDING_ACCOUNTS } from "@/lib/types"
 import { getDirectReports } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
@@ -8,11 +8,35 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { User, Mail, Phone, MapPin, BookOpen, GraduationCap, Users, Building, Network } from "lucide-react"
 import { NetworkView } from "./NetworkView"
+import PositionBadge from "@/components/PositionBadge"
 
-export function PeopleView() {
-  const profiles = useProfiles()
+interface PeopleViewProps {
+  currentUserProfile?: PersonProfile | null
+}
+
+export function PeopleView({ currentUserProfile }: PeopleViewProps = {}) {
+  const allProfiles = useProfiles()
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "orgchart" | "network">("grid")
+
+  // Filter profiles by lab if currentUserProfile is provided
+  const profiles = currentUserProfile?.lab
+    ? allProfiles.filter(p => p.lab === currentUserProfile.lab)
+    : allProfiles
+
+  // Debug logging
+  useEffect(() => {
+    console.log("PeopleView: Profile loading status", {
+      allProfilesCount: allProfiles.length,
+      filteredProfilesCount: profiles.length,
+      currentUserProfile: currentUserProfile ? {
+        id: currentUserProfile.id,
+        lab: currentUserProfile.lab,
+        name: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
+      } : null,
+      allProfiles: allProfiles.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`, lab: p.lab }))
+    })
+  }, [allProfiles, profiles, currentUserProfile])
 
   const labs = Array.from(new Set(profiles.map(p => p.lab)))
   const institutes = Array.from(new Set(profiles.map(p => p.institute)))
@@ -125,7 +149,7 @@ export function PeopleView() {
 
       {viewMode === "network" ? (
         /* Network View */
-        <NetworkView />
+        <NetworkView currentUserProfile={currentUserProfile} />
       ) : viewMode === "grid" ? (
         /* Grid View - Grouped by Lab and Projects */
         <div className="space-y-6">
@@ -185,12 +209,15 @@ export function PeopleView() {
                                   <h4 className="font-semibold text-foreground truncate text-sm">
                                     {profile.firstName} {profile.lastName}
                                   </h4>
-                                  <p className="text-xs text-muted-foreground truncate">{profile.position}</p>
-                                  {profile.principalInvestigatorProjects?.includes(projectId) && (
-                                    <Badge variant="outline" className="text-[10px] mt-1 bg-purple-50 text-purple-700 border-purple-300">
-                                      PI
-                                    </Badge>
-                                  )}
+                                  <div className="mt-1">
+                                    <PositionBadge
+                                      positionLevel={profile.positionLevel}
+                                      positionDisplayName={profile.positionDisplayName}
+                                      size="sm"
+                                      showIcon={false}
+                                      isPrincipalInvestigator={profile.principalInvestigatorProjects?.includes(projectId) || false}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -223,7 +250,15 @@ export function PeopleView() {
                               <h3 className="font-bold text-foreground truncate">
                                 {profile.firstName} {profile.lastName}
                               </h3>
-                              <p className="text-sm text-muted-foreground truncate">{profile.position}</p>
+                              <div className="mt-1">
+                                <PositionBadge
+                                  positionLevel={profile.positionLevel}
+                                  positionDisplayName={profile.positionDisplayName}
+                                  size="sm"
+                                  showIcon={true}
+                                  isPrincipalInvestigator={profile.isPrincipalInvestigator || false}
+                                />
+                              </div>
                               <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                                 <Mail className="h-3 w-3" />
                                 <span className="truncate">{profile.email}</span>
@@ -282,7 +317,15 @@ export function PeopleView() {
                             <h3 className="font-bold text-foreground">
                               {leader.firstName} {leader.lastName}
                             </h3>
-                            <p className="text-sm text-muted-foreground">{leader.position}</p>
+                            <div className="mt-1">
+                              <PositionBadge
+                                positionLevel={leader.positionLevel}
+                                positionDisplayName={leader.positionDisplayName}
+                                size="sm"
+                                showIcon={true}
+                                isPrincipalInvestigator={leader.isPrincipalInvestigator || false}
+                              />
+                            </div>
                           </div>
                           {directReports.length > 0 && (
                             <Badge className="bg-gray-200 text-gray-700">
@@ -313,7 +356,15 @@ export function PeopleView() {
                                       <h4 className="font-semibold text-foreground text-sm">
                                         {report.firstName} {report.lastName}
                                       </h4>
-                                      <p className="text-xs text-muted-foreground">{report.position}</p>
+                                      <div className="mt-1">
+                                        <PositionBadge
+                                          positionLevel={report.positionLevel}
+                                          positionDisplayName={report.positionDisplayName}
+                                          size="sm"
+                                          showIcon={false}
+                                          isPrincipalInvestigator={report.isPrincipalInvestigator || false}
+                                        />
+                                      </div>
                                     </div>
                                     {subReports.length > 0 && (
                                       <Badge variant="outline" className="text-xs">
@@ -341,7 +392,15 @@ export function PeopleView() {
                                             <h5 className="font-medium text-foreground text-xs">
                                               {subReport.firstName} {subReport.lastName}
                                             </h5>
-                                            <p className="text-[10px] text-muted-foreground">{subReport.position}</p>
+                                            <div className="mt-0.5">
+                                              <PositionBadge
+                                                positionLevel={subReport.positionLevel}
+                                                positionDisplayName={subReport.positionDisplayName}
+                                                size="sm"
+                                                showIcon={false}
+                                                isPrincipalInvestigator={subReport.isPrincipalInvestigator || false}
+                                              />
+                                            </div>
                                           </div>
                                         </div>
                                       ))}
@@ -383,7 +442,15 @@ export function PeopleView() {
                 <h2 className="text-2xl font-bold text-foreground">
                   {selectedProfile.firstName} {selectedProfile.lastName}
                 </h2>
-                <p className="text-lg text-muted-foreground">{selectedProfile.position}</p>
+                <div className="mt-2">
+                  <PositionBadge
+                    positionLevel={selectedProfile.positionLevel}
+                    positionDisplayName={selectedProfile.positionDisplayName}
+                    size="md"
+                    showIcon={true}
+                    isPrincipalInvestigator={selectedProfile.isPrincipalInvestigator || false}
+                  />
+                </div>
                 <div className="flex gap-2 mt-2">
                   {selectedProfile.fundedBy.map((fund) => (
                     <Badge key={fund} className="bg-brand-500 text-white">

@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -19,15 +20,7 @@ import {
 import { Plus, GripVertical, Trash2, Edit2, Clock } from "lucide-react"
 import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
-
-interface DayToDayBoardProps {
-  tasks: DayToDayTask[]
-  people: Person[]
-  onCreateTask: (task: Omit<DayToDayTask, "id" | "createdAt" | "updatedAt" | "order">) => void
-  onUpdateTask: (taskId: string, updates: Partial<DayToDayTask>) => void
-  onDeleteTask: (taskId: string) => void
-  onMoveTask: (taskId: string, newStatus: TaskStatus) => void
-}
+import { useAppContext } from "@/lib/AppContext"
 
 function DroppableColumn({ 
   id, 
@@ -321,14 +314,19 @@ function DayToDayTaskEditDialog({
   )
 }
 
-export function DayToDayBoard({
-  tasks,
-  people,
-  onCreateTask,
-  onUpdateTask,
-  onDeleteTask,
-  onMoveTask,
-}: DayToDayBoardProps) {
+export function DayToDayBoard() {
+  // Get state and handlers from context
+  const {
+    dayToDayTasks,
+    people,
+    handleCreateDayToDayTask: onCreateTask,
+    handleUpdateDayToDayTask: onUpdateTask,
+    handleDeleteDayToDayTask: onDeleteTask,
+    handleMoveDayToDayTask: onMoveTask,
+  } = useAppContext()
+
+  const tasks = dayToDayTasks as DayToDayTask[]
+
   const [activeTask, setActiveTask] = useState<DayToDayTask | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState("")
   const [newTaskImportance, setNewTaskImportance] = useState<ImportanceLevel>("medium")
@@ -598,4 +596,3 @@ export function DayToDayBoard({
     </div>
   )
 }
-

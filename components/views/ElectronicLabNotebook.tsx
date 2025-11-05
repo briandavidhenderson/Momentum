@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -9,12 +10,10 @@ import { Badge } from "@/components/ui/badge"
 import { ELNExperiment, ELNPage, ELNStickyNote, ELNVoiceNote, PersonProfile } from "@/lib/types"
 import { Plus, Camera, Mic, Square, X, Save, Download, Upload, ChevronLeft, ChevronRight, Edit2, Trash2, FileText } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-
-interface ElectronicLabNotebookProps {
-  experiments: ELNExperiment[]
-  currentUserProfile: PersonProfile | null
-  onExperimentsUpdate: (experiments: ELNExperiment[]) => void
-}
+import { useAppContext } from "@/lib/AppContext"
+import { VoiceRecorder } from "@/components/VoiceRecorder"
+import { PhotoUploader } from "@/components/PhotoUploader"
+import { voiceToProtocol, photoToProtocol } from "@/lib/ai/router"
 
 const STICKY_NOTE_COLORS = [
   { name: "Yellow", value: "#FFEB3B" },
@@ -25,11 +24,20 @@ const STICKY_NOTE_COLORS = [
   { name: "Purple", value: "#CE93D8" },
 ]
 
-export function ElectronicLabNotebook({
-  experiments,
-  currentUserProfile,
-  onExperimentsUpdate,
-}: ElectronicLabNotebookProps) {
+export function ElectronicLabNotebook() {
+  // Get state and handlers from context
+  const {
+    elnExperiments,
+    currentUserProfile,
+    handleExperimentsUpdate: onExperimentsUpdate,
+  } = useAppContext()
+
+  const experiments = elnExperiments as ELNExperiment[]
+
+  // AI feature state
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false)
+  const [showPhotoUploader, setShowPhotoUploader] = useState(false)
+
   const [selectedExperiment, setSelectedExperiment] = useState<ELNExperiment | null>(null)
   const [currentPageIndex, setCurrentPageIndex] = useState<number>(-1)
   const [isRecording, setIsRecording] = useState(false)
@@ -448,6 +456,21 @@ export function ElectronicLabNotebook({
               Export
             </Button>
           )}
+          {/* AI Features */}
+          <Button
+            onClick={() => setShowVoiceRecorder(true)}
+            className="bg-purple-500 hover:bg-purple-600 text-white gap-2"
+          >
+            <Mic className="h-4 w-4" />
+            Voice Transcription
+          </Button>
+          <Button
+            onClick={() => setShowPhotoUploader(true)}
+            className="bg-blue-500 hover:bg-blue-600 text-white gap-2"
+          >
+            <Camera className="h-4 w-4" />
+            Photo OCR
+          </Button>
           <Button
             className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
             onClick={() => setIsCreatingExperiment(true)}
@@ -837,8 +860,109 @@ export function ElectronicLabNotebook({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AI Features */}
+      {showVoiceRecorder && (
+        <Dialog open={showVoiceRecorder} onOpenChange={setShowVoiceRecorder}>
+          <DialogContent className="max-w-md">
+            <VoiceRecorder
+              onRecordingComplete={async (audioBlob, audioFile) => {
+                try {
+                  // Send audio to AI for transcription and protocol extraction
+                  const result = await voiceToProtocol(audioFile)
+
+                  // Add transcribed text as a sticky note to current page
+                  if (currentPage && selectedExperiment) {
+                    const transcriptText = result.transcript.data.text
+                    const protocolData = result.protocol.data
+                    const protocolText = `AI Transcription:\n${transcriptText}\n\nProtocol:\n${JSON.stringify(protocolData, null, 2)}`
+
+                    const newStickyNote = {
+                      id: Date.now().toString(),
+                      content: protocolText,
+                      x: 50,
+                      y: 50,
+                      color: "#E1F5FE", // Light blue for AI notes
+                      createdAt: new Date().toISOString()
+                    }
+
+                    const updatedPage = {
+                      ...currentPage,
+                      stickyNotes: [...currentPage.stickyNotes, newStickyNote]
+                    }
+                    const updatedPages = selectedExperiment.pages.map(p =>
+                      p.id === currentPage.id ? updatedPage : p
+                    )
+                    const updatedExperiment = {
+                      ...selectedExperiment,
+                      pages: updatedPages
+                    }
+                    const updatedExperiments = experiments.map(e =>
+                      e.id === selectedExperiment.id ? updatedExperiment : e
+                    )
+                    onExperimentsUpdate(updatedExperiments)
+                  }
+                  setShowVoiceRecorder(false)
+                } catch (error) {
+                  console.error("Voice transcription failed:", error)
+                }
+              }}
+              onCancel={() => setShowVoiceRecorder(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {showPhotoUploader && (
+        <Dialog open={showPhotoUploader} onOpenChange={setShowPhotoUploader}>
+          <DialogContent className="max-w-2xl">
+            <PhotoUploader
+              onPhotoSelected={async (imageFile) => {
+                try {
+                  // Send photo to AI for OCR and protocol extraction
+                  const result = await photoToProtocol(imageFile)
+
+                  // Add extracted protocol as a sticky note to current page
+                  if (currentPage && selectedExperiment) {
+                    const extractedText = result.ocr.data.text
+                    const protocolData = result.protocol.data
+                    const protocolText = `AI OCR Extraction:\n${extractedText}\n\nProtocol:\n${JSON.stringify(protocolData, null, 2)}`
+
+                    const newStickyNote = {
+                      id: Date.now().toString(),
+                      content: protocolText,
+                      x: 50,
+                      y: 150,
+                      color: "#F1F8E9", // Light green for OCR notes
+                      createdAt: new Date().toISOString()
+                    }
+
+                    const updatedPage = {
+                      ...currentPage,
+                      stickyNotes: [...currentPage.stickyNotes, newStickyNote]
+                    }
+                    const updatedPages = selectedExperiment.pages.map(p =>
+                      p.id === currentPage.id ? updatedPage : p
+                    )
+                    const updatedExperiment = {
+                      ...selectedExperiment,
+                      pages: updatedPages
+                    }
+                    const updatedExperiments = experiments.map(e =>
+                      e.id === selectedExperiment.id ? updatedExperiment : e
+                    )
+                    onExperimentsUpdate(updatedExperiments)
+                  }
+                  setShowPhotoUploader(false)
+                } catch (error) {
+                  console.error("Photo protocol extraction failed:", error)
+                }
+              }}
+              onCancel={() => setShowPhotoUploader(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }
-
-

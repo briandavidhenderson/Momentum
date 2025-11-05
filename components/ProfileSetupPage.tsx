@@ -4,30 +4,49 @@ import { useState, useMemo, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { PersonProfile, ProfileProject } from "@/lib/types"
+import { PersonProfile, ProfileProject, Organisation, Institute, Lab, Funder } from "@/lib/types"
 import { Building, GraduationCap, BookOpen, Users, Mail, Phone, MapPin, Save, Plus } from "lucide-react"
-import { 
-  getOrganisations, 
-  getInstitutes, 
-  getLabs, 
+import {
+  getOrganisations,
+  getInstitutes,
+  getLabs,
   getFunders,
-  createOrganisation, 
-  createInstitute, 
+  createOrganisation,
+  createInstitute,
   createLab,
   createFunder,
   createProfile,
   updateUser
 } from "@/lib/firestoreService"
-import type { Organisation, Institute, Lab, Funder } from "@/lib/firestoreService"
 
 interface ProfileSetupPageProps {
   user: { id: string; email: string; fullName: string }
   onComplete: (profile: PersonProfile) => void
 }
 
+type QuestionType = 
+  | "text"
+  | "select"
+  | "email"
+  | "tel"
+  | "date"
+  | "textarea"
+  | "multi-select"
+  | "array"
+
+interface Question {
+  id: string
+  label: string
+  field: keyof PersonProfile
+  type: QuestionType
+  required: boolean
+  placeholder?: string
+  options?: string[]
+  dependsOn?: { field: keyof PersonProfile; value: any }
+  allowAddNew?: boolean
+}
+
 export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
-  const [step, setStep] = useState(1)
-  
   // Safely split fullName
   const nameParts = (user.fullName || "").split(" ")
   const firstName = nameParts[0] || ""
@@ -52,9 +71,10 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
     projects: [],
     principalInvestigatorProjects: [],
     userId: user.id,
-    profileComplete: false,
+    profileComplete: true, // Always true once profile is created
   })
 
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [newInterest, setNewInterest] = useState("")
   const [newQualification, setNewQualification] = useState("")
   
@@ -119,6 +139,113 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
   const labNames = useMemo(() => labs.map(l => l.name).sort(), [labs])
   const funderNames = useMemo(() => funders.map(f => f.name).sort(), [funders])
 
+  // Define all questions in order
+  const allQuestions: Question[] = useMemo(() => [
+    {
+      id: "firstName",
+      label: "What is your first name?",
+      field: "firstName",
+      type: "text",
+      required: true,
+      placeholder: "Enter your first name"
+    },
+    {
+      id: "lastName",
+      label: "What is your last name?",
+      field: "lastName",
+      type: "text",
+      required: true,
+      placeholder: "Enter your last name"
+    },
+    {
+      id: "organisation",
+      label: "Which organisation do you belong to?",
+      field: "organisation",
+      type: "select",
+      required: true,
+      options: organisationNames,
+      allowAddNew: true
+    },
+    {
+      id: "institute",
+      label: "Which institute are you part of?",
+      field: "institute",
+      type: "select",
+      required: true,
+      options: instituteNames,
+      dependsOn: { field: "organisation", value: true }, // true means just check if field has a value
+      allowAddNew: true
+    },
+    {
+      id: "lab",
+      label: "Which lab do you work in?",
+      field: "lab",
+      type: "select",
+      required: true,
+      options: labNames,
+      dependsOn: { field: "institute", value: true }, // true means just check if field has a value
+      allowAddNew: true
+    },
+    {
+      id: "position",
+      label: "What is your position?",
+      field: "position",
+      type: "text",
+      required: false,
+      placeholder: "e.g., PhD Student, Postdoctoral Researcher, Principal Investigator"
+    },
+    {
+      id: "phone",
+      label: "What is your phone number?",
+      field: "phone",
+      type: "tel",
+      required: false,
+      placeholder: "+44 20 7123 4567"
+    },
+    {
+      id: "officeLocation",
+      label: "Where is your office located?",
+      field: "officeLocation",
+      type: "text",
+      required: false,
+      placeholder: "e.g., Building A, Room 301"
+    },
+    {
+      id: "startDate",
+      label: "When did you start?",
+      field: "startDate",
+      type: "date",
+      required: false
+    },
+    {
+      id: "notes",
+      label: "Any additional information about yourself?",
+      field: "notes",
+      type: "textarea",
+      required: false,
+      placeholder: "Enter any additional information..."
+    }
+  ], [organisationNames, instituteNames, labNames, formData.organisation, formData.institute])
+
+  // Filter visible questions based on dependencies
+  const visibleQuestions = useMemo(() => {
+    return allQuestions.filter(q => {
+      if (!q.dependsOn) return true
+      const dependencyValue = formData[q.dependsOn.field]
+      // If dependsOn.value is true, just check if the field has any value
+      if (q.dependsOn.value === true) {
+        return !!dependencyValue
+      }
+      // Otherwise check for exact match
+      return dependencyValue === q.dependsOn.value
+    })
+  }, [allQuestions, formData])
+
+  // Get current question
+  const currentQuestion = visibleQuestions[currentQuestionIndex]
+  const totalQuestions = visibleQuestions.length
+  const isLastQuestion = currentQuestionIndex === totalQuestions - 1
+
   // Load organisations and funders on mount
   useEffect(() => {
     loadOrganisations()
@@ -145,12 +272,45 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
       setLabs([])
     }
   }, [formData.institute, institutes, loadLabs])
+
+  // Ensure current question index is valid when visible questions change
+  useEffect(() => {
+    if (currentQuestionIndex >= visibleQuestions.length) {
+      setCurrentQuestionIndex(Math.max(0, visibleQuestions.length - 1))
+    }
+    
+    // If current question is not in visible questions, find a valid one
+    if (currentQuestion && !visibleQuestions.includes(currentQuestion)) {
+      const newIndex = visibleQuestions.findIndex(q => q.id === currentQuestion.id)
+      if (newIndex >= 0) {
+        setCurrentQuestionIndex(newIndex)
+      } else {
+        // Find the first valid question
+        const firstValidIndex = visibleQuestions.findIndex(q => {
+          if (!q.dependsOn) return true
+          const dependencyValue = formData[q.dependsOn.field]
+          if (q.dependsOn.value === true) {
+            return !!dependencyValue
+          }
+          return dependencyValue === q.dependsOn.value
+        })
+        if (firstValidIndex >= 0) {
+          setCurrentQuestionIndex(firstValidIndex)
+        }
+      }
+    }
+  }, [visibleQuestions, currentQuestion, currentQuestionIndex, formData])
   
   const handleAddNewOrg = async () => {
     if (newOrgName.trim()) {
       try {
         setLoading(true)
-        await createOrganisation(newOrgName.trim(), user.id)
+        await createOrganisation({
+          name: newOrgName.trim(),
+          country: "Unknown", // TODO: Add country selection in UI
+          type: "university",
+          createdBy: user.id,
+        })
         await loadOrganisations()
         setFormData({ ...formData, organisation: newOrgName.trim(), institute: "", lab: "" })
         setNewOrgName("")
@@ -170,7 +330,12 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
         setLoading(true)
         const org = organisations.find(o => o.name === formData.organisation)
         if (org) {
-          await createInstitute(newInstituteName.trim(), org.id, user.id)
+          await createInstitute({
+            name: newInstituteName.trim(),
+            organisationId: org.id,
+            organisationName: org.name,
+            createdBy: user.id,
+          })
           await loadInstitutes(formData.organisation)
           setFormData({ ...formData, institute: newInstituteName.trim(), lab: "" })
           setNewInstituteName("")
@@ -192,7 +357,16 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
         const org = organisations.find(o => o.name === formData.organisation)
         const inst = institutes.find(i => i.name === formData.institute)
         if (org && inst) {
-          await createLab(newLabName.trim(), inst.id, org.id, user.id)
+          await createLab({
+            name: newLabName.trim(),
+            instituteId: inst.id,
+            instituteName: inst.name,
+            organisationId: org.id,
+            organisationName: org.name,
+            principalInvestigators: [],
+            labManagerIds: [],
+            createdBy: user.id,
+          })
           await loadLabs(inst.id)
           setFormData({ ...formData, lab: newLabName.trim() })
           setNewLabName("")
@@ -211,7 +385,12 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
     if (newFunderName.trim()) {
       try {
         setLoading(true)
-        await createFunder(newFunderName.trim(), user.id)
+        await createFunder({
+          name: newFunderName.trim(),
+          country: "Unknown", // TODO: Add country selection in UI
+          type: "other",
+          createdBy: user.id,
+        })
         await loadFunders()
         setFormData({
           ...formData,
@@ -260,22 +439,56 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
         firstName: formData.firstName!,
         lastName: formData.lastName!,
         email: formData.email!,
+        phone: formData.phone || "",
+        officeLocation: formData.officeLocation || "",
+
+        // New organizational hierarchy fields
+        organisationId: `org_${formData.organisation!.toLowerCase().replace(/\s+/g, '_')}`,
+        organisationName: formData.organisation!,
+        instituteId: `inst_${formData.institute!.toLowerCase().replace(/\s+/g, '_')}`,
+        instituteName: formData.institute!,
+        labId: `lab_${formData.lab!.toLowerCase().replace(/\s+/g, '_')}`,
+        labName: formData.lab!,
+
+        // Position
+        positionLevel: formData.position?.includes("PhD") ? "phd_student" as any :
+                       formData.position?.includes("Postdoc") ? "postdoc_research_associate" as any :
+                       formData.position?.includes("Professor") ? "professor" as any :
+                       "research_assistant" as any,
+        positionDisplayName: formData.position || "Unknown",
         position: formData.position || "",
+
+        // Reporting structure
+        reportsToId: formData.reportsTo || null,
+
+        // PI status
+        isPrincipalInvestigator: false,
+
+        // Project membership
+        masterProjectIds: [],
+        masterProjectRoles: {},
+
+        // Legacy fields (for backward compatibility)
         organisation: formData.organisation!,
         institute: formData.institute!,
         lab: formData.lab!,
         reportsTo: formData.reportsTo || null,
         fundedBy: formData.fundedBy || [],
+        projects: [],
+        principalInvestigatorProjects: [],
+
+        // Dates
         startDate: formData.startDate || new Date().toISOString().split("T")[0],
-        phone: formData.phone || "",
-        officeLocation: formData.officeLocation || "",
+
+        // Research profile
         researchInterests: formData.researchInterests || [],
         qualifications: formData.qualifications || [],
         notes: formData.notes || "",
-        projects: [],
-        principalInvestigatorProjects: [],
+
+        // Account
         userId: user.id,
         profileComplete: true,
+        onboardingComplete: false,
       }
 
       // Save profile to Firestore
@@ -309,120 +522,159 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
     }
   }
 
-  const canProceedToStep2 = formData.firstName && formData.lastName && formData.organisation && formData.institute && formData.lab
-  const canProceedToStep3 = true // Optional fields, can always proceed
-  const canComplete = canProceedToStep2
+  // Check if current question is valid
+  const canProceedToNext = useMemo(() => {
+    if (!currentQuestion) return false
+    if (!currentQuestion.required) return true
+    
+    const value = formData[currentQuestion.field]
+    if (Array.isArray(value)) {
+      return value.length > 0
+    }
+    return !!value
+  }, [currentQuestion, formData])
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="card-monday p-8 shadow-2xl">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">Complete Your Profile</h1>
-            <p className="text-muted-foreground">
-              Tell us about yourself to join the lab network
-            </p>
-          </div>
+  const handleNext = () => {
+    if (!canProceedToNext && currentQuestion?.required) {
+      alert(`Please ${currentQuestion.label.toLowerCase()}`)
+      return
+    }
 
-          {/* Progress Steps */}
-          <div className="flex items-center justify-between mb-8">
-            <div className={`flex items-center ${step >= 1 ? "text-brand-500" : "text-muted-foreground"}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 1 ? "border-brand-500 bg-brand-50" : "border-muted-foreground"}`}>
-                1
-              </div>
-              <span className="ml-2 font-medium">Basic Info</span>
-            </div>
-            <div className="flex-1 h-0.5 bg-muted-foreground mx-4" />
-            <div className={`flex items-center ${step >= 2 ? "text-brand-500" : "text-muted-foreground"}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 2 ? "border-brand-500 bg-brand-50" : "border-muted-foreground"}`}>
-                2
-              </div>
-              <span className="ml-2 font-medium">Position & Lab</span>
-            </div>
-            <div className="flex-1 h-0.5 bg-muted-foreground mx-4" />
-            <div className={`flex items-center ${step >= 3 ? "text-brand-500" : "text-muted-foreground"}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${step >= 3 ? "border-brand-500 bg-brand-50" : "border-muted-foreground"}`}>
-                3
-              </div>
-              <span className="ml-2 font-medium">Additional Details</span>
-            </div>
-          </div>
+    if (isLastQuestion) {
+      handleSubmit()
+    } else {
+      setCurrentQuestionIndex(prev => Math.min(prev + 1, totalQuestions - 1))
+    }
+  }
 
-          {/* Step 1: Basic Information */}
-          {step === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-foreground mb-4">Basic Information</h2>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">First Name *</Label>
-                  <Input
-                    id="firstName"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input
-                    id="lastName"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
+  const handleBack = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1)
+    }
+  }
 
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
+  // Render field based on question type
+  const renderQuestionField = () => {
+    if (!currentQuestion) return null
 
-              <div>
-                <Label htmlFor="organisation">Organisation *</Label>
-                <div className="flex gap-2">
-                  <select
-                    id="organisation"
-                    value={formData.organisation}
-                    onChange={(e) => {
-                      setFormData({ 
-                        ...formData, 
-                        organisation: e.target.value,
-                        institute: "", // Reset dependent fields
-                        lab: ""
-                      })
-                      setShowNewOrg(false)
-                    }}
-                    className="flex-1 px-3 py-2 rounded-md border border-border bg-background"
-                    required
-                  >
-                    <option value="">Select Organisation...</option>
-                    {organisationNames.map(org => (
-                      <option key={org} value={org}>{org}</option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
+    const fieldValue = formData[currentQuestion.field] as any
+
+    switch (currentQuestion.type) {
+      case "text":
+      case "tel":
+        return (
+          <Input
+            id={currentQuestion.id}
+            type={currentQuestion.type}
+            value={fieldValue || ""}
+            onChange={(e) => setFormData({ ...formData, [currentQuestion.field]: e.target.value })}
+            placeholder={currentQuestion.placeholder}
+            required={currentQuestion.required}
+            autoFocus
+          />
+        )
+      
+      case "date":
+        return (
+          <Input
+            id={currentQuestion.id}
+            type="date"
+            value={fieldValue || ""}
+            onChange={(e) => setFormData({ ...formData, [currentQuestion.field]: e.target.value })}
+            required={currentQuestion.required}
+            autoFocus
+          />
+        )
+
+      case "textarea":
+        return (
+          <textarea
+            id={currentQuestion.id}
+            value={fieldValue || ""}
+            onChange={(e) => setFormData({ ...formData, [currentQuestion.field]: e.target.value })}
+            rows={3}
+            className="w-full px-3 py-2 rounded-md border border-border bg-background"
+            placeholder={currentQuestion.placeholder}
+            required={currentQuestion.required}
+            autoFocus
+          />
+        )
+
+      case "select":
+        const showAddNew = currentQuestion.allowAddNew
+        const isOrg = currentQuestion.id === "organisation"
+        const isInstitute = currentQuestion.id === "institute"
+        const isLab = currentQuestion.id === "lab"
+
+        return (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <select
+                id={currentQuestion.id}
+                value={fieldValue || ""}
+                onChange={(e) => {
+                  const updates: any = { ...formData, [currentQuestion.field]: e.target.value }
+                  
+                  // Reset dependent fields
+                  if (isOrg) {
+                    updates.institute = ""
+                    updates.lab = ""
+                    setShowNewOrg(false)
+                  } else if (isInstitute) {
+                    updates.lab = ""
+                    setShowNewInstitute(false)
+                  } else if (isLab) {
+                    setShowNewLab(false)
+                  }
+                  
+                  setFormData(updates)
+                }}
+                className="flex-1 px-3 py-2 rounded-md border border-border bg-background"
+                required={currentQuestion.required}
+                disabled={
+                  (isInstitute && !formData.organisation) ||
+                  (isLab && (!formData.organisation || !formData.institute))
+                }
+                autoFocus
+              >
+                <option value="">Select {currentQuestion.label.split(" ").slice(-2).join(" ")}...</option>
+                {currentQuestion.options?.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              {showAddNew && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (isOrg) {
                       setShowNewOrg(!showNewOrg)
                       if (showNewOrg) setNewOrgName("")
-                    }}
-                    className="whitespace-nowrap"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add New
-                  </Button>
-                </div>
-                {showNewOrg && (
-                  <div className="mt-2 flex gap-2">
+                    } else if (isInstitute) {
+                      setShowNewInstitute(!showNewInstitute)
+                      if (showNewInstitute) setNewInstituteName("")
+                    } else if (isLab) {
+                      setShowNewLab(!showNewLab)
+                      if (showNewLab) setNewLabName("")
+                    }
+                  }}
+                  className="whitespace-nowrap"
+                  disabled={
+                    (isInstitute && !formData.organisation) ||
+                    (isLab && (!formData.organisation || !formData.institute))
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add New
+                </Button>
+              )}
+            </div>
+            
+            {/* Add new inputs */}
+            {showAddNew && (
+              <>
+                {isOrg && showNewOrg && (
+                  <div className="flex gap-2">
                     <Input
                       value={newOrgName}
                       onChange={(e) => setNewOrgName(e.target.value)}
@@ -438,404 +690,120 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
                     </Button>
                   </div>
                 )}
-              </div>
-
-              {formData.organisation && (
-                <div>
-                  <Label htmlFor="institute">Institute *</Label>
+                {isInstitute && showNewInstitute && (
                   <div className="flex gap-2">
-                    <select
-                      id="institute"
-                      value={formData.institute}
-                      onChange={(e) => {
-                        setFormData({ 
-                          ...formData, 
-                          institute: e.target.value,
-                          lab: "" // Reset dependent field
-                        })
-                        setShowNewInstitute(false)
-                      }}
-                      className="flex-1 px-3 py-2 rounded-md border border-border bg-background"
-                      required
-                      disabled={!formData.organisation}
-                    >
-                      <option value="">Select Institute...</option>
-                      {instituteNames.map(inst => (
-                        <option key={inst} value={inst}>{inst}</option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setShowNewInstitute(!showNewInstitute)
-                        if (showNewInstitute) setNewInstituteName("")
-                      }}
-                      className="whitespace-nowrap"
-                      disabled={!formData.organisation}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add New
-                    </Button>
-                  </div>
-                  {showNewInstitute && (
-                    <div className="mt-2 flex gap-2">
-                      <Input
-                        value={newInstituteName}
-                        onChange={(e) => setNewInstituteName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddNewInstitute())}
-                        placeholder="New Institute Name"
-                        autoFocus
-                      />
-                      <Button type="button" onClick={handleAddNewInstitute} size="sm">
-                        Save
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => { setShowNewInstitute(false); setNewInstituteName("") }} size="sm">
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {formData.organisation && formData.institute && (
-                <div>
-                  <Label htmlFor="lab">Lab *</Label>
-                  <div className="flex gap-2">
-                    <select
-                      id="lab"
-                      value={formData.lab}
-                      onChange={(e) => {
-                        setFormData({ ...formData, lab: e.target.value })
-                        setShowNewLab(false)
-                      }}
-                      className="flex-1 px-3 py-2 rounded-md border border-border bg-background"
-                      required
-                      disabled={!formData.organisation || !formData.institute}
-                    >
-                      <option value="">Select Lab...</option>
-                      {labNames.map(lab => (
-                        <option key={lab} value={lab}>{lab}</option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setShowNewLab(!showNewLab)
-                        if (showNewLab) setNewLabName("")
-                      }}
-                      className="whitespace-nowrap"
-                      disabled={!formData.organisation || !formData.institute}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add New
-                    </Button>
-                  </div>
-                  {showNewLab && (
-                    <div className="mt-2 flex gap-2">
-                      <Input
-                        value={newLabName}
-                        onChange={(e) => setNewLabName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddNewLab())}
-                        placeholder="New Lab Name"
-                        autoFocus
-                      />
-                      <Button type="button" onClick={handleAddNewLab} size="sm">
-                        Save
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => { setShowNewLab(false); setNewLabName("") }} size="sm">
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Show Active Projects for Selected Lab - TODO: Implement with Firestore */}
-              {/* {formData.lab && labProjects.length > 0 && (...)} */}
-
-              <div className="flex justify-end gap-3">
-                <Button
-                  type="button"
-                  onClick={() => setStep(2)}
-                  disabled={!canProceedToStep2}
-                  className="bg-brand-500 hover:bg-brand-600 text-white"
-                >
-                  Next: Position & Lab
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Position & Lab */}
-          {step === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-foreground mb-4">Position & Lab Details</h2>
-              
-              <div>
-                <Label htmlFor="position">Position</Label>
-                <Input
-                  id="position"
-                  value={formData.position}
-                  onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                  placeholder="e.g., PhD Student, Postdoctoral Researcher, Principal Investigator"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="reportsTo">Reports To</Label>
-                <select
-                  id="reportsTo"
-                  value={formData.reportsTo || ""}
-                  onChange={(e) => setFormData({ ...formData, reportsTo: e.target.value || null })}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-background"
-                >
-                  <option value="">N/A - Not applicable</option>
-                  {/* TODO: Load profiles from Firestore for "Reports To" dropdown */}
-                </select>
-              </div>
-
-              <div>
-                <Label htmlFor="funders">Funders</Label>
-                <div className="space-y-2">
-                  {(formData.fundedBy || []).map((funderName, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <span className="px-3 py-2 rounded-md border border-border bg-background flex-1">
-                        {funderName}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const updated = (formData.fundedBy || []).filter((_, i) => i !== index)
-                          setFormData({ ...formData, fundedBy: updated })
-                        }}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value && !formData.fundedBy?.includes(e.target.value)) {
-                        setFormData({
-                          ...formData,
-                          fundedBy: [...(formData.fundedBy || []), e.target.value],
-                        })
-                        e.target.value = ""
-                      }
-                    }}
-                    className="flex-1 px-3 py-2 rounded-md border border-border bg-background"
-                  >
-                    <option value="">Select Funder...</option>
-                    {funderNames.map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setShowNewFunder(!showNewFunder)
-                      if (showNewFunder) setNewFunderName("")
-                    }}
-                    className="whitespace-nowrap"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add New
-                  </Button>
-                </div>
-                {showNewFunder && (
-                  <div className="mt-2 flex gap-2">
                     <Input
-                      value={newFunderName}
-                      onChange={(e) => setNewFunderName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddNewFunder())}
-                      placeholder="New Funder Name"
+                      value={newInstituteName}
+                      onChange={(e) => setNewInstituteName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddNewInstitute())}
+                      placeholder="New Institute Name"
                       autoFocus
                     />
-                    <Button type="button" onClick={handleAddNewFunder} size="sm">
+                    <Button type="button" onClick={handleAddNewInstitute} size="sm">
                       Save
                     </Button>
-                    <Button type="button" variant="outline" onClick={() => { setShowNewFunder(false); setNewFunderName("") }} size="sm">
+                    <Button type="button" variant="outline" onClick={() => { setShowNewInstitute(false); setNewInstituteName("") }} size="sm">
                       Cancel
                     </Button>
                   </div>
                 )}
-              </div>
-
-              <div>
-                <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+44 20 7123 4567"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="officeLocation">Office Location</Label>
-                <Input
-                  id="officeLocation"
-                  value={formData.officeLocation}
-                  onChange={(e) => setFormData({ ...formData, officeLocation: e.target.value })}
-                  placeholder="e.g., Building A, Room 301"
-                />
-              </div>
-
-              <div className="flex justify-between gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStep(1)}
-                >
-                  Back
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => setStep(3)}
-                  disabled={!canProceedToStep3}
-                  className="bg-brand-500 hover:bg-brand-600 text-white"
-                >
-                  Next: Additional Details
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Additional Details */}
-          {step === 3 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-foreground mb-4">Additional Details</h2>
-              
-              <div>
-                <Label htmlFor="startDate">Start Date</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <Label>Research Interests</Label>
-                {(formData.researchInterests || []).map((interest, index) => (
-                  <div key={index} className="flex gap-2 mb-2">
+                {isLab && showNewLab && (
+                  <div className="flex gap-2">
                     <Input
-                      value={interest}
-                      onChange={(e) => {
-                        const updated = [...(formData.researchInterests || [])]
-                        updated[index] = e.target.value
-                        setFormData({ ...formData, researchInterests: updated })
-                      }}
-                      placeholder="e.g., Microfluidics, Cell Analysis"
+                      value={newLabName}
+                      onChange={(e) => setNewLabName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddNewLab())}
+                      placeholder="New Lab Name"
+                      autoFocus
                     />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeArrayItem("researchInterests", index)}
-                    >
-                      Remove
+                    <Button type="button" onClick={handleAddNewLab} size="sm">
+                      Save
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => { setShowNewLab(false); setNewLabName("") }} size="sm">
+                      Cancel
                     </Button>
                   </div>
-                ))}
-                <div className="flex gap-2">
-                  <Input
-                    value={newInterest}
-                    onChange={(e) => setNewInterest(e.target.value)}
-                    placeholder="Add research interest..."
-                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addArrayItem("researchInterests"))}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => addArrayItem("researchInterests")}
-                  >
-                    Add
-                  </Button>
-                </div>
-              </div>
+                )}
+              </>
+            )}
+          </div>
+        )
 
-              <div>
-                <Label>Qualifications</Label>
-                {(formData.qualifications || []).map((qual, index) => (
-                  <div key={index} className="flex gap-2 mb-2">
-                    <Input
-                      value={qual}
-                      onChange={(e) => {
-                        const updated = [...(formData.qualifications || [])]
-                        updated[index] = e.target.value
-                        setFormData({ ...formData, qualifications: updated })
-                      }}
-                      placeholder="e.g., PhD Molecular Biology"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeArrayItem("qualifications", index)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ))}
-                <div className="flex gap-2">
-                  <Input
-                    value={newQualification}
-                    onChange={(e) => setNewQualification(e.target.value)}
-                    placeholder="Add qualification..."
-                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addArrayItem("qualifications"))}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => addArrayItem("qualifications")}
-                  >
-                    Add
-                  </Button>
-                </div>
-              </div>
+      default:
+        return null
+    }
+  }
 
-              <div>
-                <Label htmlFor="notes">Notes</Label>
-                <textarea
-                  id="notes"
-                  value={formData.notes || ""}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-background"
-                  placeholder="Any additional information about yourself..."
-                />
-              </div>
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
-              <div className="flex justify-between gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setStep(2)}
-                >
-                  Back
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={!canComplete}
-                  className="bg-brand-500 hover:bg-brand-600 text-white"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  Complete Profile & Continue
-                </Button>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
+      <div className="max-w-2xl mx-auto">
+        <div className="card-monday p-8 shadow-2xl">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-foreground mb-2">Complete Your Profile</h1>
+            <p className="text-muted-foreground">
+              Question {currentQuestionIndex + 1} of {totalQuestions}
+            </p>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-8">
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-brand-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Current Question */}
+          <div className="space-y-6">
+            <div>
+              <Label htmlFor={currentQuestion.id} className="text-lg font-medium">
+                {currentQuestion.label}
+                {currentQuestion.required && <span className="text-red-500 ml-1">*</span>}
+              </Label>
+              <div className="mt-3">
+                {renderQuestionField()}
               </div>
             </div>
-          )}
+
+            {/* Navigation Buttons */}
+            <div className="flex justify-between gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBack}
+                disabled={currentQuestionIndex === 0}
+              >
+                Back
+              </Button>
+              <Button
+                type="button"
+                onClick={handleNext}
+                disabled={!canProceedToNext && currentQuestion.required}
+                className="bg-brand-500 hover:bg-brand-600 text-white"
+              >
+                {isLastQuestion ? (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Complete Profile
+                  </>
+                ) : (
+                  "Next"
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
