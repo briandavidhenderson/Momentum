@@ -14,9 +14,11 @@ export function useAuth() {
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthState>('auth');
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    setMounted(true);
     isMountedRef.current = true;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -119,6 +121,7 @@ export function useAuth() {
     currentUserProfileId,
     authState,
     isLoadingProfile,
+    mounted,
     handleLogin,
     handleSignup,
     handleSignOut,
