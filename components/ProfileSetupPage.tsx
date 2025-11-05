@@ -81,12 +81,14 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
   // States for adding new hierarchy levels
   const [showNewOrg, setShowNewOrg] = useState(false)
   const [newOrgName, setNewOrgName] = useState("")
+  const [newOrgCountry, setNewOrgCountry] = useState<string>("")
   const [showNewInstitute, setShowNewInstitute] = useState(false)
   const [newInstituteName, setNewInstituteName] = useState("")
   const [showNewLab, setShowNewLab] = useState(false)
   const [newLabName, setNewLabName] = useState("")
   const [showNewFunder, setShowNewFunder] = useState(false)
   const [newFunderName, setNewFunderName] = useState("")
+  const [newFunderCountry, setNewFunderCountry] = useState<string>("")
 
   // Firestore data
   const [organisations, setOrganisations] = useState<Organisation[]>([])
@@ -225,7 +227,7 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
       required: false,
       placeholder: "Enter any additional information..."
     }
-  ], [organisationNames, instituteNames, labNames, formData.organisation, formData.institute])
+  ], [organisationNames, instituteNames, labNames])
 
   // Filter visible questions based on dependencies
   const visibleQuestions = useMemo(() => {
@@ -307,13 +309,14 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
         setLoading(true)
         await createOrganisation({
           name: newOrgName.trim(),
-          country: "Unknown", // TODO: Add country selection in UI
+          country: newOrgCountry || "Unknown",
           type: "university",
           createdBy: user.id,
         })
         await loadOrganisations()
         setFormData({ ...formData, organisation: newOrgName.trim(), institute: "", lab: "" })
         setNewOrgName("")
+        setNewOrgCountry("")
         setShowNewOrg(false)
       } catch (error) {
         console.error("Error creating organisation:", error)
@@ -387,7 +390,7 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
         setLoading(true)
         await createFunder({
           name: newFunderName.trim(),
-          country: "Unknown", // TODO: Add country selection in UI
+          country: newFunderCountry || "Unknown",
           type: "other",
           createdBy: user.id,
         })
@@ -397,6 +400,7 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
           fundedBy: [...(formData.fundedBy || []), newFunderName.trim()],
         })
         setNewFunderName("")
+        setNewFunderCountry("")
         setShowNewFunder(false)
       } catch (error) {
         console.error("Error creating funder:", error)
@@ -674,20 +678,57 @@ export function ProfileSetupPage({ user, onComplete }: ProfileSetupPageProps) {
             {showAddNew && (
               <>
                 {isOrg && showNewOrg && (
-                  <div className="flex gap-2">
-                    <Input
-                      value={newOrgName}
-                      onChange={(e) => setNewOrgName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddNewOrg())}
-                      placeholder="New Organisation Name"
-                      autoFocus
-                    />
-                    <Button type="button" onClick={handleAddNewOrg} size="sm">
-                      Save
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => { setShowNewOrg(false); setNewOrgName("") }} size="sm">
-                      Cancel
-                    </Button>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Input
+                        value={newOrgName}
+                        onChange={(e) => setNewOrgName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddNewOrg())}
+                        placeholder="New Organisation Name"
+                        autoFocus
+                      />
+                      <Button type="button" onClick={handleAddNewOrg} size="sm">
+                        Save
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => { setShowNewOrg(false); setNewOrgName(""); setNewOrgCountry("") }} size="sm">
+                        Cancel
+                      </Button>
+                    </div>
+                    <div>
+                      <Label htmlFor="new-org-country" className="text-sm font-medium mb-1 block">
+                        Country
+                      </Label>
+                      <select
+                        id="new-org-country"
+                        value={newOrgCountry}
+                        onChange={(e) => setNewOrgCountry(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <option value="">Select a country</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="United States">United States</option>
+                        <option value="Canada">Canada</option>
+                        <option value="Australia">Australia</option>
+                        <option value="Germany">Germany</option>
+                        <option value="France">France</option>
+                        <option value="Italy">Italy</option>
+                        <option value="Spain">Spain</option>
+                        <option value="Netherlands">Netherlands</option>
+                        <option value="Belgium">Belgium</option>
+                        <option value="Switzerland">Switzerland</option>
+                        <option value="Sweden">Sweden</option>
+                        <option value="Norway">Norway</option>
+                        <option value="Denmark">Denmark</option>
+                        <option value="Finland">Finland</option>
+                        <option value="Japan">Japan</option>
+                        <option value="China">China</option>
+                        <option value="India">India</option>
+                        <option value="Brazil">Brazil</option>
+                        <option value="Mexico">Mexico</option>
+                        <option value="South Africa">South Africa</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
                   </div>
                 )}
                 {isInstitute && showNewInstitute && (

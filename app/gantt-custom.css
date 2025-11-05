@@ -1,4 +1,22 @@
 /* Custom Gantt Chart Styling - Light Mode */
+/* 
+ * WARNING: This file uses hashed/minified class names from gantt-task-react library.
+ * These class names (e.g., ._3jLuT, ._2vQhZ) are brittle and may break if the library is updated.
+ * 
+ * Library Version: gantt-task-react@^0.3.9
+ * 
+ * These selectors target internal elements of the gantt-task-react component.
+ * If the library updates and changes its class names, these styles will need to be updated.
+ * 
+ * Alternative approaches to consider:
+ * 1. Use CSS-in-JS or styled-components to style the Gantt component
+ * 2. Check if the library provides stable data attributes or class names
+ * 3. Use CSS custom properties (CSS variables) that can be set via props
+ * 4. Fork the library and add stable class names
+ * 
+ * Current approach uses !important flags to ensure styles override library defaults.
+ * This is necessary because the library doesn't expose stable class names.
+ */
 
 /* Override default table styles */
 .gantt-container {
@@ -7,6 +25,7 @@
 }
 
 /* Style the grid to be less table-like */
+/* NOTE: ._3jLuT is the main gantt grid container - may change with library updates */
 ._3jLuT {
   border-radius: 12px !important;
   overflow: hidden !important;
@@ -14,6 +33,7 @@
 }
 
 /* Task list styling */
+/* NOTE: ._2vQhZ targets the task list sidebar - may change with library updates */
 ._2vQhZ {
   background: hsl(var(--surface-2)) !important;
   border-right: 2px solid hsl(var(--border)) !important;
@@ -21,6 +41,7 @@
 }
 
 /* Task list rows */
+/* NOTE: ._1xfOj targets individual task rows - may change with library updates */
 ._1xfOj {
   border-bottom: 1px solid hsl(var(--border)) !important;
   transition: background-color 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -49,6 +70,7 @@
 }
 
 /* Calendar header */
+/* NOTE: ._1cK-_ targets the calendar date header - may change with library updates */
 ._1cK-_ {
   background: hsl(var(--brand-500)) !important;
   color: white !important;
@@ -58,6 +80,7 @@
 }
 
 /* Calendar grid */
+/* NOTE: ._2AmPk targets the calendar grid area - may change with library updates */
 ._2AmPk {
   background-color: hsl(var(--gray-50)) !important;
   border-radius: 0 0 12px 0 !important;

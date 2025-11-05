@@ -1,9 +1,11 @@
 
+import { useAuth } from './useAuth';
 import { useState, useEffect } from 'react';
 import { LabPoll } from '@/lib/types';
 import { subscribeToLabPolls, createLabPoll, updateLabPoll, deleteLabPoll } from '@/lib/firestoreService';
 
-export function usePolls(currentUserProfile: any) {
+export function usePolls() {
+  const { currentUserProfile } = useAuth();
   const [polls, setPolls] = useState<LabPoll[]>([]);
 
   useEffect(() => {

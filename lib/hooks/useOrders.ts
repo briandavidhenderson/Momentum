@@ -1,8 +1,10 @@
 
 import { useState, useEffect } from 'react';
 import { Order, InventoryItem, InventoryLevel } from '@/lib/types';
+import { useAuth } from './useAuth';
 
-export function useOrders(people: any) {
+export function useOrders() {
+  const { currentUserProfile } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
 
@@ -54,8 +56,8 @@ export function useOrders(people: any) {
       priceExVAT: 0,
       currency: 'GBP',
       status: 'to-order',
-      orderedBy: people[0]?.id || '',
-      createdBy: people[0]?.id || '',
+      orderedBy: currentUserProfile?.id || '',
+      createdBy: currentUserProfile?.id || '',
       createdDate: new Date(),
     };
     setOrders((prev) => [...prev, newOrder]);
@@ -121,8 +123,8 @@ export function useOrders(people: any) {
       priceExVAT: item.priceExVAT || 0,
       currency: 'GBP',
       status: 'to-order',
-      orderedBy: people[0]?.id || '',
-      createdBy: people[0]?.id || '',
+      orderedBy: currentUserProfile?.id || '',
+      createdBy: currentUserProfile?.id || '',
       createdDate: new Date(),
       category: item.category,
       subcategory: item.subcategory,

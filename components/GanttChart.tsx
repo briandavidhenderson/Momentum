@@ -2,7 +2,7 @@
 
 import { Gantt, Task as GanttTask, ViewMode } from "gantt-task-react"
 import "gantt-task-react/dist/index.css"
-import { Project, Task, Person, Workpackage, Subtask, Deliverable } from "@/lib/types"
+import { MasterProject, Workpackage, Task, Person, Subtask, Deliverable } from "@/lib/types"
 import { useMemo, useState, useCallback } from "react"
 import type { MouseEvent } from "react"
 import { useDroppable } from "@dnd-kit/core"
@@ -10,8 +10,8 @@ import { ChevronDown, ChevronRight, ZoomIn, ZoomOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface GanttChartProps {
-  projects: Project[]
-  workpackages: Workpackage[]
+  projects: MasterProject[]
+  workpackages?: Workpackage[] // Optional: workpackages loaded separately
   people: Person[]
   onDateChange?: (task: GanttTask) => void
   onTaskClick?: (task: Task) => void
@@ -20,48 +20,12 @@ interface GanttChartProps {
   onContextAction?: (action: GanttContextAction) => void
 }
 
-type GanttContextTargetType = "project" | "workpackage" | "regular-project" | "task" | "subtask" | "deliverable"
+type GanttContextTargetType = "project" | "workpackage" | "task" | "subtask" | "deliverable"
 
 interface GanttContextAction {
   action: "add-child" | "add-dependency" | "mark-complete" | "open-details"
   targetId: string
   targetType: GanttContextTargetType
-}
-
-// Droppable bar wrapper component
-function DroppableBar({ 
-  id, 
-  isProject, 
-  children,
-  onPersonDrop 
-}: { 
-  id: string
-  isProject: boolean
-  children: React.ReactNode
-  onPersonDrop: (taskOrProjectId: string, personId: string, isProject: boolean) => void
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `gantt-bar-${id}`,
-    data: { type: "gantt-bar", id, isProject },
-  })
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        position: "relative",
-        outline: isOver ? "3px solid #3b82f6" : "none",
-        outlineOffset: "2px",
-        borderRadius: "8px",
-        backgroundColor: isOver ? "rgba(59, 130, 246, 0.1)" : "transparent",
-        transition: "all 0.2s ease-in-out",
-        boxShadow: isOver ? "0 4px 12px rgba(59, 130, 246, 0.3)" : "none",
-      }}
-      title={isOver ? "Drop to assign person" : undefined}
-    >
-      {children}
-    </div>
-  )
 }
 
 // Custom Task List Header with expand/collapse column
@@ -137,24 +101,21 @@ const CustomTaskListTable: React.FC<{
 
         switch (type) {
           case "project":
-            level = task.project ? 2 : 0
+            level = 0
             break
           case "workpackage":
             level = 1
             break
-          case "regular-project":
+          case "task":
             level = 2
             break
-          case "task":
-            level = task.project && taskMeta.get(task.project)?.type === "regular-project" ? 3 : 2
-            break
           case "subtask":
-            level = 4
+            level = 3
             break
           case "deliverable":
-            level = 5
+            level = 4
             isExpanded = false
-            break
+            break;
         }
 
         const hasChildren = (childCount.get(task.id) ?? 0) > 0 && !isMilestone
@@ -213,7 +174,7 @@ const CustomTaskListTable: React.FC<{
 
 export function GanttChart({ 
   projects, 
-  workpackages,
+  workpackages = [],
   people, 
   onDateChange, 
   onTaskClick,
@@ -228,7 +189,6 @@ export function GanttChart({
     taskId: string
   } | null>(null)
   
-  // Calculate column width based on view mode
   const columnWidth = useMemo(() => {
     switch (viewMode) {
       case ViewMode.Hour:
@@ -259,124 +219,24 @@ export function GanttChart({
       metaMap.set(task.id, meta)
     }
 
-    const getInvolvedPeople = (tasks?: Task[] | Subtask[]) => {
-      const involvedPeopleIds = new Set<string>()
-      tasks?.forEach((task) => {
-        if ("primaryOwner" in task && task.primaryOwner) involvedPeopleIds.add(task.primaryOwner)
-        if ("ownerId" in task && task.ownerId) involvedPeopleIds.add(task.ownerId)
-        const helpers = "helpers" in task ? task.helpers : undefined
-        helpers?.forEach((helper) => involvedPeopleIds.add(helper))
-      })
-      return Array.from(involvedPeopleIds)
-        .map((id) => people.find((person) => person.id === id))
-        .filter((person): person is Person => person !== undefined)
-    }
-
-    const getColorsFromPeople = (involvedPeople: Person[], defaultColor: string) => {
-      let color = defaultColor
-      let backgroundColor = defaultColor
-      const initials = involvedPeople.length > 0 ? involvedPeople.map((p) => p.name.charAt(0).toUpperCase()).join("") : ""
-
-      if (involvedPeople.length === 1) {
-        color = involvedPeople[0].color
-        backgroundColor = color
-      } else if (involvedPeople.length > 1) {
-        color = involvedPeople[0].color
-        const gradientStops = involvedPeople
-          .map((person, index) => {
-            const start = (index / involvedPeople.length) * 100
-            const end = ((index + 1) / involvedPeople.length) * 100
-            return `${person.color} ${start}%, ${person.color} ${end}%`
-          })
-          .join(", ")
-        backgroundColor = `linear-gradient(90deg, ${gradientStops})`
-      }
-
-      return { color, backgroundColor, initials }
-    }
-
-    const pushDeliverables = (parentId: string, deliverables: Deliverable[] | undefined, colors: { color: string; backgroundColor: string }, parentMeta: { type: GanttContextTargetType; reference: any }) => {
-      if (!deliverables?.length) return
-      deliverables.forEach((deliverable) => {
-        const dueDate = deliverable.dueDate ? new Date(deliverable.dueDate) : undefined
-        const milestoneDate = dueDate ?? new Date(parentMeta.reference.end ?? parentMeta.reference.endDate ?? new Date())
-        addTask(
-          {
-            id: deliverable.id,
-            name: `📋 ${deliverable.name}`,
-            start: milestoneDate,
-            end: milestoneDate,
-            progress: deliverable.progress,
-            type: "milestone",
-            project: parentId,
-            styles: {
-              progressColor: colors.color,
-              progressSelectedColor: colors.color,
-              backgroundColor: colors.backgroundColor,
-              backgroundSelectedColor: colors.backgroundColor,
-            },
-          },
-          { type: "deliverable", reference: deliverable }
-        )
-      })
-    }
-
-    const pushSubtasks = (task: Task, parentId: string, colors: { color: string; backgroundColor: string }) => {
-      if (!task.subtasks || task.subtasks.length === 0 || task.isExpanded === false) return
-      task.subtasks.forEach((subtask) => {
-        const subAssignees = getInvolvedPeople([subtask])
-        const subColors = getColorsFromPeople(subAssignees, colors.color)
-        addTask(
-          {
-            id: subtask.id,
-            name: subAssignees.length ? `${subtask.name} [${subAssignees.map((p) => p.name.charAt(0).toUpperCase()).join("")}]` : subtask.name,
-            start: new Date(subtask.start),
-            end: new Date(subtask.end),
-            progress: subtask.progress,
-            type: "task",
-            project: parentId,
-            hideChildren: subtask.isExpanded === false,
-            dependencies: subtask.dependencies,
-            styles: {
-              progressColor: subColors.color,
-              progressSelectedColor: subColors.color,
-              backgroundColor: subColors.backgroundColor,
-              backgroundSelectedColor: subColors.backgroundColor,
-            },
-          },
-          { type: "subtask", reference: subtask }
-        )
-
-        pushDeliverables(subtask.id, subtask.deliverables, subColors, { type: "subtask", reference: subtask })
-      })
-    }
-
     projects.forEach((project) => {
-      const projectWorkpackages = workpackages.filter((wp) => wp.profileProjectId === project.id)
-      const allProjectTasks: Task[] = []
-      projectWorkpackages.forEach((wp) => {
-        if (wp.tasks) allProjectTasks.push(...wp.tasks)
-      })
-      if (project.tasks) allProjectTasks.push(...project.tasks)
-
-      const projectInvolved = getInvolvedPeople(allProjectTasks)
-      const projectColors = getColorsFromPeople(projectInvolved, project.color)
-
+      // Ensure dates are Date objects (convert from ISO string if needed)
+      const projectStart = typeof project.startDate === 'string' 
+        ? new Date(project.startDate)
+        : project.startDate
+      const projectEnd = typeof project.endDate === 'string'
+        ? new Date(project.endDate)
+        : project.endDate
+      
       addTask(
         {
           id: project.id,
-          name: projectColors.initials ? `${project.name} [${projectColors.initials}]` : project.name,
-          start: new Date(project.start),
-          end: new Date(project.end),
+          name: project.name,
+          start: projectStart,
+          end: projectEnd,
           progress: project.progress,
           type: "project",
           hideChildren: project.isExpanded === false,
-          styles: {
-            progressColor: projectColors.color,
-            progressSelectedColor: projectColors.color,
-            backgroundColor: projectColors.backgroundColor,
-            backgroundSelectedColor: projectColors.backgroundColor,
-          },
         },
         { type: "project", reference: project }
       )
@@ -385,26 +245,28 @@ export function GanttChart({
         return
       }
 
-      projectWorkpackages.forEach((workpackage) => {
-        const wpInvolved = getInvolvedPeople(workpackage.tasks)
-        const wpColors = getColorsFromPeople(wpInvolved, project.color)
-
+      project.workpackageIds?.forEach((workpackageId) => {
+        const workpackage = workpackages.find(wp => wp.id === workpackageId && wp.profileProjectId === project.id);
+        if (!workpackage) return;
+        
+        // Ensure dates are Date objects (converted from Firestore Timestamps)
+        const wpStart = workpackage.start instanceof Date 
+          ? workpackage.start 
+          : new Date(workpackage.start)
+        const wpEnd = workpackage.end instanceof Date 
+          ? workpackage.end 
+          : new Date(workpackage.end)
+        
         addTask(
           {
             id: workpackage.id,
-            name: wpColors.initials ? `WP: ${workpackage.name} [${wpColors.initials}]` : `WP: ${workpackage.name}`,
-            start: new Date(workpackage.start),
-            end: new Date(workpackage.end),
+            name: `WP: ${workpackage.name}`,
+            start: wpStart,
+            end: wpEnd,
             progress: workpackage.progress,
             type: "task",
             project: project.id,
             hideChildren: workpackage.isExpanded === false,
-            styles: {
-              progressColor: wpColors.color,
-              progressSelectedColor: wpColors.color,
-              backgroundColor: wpColors.backgroundColor,
-              backgroundSelectedColor: wpColors.backgroundColor,
-            },
           },
           { type: "workpackage", reference: workpackage }
         )
@@ -413,127 +275,118 @@ export function GanttChart({
           return
         }
 
-        // Nested regular projects inside workpackage
-        workpackage.regularProjects?.forEach((regularProject) => {
-          const regularTasks = regularProject.tasks ?? []
-          const regularInvolved = getInvolvedPeople(regularTasks)
-          const regularColors = getColorsFromPeople(regularInvolved, project.color)
-
-          addTask(
-            {
-              id: regularProject.id,
-              name: regularColors.initials ? `${regularProject.name} [${regularColors.initials}]` : regularProject.name,
-              start: new Date(regularProject.start),
-              end: new Date(regularProject.end),
-              progress: regularProject.progress,
-              type: "project",
-              project: workpackage.id,
-              hideChildren: regularProject.isExpanded === false,
-              styles: {
-                progressColor: regularColors.color,
-                progressSelectedColor: regularColors.color,
-                backgroundColor: regularColors.backgroundColor,
-                backgroundSelectedColor: regularColors.backgroundColor,
-              },
-            },
-            { type: "regular-project", reference: regularProject }
-          )
-
-          const parentId = regularProject.id
-          const parentExpanded = regularProject.isExpanded !== false
-
-          if (parentExpanded) {
-            regularTasks.forEach((task) => {
-              const taskAssignees = getInvolvedPeople([task])
-              const taskColors = getColorsFromPeople(taskAssignees, regularColors.color)
-              addTask(
-                {
-                  id: task.id,
-                  name: taskColors.initials ? `${task.name} [${taskColors.initials}]` : task.name,
-                  start: new Date(task.start),
-                  end: new Date(task.end),
-                  progress: task.progress,
-                  type: "task",
-                  project: parentId,
-                  hideChildren: task.isExpanded === false,
-                  dependencies: task.dependencies,
-                  styles: {
-                    progressColor: taskColors.color,
-                    progressSelectedColor: taskColors.color,
-                    backgroundColor: taskColors.backgroundColor,
-                    backgroundSelectedColor: taskColors.backgroundColor,
-                  },
-                },
-                { type: "task", reference: task }
-              )
-
-              pushSubtasks(task, task.id, taskColors)
-              pushDeliverables(task.id, task.deliverables, taskColors, { type: "task", reference: task })
-            })
-          }
-        })
-
         workpackage.tasks?.forEach((task) => {
-          const taskAssignees = getInvolvedPeople([task])
-          const taskColors = getColorsFromPeople(taskAssignees, project.color)
+          // Ensure dates are Date objects (converted from Firestore Timestamps)
+          const taskStart = task.start instanceof Date 
+            ? task.start 
+            : new Date(task.start)
+          const taskEnd = task.end instanceof Date 
+            ? task.end 
+            : new Date(task.end)
+          
           addTask(
             {
               id: task.id,
-              name: taskColors.initials ? `${task.name} [${taskColors.initials}]` : task.name,
-              start: new Date(task.start),
-              end: new Date(task.end),
+              name: task.name,
+              start: taskStart,
+              end: taskEnd,
               progress: task.progress,
               type: "task",
               project: workpackage.id,
               hideChildren: task.isExpanded === false,
               dependencies: task.dependencies,
-              styles: {
-                progressColor: taskColors.color,
-                progressSelectedColor: taskColors.color,
-                backgroundColor: taskColors.backgroundColor,
-                backgroundSelectedColor: taskColors.backgroundColor,
-              },
             },
             { type: "task", reference: task }
           )
 
-          pushSubtasks(task, task.id, taskColors)
-          pushDeliverables(task.id, task.deliverables, taskColors, { type: "task", reference: task })
+          if (task.isExpanded === false) {
+            // Still add deliverables even if task is collapsed
+            task.deliverables?.forEach((deliverable) => {
+              if (deliverable.dueDate) {
+                addTask(
+                  {
+                    id: deliverable.id,
+                    name: deliverable.name,
+                    start: new Date(deliverable.dueDate),
+                    end: new Date(deliverable.dueDate),
+                    progress: deliverable.progress,
+                    type: "milestone",
+                    project: task.id,
+                  },
+                  { type: "deliverable", reference: deliverable }
+                )
+              }
+            })
+            return
+          }
+
+          // Add subtasks
+          task.subtasks?.forEach((subtask) => {
+            // Ensure dates are Date objects (converted from Firestore Timestamps)
+            const subtaskStart = subtask.start instanceof Date 
+              ? subtask.start 
+              : new Date(subtask.start)
+            const subtaskEnd = subtask.end instanceof Date 
+              ? subtask.end 
+              : new Date(subtask.end)
+            
+            addTask(
+              {
+                id: subtask.id,
+                name: subtask.name,
+                start: subtaskStart,
+                end: subtaskEnd,
+                progress: subtask.progress,
+                type: "task",
+                project: task.id,
+                hideChildren: subtask.isExpanded === false,
+                dependencies: subtask.dependencies,
+              },
+              { type: "subtask", reference: subtask }
+            )
+
+            // Add deliverables from subtasks
+            subtask.deliverables?.forEach((deliverable) => {
+              if (deliverable.dueDate) {
+                addTask(
+                  {
+                    id: deliverable.id,
+                    name: deliverable.name,
+                    start: new Date(deliverable.dueDate),
+                    end: new Date(deliverable.dueDate),
+                    progress: deliverable.progress,
+                    type: "milestone",
+                    project: subtask.id,
+                  },
+                  { type: "deliverable", reference: deliverable }
+                )
+              }
+            })
+          })
+
+          // Add deliverables from tasks
+          task.deliverables?.forEach((deliverable) => {
+            if (deliverable.dueDate) {
+              addTask(
+                {
+                  id: deliverable.id,
+                  name: deliverable.name,
+                  start: new Date(deliverable.dueDate),
+                  end: new Date(deliverable.dueDate),
+                  progress: deliverable.progress,
+                  type: "milestone",
+                  project: task.id,
+                },
+                { type: "deliverable", reference: deliverable }
+              )
+            }
+          })
         })
-      })
-
-      // Standalone tasks for backwards compatibility
-      project.tasks?.forEach((task) => {
-        const taskAssignees = getInvolvedPeople([task])
-        const taskColors = getColorsFromPeople(taskAssignees, project.color)
-        addTask(
-          {
-            id: task.id,
-            name: taskColors.initials ? `${task.name} [${taskColors.initials}]` : task.name,
-            start: new Date(task.start),
-            end: new Date(task.end),
-            progress: task.progress,
-            type: "task",
-            project: project.id,
-            hideChildren: task.isExpanded === false,
-            dependencies: task.dependencies,
-            styles: {
-              progressColor: taskColors.color,
-              progressSelectedColor: taskColors.color,
-              backgroundColor: taskColors.backgroundColor,
-              backgroundSelectedColor: taskColors.backgroundColor,
-            },
-          },
-          { type: "task", reference: task }
-        )
-
-        pushSubtasks(task, task.id, taskColors)
-        pushDeliverables(task.id, task.deliverables, taskColors, { type: "task", reference: task })
       })
     })
 
     return { ganttTasks, metaMap }
-  }, [projects, workpackages, people])
+  }, [projects, workpackages])
 
   const childCount = useMemo(() => {
     const map = new Map<string, number>()
@@ -576,7 +429,6 @@ export function GanttChart({
 
   return (
     <div className="gantt-container relative rounded-2xl shadow-sm border border-border p-6 overflow-hidden" style={{ background: "hsl(var(--surface-2))" }} onClick={() => contextMenu && closeContextMenu()}>
-      {/* View Mode Controls */}
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-border">
         <div className="flex items-center gap-2">
           <ZoomOut className="h-4 w-4 text-muted-foreground" />
@@ -630,6 +482,20 @@ export function GanttChart({
           const meta = metaMap.get(task.id)
           if (meta?.type === "task" && onTaskClick) {
             onTaskClick(meta.reference as Task)
+          } else if (meta?.type === "subtask" && onTaskClick) {
+            // For subtasks, find and open the parent task
+            const subtask = meta.reference as Subtask
+            // Find the parent task by looking for a task that has this subtask
+            for (const ganttTask of ganttTasks) {
+              const taskMeta = metaMap.get(ganttTask.id)
+              if (taskMeta?.type === "task") {
+                const parentTask = taskMeta.reference as Task
+                if (parentTask.subtasks?.some(st => st.id === subtask.id)) {
+                  onTaskClick(parentTask)
+                  return
+                }
+              }
+            }
           }
         }}
         listCellWidth="250px"

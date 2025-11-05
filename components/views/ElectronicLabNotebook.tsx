@@ -2,6 +2,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -91,38 +92,30 @@ export function ElectronicLabNotebook() {
     const reader = new FileReader()
     reader.onloadend = () => {
       const imageUrl = reader.result as string
-      createNewPage(imageUrl)
+      
+      if (!selectedExperiment) return
+
+      const newPage: ELNPage = {
+        id: `page-${Date.now()}`,
+        title: `Page ${selectedExperiment.pages.length + 1}`,
+        imageUrl,
+        voiceNotes: [],
+        stickyNotes: [],
+        createdAt: new Date().toISOString(),
+      }
+
+      const updatedExperiment = {
+        ...selectedExperiment,
+        pages: [...selectedExperiment.pages, newPage],
+      }
+
+      updateExperiment(updatedExperiment)
+      setCurrentPageIndex(updatedExperiment.pages.length - 1)
     }
     reader.readAsDataURL(file)
     
     // Reset input
-    if (event.target) {
-      event.target.value = ""
-    }
-  }, [])
-
-  // Create a new page with an image
-  const createNewPage = (imageUrl: string) => {
-    if (!selectedExperiment) return
-
-    const newPage: ELNPage = {
-      id: `page-${Date.now()}`,
-      title: `Page ${selectedExperiment.pages.length + 1}`,
-      imageUrl,
-      voiceNotes: [],
-      stickyNotes: [],
-      createdAt: new Date().toISOString(),
-    }
-
-    const updatedExperiment = {
-      ...selectedExperiment,
-      pages: [...selectedExperiment.pages, newPage],
-      updatedAt: new Date().toISOString(),
-    }
-
-    updateExperiment(updatedExperiment)
-    setCurrentPageIndex(updatedExperiment.pages.length - 1)
-  }
+  }, [selectedExperiment, setCurrentPageIndex])
 
   // Handle voice recording
   const startRecording = async () => {
@@ -675,10 +668,12 @@ export function ElectronicLabNotebook() {
                   {/* Image with Sticky Notes */}
                   <div className="relative bg-white rounded-lg shadow-lg p-4 mb-4">
                     <div className="relative">
-                      <img
+                      <Image
                         ref={imageRef}
                         src={currentPage.imageUrl}
                         alt={currentPage.title}
+                        width={1024}
+                        height={768}
                         className="w-full h-auto rounded-lg"
                         onClick={handleImageClick}
                         style={{ cursor: isAddingStickyNote ? "crosshair" : "default" }}

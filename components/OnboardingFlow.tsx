@@ -106,6 +106,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showCreateInst, setShowCreateInst] = useState(false)
   const [showCreateLab, setShowCreateLab] = useState(false)
+  const [selectedCountry, setSelectedCountry] = useState<string>("")
 
   // Form state
   const [state, setState] = useState<OnboardingState>({
@@ -202,7 +203,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
       setLoading(true)
       const orgId = await createOrganisation({
         name: orgSearchTerm.trim(),
-        country: "Unknown", // TODO: Add country selection
+        country: selectedCountry || "Unknown",
         type: "university",
         createdBy: user.id,
       })
@@ -640,11 +641,49 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                 <p className="text-sm text-gray-600 mb-4">
                   Name: {orgSearchTerm}
                 </p>
+                <div className="mb-4">
+                  <Label htmlFor="org-country" className="text-sm font-medium mb-2 block">
+                    Country
+                  </Label>
+                  <select
+                    id="org-country"
+                    value={selectedCountry}
+                    onChange={(e) => setSelectedCountry(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">Select a country</option>
+                    <option value="United Kingdom">United Kingdom</option>
+                    <option value="United States">United States</option>
+                    <option value="Canada">Canada</option>
+                    <option value="Australia">Australia</option>
+                    <option value="Germany">Germany</option>
+                    <option value="France">France</option>
+                    <option value="Italy">Italy</option>
+                    <option value="Spain">Spain</option>
+                    <option value="Netherlands">Netherlands</option>
+                    <option value="Belgium">Belgium</option>
+                    <option value="Switzerland">Switzerland</option>
+                    <option value="Sweden">Sweden</option>
+                    <option value="Norway">Norway</option>
+                    <option value="Denmark">Denmark</option>
+                    <option value="Finland">Finland</option>
+                    <option value="Japan">Japan</option>
+                    <option value="China">China</option>
+                    <option value="India">India</option>
+                    <option value="Brazil">Brazil</option>
+                    <option value="Mexico">Mexico</option>
+                    <option value="South Africa">South Africa</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
                 <div className="flex gap-2">
                   <Button onClick={handleCreateOrganisation} disabled={loading}>
                     {loading ? "Creating..." : "Confirm"}
                   </Button>
-                  <Button variant="outline" onClick={() => setShowCreateOrg(false)}>
+                  <Button variant="outline" onClick={() => {
+                    setShowCreateOrg(false)
+                    setSelectedCountry("")
+                  }}>
                     Cancel
                   </Button>
                 </div>

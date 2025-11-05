@@ -316,6 +316,74 @@ export function addTodoAndRecalculate(
 }
 
 /**
+ * Delete a todo from a subtask and recalculate progress
+ */
+export function deleteTodoAndRecalculate(
+  project: Project,
+  workpackageId: string | null,
+  taskId: string,
+  subtaskId: string,
+  todoId: string
+): Project {
+  // Helper to delete todo from subtask
+  const deleteTodoFromSubtask = (subtask: Subtask): Subtask => {
+    if (subtask.id !== subtaskId) return subtask
+
+    return {
+      ...subtask,
+      todos: subtask.todos?.filter(todo => todo.id !== todoId) || []
+    }
+  }
+
+  // Helper to delete todo from task
+  const deleteTodoFromTask = (task: Task): Task => {
+    if (task.id !== taskId) return task
+
+    const updatedSubtasks = task.subtasks?.map(deleteTodoFromSubtask)
+
+    return {
+      ...task,
+      subtasks: updatedSubtasks
+    }
+  }
+
+  // Update in work packages structure
+  if (workpackageId && project.workpackages) {
+    const updatedWorkpackages = project.workpackages.map(wp => {
+      if (wp.id !== workpackageId) return wp
+
+      const updatedTasks = wp.tasks.map(deleteTodoFromTask)
+
+      return {
+        ...wp,
+        tasks: updatedTasks
+      }
+    })
+
+    const projectWithUpdatedData = {
+      ...project,
+      workpackages: updatedWorkpackages
+    }
+
+    return updateProjectProgress(projectWithUpdatedData)
+  }
+
+  // Legacy: Update in tasks directly
+  if (project.tasks) {
+    const updatedTasks = project.tasks.map(deleteTodoFromTask)
+
+    const projectWithUpdatedData = {
+      ...project,
+      tasks: updatedTasks
+    }
+
+    return updateProjectProgress(projectWithUpdatedData)
+  }
+
+  return project
+}
+
+/**
  * Get completion statistics for a project
  */
 export function getProjectStats(project: Project) {

@@ -2,14 +2,16 @@
 import { useState, useEffect } from 'react';
 import { DayToDayTask } from '@/lib/dayToDayTypes';
 import { createDayToDayTask, subscribeToDayToDayTasks, updateDayToDayTask, deleteDayToDayTask } from '@/lib/firestoreService';
+import { useAuth } from './useAuth';
 
-export function useDayToDayTasks(currentUser: any) {
+export function useDayToDayTasks() {
+  const { currentUser } = useAuth();
   const [dayToDayTasks, setDayToDayTasks] = useState<DayToDayTask[]>([]);
 
   useEffect(() => {
-    if (!currentUser || !currentUser.id) return;
+    if (!currentUser || !currentUser.uid) return;
 
-    const unsubscribe = subscribeToDayToDayTasks(currentUser.id, (tasks) => {
+    const unsubscribe = subscribeToDayToDayTasks(currentUser.uid, (tasks) => {
       setDayToDayTasks(tasks);
     });
 
@@ -21,7 +23,7 @@ export function useDayToDayTasks(currentUser: any) {
     const order = dayToDayTasks.length;
     await createDayToDayTask({
       ...task,
-      createdBy: currentUser.id,
+      createdBy: currentUser.uid,
       order,
     });
   };

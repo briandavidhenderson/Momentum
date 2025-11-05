@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -444,10 +445,10 @@ export function EquipmentStatusPanel({
               return (
                 <div key={device.id} className="border border-border rounded-lg p-4 bg-card space-y-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {device.imageUrl ? (
-                        <img src={device.imageUrl} alt={device.name} className="w-12 h-12 object-cover rounded" />
-                      ) : (
+                  <div className="flex items-center gap-2">
+                    {device.imageUrl ? (
+                      <Image src={device.imageUrl} alt={device.name} width={48} height={48} className="w-12 h-12 object-cover rounded" />
+                    ) : (
                         <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">
                           No Image
                         </div>
@@ -895,7 +896,7 @@ function EquipmentEditorModal({
             />
             {imagePreview && (
               <div className="mt-2">
-                <img src={imagePreview} alt="Preview" className="w-24 h-24 object-cover rounded border" />
+                <Image src={imagePreview} alt="Preview" width={96} height={96} className="w-24 h-24 object-cover rounded border" />
                 <Button
                   type="button"
                   variant="ghost"

@@ -375,6 +375,7 @@ export interface ProfileProject {
  * Contains work packages, which contain tasks
  */
 export interface MasterProject {
+  isExpanded?: boolean;
   id: string
   name: string
   description?: string
@@ -580,6 +581,7 @@ export interface Subtask {
 }
 
 export interface Task {
+  isExpanded?: boolean;
   id: string
   name: string
   start: Date
@@ -606,6 +608,7 @@ export type ImportanceLevel = "low" | "medium" | "high" | "critical"
 
 // A workpackage is a major work unit within a master project
 export interface Workpackage {
+  isExpanded?: boolean;
   id: string
   name: string
   profileProjectId: string // Links to ProfileProject (master project)

@@ -1,15 +1,17 @@
 
+import { useAuth } from './useAuth';
 import { useState, useEffect } from 'react';
 import { ELNExperiment } from '@/lib/types';
 import { subscribeToELNExperiments, createELNExperiment, updateELNExperiment, deleteELNExperiment } from '@/lib/firestoreService';
 
-export function useELN(currentUser: any) {
+export function useELN() {
+  const { currentUser } = useAuth();
   const [elnExperiments, setElnExperiments] = useState<ELNExperiment[]>([]);
 
   useEffect(() => {
-    if (!currentUser || !currentUser.id) return;
+    if (!currentUser || !currentUser.uid) return;
 
-    const unsubscribe = subscribeToELNExperiments(currentUser.id, (experiments) => {
+    const unsubscribe = subscribeToELNExperiments(currentUser.uid, (experiments) => {
       setElnExperiments(experiments);
     });
 
