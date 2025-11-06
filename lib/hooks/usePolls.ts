@@ -9,9 +9,9 @@ export function usePolls() {
   const [polls, setPolls] = useState<LabPoll[]>([]);
 
   useEffect(() => {
-    if (!currentUserProfile || !currentUserProfile.lab) return;
+    if (!currentUserProfile || !currentUserProfile.labId) return;
 
-    const unsubscribe = subscribeToLabPolls(currentUserProfile.lab, (polls) => {
+    const unsubscribe = subscribeToLabPolls(currentUserProfile.labId, (polls) => {
       setPolls(polls);
     });
 

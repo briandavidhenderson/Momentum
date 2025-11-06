@@ -9,9 +9,9 @@ export function useEquipment() {
   const [equipment, setEquipment] = useState<EquipmentDevice[]>([]);
 
   useEffect(() => {
-    if (!currentUserProfile || !currentUserProfile.lab) return;
+    if (!currentUserProfile || !currentUserProfile.labId) return;
 
-    const unsubscribe = subscribeToEquipment(currentUserProfile.lab, (equipment) => {
+    const unsubscribe = subscribeToEquipment(currentUserProfile.labId, (equipment) => {
       setEquipment(equipment);
     });
 
