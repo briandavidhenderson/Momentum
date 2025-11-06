@@ -4,7 +4,7 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut, Users, Check, FileText, Edit } from "lucide-react"
+import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench } from "lucide-react"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
@@ -12,6 +12,9 @@ import { DayToDayBoard } from "@/components/views/DayToDayBoard"
 import { ElectronicLabNotebook } from "@/components/views/ElectronicLabNotebook"
 import { PersonalProfilePage } from "@/components/views/PersonalProfilePage"
 import { ProfileManagement } from "@/components/views/ProfileManagement"
+import { OrdersInventory } from "@/components/views/OrdersInventory"
+import { EquipmentManagement } from "@/components/views/EquipmentManagement"
+import { CalendarEvents } from "@/components/views/CalendarEvents"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -154,6 +157,33 @@ export default function Home() {
               Lab Notebook
             </Button>
             <Button
+              onClick={() => setMainView('orders')}
+              variant={mainView === 'orders' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'orders' ? 'bg-brand-500 text-white' : ''}
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Orders
+            </Button>
+            <Button
+              onClick={() => setMainView('equipment')}
+              variant={mainView === 'equipment' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'equipment' ? 'bg-brand-500 text-white' : ''}
+            >
+              <Wrench className="h-4 w-4 mr-2" />
+              Equipment
+            </Button>
+            <Button
+              onClick={() => setMainView('calendar')}
+              variant={mainView === 'calendar' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'calendar' ? 'bg-brand-500 text-white' : ''}
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Calendar
+            </Button>
+            <Button
               onClick={() => setMainView('myprofile')}
               variant={mainView === 'myprofile' ? 'default' : 'outline'}
               size="lg"
@@ -181,6 +211,9 @@ export default function Home() {
         {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
         {mainView === 'daytoday' && <DayToDayBoard />}
         {mainView === 'eln' && <ElectronicLabNotebook />}
+        {mainView === 'orders' && <OrdersInventory />}
+        {mainView === 'equipment' && <EquipmentManagement />}
+        {mainView === 'calendar' && <CalendarEvents />}
         {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
         {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
       </div>

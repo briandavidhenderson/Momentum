@@ -12,7 +12,11 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(cp:*)",
-      "Bash(firebase functions:config:set:*)"
+      "Bash(firebase functions:config:set:*)",
+      "Bash(firebase hosting:channel:list:*)",
+      "Bash(firebase hosting:sites:list:*)",
+      "Bash(firebase hosting:releases:list:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
