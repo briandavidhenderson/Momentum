@@ -276,3 +276,311 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError("internal", "Failed to link ORCID account")
   }
 })
+
+// ============================================================================
+// GOOGLE CALENDAR OAUTH
+// ============================================================================
+
+/**
+ * Google Calendar OAuth Configuration
+ * Set via Firebase Functions config:
+ * firebase functions:config:set google.client_id="YOUR_CLIENT_ID"
+ * firebase functions:config:set google.client_secret="YOUR_CLIENT_SECRET"
+ * firebase functions:config:set google.redirect_uri="YOUR_REDIRECT_URI"
+ */
+
+interface GoogleCalendarConfig {
+  clientId: string
+  clientSecret: string
+  redirectUri: string
+  authorizeUrl: string
+  tokenUrl: string
+  scopes: string
+}
+
+function getGoogleCalendarConfig(): GoogleCalendarConfig {
+  return {
+    clientId: functions.config().google?.client_id || process.env.GOOGLE_CLIENT_ID || "",
+    clientSecret: functions.config().google?.client_secret || process.env.GOOGLE_CLIENT_SECRET || "",
+    redirectUri: functions.config().google?.redirect_uri || process.env.GOOGLE_REDIRECT_URI || "",
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    scopes: "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events",
+  }
+}
+
+/**
+ * Initiate Google Calendar OAuth flow
+ * Returns the authorization URL to redirect the user to
+ */
+export const googleCalendarAuthStart = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const config = getGoogleCalendarConfig()
+
+  if (!config.clientId) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Google Calendar client ID not configured"
+    )
+  }
+
+  // Generate state parameter for CSRF protection
+  const state = `${context.auth.uid}-${Math.random().toString(36).substring(2, 15)}`
+
+  // Build authorization URL
+  const authUrl = new URL(config.authorizeUrl)
+  authUrl.searchParams.set("client_id", config.clientId)
+  authUrl.searchParams.set("redirect_uri", config.redirectUri)
+  authUrl.searchParams.set("response_type", "code")
+  authUrl.searchParams.set("scope", config.scopes)
+  authUrl.searchParams.set("state", state)
+  authUrl.searchParams.set("access_type", "offline") // Get refresh token
+  authUrl.searchParams.set("prompt", "consent") // Force consent to get refresh token
+
+  return {
+    authUrl: authUrl.toString(),
+    state,
+  }
+})
+
+/**
+ * Handle Google Calendar OAuth callback
+ * Exchanges authorization code for tokens and creates calendar connection
+ */
+export const googleCalendarAuthCallback = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const config = getGoogleCalendarConfig()
+
+  if (!config.clientId || !config.clientSecret) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Google Calendar not properly configured"
+    )
+  }
+
+  // Get authorization code from request
+  const { code, state } = data
+
+  if (!code) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Authorization code is required"
+    )
+  }
+
+  // Verify state parameter
+  if (!state || !state.startsWith(context.auth.uid)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Invalid state parameter"
+    )
+  }
+
+  try {
+    // Exchange authorization code for tokens
+    const tokenResponse = await fetch(config.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: config.redirectUri,
+      }),
+    })
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error("Google token exchange failed:", errorText)
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to exchange authorization code"
+      )
+    }
+
+    const tokenData = await tokenResponse.json()
+    const accessToken = tokenData.access_token
+    const refreshToken = tokenData.refresh_token
+    const expiresIn = tokenData.expires_in || 3600
+
+    if (!accessToken) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "No access token in response"
+      )
+    }
+
+    // Get user's calendar list
+    const calendarsResponse = await fetch(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+      {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+        },
+      }
+    )
+
+    if (!calendarsResponse.ok) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to fetch calendar list"
+      )
+    }
+
+    const calendarsData = await calendarsResponse.json()
+    const calendars = calendarsData.items || []
+
+    // Get user info to get email
+    const userinfoResponse = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+        },
+      }
+    )
+
+    let email = "unknown@google.com"
+    if (userinfoResponse.ok) {
+      const userinfo = await userinfoResponse.json()
+      email = userinfo.email || email
+    }
+
+    // Store tokens in Secret Manager (TODO: implement encryption)
+    // For now, we'll store a reference that tokens are server-side only
+    const connectionId = admin.firestore().collection("calendarConnections").doc().id
+
+    // Store encrypted tokens in Secret Manager
+    // TODO: Implement proper encryption using @google-cloud/secret-manager
+    // For now, we'll store tokens in Firestore (NOT RECOMMENDED FOR PRODUCTION)
+    await admin.firestore().collection("_calendarTokens").doc(connectionId).set({
+      accessToken,
+      refreshToken,
+      expiresAt: Date.now() + (expiresIn * 1000),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    // Create calendar connection document
+    const connection = {
+      id: connectionId,
+      userId: context.auth.uid,
+      provider: "google",
+      providerAccountId: email,
+      providerAccountName: email,
+      calendars: calendars.map((cal: any) => ({
+        id: cal.id,
+        name: cal.summary,
+        description: cal.description || "",
+        isPrimary: cal.primary || false,
+        isSelected: cal.primary || false, // Auto-select primary calendar
+        color: cal.backgroundColor || "",
+        timeZone: cal.timeZone || "",
+        accessRole: cal.accessRole || "reader",
+      })),
+      syncEnabled: true,
+      syncDirection: "import",
+      status: "active",
+      tokenExpiresAt: new Date(Date.now() + (expiresIn * 1000)).toISOString(),
+      createdAt: new Date().toISOString(),
+    }
+
+    await admin.firestore().collection("calendarConnections").doc(connectionId).set(connection)
+
+    // Update user profile with connection reference
+    await admin.firestore().collection("personProfiles").doc(context.auth.uid).update({
+      "calendarConnections.google": connectionId,
+    })
+
+    return {
+      success: true,
+      connectionId,
+      email,
+      calendarsCount: calendars.length,
+    }
+  } catch (error: any) {
+    console.error("Google Calendar callback error:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
+    throw new functions.https.HttpsError("internal", "Internal server error")
+  }
+})
+
+/**
+ * Unlink Google Calendar from user
+ */
+export const unlinkGoogleCalendar = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const { connectionId } = data
+
+  if (!connectionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Connection ID is required"
+    )
+  }
+
+  try {
+    // Verify connection belongs to user
+    const connectionRef = admin.firestore().collection("calendarConnections").doc(connectionId)
+    const connectionDoc = await connectionRef.get()
+
+    if (!connectionDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Connection not found"
+      )
+    }
+
+    const connectionData = connectionDoc.data()
+    if (connectionData?.userId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "You do not have permission to delete this connection"
+      )
+    }
+
+    // Delete tokens
+    await admin.firestore().collection("_calendarTokens").doc(connectionId).delete()
+
+    // Delete connection
+    await connectionRef.delete()
+
+    // Update user profile
+    await admin.firestore().collection("personProfiles").doc(context.auth.uid).update({
+      "calendarConnections.google": admin.firestore.FieldValue.delete(),
+    })
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Unlink Google Calendar error:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
+    throw new functions.https.HttpsError("internal", "Failed to unlink Google Calendar")
+  }
+})
