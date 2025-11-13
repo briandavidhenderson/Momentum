@@ -254,9 +254,13 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       )
     }
 
-    // Update user's custom claims
+    // Get existing custom claims (excluding reserved Firebase claims)
+    const userRecord = await admin.auth().getUser(context.auth.uid)
+    const existingClaims = userRecord.customClaims || {}
+
+    // Update user's custom claims (only non-reserved claims)
     await admin.auth().setCustomUserClaims(context.auth.uid, {
-      ...context.auth.token,
+      ...existingClaims,
       orcidId,
       orcidVerified: true,
     })
