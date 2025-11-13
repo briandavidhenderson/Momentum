@@ -27,7 +27,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { updateProfile, updateUser } from "@/lib/firestoreService"
 import { OrcidBadge } from "@/components/OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
-import { CalendarConnections } from "@/components/CalendarConnections"
 
 interface PersonalProfilePageProps {
   currentUser: User | null
@@ -345,7 +344,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
           </h2>
 
           {formData.orcidId ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* ORCID Badge & Controls */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <OrcidBadge
@@ -356,42 +356,22 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                   />
                 </div>
                 {isEditing && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        try {
-                          const { syncOrcidData } = await import('@/lib/auth/orcid')
-                          await syncOrcidData()
-                          window.location.reload() // Reload to show new data
-                        } catch (err: any) {
-                          alert(err.message || "Failed to sync ORCID data")
-                        }
-                      }}
-                    >
-                      Sync from ORCID
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        if (confirm("Are you sure you want to disconnect your ORCID?")) {
-                          await handleSave({
-                            orcidId: undefined,
-                            orcidUrl: undefined,
-                            orcidVerified: false,
-                            orcidBio: undefined,
-                            orcidPublications: undefined,
-                            orcidEmploymentHistory: undefined,
-                            orcidEducationHistory: undefined
-                          })
-                        }
-                      }}
-                    >
-                      Disconnect
-                    </Button>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to disconnect your ORCID?")) {
+                        await handleSave({
+                          orcidId: undefined,
+                          orcidUrl: undefined,
+                          orcidVerified: false,
+                          orcidData: undefined
+                        })
+                      }
+                    }}
+                  >
+                    Disconnect ORCID
+                  </Button>
                 )}
               </div>
 
@@ -401,59 +381,28 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                 </p>
               )}
 
-              {/* Bio */}
-              {formData.orcidBio && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                  <h3 className="text-sm font-semibold mb-2">Biography</h3>
-                  <p className="text-sm text-gray-700">{formData.orcidBio}</p>
-                </div>
-              )}
-
-              {/* Publications */}
-              {formData.orcidPublications && formData.orcidPublications.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-semibold mb-2">Publications ({formData.orcidPublications.length})</h3>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {formData.orcidPublications.slice(0, 10).map((pub: any, idx: number) => (
-                      <div key={idx} className="p-3 bg-gray-50 rounded-md text-sm">
-                        <p className="font-medium text-gray-900">{pub.title}</p>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {pub.year} • {pub.type}
-                          {pub.doi && (
-                            <a
-                              href={`https://doi.org/${pub.doi}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="ml-2 text-blue-600 hover:underline"
-                            >
-                              DOI: {pub.doi}
-                            </a>
-                          )}
-                        </p>
-                      </div>
-                    ))}
-                    {formData.orcidPublications.length > 10 && (
-                      <p className="text-xs text-gray-500 text-center">
-                        Showing 10 of {formData.orcidPublications.length} publications
-                      </p>
-                    )}
-                  </div>
+              {/* Biography */}
+              {formData.orcidData?.biography && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Biography</h3>
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{formData.orcidData.biography}</p>
                 </div>
               )}
 
               {/* Employment */}
-              {formData.orcidEmploymentHistory && formData.orcidEmploymentHistory.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-semibold mb-2">Employment History</h3>
-                  <div className="space-y-2">
-                    {formData.orcidEmploymentHistory.map((emp: any, idx: number) => (
-                      <div key={idx} className="p-3 bg-gray-50 rounded-md text-sm">
-                        <p className="font-medium text-gray-900">{emp.role}</p>
-                        <p className="text-gray-700">{emp.organization}</p>
-                        {emp.department && <p className="text-gray-600 text-xs">{emp.department}</p>}
-                        <p className="text-xs text-gray-500 mt-1">
-                          {emp.startDate} - {emp.endDate}
+              {formData.orcidData?.employment && formData.orcidData.employment.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Employment</h3>
+                  <div className="space-y-3">
+                    {formData.orcidData.employment.map((emp, idx) => (
+                      <div key={idx} className="pl-4 border-l-2 border-gray-200">
+                        <p className="text-sm font-medium text-gray-900">{emp.role || "Position"}</p>
+                        <p className="text-sm text-gray-700">{emp.organization}</p>
+                        {emp.department && <p className="text-xs text-gray-500">{emp.department}</p>}
+                        <p className="text-xs text-gray-500">
+                          {emp.startDate || "Unknown start"} - {emp.endDate || "Present"}
                         </p>
+                        {emp.location && <p className="text-xs text-gray-500">{emp.location}</p>}
                       </div>
                     ))}
                   </div>
@@ -461,18 +410,96 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               )}
 
               {/* Education */}
-              {formData.orcidEducationHistory && formData.orcidEducationHistory.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-semibold mb-2">Education</h3>
-                  <div className="space-y-2">
-                    {formData.orcidEducationHistory.map((edu: any, idx: number) => (
-                      <div key={idx} className="p-3 bg-gray-50 rounded-md text-sm">
-                        <p className="font-medium text-gray-900">{edu.degree}</p>
-                        <p className="text-gray-700">{edu.institution}</p>
-                        {edu.field && <p className="text-gray-600 text-xs">{edu.field}</p>}
-                        <p className="text-xs text-gray-500 mt-1">
-                          {edu.startDate} - {edu.endDate}
+              {formData.orcidData?.education && formData.orcidData.education.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Education</h3>
+                  <div className="space-y-3">
+                    {formData.orcidData.education.map((edu, idx) => (
+                      <div key={idx} className="pl-4 border-l-2 border-gray-200">
+                        <p className="text-sm font-medium text-gray-900">{edu.degree || "Degree"}</p>
+                        <p className="text-sm text-gray-700">{edu.organization}</p>
+                        {edu.field && <p className="text-xs text-gray-500">{edu.field}</p>}
+                        <p className="text-xs text-gray-500">
+                          {edu.startDate || "Unknown start"} - {edu.endDate || "Unknown end"}
                         </p>
+                        {edu.location && <p className="text-xs text-gray-500">{edu.location}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Publications/Works */}
+              {formData.orcidData?.works && formData.orcidData.works.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                    Publications ({formData.orcidData.works.length})
+                  </h3>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {formData.orcidData.works.map((work, idx) => (
+                      <div key={idx} className="pl-4 border-l-2 border-gray-200">
+                        <p className="text-sm font-medium text-gray-900">{work.title}</p>
+                        {work.journal && <p className="text-xs text-gray-600 italic">{work.journal}</p>}
+                        <div className="flex gap-3 mt-1">
+                          {work.publicationDate && (
+                            <p className="text-xs text-gray-500">{work.publicationDate}</p>
+                          )}
+                          {work.type && (
+                            <p className="text-xs text-gray-500">{work.type}</p>
+                          )}
+                        </div>
+                        {work.doi && (
+                          <a
+                            href={`https://doi.org/${work.doi}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            DOI: {work.doi}
+                          </a>
+                        )}
+                        {work.url && !work.doi && (
+                          <a
+                            href={work.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            View
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Funding */}
+              {formData.orcidData?.funding && formData.orcidData.funding.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Funding</h3>
+                  <div className="space-y-3">
+                    {formData.orcidData.funding.map((fund, idx) => (
+                      <div key={idx} className="pl-4 border-l-2 border-gray-200">
+                        <p className="text-sm font-medium text-gray-900">{fund.title}</p>
+                        <p className="text-sm text-gray-700">{fund.organization}</p>
+                        {fund.type && <p className="text-xs text-gray-500">{fund.type}</p>}
+                        {fund.grantNumber && (
+                          <p className="text-xs text-gray-500">Grant: {fund.grantNumber}</p>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          {fund.startDate || "Unknown start"} - {fund.endDate || "Ongoing"}
+                        </p>
+                        {fund.url && (
+                          <a
+                            href={fund.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            View details
+                          </a>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -482,7 +509,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-gray-600">
-                Connect your ORCID iD to verify your identity and link your research outputs.
+                Connect your ORCID iD to verify your identity and automatically import your academic profile, including biography, employment, education, publications, and funding.
               </p>
               <Button
                 variant="outline"
@@ -490,13 +517,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                 onClick={async () => {
                   try {
                     const result = await linkOrcidToCurrentUser()
-                    await handleSave({
-                      orcidId: result.orcid,
-                      orcidUrl: result.orcidUrl,
-                      orcidVerified: true,
-                      orcidLastSynced: new Date().toISOString(),
-                      orcidClaims: result.claims,
-                    })
+                    // Reload the page to fetch updated profile with ORCID data
+                    window.location.reload()
                   } catch (err: any) {
                     alert(err.message || "Failed to connect ORCID")
                   }
@@ -507,17 +529,6 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               </Button>
             </div>
           )}
-        </div>
-
-        {/* Calendar Connections */}
-        <div className="space-y-4">
-          <CalendarConnections
-            currentUserProfile={currentUserProfile}
-            onConnectionChange={() => {
-              // Trigger profile refresh
-              window.location.reload()
-            }}
-          />
         </div>
 
         {/* Funding */}
