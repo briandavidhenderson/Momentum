@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useMemo } from "react"
 import * as d3 from "d3"
 import { useProfiles } from "@/lib/useProfiles"
 import { FUNDING_ACCOUNTS, PersonProfile, PositionLevel } from "@/lib/types"
@@ -63,9 +63,12 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
 
   // Filter profiles by lab if currentUserProfile is provided
   // Ensure profiles is always an array
-  const profiles = (currentUserProfile?.labId
-    ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
-    : allProfiles) || []
+  const profiles = useMemo(() =>
+    (currentUserProfile?.labId
+      ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
+      : allProfiles) || [],
+    [currentUserProfile?.labId, allProfiles]
+  )
 
   useEffect(() => {
     if (!svgRef.current) return

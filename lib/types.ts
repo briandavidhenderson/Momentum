@@ -445,6 +445,31 @@ export interface MasterProject {
  * PersonProfile - Complete profile for a lab member
  * UPDATED: Now uses organizational hierarchy with IDs
  */
+// ORCID Data Types
+export interface OrcidPublication {
+  title: string
+  year: string
+  type: string
+  doi: string
+  putCode: string
+}
+
+export interface OrcidEmployment {
+  organization: string
+  role: string
+  startDate: string
+  endDate: string
+  department: string
+}
+
+export interface OrcidEducation {
+  institution: string
+  degree: string
+  field: string
+  startDate: string
+  endDate: string
+}
+
 export interface PersonProfile {
   id: string
 
@@ -506,6 +531,10 @@ export interface PersonProfile {
     name?: string
     email?: string | null             // May be null if user hides email
   }
+  orcidBio?: string                   // Biography from ORCID profile
+  orcidPublications?: OrcidPublication[] // Publications from ORCID
+  orcidEmploymentHistory?: OrcidEmployment[] // Employment history from ORCID
+  orcidEducationHistory?: OrcidEducation[] // Education history from ORCID
 
   // Account
   userId?: string // Links to User account
