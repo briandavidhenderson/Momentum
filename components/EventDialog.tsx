@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { CalendarEvent, EventAttendee, EventVisibility, Person, RecurrenceFrequency, RecurrenceRule } from "@/lib/types"
 import { buildICSForEvent, getRecurrenceSummary } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
-import { Trash2 } from "lucide-react"
+import { Trash2, Lock, ExternalLink, Calendar as CalendarIcon } from "lucide-react"
 
 type EventDialogMode = "create" | "edit"
 
@@ -79,6 +79,8 @@ export function EventDialog({
 
   const dialogTitle = mode === "create" ? "Create event" : "Edit event"
   const isEditMode = mode === "edit" && Boolean(initialEvent)
+  const isReadOnly = initialEvent?.isReadOnly ?? false
+  const isExternalEvent = initialEvent?.calendarSource && initialEvent.calendarSource !== 'momentum'
 
   const recurrenceSummary = useMemo(() => getRecurrenceSummary(recurrence), [recurrence])
 
@@ -260,6 +262,31 @@ export function EventDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Read-only External Event Notice */}
+        {isReadOnly && isExternalEvent && (
+          <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <Lock className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-900">Read-only External Event</p>
+              <p className="text-xs text-blue-700 mt-1">
+                This event is synced from {initialEvent.calendarSource === 'google' ? 'Google Calendar' : 'Microsoft Outlook'} and cannot be edited in Momentum.
+                {initialEvent.externalUrl && ' Use the link below to edit in the original calendar.'}
+              </p>
+              {initialEvent.externalUrl && (
+                <a
+                  href={initialEvent.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 mt-2 hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Open in {initialEvent.calendarSource === 'google' ? 'Google Calendar' : 'Outlook'}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-6 overflow-y-auto pr-1 max-h-[70vh]">
           <div className="space-y-6">
             <section className="space-y-3">
@@ -270,6 +297,7 @@ export function EventDialog({
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="e.g. Biomarker stand-up"
+                  disabled={isReadOnly}
                 />
               </div>
 
