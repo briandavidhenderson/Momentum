@@ -145,3 +145,18 @@ export function isGoogleCalendarLinked(profile: PersonProfile): boolean {
 export function getGoogleCalendarConnectionId(profile: PersonProfile): string | null {
   return profile.calendarConnections?.google || null
 }
+
+/**
+ * Manually trigger sync for Google Calendar
+ */
+export async function syncGoogleCalendar(connectionId: string): Promise<void> {
+  try {
+    const functions = getFunctionsInstance()
+    const sync = httpsCallable(functions, "syncGoogleCalendar")
+
+    await sync({ connectionId })
+  } catch (error: any) {
+    console.error("Google Calendar sync error:", error)
+    throw new Error(error.message || "Failed to sync Google Calendar")
+  }
+}

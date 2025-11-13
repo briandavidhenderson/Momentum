@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Calendar, CheckCircle, XCircle, Loader2 } from 'lucide-react'
-import { linkGoogleCalendar, unlinkGoogleCalendar, isGoogleCalendarLinked, getGoogleCalendarConnectionId } from '@/lib/calendar/google'
+import { linkGoogleCalendar, unlinkGoogleCalendar, isGoogleCalendarLinked, getGoogleCalendarConnectionId, syncGoogleCalendar } from '@/lib/calendar/google'
 import { linkMicrosoftCalendar, unlinkMicrosoftCalendar, isMicrosoftCalendarLinked, getMicrosoftCalendarConnectionId } from '@/lib/calendar/microsoft'
 import { PersonProfile } from '@/lib/types'
 
@@ -69,6 +69,24 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
     } catch (error: any) {
       console.error('Error disconnecting Google Calendar:', error)
       alert(error.message || 'Failed to disconnect Google Calendar')
+    } finally {
+      setGoogleLoading(false)
+      setLoading(false)
+    }
+  }
+
+  const handleSyncGoogle = async () => {
+    if (!googleConnectionId) return
+
+    setGoogleLoading(true)
+    setLoading(true)
+    try {
+      await syncGoogleCalendar(googleConnectionId)
+      alert('Google Calendar synced successfully!')
+      onConnectionChange?.()
+    } catch (error: any) {
+      console.error('Error syncing Google Calendar:', error)
+      alert(error.message || 'Failed to sync Google Calendar')
     } finally {
       setGoogleLoading(false)
       setLoading(false)
@@ -154,14 +172,23 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
             </div>
             <div className="flex gap-2">
               {googleConnected ? (
-                <Button
-                  variant="outline"
-                  onClick={handleDisconnectGoogle}
-                  disabled={loading || googleLoading}
-                >
-                  {googleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Disconnect
-                </Button>
+                <>
+                  <Button
+                    onClick={handleSyncGoogle}
+                    disabled={loading || googleLoading}
+                    variant="default"
+                  >
+                    {googleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Sync Now
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleDisconnectGoogle}
+                    disabled={loading || googleLoading}
+                  >
+                    Disconnect
+                  </Button>
+                </>
               ) : (
                 <Button
                   onClick={handleConnectGoogle}
@@ -176,6 +203,7 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
           {googleConnected && (
             <div className="mt-3 text-sm text-muted-foreground">
               <p>✓ Events are being synced from Google Calendar</p>
+              <p className="text-xs mt-1">Syncs automatically every hour</p>
               <p className="text-xs mt-1">Connection ID: {googleConnectionId}</p>
             </div>
           )}

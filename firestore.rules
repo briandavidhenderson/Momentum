@@ -510,6 +510,16 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // CALENDAR TOKENS (NEW - INTERNAL ONLY)
+    // ============================================================================
+    // This collection stores OAuth tokens and should NEVER be accessible from clients
+    // Only Cloud Functions can read/write to this collection
+    match /_calendarTokens/{tokenId} {
+      // No client access - all operations blocked
+      allow read, write: if false;
+    }
+
+    // ============================================================================
     // DEFAULT DENY (catch-all)
     // ============================================================================
     match /{document=**} {

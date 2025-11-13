@@ -584,3 +584,223 @@ export const unlinkGoogleCalendar = functions.https.onCall(async (data, context)
     throw new functions.https.HttpsError("internal", "Failed to unlink Google Calendar")
   }
 })
+
+// ============================================================================
+// GOOGLE CALENDAR SYNC
+// ============================================================================
+
+import { syncGoogleCalendarEvents } from "./calendar-sync"
+
+/**
+ * Manual sync trigger for Google Calendar
+ * Allows users to manually sync their calendar
+ */
+export const syncGoogleCalendar = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const { connectionId } = data
+
+  if (!connectionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Connection ID is required"
+    )
+  }
+
+  try {
+    // Verify connection belongs to user
+    const connectionDoc = await admin
+      .firestore()
+      .collection("calendarConnections")
+      .doc(connectionId)
+      .get()
+
+    if (!connectionDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Connection not found"
+      )
+    }
+
+    const connectionData = connectionDoc.data()
+    if (connectionData?.userId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "You do not have permission to sync this connection"
+      )
+    }
+
+    // Trigger sync
+    const syncLog = await syncGoogleCalendarEvents(context.auth.uid, connectionId)
+
+    return {
+      success: true,
+      syncLog,
+    }
+  } catch (error: any) {
+    console.error("Manual sync error:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
+    throw new functions.https.HttpsError("internal", "Failed to sync calendar")
+  }
+})
+
+/**
+ * Scheduled function to sync all Google Calendar connections
+ * Runs every hour to keep calendars in sync
+ */
+export const scheduledGoogleCalendarSync = functions.pubsub
+  .schedule("every 60 minutes")
+  .onRun(async (context) => {
+    try {
+      console.log("Starting scheduled Google Calendar sync...")
+
+      // Get all active Google Calendar connections
+      const connectionsSnapshot = await admin
+        .firestore()
+        .collection("calendarConnections")
+        .where("provider", "==", "google")
+        .where("status", "==", "active")
+        .where("syncEnabled", "==", true)
+        .get()
+
+      console.log(`Found ${connectionsSnapshot.size} connections to sync`)
+
+      // Sync each connection
+      const syncPromises = connectionsSnapshot.docs.map(async (doc) => {
+        const connection = doc.data()
+        try {
+          await syncGoogleCalendarEvents(connection.userId, doc.id)
+          console.log(`Synced connection ${doc.id}`)
+        } catch (error) {
+          console.error(`Failed to sync connection ${doc.id}:`, error)
+        }
+      })
+
+      await Promise.all(syncPromises)
+
+      console.log("Scheduled sync completed")
+      return null
+    } catch (error) {
+      console.error("Scheduled sync error:", error)
+      return null
+    }
+  })
+
+/**
+ * Webhook handler for Google Calendar push notifications
+ * Google sends notifications when calendar events change
+ */
+export const googleCalendarWebhook = functions.https.onRequest(async (req, res) => {
+  try {
+    // Verify this is from Google
+    const channelId = req.headers["x-goog-channel-id"]
+    const resourceId = req.headers["x-goog-resource-id"]
+    const resourceState = req.headers["x-goog-resource-state"]
+
+    if (!channelId || !resourceId) {
+      console.error("Invalid webhook headers")
+      res.status(400).send("Invalid request")
+      return
+    }
+
+    console.log(`Webhook received: channel=${channelId}, state=${resourceState}`)
+
+    // Handle sync notification
+    if (resourceState === "sync") {
+      // Initial sync notification, just acknowledge
+      res.status(200).send("OK")
+      return
+    }
+
+    // Find connection by webhook channel ID
+    const connectionsSnapshot = await admin
+      .firestore()
+      .collection("calendarConnections")
+      .where("webhookChannelId", "==", channelId)
+      .where("webhookResourceId", "==", resourceId)
+      .limit(1)
+      .get()
+
+    if (connectionsSnapshot.empty) {
+      console.error(`No connection found for channel ${channelId}`)
+      res.status(404).send("Connection not found")
+      return
+    }
+
+    const connectionDoc = connectionsSnapshot.docs[0]
+    const connection = connectionDoc.data()
+
+    // Trigger sync for this connection
+    await syncGoogleCalendarEvents(connection.userId, connectionDoc.id)
+
+    console.log(`Webhook sync completed for connection ${connectionDoc.id}`)
+    res.status(200).send("OK")
+  } catch (error) {
+    console.error("Webhook error:", error)
+    res.status(500).send("Internal server error")
+  }
+})
+
+/**
+ * Scheduled function to renew Google Calendar webhook channels
+ * Channels expire after a certain time and need to be renewed
+ * Runs daily to check and renew expiring channels
+ */
+export const renewGoogleCalendarChannels = functions.pubsub
+  .schedule("every 24 hours")
+  .onRun(async (context) => {
+    try {
+      console.log("Checking for expiring Google Calendar webhook channels...")
+
+      // Get connections with expiring channels (within next 2 days)
+      const twoDaysFromNow = new Date()
+      twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2)
+
+      const connectionsSnapshot = await admin
+        .firestore()
+        .collection("calendarConnections")
+        .where("provider", "==", "google")
+        .where("status", "==", "active")
+        .get()
+
+      const renewPromises = connectionsSnapshot.docs
+        .filter((doc) => {
+          const connection = doc.data()
+          if (!connection.webhookExpiration) return false
+
+          const expiration = new Date(connection.webhookExpiration)
+          return expiration <= twoDaysFromNow
+        })
+        .map(async (doc) => {
+          try {
+            // TODO: Implement channel renewal with Google Calendar API
+            // For now, just log that renewal is needed
+            console.log(`Channel renewal needed for connection ${doc.id}`)
+
+            // Mark channel as needing renewal
+            await doc.ref.update({
+              status: "expired",
+              syncError: "Webhook channel expired, please reconnect",
+            })
+          } catch (error) {
+            console.error(`Failed to renew channel for ${doc.id}:`, error)
+          }
+        })
+
+      await Promise.all(renewPromises)
+
+      console.log("Channel renewal check completed")
+      return null
+    } catch (error) {
+      console.error("Channel renewal error:", error)
+      return null
+    }
+  })
