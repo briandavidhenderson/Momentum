@@ -115,24 +115,25 @@ This document summarizes the **Google Calendar integration** implemented across 
 
 ### User Features
 ✅ Connect Google Calendar via OAuth
+✅ Connect Microsoft Calendar/Outlook via OAuth
 ✅ Select which calendars to sync
 ✅ Automatic hourly sync
 ✅ Manual sync on demand
 ✅ View synced events with visual distinction
 ✅ Read-only protection for external events
-✅ Direct links to events in Google Calendar
+✅ Direct links to events in Google Calendar or Outlook
 ✅ Sync status and error visibility
 ✅ Calendar color indicators
 
 ### Technical Features
-✅ Secure OAuth flow with state validation
+✅ Secure OAuth flow with state validation (Google & Microsoft)
 ✅ Token refresh automation
-✅ Incremental sync for efficiency
-✅ Event normalization (Google → Momentum format)
+✅ Incremental sync for efficiency (Google syncToken, Microsoft delta query)
+✅ Event normalization (Google & Microsoft → Momentum format)
 ✅ Comprehensive error handling and logging
 ✅ Firestore security rules
-✅ Webhook support (when configured)
-✅ Channel renewal monitoring
+✅ Webhook support (Google push notifications, Microsoft subscriptions)
+✅ Channel/subscription renewal monitoring
 
 ## 📁 File Structure
 
@@ -143,7 +144,7 @@ Momentum/
 │   ├── firestoreCalendarService.ts       # Calendar CRUD operations
 │   └── calendar/
 │       ├── google.ts                      # Google Calendar client
-│       └── microsoft.ts                   # Microsoft placeholder (Phase 5)
+│       └── microsoft.ts                   # Microsoft Calendar client
 ├── components/
 │   ├── CalendarConnections.tsx           # Connection management UI
 │   ├── CalendarSettings.tsx              # Calendar selection & settings
@@ -165,10 +166,20 @@ firebase functions:config:set google.client_id="YOUR_GOOGLE_CLIENT_ID"
 firebase functions:config:set google.client_secret="YOUR_GOOGLE_CLIENT_SECRET"
 firebase functions:config:set google.redirect_uri="https://YOUR_APP_URL/__/auth/handler"
 
+# Microsoft Calendar OAuth
+firebase functions:config:set microsoft.client_id="YOUR_MICROSOFT_CLIENT_ID"
+firebase functions:config:set microsoft.client_secret="YOUR_MICROSOFT_CLIENT_SECRET"
+firebase functions:config:set microsoft.redirect_uri="https://YOUR_APP_URL/__/auth/handler"
+firebase functions:config:set microsoft.tenant_id="common"
+
 # Or using environment variables in .env
 GOOGLE_CLIENT_ID=your_client_id
 GOOGLE_CLIENT_SECRET=your_client_secret
 GOOGLE_REDIRECT_URI=your_redirect_uri
+MICROSOFT_CLIENT_ID=your_client_id
+MICROSOFT_CLIENT_SECRET=your_client_secret
+MICROSOFT_REDIRECT_URI=your_redirect_uri
+MICROSOFT_TENANT_ID=common
 ```
 
 ### Getting Google OAuth Credentials
@@ -179,6 +190,16 @@ GOOGLE_REDIRECT_URI=your_redirect_uri
 4. Create OAuth 2.0 credentials (Web application)
 5. Add authorized redirect URIs
 6. Copy Client ID and Client Secret
+
+### Getting Microsoft OAuth Credentials
+
+1. Go to [Azure Portal](https://portal.azure.com/)
+2. Navigate to Azure Active Directory → App registrations
+3. Create a new registration
+4. Add API permissions: Calendars.Read, Calendars.ReadWrite, offline_access
+5. Generate a client secret
+6. Add redirect URI
+7. Copy Application (client) ID and client secret
 
 ## 🔐 Security Considerations
 
@@ -239,17 +260,50 @@ GOOGLE_REDIRECT_URI=your_redirect_uri
 - [ ] Test calendar selection interface
 - [ ] Verify sync status in CalendarSettings
 
-## ⏭️ Remaining Phases
-
 ### Phase 5: Microsoft Calendar OAuth & Sync
-**Status**: 🔄 Placeholder implemented
-**Effort**: Medium (similar to Google)
+**Status**: ✅ Complete
+**Commit**: `2e16298`
+**Snapshot**: `snapshot-20251113-151848`
 
-Would implement:
-- Microsoft OAuth flow (Azure AD)
-- Outlook Calendar API integration
-- Event normalization for Microsoft events
-- UI updates for Microsoft branding
+**Implemented:**
+- Cloud Functions (`firebase/functions/src/index.ts`):
+  - `microsoftCalendarAuthStart` - Initiates OAuth flow
+  - `microsoftCalendarAuthCallback` - Exchanges code for tokens
+  - `unlinkMicrosoftCalendar` - Removes connection
+  - `syncMicrosoftCalendar` - Manual sync trigger (callable)
+  - `scheduledMicrosoftCalendarSync` - Runs every 60 minutes
+  - `microsoftCalendarWebhook` - Push notification handler
+  - `renewMicrosoftSubscriptions` - Every 48 hours subscription renewal
+- Client library (`lib/calendar/microsoft.ts`):
+  - `linkMicrosoftCalendar()` - OAuth popup flow
+  - `unlinkMicrosoftCalendar()` - Connection removal
+  - `isMicrosoftCalendarLinked()` - Connection status check
+  - `getMicrosoftCalendarConnectionId()` - Get connection ID
+  - `syncMicrosoftCalendar()` - Manual sync trigger
+- Sync utilities (`firebase/functions/src/calendar-sync.ts`):
+  - `normalizeMicrosoftEvent()` - Event format conversion
+  - `fetchMicrosoftCalendarEvents()` - Delta query implementation
+  - `syncMicrosoftCalendarEvents()` - Full sync with incremental support
+  - Microsoft token refresh logic
+  - Response status and visibility mapping
+- UI Component (`components/CalendarSettings.tsx`):
+  - Updated to support Microsoft Calendar sync
+- OAuth Features:
+  - State parameter for CSRF protection
+  - Refresh token acquisition (offline access)
+  - Calendar list fetching
+  - Token storage in Firestore (TODO: migrate to Secret Manager)
+- Sync Features:
+  - Initial sync: 6 months back, 1 year forward
+  - Incremental sync using Microsoft's delta query
+  - Event normalization (attendees, sensitivity, times)
+  - Automatic token refresh
+  - Read-only event flagging
+  - Subscription-based webhooks (3-day expiration)
+  - Comprehensive error logging
+  - Sync status tracking
+
+## ⏭️ Remaining Phases
 
 ### Phase 6: Conflict Resolution
 **Status**: ⏳ Not started
@@ -304,6 +358,7 @@ Would implement:
 | `snapshot-20251113-145335` | Nov 13 14:53 | Phase 2: Google OAuth | `git checkout snapshot-20251113-145335` |
 | `snapshot-20251113-150211` | Nov 13 15:02 | Phase 3: Google Sync | `git checkout snapshot-20251113-150211` |
 | `snapshot-20251113-150702` | Nov 13 15:07 | Phase 4: UI Enhancements | `git checkout snapshot-20251113-150702` |
+| `snapshot-20251113-151848` | Nov 13 15:18 | Phase 5: Microsoft Calendar | `git checkout snapshot-20251113-151848` |
 
 ## 💡 Key Decisions & Trade-offs
 
@@ -329,6 +384,6 @@ Would implement:
 
 ## 🎉 Conclusion
 
-The Google Calendar integration is **functionally complete** with OAuth, automatic syncing, and a polished UI. The core functionality is ready for testing and can be deployed once OAuth credentials are configured.
+The calendar integration is **functionally complete** for both Google Calendar and Microsoft Calendar/Outlook with OAuth, automatic syncing, and a polished UI. The core functionality is ready for testing and can be deployed once OAuth credentials are configured.
 
-**Phases 1-4 represent approximately 75% of the complete calendar integration vision**, with Google Calendar fully supported. The remaining 25% would add Microsoft Calendar support, conflict resolution, and production hardening.
+**Phases 1-5 represent approximately 85% of the complete calendar integration vision**, with both Google Calendar and Microsoft Calendar fully supported. The remaining 15% would add conflict resolution and production hardening (Phases 6-7).
