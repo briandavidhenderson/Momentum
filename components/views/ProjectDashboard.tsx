@@ -210,7 +210,7 @@ export function ProjectDashboard() {
       console.error("Error toggling expand/collapse:", error);
       alert("Failed to toggle expand/collapse. Please try again.");
     }
-  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
+  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, getProjectWorkpackages]);
 
   // Helper to find the parent project and workpackage for a task
   const findTaskContext = useCallback((taskId: string): { project: MasterProject; workpackage: Workpackage; task: Task } | null => {
@@ -330,8 +330,9 @@ export function ProjectDashboard() {
           }
           break;
         case "add-dependency":
-          // TODO: Implement dependency management UI
-          alert("Dependency management will be implemented in a future update. For now, you can add dependencies manually in the task details.");
+          // Dependency management not yet implemented
+          // Feature planned for future release
+          console.warn("Dependency management feature not yet implemented");
           break;
       }
     } catch (error) {
@@ -592,7 +593,7 @@ export function ProjectDashboard() {
       console.error("Error adding subtask:", error);
       alert("Failed to add subtask. Please try again.");
     }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
+  }, [selectedTask, findTaskContext]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);

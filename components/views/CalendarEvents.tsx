@@ -80,8 +80,8 @@ export function CalendarEvents() {
         </Button>
       </div>
 
-      {/* View Mode Toggle */}
-      <div className="flex gap-2 border-b border-border">
+      {/* View Mode Toggle - Disabled until calendar grid views are implemented */}
+      {/* <div className="flex gap-2 border-b border-border">
         <Button
           onClick={() => setViewMode('day')}
           variant={viewMode === 'day' ? 'default' : 'ghost'}
@@ -103,7 +103,7 @@ export function CalendarEvents() {
         >
           Month
         </Button>
-      </div>
+      </div> */}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

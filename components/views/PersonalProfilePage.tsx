@@ -344,32 +344,138 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
           </h2>
 
           {formData.orcidId ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <OrcidBadge
-                  orcidId={formData.orcidId}
-                  verified={formData.orcidVerified}
-                  size="md"
-                  showLabel
-                />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <OrcidBadge
+                    orcidId={formData.orcidId}
+                    verified={formData.orcidVerified}
+                    size="md"
+                    showLabel
+                  />
+                </div>
+                {isEditing && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const { syncOrcidData } = await import('@/lib/auth/orcid')
+                          await syncOrcidData()
+                          window.location.reload() // Reload to show new data
+                        } catch (err: any) {
+                          alert(err.message || "Failed to sync ORCID data")
+                        }
+                      }}
+                    >
+                      Sync from ORCID
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (confirm("Are you sure you want to disconnect your ORCID?")) {
+                          await handleSave({
+                            orcidId: undefined,
+                            orcidUrl: undefined,
+                            orcidVerified: false,
+                            orcidBio: undefined,
+                            orcidPublications: undefined,
+                            orcidEmploymentHistory: undefined,
+                            orcidEducationHistory: undefined
+                          })
+                        }
+                      }}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                )}
               </div>
+
               {formData.orcidLastSynced && (
                 <p className="text-xs text-gray-500">
                   Last synced: {new Date(formData.orcidLastSynced).toLocaleDateString()}
                 </p>
               )}
-              {isEditing && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    if (confirm("Are you sure you want to disconnect your ORCID?")) {
-                      await handleSave({ orcidId: undefined, orcidUrl: undefined, orcidVerified: false })
-                    }
-                  }}
-                >
-                  Disconnect ORCID
-                </Button>
+
+              {/* Bio */}
+              {formData.orcidBio && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-md">
+                  <h3 className="text-sm font-semibold mb-2">Biography</h3>
+                  <p className="text-sm text-gray-700">{formData.orcidBio}</p>
+                </div>
+              )}
+
+              {/* Publications */}
+              {formData.orcidPublications && formData.orcidPublications.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold mb-2">Publications ({formData.orcidPublications.length})</h3>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {formData.orcidPublications.slice(0, 10).map((pub: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-gray-50 rounded-md text-sm">
+                        <p className="font-medium text-gray-900">{pub.title}</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {pub.year} • {pub.type}
+                          {pub.doi && (
+                            <a
+                              href={`https://doi.org/${pub.doi}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-2 text-blue-600 hover:underline"
+                            >
+                              DOI: {pub.doi}
+                            </a>
+                          )}
+                        </p>
+                      </div>
+                    ))}
+                    {formData.orcidPublications.length > 10 && (
+                      <p className="text-xs text-gray-500 text-center">
+                        Showing 10 of {formData.orcidPublications.length} publications
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Employment */}
+              {formData.orcidEmploymentHistory && formData.orcidEmploymentHistory.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold mb-2">Employment History</h3>
+                  <div className="space-y-2">
+                    {formData.orcidEmploymentHistory.map((emp: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-gray-50 rounded-md text-sm">
+                        <p className="font-medium text-gray-900">{emp.role}</p>
+                        <p className="text-gray-700">{emp.organization}</p>
+                        {emp.department && <p className="text-gray-600 text-xs">{emp.department}</p>}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {emp.startDate} - {emp.endDate}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Education */}
+              {formData.orcidEducationHistory && formData.orcidEducationHistory.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-semibold mb-2">Education</h3>
+                  <div className="space-y-2">
+                    {formData.orcidEducationHistory.map((edu: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-gray-50 rounded-md text-sm">
+                        <p className="font-medium text-gray-900">{edu.degree}</p>
+                        <p className="text-gray-700">{edu.institution}</p>
+                        {edu.field && <p className="text-gray-600 text-xs">{edu.field}</p>}
+                        <p className="text-xs text-gray-500 mt-1">
+                          {edu.startDate} - {edu.endDate}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           ) : (

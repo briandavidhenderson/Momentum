@@ -130,18 +130,6 @@ service cloud.firestore {
       return userProfile != null && userProfile.data != null ? userProfile.data.labId : null;
     }
 
-    // Helper function to check if user can view a project
-    // Projects are scoped to labs - users can only see projects created by users in their lab
-    // Note: Projects should have a 'labId' field set when created. If not present, 
-    //       the project is visible to all authenticated users (fallback behavior)
-    function canViewProject(projectData) {
-      return isAuthenticated() && (
-        isAdmin() ||
-        (projectData.labId != null && projectData.labId == getUserLab()) ||
-        projectData.createdBy == request.auth.uid ||
-        projectData.labId == null  // Fallback: allow if labId not set (will be filtered client-side)
-      );
-    }
 
     // ============================================================================
     // USERS COLLECTION
