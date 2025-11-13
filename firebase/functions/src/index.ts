@@ -382,13 +382,29 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
     })
 
     if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error("ORCID token exchange failed. Status:", tokenResponse.status)
+      console.error("Response body:", errorText)
       throw new functions.https.HttpsError(
         "internal",
-        "Failed to exchange authorization code"
+        `Failed to exchange authorization code: ${tokenResponse.status} ${tokenResponse.statusText}`
       )
     }
 
-    const tokenData = await tokenResponse.json()
+    const responseText = await tokenResponse.text()
+    console.log("ORCID token response:", responseText.substring(0, 200))
+
+    let tokenData
+    try {
+      tokenData = JSON.parse(responseText)
+    } catch (parseError) {
+      console.error("Failed to parse ORCID token response as JSON:", parseError)
+      console.error("Response was:", responseText.substring(0, 500))
+      throw new functions.https.HttpsError(
+        "internal",
+        "Invalid response from ORCID - expected JSON but got HTML or invalid format"
+      )
+    }
     const orcidId = tokenData.orcid
     const name = tokenData.name
     const accessToken = tokenData.access_token
@@ -409,9 +425,18 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
     const userRecord = await admin.auth().getUser(context.auth.uid)
     const existingClaims = userRecord.customClaims || {}
 
+    // Filter out reserved Firebase claims
+    const reservedClaims = ['aud', 'auth_time', 'exp', 'iat', 'iss', 'sub', 'firebase']
+    const filteredClaims = Object.keys(existingClaims).reduce((acc, key) => {
+      if (!reservedClaims.includes(key)) {
+        acc[key] = existingClaims[key]
+      }
+      return acc
+    }, {} as Record<string, any>)
+
     // Update user's custom claims (only non-reserved claims)
     await admin.auth().setCustomUserClaims(context.auth.uid, {
-      ...existingClaims,
+      ...filteredClaims,
       orcidId,
       orcidVerified: true,
     })
