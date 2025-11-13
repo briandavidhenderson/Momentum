@@ -76,10 +76,11 @@ export function normalizeGoogleEvent(
     workloadImpactHours: undefined,
   }))
 
-  // Map reminders
-  const reminders = googleEvent.reminders?.overrides?.map(reminder => ({
-    method: reminder.method as "email" | "notification" | "popup",
-    minutesBefore: reminder.minutes,
+  // Map reminders (convert Google Calendar methods to Momentum format)
+  const reminders = googleEvent.reminders?.overrides?.map((reminder, index) => ({
+    id: `reminder-${index}`,
+    method: (reminder.method === "popup" || reminder.method === "notification") ? "push" : "email" as "email" | "push" | "sms",
+    offsetMinutes: reminder.minutes,
   })) || []
 
   // Build normalized event
@@ -303,7 +304,7 @@ export async function syncGoogleCalendarEvents(
   let eventsImported = 0
   let eventsUpdated = 0
   let eventsDeleted = 0
-  const errors: Array<{ eventId?: string; eventTitle?: string; error: string; action: string }> = []
+  const errors: Array<{ eventId?: string; eventTitle?: string; error: string; action: "import" | "export" | "update" | "delete" }> = []
 
   try {
     // Get connection details
@@ -763,7 +764,7 @@ export async function syncMicrosoftCalendarEvents(
   let eventsImported = 0
   let eventsUpdated = 0
   let eventsDeleted = 0
-  const errors: Array<{ eventId?: string; eventTitle?: string; error: string; action: string }> = []
+  const errors: Array<{ eventId?: string; eventTitle?: string; error: string; action: "import" | "export" | "update" | "delete" }> = []
 
   try {
     // Get connection details
