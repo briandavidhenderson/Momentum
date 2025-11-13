@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
 import { MasterProject, Task, Workpackage, Project, Person } from "@/lib/types";
-import { Plus, FolderKanban, PackagePlus } from "lucide-react";
+import { Plus, FolderKanban, PackagePlus, Trash2 } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
 import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
@@ -25,6 +25,7 @@ export function ProjectDashboard() {
     workpackagesMap,
     handleCreateMasterProject,
     handleUpdateMasterProject,
+    handleDeleteMasterProject,
     handleUpdateWorkpackage,
     handleCreateWorkpackage: createWorkpackage,
   } = useProjects();
@@ -38,6 +39,23 @@ export function ProjectDashboard() {
       .map(wpId => workpackagesMap.get(wpId))
       .filter((wp): wp is Workpackage => wp !== undefined);
   }, [workpackagesMap]);
+
+  const handleDeleteProject = async () => {
+    if (!selectedProjectId) return;
+
+    const project = projects.find(p => p.id === selectedProjectId);
+    if (!project) return;
+
+    if (confirm(`Are you sure you want to delete "${project.name}"? This will also delete all associated workpackages and tasks. This action cannot be undone.`)) {
+      try {
+        await handleDeleteMasterProject(selectedProjectId);
+        setSelectedProjectId(null); // Clear selection after delete
+      } catch (error) {
+        console.error('Error deleting project:', error);
+        alert('Failed to delete project. Please try again.');
+      }
+    }
+  };
 
   const handleCreateProject = () => {
     if (!profile) return;
@@ -678,14 +696,24 @@ export function ProjectDashboard() {
           )}
 
           {selectedProjectId && (
-            <Button
-              onClick={() => setShowWorkpackageDialog(true)}
-              variant="outline"
-              className="gap-2"
-            >
-              <PackagePlus className="h-4 w-4" />
-              Add Workpackage
-            </Button>
+            <>
+              <Button
+                onClick={() => setShowWorkpackageDialog(true)}
+                variant="outline"
+                className="gap-2"
+              >
+                <PackagePlus className="h-4 w-4" />
+                Add Workpackage
+              </Button>
+              <Button
+                onClick={handleDeleteProject}
+                variant="outline"
+                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Project
+              </Button>
+            </>
           )}
 
           <Button onClick={handleCreateProject} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
