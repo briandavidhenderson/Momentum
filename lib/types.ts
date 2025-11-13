@@ -1321,7 +1321,27 @@ export interface CalendarEvent {
     googleEventId?: string
     outlookEventId?: string
   }
+  calendarSource?: "google" | "microsoft" | "manual"  // Source of calendar event
   labId?: string
+}
+
+/**
+ * Calendar Sync Log
+ * Tracks calendar synchronization history
+ */
+export interface CalendarSyncLog {
+  id: string
+  userId: string
+  calendarSource: "google" | "microsoft"
+  syncType: "full" | "incremental"
+  startTime: Date
+  endTime?: Date
+  status: "success" | "failed" | "partial"
+  eventsAdded: number
+  eventsUpdated: number
+  eventsDeleted: number
+  errorMessage?: string
+  createdAt: Date
 }
 
 // New: Audit trail entries for compliance and change history
