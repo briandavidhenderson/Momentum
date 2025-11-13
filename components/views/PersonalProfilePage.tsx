@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { updateProfile, updateUser } from "@/lib/firestoreService"
 import { OrcidBadge } from "@/components/OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
+import { deleteField } from "firebase/firestore"
 
 interface PersonalProfilePageProps {
   currentUser: User | null
@@ -362,10 +363,11 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                     onClick={async () => {
                       if (confirm("Are you sure you want to disconnect your ORCID?")) {
                         await handleSave({
-                          orcidId: undefined,
-                          orcidUrl: undefined,
+                          orcidId: deleteField() as any,
+                          orcidUrl: deleteField() as any,
                           orcidVerified: false,
-                          orcidData: undefined
+                          orcidData: deleteField() as any,
+                          orcidLastSynced: deleteField() as any
                         })
                       }
                     }}
