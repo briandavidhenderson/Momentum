@@ -37,9 +37,23 @@ async function initiateOrcidAuth(): Promise<{ code: string; state: string }> {
   const startAuth = httpsCallable(functions, "orcidAuthStart")
 
   const redirectUri = getRedirectUri()
-  const result: any = await startAuth({ redirect_uri: redirectUri })
+
+  let result: any
+  try {
+    result = await startAuth({ redirect_uri: redirectUri })
+  } catch (error: any) {
+    console.error("Error calling orcidAuthStart:", error)
+    throw new Error(`Failed to initiate ORCID authentication: ${error.message || "Unknown error"}`)
+  }
 
   const { authUrl, state } = result.data
+
+  if (!authUrl) {
+    console.error("No authUrl returned from orcidAuthStart. Full result:", result)
+    throw new Error("Invalid response from authentication service - no authorization URL received")
+  }
+
+  console.log("Opening ORCID authorization URL:", authUrl)
 
   // Open popup for ORCID authorization
   const width = 500
