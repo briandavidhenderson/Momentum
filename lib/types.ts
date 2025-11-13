@@ -507,6 +507,21 @@ export interface PersonProfile {
     email?: string | null             // May be null if user hides email
   }
 
+  // Calendar Integration (NEW)
+  calendarConnections?: {
+    google?: string                   // CalendarConnection document ID
+    microsoft?: string                // CalendarConnection document ID
+  }
+  calendarPreferences?: {
+    defaultView?: 'day' | 'week' | 'month'
+    workingHours?: {
+      start: string                   // e.g., "09:00"
+      end: string                     // e.g., "17:00"
+    }
+    showWeekends?: boolean
+    defaultCalendar?: string          // Which calendar to create events in
+  }
+
   // Account
   userId?: string // Links to User account
   profileComplete?: boolean // Whether user has completed profile setup
@@ -1252,6 +1267,115 @@ export interface CalendarEvent {
     outlookEventId?: string
   }
   labId?: string
+
+  // Calendar Integration Fields (NEW)
+  calendarSource?: 'momentum' | 'google' | 'microsoft'  // Source of the event
+  calendarId?: string           // Specific calendar within provider
+  syncStatus?: 'synced' | 'pending' | 'conflict' | 'error'  // Sync state
+  lastSyncedAt?: string         // ISO timestamp of last sync
+  syncError?: string            // Error message if sync failed
+  isReadOnly?: boolean          // External events may be read-only
+  externalUrl?: string          // Link to event in external calendar
+}
+
+// ============================================================================
+// CALENDAR INTEGRATION TYPES (NEW)
+// ============================================================================
+
+/**
+ * ConnectedCalendar - Individual calendar within a provider account
+ */
+export interface ConnectedCalendar {
+  id: string                    // Calendar ID from provider
+  name: string                  // Calendar name
+  description?: string
+  isPrimary: boolean            // Provider's primary calendar
+  isSelected: boolean           // User chose to sync this calendar
+  color?: string                // Calendar color for UI
+  timeZone?: string             // Calendar timezone
+  accessRole: 'owner' | 'writer' | 'reader'
+}
+
+/**
+ * CalendarConnection - OAuth connection to external calendar provider
+ */
+export interface CalendarConnection {
+  id: string                    // Firestore document ID
+  userId: string                // Momentum user ID
+  provider: 'google' | 'microsoft'
+  providerAccountId: string     // email or unique ID from provider
+  providerAccountName: string   // Display name (e.g., "john@example.com")
+
+  // Connected calendars from this account
+  calendars: ConnectedCalendar[]
+
+  // Sync settings
+  syncEnabled: boolean
+  syncDirection: 'import' | 'export' | 'bidirectional'
+  defaultCalendarId?: string    // Primary calendar for exports
+
+  // Status & metadata
+  status: 'active' | 'expired' | 'error'
+  lastSyncedAt?: string
+  syncError?: string
+
+  // OAuth metadata (tokens stored server-side only)
+  tokenExpiresAt?: string
+
+  // Webhook/push notification IDs
+  webhookChannelId?: string     // Google push channel
+  webhookResourceId?: string    // Google resource ID
+  webhookExpiration?: string    // Google channel expiration
+  subscriptionId?: string       // Microsoft subscription
+  subscriptionExpiration?: string // Microsoft subscription expiration
+  syncToken?: string            // Google sync token for incremental sync
+  deltaLink?: string            // Microsoft delta link for incremental sync
+
+  createdAt: string
+  updatedAt?: string
+}
+
+/**
+ * SyncError - Individual sync error for a specific event
+ */
+export interface SyncError {
+  eventId?: string
+  eventTitle?: string
+  error: string
+  action: 'import' | 'export' | 'update' | 'delete'
+}
+
+/**
+ * CalendarSyncLog - Audit trail of sync operations
+ */
+export interface CalendarSyncLog {
+  id: string
+  userId: string
+  connectionId: string
+  timestamp: string
+  status: 'success' | 'partial' | 'failed'
+  eventsImported: number
+  eventsExported: number
+  eventsUpdated: number
+  eventsDeleted: number
+  errors?: SyncError[]
+  duration?: number             // Sync duration in ms
+}
+
+/**
+ * CalendarConflict - Conflicting changes requiring user resolution
+ */
+export interface CalendarConflict {
+  id: string
+  eventId: string
+  userId: string
+  localVersion: Partial<CalendarEvent>
+  remoteVersion: Partial<CalendarEvent>
+  conflictFields: string[]      // Which fields differ
+  detectedAt: string
+  resolution?: 'local' | 'remote' | 'merge' | 'manual'
+  resolvedAt?: string
+  resolvedBy?: string           // User ID who resolved
 }
 
 // New: Audit trail entries for compliance and change history

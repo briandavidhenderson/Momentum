@@ -37,6 +37,9 @@ import {
   Funder,
   FundingAccount,
   MasterProject,
+  CalendarConnection,
+  CalendarSyncLog,
+  CalendarConflict,
 } from "./types"
 
 // ============================================================================
