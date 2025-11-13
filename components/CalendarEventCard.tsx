@@ -18,7 +18,7 @@ interface CalendarEventCardProps {
 }
 
 export function CalendarEventCard({ event, onClick, className }: CalendarEventCardProps) {
-  const isExternal = event.calendarSource && event.calendarSource !== 'momentum'
+  const isExternal = event.calendarSource && event.calendarSource !== 'manual'
   const isGoogleEvent = event.calendarSource === 'google'
   const isMicrosoftEvent = event.calendarSource === 'microsoft'
 

@@ -107,7 +107,7 @@ export function normalizeGoogleEvent(
     calendarSource: "google",
     calendarId,
     syncStatus: "synced",
-    lastSyncedAt: new Date().toISOString(),
+    lastSyncedAt: new Date(),
     isReadOnly: true, // External events are read-only by default
     externalUrl: googleEvent.htmlLink || "",
     integrationRefs: {
@@ -371,7 +371,7 @@ export async function syncGoogleCalendarEvents(
                 .update({
                   ...normalizedEvent,
                   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                  lastSyncedAt: new Date().toISOString(),
+                  lastSyncedAt: new Date(),
                 })
               eventsUpdated++
             } else {
@@ -405,7 +405,7 @@ export async function syncGoogleCalendarEvents(
             .doc(connectionId)
             .update({
               syncToken: nextSyncToken,
-              lastSyncedAt: new Date().toISOString(),
+              lastSyncedAt: new Date(),
             })
         }
       } catch (error: any) {
@@ -570,7 +570,7 @@ export function normalizeMicrosoftEvent(
     calendarSource: "microsoft",
     calendarId,
     syncStatus: "synced",
-    lastSyncedAt: new Date().toISOString(),
+    lastSyncedAt: new Date(),
     isReadOnly: true, // External events are read-only by default
     externalUrl: msEvent.webLink || "",
     integrationRefs: {
@@ -832,7 +832,7 @@ export async function syncMicrosoftCalendarEvents(
                 .update({
                   ...normalizedEvent,
                   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                  lastSyncedAt: new Date().toISOString(),
+                  lastSyncedAt: new Date(),
                 })
               eventsUpdated++
             } else {
@@ -866,7 +866,7 @@ export async function syncMicrosoftCalendarEvents(
             .doc(connectionId)
             .update({
               deltaLink: nextDeltaLink,
-              lastSyncedAt: new Date().toISOString(),
+              lastSyncedAt: new Date(),
             })
         }
       } catch (error: any) {

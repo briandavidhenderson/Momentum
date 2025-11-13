@@ -577,6 +577,20 @@ export interface PersonProfile {
   orcidLastSynced?: string            // ISO date of last sync with ORCID record
   orcidData?: OrcidProfileData        // Full ORCID record data
 
+  // Calendar Integration
+  calendarConnections?: {
+    google?: string                   // Google CalendarConnection document ID
+    microsoft?: string                // Microsoft CalendarConnection document ID
+  }
+  calendarPreferences?: {
+    defaultView?: "week" | "month" | "day"
+    workingHours?: {
+      start: string                   // e.g., "09:00"
+      end: string                     // e.g., "17:00"
+    }
+    showExternalEvents?: boolean      // Show events from connected calendars
+  }
+
   // Account
   userId?: string // Links to User account
   profileComplete?: boolean // Whether user has completed profile setup
@@ -1322,6 +1336,15 @@ export interface CalendarEvent {
     outlookEventId?: string
   }
   calendarSource?: "google" | "microsoft" | "manual"  // Source of calendar event
+  calendarId?: string          // Specific calendar ID within the provider account
+
+  // External calendar sync properties
+  isReadOnly?: boolean          // True for synced external events that can't be edited
+  externalUrl?: string          // URL to view event in external calendar (Google/Outlook)
+  syncStatus?: "synced" | "pending" | "error"  // Sync status for external events
+  lastSyncedAt?: Date          // Timestamp of last successful sync
+  syncError?: string           // Error message if sync failed
+
   labId?: string
 }
 
@@ -1332,16 +1355,84 @@ export interface CalendarEvent {
 export interface CalendarSyncLog {
   id: string
   userId: string
-  calendarSource: "google" | "microsoft"
-  syncType: "full" | "incremental"
-  startTime: Date
-  endTime?: Date
+  connectionId: string         // CalendarConnection ID
+  calendarSource?: "google" | "microsoft"
+  syncType?: "full" | "incremental"
+  timestamp: string            // ISO timestamp when sync occurred
   status: "success" | "failed" | "partial"
-  eventsAdded: number
-  eventsUpdated: number
-  eventsDeleted: number
-  errorMessage?: string
-  createdAt: Date
+  eventsImported: number       // Events imported from external calendar
+  eventsExported: number       // Events exported to external calendar
+  eventsUpdated: number        // Events updated during sync
+  eventsDeleted: number        // Events deleted during sync
+  errors?: Array<{ error: string; action: string }>  // Detailed error information
+  duration: number             // Sync duration in milliseconds
+}
+
+/**
+ * Connected Calendar
+ * Represents an individual calendar within a provider account
+ */
+export interface ConnectedCalendar {
+  id: string                    // Calendar ID from provider
+  name: string                  // Calendar name
+  description?: string
+  isPrimary: boolean            // Provider's primary calendar
+  isSelected: boolean           // User chose to sync this calendar
+  color?: string                // Calendar color for UI
+  timeZone?: string             // Calendar timezone
+  accessRole: "owner" | "writer" | "reader"
+}
+
+/**
+ * Calendar Connection
+ * Manages OAuth connection to external calendar provider
+ */
+export interface CalendarConnection {
+  id: string                    // Firestore document ID
+  userId: string                // Momentum user ID
+  provider: "google" | "microsoft"
+  providerAccountId: string     // email or unique ID from provider
+  providerAccountName: string   // Display name (e.g., "john@example.com")
+
+  // Connected calendars from this account
+  calendars: ConnectedCalendar[]
+
+  // Sync settings
+  syncEnabled: boolean
+  syncDirection: "import" | "export" | "bidirectional"
+  defaultCalendarId?: string    // Primary calendar for exports
+
+  // Status & metadata
+  status: "active" | "expired" | "error"
+  lastSyncedAt?: string
+  syncError?: string
+
+  // OAuth metadata (tokens stored server-side only)
+  tokenExpiresAt?: string
+
+  // Webhook/push notification IDs
+  webhookChannelId?: string     // Google push channel
+  subscriptionId?: string       // Microsoft subscription
+
+  createdAt: string
+  updatedAt?: string
+}
+
+/**
+ * Calendar Conflict
+ * Tracks conflicts between local and remote calendar events
+ */
+export interface CalendarConflict {
+  id: string
+  eventId: string
+  userId: string
+  localVersion: Partial<CalendarEvent>
+  remoteVersion: Partial<CalendarEvent>
+  conflictFields: string[]      // Which fields differ
+  detectedAt: string
+  resolution?: "local" | "remote" | "merge" | "manual"
+  resolvedAt?: string
+  resolvedBy?: string           // User ID who resolved
 }
 
 // New: Audit trail entries for compliance and change history

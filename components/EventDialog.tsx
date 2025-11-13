@@ -80,7 +80,7 @@ export function EventDialog({
   const dialogTitle = mode === "create" ? "Create event" : "Edit event"
   const isEditMode = mode === "edit" && Boolean(initialEvent)
   const isReadOnly = initialEvent?.isReadOnly ?? false
-  const isExternalEvent = initialEvent?.calendarSource && initialEvent.calendarSource !== 'momentum'
+  const isExternalEvent = initialEvent?.calendarSource && initialEvent.calendarSource !== 'manual'
 
   const recurrenceSummary = useMemo(() => getRecurrenceSummary(recurrence), [recurrence])
 
