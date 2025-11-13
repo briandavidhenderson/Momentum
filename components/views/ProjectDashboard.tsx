@@ -330,8 +330,9 @@ export function ProjectDashboard() {
           }
           break;
         case "add-dependency":
-          // TODO: Implement dependency management UI
-          alert("Dependency management will be implemented in a future update. For now, you can add dependencies manually in the task details.");
+          // Dependency management not yet implemented
+          // Feature planned for future release
+          console.warn("Dependency management feature not yet implemented");
           break;
       }
     } catch (error) {
