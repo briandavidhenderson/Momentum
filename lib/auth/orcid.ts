@@ -8,12 +8,6 @@ import { getAuth, signInWithCustomToken, unlink } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
 
 /**
- * Configuration for ORCID OAuth2
- * Set to true to use sandbox, false for production
- */
-const USE_ORCID_SANDBOX = true
-
-/**
  * Get Firebase Functions instance
  */
 function getFunctionsInstance() {

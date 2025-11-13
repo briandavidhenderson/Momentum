@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { updateProfile, updateUser } from "@/lib/firestoreService"
 import { OrcidBadge } from "@/components/OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
+import { CalendarConnections } from "@/components/CalendarConnections"
 
 interface PersonalProfilePageProps {
   currentUser: User | null
@@ -506,6 +507,17 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               </Button>
             </div>
           )}
+        </div>
+
+        {/* Calendar Connections */}
+        <div className="space-y-4">
+          <CalendarConnections
+            currentUserProfile={currentUserProfile}
+            onConnectionChange={() => {
+              // Trigger profile refresh
+              window.location.reload()
+            }}
+          />
         </div>
 
         {/* Funding */}
