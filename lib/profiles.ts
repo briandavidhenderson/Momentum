@@ -1,7 +1,7 @@
 import { PersonProfile } from "./types"
 
 // Static profiles have been removed - all profiles are now stored dynamically
-// in localStorage via the ProfileManagement component and ProfileSetupPage
+// in localStorage via the ProfileManagement component
 export const profiles: PersonProfile[] = []
 
 export function getProfileById(id: string): PersonProfile | undefined {

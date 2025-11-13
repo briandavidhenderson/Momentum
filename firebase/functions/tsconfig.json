@@ -8,6 +8,7 @@
     "strict": true,
     "target": "es2017",
     "skipLibCheck": true,
+    "esModuleInterop": true,
     "types": []
   },
   "compileOnSave": true,

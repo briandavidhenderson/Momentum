@@ -6,20 +6,32 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { EquipmentDevice, EquipmentSupply, InventoryItem, Order, InventoryLevel, MasterProject, ReorderSuggestion } from "@/lib/types"
+import { EquipmentDevice, EquipmentSupply, InventoryItem, Order, InventoryLevel, MasterProject, ReorderSuggestion, PersonProfile, EquipmentTaskType } from "@/lib/types"
 import { Package, Plus, Edit2, Wrench, ShoppingCart, AlertTriangle } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { calculateReorderSuggestions } from "@/lib/equipmentUtils"
 import { ReorderSuggestionsPanel } from "@/components/ReorderSuggestionsPanel"
 import { DayToDayTask } from "@/lib/dayToDayTypes"
+import {
+  calculateMaintenanceHealth,
+  calculateWeeksRemaining,
+  calculateSuppliesHealth,
+  calculateStockPercentage,
+  calculateNeededQuantity,
+  toISODateString,
+  parseDateSafe,
+  weeksToHealthPercentage,
+} from "@/lib/equipmentMath"
+import { formatCurrency, getHealthClass, getHealthColor, getHealthTextColor, generateId, EQUIPMENT_CONFIG } from "@/lib/equipmentConfig"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
   inventory: InventoryItem[]
   orders: Order[]
   masterProjects: MasterProject[]
-  currentUserProfile: any // PersonProfile
-  onEquipmentUpdate: (equipment: EquipmentDevice[]) => void
+  currentUserProfile: PersonProfile | null
+  onEquipmentCreate: (equipment: Omit<EquipmentDevice, 'id'>) => void
+  onEquipmentUpdate: (equipmentId: string, updates: Partial<EquipmentDevice>) => void
   onInventoryUpdate: (inventory: InventoryItem[]) => void
   onOrderCreate: (order: Order) => void
   onTaskCreate?: (task: DayToDayTask) => void
@@ -31,6 +43,7 @@ export function EquipmentStatusPanel({
   orders,
   masterProjects,
   currentUserProfile,
+  onEquipmentCreate,
   onEquipmentUpdate,
   onInventoryUpdate,
   onOrderCreate,
@@ -39,8 +52,8 @@ export function EquipmentStatusPanel({
   const [devices, setDevices] = useState<EquipmentDevice[]>(equipment)
   const [editingDevice, setEditingDevice] = useState<EquipmentDevice | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingSupplyIndex, setEditingSupplyIndex] = useState<number | null>(null)
-  const [checkStockItem, setCheckStockItem] = useState<{ deviceId: string; supplyId: string } | null>(null)
+  const [checkStockItem, setCheckStockItem] = useState<{ deviceId: string; supplyId: string; currentQty: number } | null>(null)
+  const [tempStockQty, setTempStockQty] = useState<string>("")
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -54,49 +67,13 @@ export function EquipmentStatusPanel({
     return allSuggestions.filter(s => !dismissedSuggestions.has(s.inventoryItemId))
   }, [inventory, equipment, masterProjects, dismissedSuggestions])
 
-  // Calculate maintenance health (0-100%)
+  // Use imported calculation functions (now testable and safe)
   const maintenanceHealth = (device: EquipmentDevice): number => {
-    const today = new Date().toISOString().slice(0, 10)
-    const lastMaintained = new Date(device.lastMaintained)
-    const todayDate = new Date(today)
-    const elapsedDays = Math.floor((todayDate.getTime() - lastMaintained.getTime()) / (1000 * 60 * 60 * 24))
-    const p = Math.max(0, 1 - elapsedDays / device.maintenanceDays)
-    return Math.round(p * 100)
+    return calculateMaintenanceHealth(device.lastMaintained, device.maintenanceDays)
   }
 
-  // Calculate supplies health (0-100%) - based on worst supply
   const suppliesHealth = (device: EquipmentDevice): number => {
-    if (!device.supplies || device.supplies.length === 0) return 100
-    
-    const weeksToPercent = (weeks: number): number => {
-      const p = Math.min(100, (weeks / 4) * 100)
-      return Math.max(0, p)
-    }
-    
-    const percents = device.supplies.map(s => {
-      const weeks = s.burnPerWeek > 0 ? s.qty / s.burnPerWeek : 99
-      return weeksToPercent(weeks)
-    })
-    
-    return Math.min(...percents)
-  }
-
-  // Get health classification
-  const getHealthClass = (percent: number): string => {
-    if (percent <= 25) return "danger"
-    if (percent <= 60) return "warn"
-    return ""
-  }
-
-  // Format weeks remaining for supply
-  const weeksRemaining = (supply: EquipmentSupply): number => {
-    if (supply.burnPerWeek <= 0) return 99
-    return supply.qty / supply.burnPerWeek
-  }
-
-  const weeksToPercent = (weeks: number): number => {
-    const p = Math.min(100, (weeks / 4) * 100)
-    return Math.max(0, p)
+    return calculateSuppliesHealth(device.supplies)
   }
 
   // Get all to-do items (maintenance and low supplies)
@@ -129,74 +106,53 @@ export function EquipmentStatusPanel({
 
   // Handle maintenance
   const handlePerformMaintenance = (deviceId: string) => {
-    setDevices(prev => {
-      const updated = prev.map(d => 
-        d.id === deviceId 
-          ? { ...d, lastMaintained: new Date().toISOString().slice(0, 10) }
-          : d
-      )
-      onEquipmentUpdate(updated)
-      return updated
-    })
+    onEquipmentUpdate(deviceId, { lastMaintained: toISODateString(new Date()) })
   }
 
-  // Handle check stock
+  // Handle check stock - now opens modal with local state
   const handleCheckStock = (deviceId: string, supplyId: string) => {
-    setCheckStockItem({ deviceId, supplyId })
+    const device = devices.find(d => d.id === deviceId)
+    if (!device) return
+
+    const supply = device.supplies.find(s => s.id === supplyId)
+    if (!supply) return
+
+    setCheckStockItem({ deviceId, supplyId, currentQty: supply.qty })
+    setTempStockQty(supply.qty.toString())
   }
 
-  // Handle update stock quantity
-  const handleUpdateStock = (deviceId: string, supplyId: string, newQty: number) => {
-    setDevices(prev => {
-      const updated = prev.map(device => {
-        if (device.id === deviceId) {
-          const updatedSupplies = device.supplies.map(s =>
-            s.id === supplyId ? { ...s, qty: newQty } : s
-          )
-          
-          // Update corresponding inventory item if it exists
-          const supply = updatedSupplies.find(s => s.id === supplyId)
-          if (supply?.inventoryItemId) {
-            const inventoryUpdate = inventory.map(item => {
-              if (item.id === supply.inventoryItemId) {
-                const newLevel: InventoryLevel = 
-                  newQty === 0 ? 'empty' :
-                  newQty < (supply.minQty || 1) ? 'low' :
-                  newQty < (supply.minQty || 1) * 2 ? 'medium' : 'full'
-                
-                return {
-                  ...item,
-                  currentQuantity: newQty,
-                  inventoryLevel: newLevel
-                }
-              }
-              return item
-            })
-            onInventoryUpdate(inventoryUpdate)
-          }
-          
-          return { ...device, supplies: updatedSupplies }
-        }
-        return device
-      })
-      onEquipmentUpdate(updated)
-      return updated
-    })
+  // Handle save stock quantity (explicit save button)
+  const handleSaveStock = () => {
+    if (!checkStockItem) return
+
+    const newQty = parseFloat(tempStockQty)
+    if (isNaN(newQty) || newQty < 0) return
+
+    const device = devices.find(d => d.id === checkStockItem.deviceId)
+    if (!device) return
+
+    const updatedSupplies = device.supplies.map(s =>
+      s.id === checkStockItem.supplyId ? { ...s, qty: newQty } : s
+    )
+
+    onEquipmentUpdate(checkStockItem.deviceId, { supplies: updatedSupplies })
     setCheckStockItem(null)
+    setTempStockQty("")
   }
 
   // Handle reorder - adds to "To Order" section
-  const handleReorder = (deviceId: string, supply: EquipmentSupply) => {
-    const neededQty = Math.max(0, (supply.minQty || 1) - (supply.qty || 0))
+  // FIXED: Now takes explicit neededQty to avoid calculation errors
+  const handleReorder = (deviceId: string, supply: EquipmentSupply, explicitNeededQty?: number) => {
+    const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
     if (neededQty <= 0) return
-    
+
     const device = devices.find(d => d.id === deviceId)
     if (!device) return
-    
+
     // Create order
     const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
     const newOrder: Order = {
-      id: `order-${Date.now()}`,
+      id: generateId('order'), // FIXED: Use crypto.randomUUID()
       productName: supply.name,
       catNum: inventoryItem?.catNum || '',
       supplier: '',
@@ -208,7 +164,7 @@ export function EquipmentStatusPanel({
       masterProjectId: "temp_project_placeholder",
       masterProjectName: "Select Project",
       priceExVAT: supply.price,
-      currency: "GBP",
+      currency: EQUIPMENT_CONFIG.currency.code, // FIXED: Use centralized currency
       status: 'to-order',
       orderedBy: currentUserProfile?.id || '',
       orderedDate: undefined, // Will be set when order is actually placed
@@ -219,41 +175,45 @@ export function EquipmentStatusPanel({
       subcategory: inventoryItem?.subcategory,
       // Legacy field for backward compatibility
       chargeToAccount: inventoryItem?.chargeToAccount,
+      // Add provenance for traceability
+      sourceDeviceId: deviceId,
+      sourceSupplyId: supply.id,
+      sourceInventoryItemId: supply.inventoryItemId,
     }
-    
+
     onOrderCreate(newOrder)
   }
 
   // Handle order missing supplies
+  // FIXED: Calculate needed qty from ORIGINAL device state, not mutated
   const handleOrderMissing = (device: EquipmentDevice) => {
     device.supplies.forEach(supply => {
-      const neededQty = Math.max(0, (supply.minQty || 1) - (supply.qty || 0))
+      const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
       if (neededQty > 0) {
-        handleReorder(device.id, { ...supply, qty: neededQty } as EquipmentSupply)
+        // Pass explicit needed qty to avoid recalculation
+        handleReorder(device.id, supply, neededQty)
       }
     })
   }
 
   // Handle add device
   const handleAddDevice = () => {
-    const newDevice: EquipmentDevice = {
-      id: `device-${Date.now()}`,
+    const newDevice: Omit<EquipmentDevice, 'id'> = {
       name: 'New Device',
       make: '',
       model: '',
-      serialNumber: undefined,
-      imageUrl: undefined,
+      serialNumber: '',
+      imageUrl: '',
       type: 'Device',
-      maintenanceDays: 90,
-      lastMaintained: new Date().toISOString().slice(0, 10),
-      threshold: 20,
+      maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
+      lastMaintained: toISODateString(new Date()),
+      threshold: EQUIPMENT_CONFIG.maintenance.defaultThreshold,
       supplies: [],
       sops: [],
-      labId: currentUserProfile?.lab,
+      labId: currentUserProfile?.labId,
       createdAt: new Date().toISOString(),
     }
-    setEditingDevice(newDevice)
-    setIsModalOpen(true)
+    onEquipmentCreate(newDevice)
   }
 
   // Handle edit device
@@ -264,14 +224,12 @@ export function EquipmentStatusPanel({
 
   // Handle save device
   const handleSaveDevice = (device: EquipmentDevice) => {
-    setDevices(prev => {
-      const updated = prev.find(d => d.id === device.id)
-        ? prev.map(d => d.id === device.id ? device : d)
-        : [...prev, device]
-      
-      onEquipmentUpdate(updated)
-      return updated
-    })
+    if (devices.find(d => d.id === device.id)) {
+      onEquipmentUpdate(device.id, device)
+    } else {
+      const { id, ...newDevice } = device;
+      onEquipmentCreate(newDevice);
+    }
     setEditingDevice(null)
     setIsModalOpen(false)
   }
@@ -291,7 +249,7 @@ export function EquipmentStatusPanel({
 
     if (!existingInventory) {
       const newInventoryItem: InventoryItem = {
-        id: `inventory-${Date.now()}`,
+        id: generateId('inventory'), // FIXED: Use crypto.randomUUID()
         productName: supply.name,
         catNum: '',
         inventoryLevel: supply.qty === 0 ? 'empty' :
@@ -342,7 +300,7 @@ export function EquipmentStatusPanel({
     const primaryAccount = suggestion.chargeToAccounts[0]
 
     const newOrder: Order = {
-      id: `order-${Date.now()}`,
+      id: generateId('order'), // FIXED: Use crypto.randomUUID()
       productName: suggestion.itemName,
       catNum: suggestion.catNum,
       supplier: '',
@@ -353,7 +311,7 @@ export function EquipmentStatusPanel({
       masterProjectId: primaryAccount?.projectId || "temp_project_placeholder",
       masterProjectName: primaryAccount?.projectName || "Select Project",
       priceExVAT: inventoryItem?.priceExVAT || 0,
-      currency: "GBP",
+      currency: EQUIPMENT_CONFIG.currency.code, // FIXED: Use centralized currency
       status: 'to-order',
       orderedBy: currentUserProfile?.id || '',
       orderedDate: undefined,
@@ -363,6 +321,8 @@ export function EquipmentStatusPanel({
       category: inventoryItem?.category,
       subcategory: inventoryItem?.subcategory,
       chargeToAccount: primaryAccount?.accountId,
+      // FIXED: Add provenance for traceability
+      sourceInventoryItemId: suggestion.inventoryItemId,
     }
 
     onOrderCreate(newOrder)
@@ -374,21 +334,30 @@ export function EquipmentStatusPanel({
 
     const daysUntilEmpty = suggestion.weeksTillEmpty * 7
     const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + daysUntilEmpty)
+    dueDate.setDate(dueDate.getDate() + Math.floor(daysUntilEmpty))
+    // Round to midnight for consistency
+    dueDate.setHours(0, 0, 0, 0)
+
+    // FIXED: Map priority properly without `as any`
+    let importance: DayToDayTask['importance'] = 'medium'
+    if (suggestion.priority === 'urgent') importance = 'critical'
+    else if (suggestion.priority === 'high') importance = 'high'
+    else if (suggestion.priority === 'medium') importance = 'medium'
+    else importance = 'low'
 
     const task: DayToDayTask = {
-      id: `task-reorder-${suggestion.inventoryItemId}-${Date.now()}`,
+      id: generateId('task'), // FIXED: Use crypto.randomUUID()
       title: `Reorder ${suggestion.itemName}`,
-      description: `${suggestion.weeksTillEmpty.toFixed(1)} weeks remaining. Order ${suggestion.suggestedOrderQty} units (£${suggestion.estimatedCost.toFixed(2)}). Used by: ${suggestion.affectedEquipment.map(e => e.name).join(', ')}`,
+      description: `${suggestion.weeksTillEmpty.toFixed(1)} weeks remaining. Order ${suggestion.suggestedOrderQty} units (${formatCurrency(suggestion.estimatedCost)}). Used by: ${suggestion.affectedEquipment.map(e => e.name).join(', ')}`,
       status: 'todo',
-      importance: suggestion.priority === 'urgent' ? 'critical' : suggestion.priority === 'high' ? 'high' : 'medium',
+      importance,
       assigneeId: currentUserProfile?.id,
       dueDate,
       createdAt: new Date(),
       updatedAt: new Date(),
-      createdBy: currentUserProfile?.userId || currentUserProfile?.id,
+      createdBy: currentUserProfile?.userId || currentUserProfile?.id || 'system',
       inventoryItemId: suggestion.inventoryItemId,
-      taskType: 'equipment_reorder' as any,
+      taskType: EquipmentTaskType.REORDER, // FIXED: Use enum value
       metadata: {
         weeksRemaining: suggestion.weeksTillEmpty,
         suggestedQty: suggestion.suggestedOrderQty,
@@ -478,15 +447,15 @@ export function EquipmentStatusPanel({
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs">Maintenance</span>
-                      <Badge className={mClass === 'danger' ? 'bg-red-500' : mClass === 'warn' ? 'bg-orange-500' : 'bg-green-500'}>
+                      <Badge className={mClass === 'critical' ? 'bg-red-500' : mClass === 'warning' ? 'bg-orange-500' : 'bg-green-500'}>
                         {mh}%
                       </Badge>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className={`h-full rounded-full transition-all ${
-                          mClass === 'danger' ? 'bg-red-500' :
-                          mClass === 'warn' ? 'bg-orange-500' :
+                          mClass === 'critical' ? 'bg-red-500' :
+                          mClass === 'warning' ? 'bg-orange-500' :
                           'bg-blue-500'
                         }`}
                         style={{ width: `${mh}%` }}
@@ -498,15 +467,15 @@ export function EquipmentStatusPanel({
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs">Supplies</span>
-                      <Badge className={sClass === 'danger' ? 'bg-red-500' : sClass === 'warn' ? 'bg-orange-500' : 'bg-green-500'}>
+                      <Badge className={sClass === 'critical' ? 'bg-red-500' : sClass === 'warning' ? 'bg-orange-500' : 'bg-green-500'}>
                         {sh}%
                       </Badge>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className={`h-full rounded-full transition-all ${
-                          sClass === 'danger' ? 'bg-red-500' :
-                          sClass === 'warn' ? 'bg-orange-500' :
+                          sClass === 'critical' ? 'bg-red-500' :
+                          sClass === 'warning' ? 'bg-orange-500' :
                           'bg-green-500'
                         }`}
                         style={{ width: `${sh}%` }}
@@ -517,8 +486,8 @@ export function EquipmentStatusPanel({
                   {/* Supplies List */}
                   <div className="flex flex-wrap gap-2">
                     {device.supplies.map(supply => {
-                      const weeks = weeksRemaining(supply)
-                      const percent = weeksToPercent(weeks)
+                      const weeks = calculateWeeksRemaining(supply.qty, supply.burnPerWeek)
+                      const percent = weeksToHealthPercentage(weeks)
                       const supplyClass = getHealthClass(percent)
                       
                       return (
@@ -536,8 +505,8 @@ export function EquipmentStatusPanel({
                           <div className={`absolute left-3 right-3 bottom-1 h-0.5 bg-gray-200 rounded-full overflow-hidden`}>
                             <div
                               className={`h-full ${
-                                supplyClass === 'danger' ? 'bg-red-500' :
-                                supplyClass === 'warn' ? 'bg-orange-500' :
+                                supplyClass === 'critical' ? 'bg-red-500' :
+                                supplyClass === 'warning' ? 'bg-orange-500' :
                                 'bg-green-500'
                               }`}
                               style={{ width: `${percent}%` }}
@@ -646,6 +615,9 @@ export function EquipmentStatusPanel({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Check Stock</DialogTitle>
+            <DialogDescription>
+              Update the current quantity for this supply item.
+            </DialogDescription>
           </DialogHeader>
           <p className="text-sm text-muted-foreground mb-4">
             Enter the current quantity for this supply:
@@ -661,17 +633,17 @@ export function EquipmentStatusPanel({
                   <Label>Current Quantity</Label>
                   <Input
                     type="number"
-                    defaultValue={supply.qty}
+                    value={tempStockQty}
                     min={0}
-                    onChange={(e) => {
-                      const newQty = parseInt(e.target.value) || 0
-                      handleUpdateStock(checkStockItem.deviceId, checkStockItem.supplyId, newQty)
-                    }}
+                    onChange={(e) => setTempStockQty(e.target.value)}
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setCheckStockItem(null)}>
                     Cancel
+                  </Button>
+                  <Button onClick={handleSaveStock}>
+                    Save
                   </Button>
                 </div>
               </div>
@@ -805,8 +777,8 @@ function EquipmentEditorModal({
       name: formData.name,
       make: formData.make,
       model: formData.model,
-      serialNumber: formData.serialNumber || undefined,
-      imageUrl: finalImageUrl || undefined,
+      serialNumber: formData.serialNumber || '',
+      imageUrl: finalImageUrl || '',
       type: formData.type,
       maintenanceDays: formData.maintenanceDays,
       lastMaintained: formData.lastMaintained,
@@ -843,8 +815,11 @@ function EquipmentEditorModal({
     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Device</DialogTitle>
+          <DialogDescription>
+            Update device details, maintenance schedule, and supply management.
+          </DialogDescription>
         </DialogHeader>
-        
+
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
             <Label>Device Name *</Label>

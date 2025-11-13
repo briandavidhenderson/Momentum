@@ -50,10 +50,10 @@ service cloud.firestore {
       return profileId != null ? get(/databases/$(database)/documents/personProfiles/$(profileId)) : null;
     }
 
-    // Helper function to get user's lab
+    // Helper function to get user's lab ID
     function getUserLab() {
       let userProfile = getUserProfile();
-      return userProfile != null && userProfile.data != null ? userProfile.data.lab : null;
+      return userProfile != null && userProfile.data != null ? userProfile.data.labId : null;
     }
 
     // Helper function to check if user can view a project
@@ -426,8 +426,9 @@ service cloud.firestore {
     // ELN EXPERIMENTS
     // ============================================================================
     match /elnExperiments/{experimentId} {
-      // Users can read their own experiments
+      // Users can read experiments in their lab
       allow read: if isAuthenticated() && (
+        resource.data.labId == getUserLab() ||
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );

@@ -2,6 +2,7 @@
 
 import { useAppContext } from "@/lib/AppContext"
 import { EquipmentStatusPanel } from "@/components/EquipmentStatusPanel"
+import { EquipmentNetworkPanel } from "@/components/EquipmentNetworkPanel"
 
 export function EquipmentManagement() {
   const {
@@ -10,10 +11,12 @@ export function EquipmentManagement() {
     orders,
     masterProjects,
     currentUserProfile,
-    handleEquipmentUpdate,
+    handleCreateEquipment,
+    handleUpdateEquipment,
     handleInventoryUpdate,
     handleCreateOrder,
-    handleCreateDayToDayTask
+    handleCreateDayToDayTask,
+    handleCreateInventoryItem,
   } = useAppContext()
 
   return (
@@ -26,6 +29,18 @@ export function EquipmentManagement() {
         </p>
       </div>
 
+      {/* Equipment Network Visualization */}
+      <EquipmentNetworkPanel
+        equipment={equipment || []}
+        inventory={inventory || []}
+        orders={orders || []}
+        masterProjects={masterProjects || []}
+        currentUserProfile={currentUserProfile}
+        onEquipmentUpdate={handleUpdateEquipment}
+        onOrderCreate={handleCreateOrder}
+        onInventoryCreate={handleCreateInventoryItem || (() => {})}
+      />
+
       {/* Equipment Status Panel */}
       <EquipmentStatusPanel
         equipment={equipment || []}
@@ -33,7 +48,8 @@ export function EquipmentManagement() {
         orders={orders || []}
         masterProjects={masterProjects || []}
         currentUserProfile={currentUserProfile}
-        onEquipmentUpdate={handleEquipmentUpdate}
+        onEquipmentCreate={handleCreateEquipment}
+        onEquipmentUpdate={handleUpdateEquipment}
         onInventoryUpdate={handleInventoryUpdate}
         onOrderCreate={handleCreateOrder}
         onTaskCreate={handleCreateDayToDayTask}

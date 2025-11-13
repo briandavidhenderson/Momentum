@@ -7,19 +7,24 @@ import {
   updateEvent,
   deleteEvent,
 } from '@/lib/firestoreService';
+import { useAuth } from './useAuth';
 
 export function useCalendar() {
+  const { currentUserProfile: profile } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToEvents((newEvents) => {
+    if (!profile?.labId) return;
+
+    const unsubscribe = subscribeToEvents({ labId: profile.labId }, (newEvents) => {
       setEvents(newEvents);
     });
     return () => unsubscribe();
-  }, []);
+  }, [profile]);
 
-  const handleCreateEvent = async (eventData: Omit<CalendarEvent, 'id'>) => {
-    const eventId = await createEvent(eventData);
+  const handleCreateEvent = async (eventData: Omit<CalendarEvent, 'id' | 'labId'>) => {
+    if (!profile) return;
+    const eventId = await createEvent({ ...eventData, labId: profile.labId });
     return eventId;
   };
 

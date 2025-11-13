@@ -1,69 +1,127 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { PersonProfile, FUNDING_ACCOUNTS } from "@/lib/types"
-import { getDirectReports } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { User, Mail, Phone, MapPin, BookOpen, GraduationCap, Users, Building, Network } from "lucide-react"
+import { Mail, Phone, MapPin, GraduationCap, Users, Building, Network } from "lucide-react"
 import { NetworkView } from "../NetworkView"
 import PositionBadge from "@/components/PositionBadge"
+import { OrcidIcon } from "@/components/OrcidBadge"
 
 interface PeopleViewProps {
   currentUserProfile?: PersonProfile | null
 }
 
 export default function PeopleView({ currentUserProfile }: PeopleViewProps = {}) {
-  const allProfiles = useProfiles()
+  // Fixed: use labId instead of lab
+  const allProfiles = useProfiles(currentUserProfile?.labId ?? null) || []
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "orgchart" | "network">("grid")
+  const [orcidFilter, setOrcidFilter] = useState<"all" | "with" | "without">("all")
 
   // Filter profiles by lab if currentUserProfile is provided
-  const profiles = currentUserProfile?.labId
+  // Ensure profiles is always an array to prevent .map() errors
+  let profiles = (currentUserProfile?.labId
     ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
-    : allProfiles
+    : allProfiles) || []
 
-  // Debug logging
+  // Apply ORCID filter
+  if (orcidFilter === "with") {
+    profiles = profiles.filter(p => p.orcidVerified)
+  } else if (orcidFilter === "without") {
+    profiles = profiles.filter(p => !p.orcidVerified)
+  }
+
+  // Debug logging (only in development)
   useEffect(() => {
-    console.log("PeopleView: Profile loading status", {
-      allProfilesCount: allProfiles.length,
-      filteredProfilesCount: profiles.length,
-      currentUserProfile: currentUserProfile ? {
-        id: currentUserProfile.id,
-        labId: currentUserProfile.labId,
-        name: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
-      } : null,
-      allProfiles: allProfiles.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`, labId: p.labId }))
-    })
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("PeopleView: Profile loading status", {
+        allProfilesCount: allProfiles?.length || 0,
+        filteredProfilesCount: profiles.length,
+        currentUserProfile: currentUserProfile ? {
+          id: currentUserProfile.id,
+          labId: currentUserProfile.labId,
+          name: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
+        } : null,
+        allProfiles: allProfiles?.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`, labId: p.labId })) || []
+      })
+    }
   }, [allProfiles, profiles, currentUserProfile])
 
-  const labs = Array.from(new Set(profiles.map(p => p.labName).filter(Boolean)))
-  const institutes = Array.from(new Set(profiles.map(p => p.instituteName).filter(Boolean)))
-  const organisations = Array.from(new Set(profiles.map(p => p.organisationName).filter(Boolean)))
+  // Memoize arrays to avoid recompute on every render
+  const labs = useMemo(() =>
+    Array.from(new Set(profiles.map(p => p.labName).filter(Boolean))),
+    [profiles]
+  )
+  const institutes = useMemo(() =>
+    Array.from(new Set(profiles.map(p => p.instituteName).filter(Boolean))),
+    [profiles]
+  )
+  const organisations = useMemo(() =>
+    Array.from(new Set(profiles.map(p => p.organisationName).filter(Boolean))),
+    [profiles]
+  )
 
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+  // Pre-group profiles for org chart (O(N) instead of O(N³))
+  const orgMap = useMemo(() => {
+    const map = new Map<string, Map<string, Map<string, PersonProfile[]>>>()
+    for (const p of profiles) {
+      const o = p.organisationName || "—"
+      const i = p.instituteName || "—"
+      const l = p.labName || "—"
+      if (!map.has(o)) map.set(o, new Map())
+      const im = map.get(o)!
+      if (!im.has(i)) im.set(i, new Map())
+      const lm = im.get(i)!
+      if (!lm.has(l)) lm.set(l, [])
+      lm.get(l)!.push(p)
+    }
+    return map
+  }, [profiles])
+
+  // Compute direct report counts
+  const directReportCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const profile of profiles) {
+      counts[profile.id] = profiles.filter(p => p.reportsTo === profile.id).length
+    }
+    return counts
+  }, [profiles])
+
+  const getInitials = (firstName?: string, lastName?: string) => {
+    return `${(firstName?.[0] ?? '?')}${(lastName?.[0] ?? '')}`.toUpperCase()
   }
 
-  const getColorForLab = (lab: string) => {
-    const colors = [
-      "#14b8a6", // teal
-      "#8b5cf6", // purple
-      "#f59e0b", // amber
-      "#3b82f6", // blue
-      "#ec4899", // pink
-    ]
-    const index = labs.indexOf(lab)
-    return colors[index % colors.length]
+  // Stable color based on string hash
+  const palette = ["#14b8a6", "#8b5cf6", "#f59e0b", "#3b82f6", "#ec4899"]
+  const labColor = (labName?: string) => {
+    const s = labName?.trim()
+    if (!s) return "#64748b" // neutral fallback (slate-500)
+    let h = 0
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+    const idx = Math.abs(h) % palette.length
+    return palette[idx]
   }
 
-  const getFundingAccountNames = (fundedBy: string[]) => {
+  const getFundingAccountNames = (fundedBy: string[] = []) => {
     return fundedBy.map(id => {
-      const account = FUNDING_ACCOUNTS.find(a => a.id.toLowerCase() === id.toLowerCase())
-      return account ? account.name : id
+      const account = FUNDING_ACCOUNTS.find(a => a.id?.toLowerCase?.() === id?.toLowerCase?.())
+      return account?.name ?? id
     }).join(", ")
   }
+
+  // Close modal on ESC key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedProfile) {
+        setSelectedProfile(null)
+      }
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [selectedProfile])
 
   return (
     <div className="space-y-6">
@@ -73,11 +131,24 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
           <h1 className="text-3xl font-bold text-foreground">People</h1>
           <p className="text-muted-foreground mt-1">Research team members and organizational structure</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {/* ORCID Filter */}
+          <select
+            value={orcidFilter}
+            onChange={(e) => setOrcidFilter(e.target.value as "all" | "with" | "without")}
+            className="border rounded-md px-3 py-2 text-sm bg-background"
+          >
+            <option value="all">All Members</option>
+            <option value="with">With ORCID</option>
+            <option value="without">Without ORCID</option>
+          </select>
+
+          {/* View Mode Buttons */}
           <Button
             onClick={() => setViewMode("grid")}
             variant={viewMode === "grid" ? "default" : "outline"}
             className={viewMode === "grid" ? "bg-brand-500 text-white" : ""}
+            aria-pressed={viewMode === "grid"}
           >
             Grid View
           </Button>
@@ -85,6 +156,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
             onClick={() => setViewMode("orgchart")}
             variant={viewMode === "orgchart" ? "default" : "outline"}
             className={viewMode === "orgchart" ? "bg-brand-500 text-white" : ""}
+            aria-pressed={viewMode === "orgchart"}
           >
             Org Chart
           </Button>
@@ -92,6 +164,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
             onClick={() => setViewMode("network")}
             variant={viewMode === "network" ? "default" : "outline"}
             className={viewMode === "network" ? "bg-brand-500 text-white" : ""}
+            aria-pressed={viewMode === "network"}
           >
             <Network className="h-4 w-4 mr-2" />
             Network
@@ -147,59 +220,52 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
       {viewMode === "orgchart" && (
         <div className="bg-card rounded-lg border border-border p-6">
           <h2 className="text-xl font-bold mb-4">Organizational Hierarchy</h2>
-          {organisations.map(org => (
+          {Array.from(orgMap.entries()).map(([org, institutesMap]) => (
             <div key={org} className="mb-6">
               <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                 <Building className="h-5 w-5" />
                 {org}
               </h3>
-              {institutes.map(inst => {
-                const instProfiles = profiles.filter(p => p.organisationName === org && p.instituteName === inst)
-                if (instProfiles.length === 0) return null
-
-                return (
-                  <div key={inst} className="ml-6 mb-4">
-                    <h4 className="font-medium mb-2 flex items-center gap-2 text-muted-foreground">
-                      <GraduationCap className="h-4 w-4" />
-                      {inst}
-                    </h4>
-                    {labs.map(lab => {
-                      const labProfiles = instProfiles.filter(p => p.labName === lab)
-                      if (labProfiles.length === 0) return null
-
-                      return (
-                        <div key={lab} className="ml-6 mb-3">
-                          <h5 className="text-sm font-medium mb-2 flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            {lab}
-                          </h5>
-                          <div className="ml-6 space-y-1">
-                            {labProfiles.map(profile => (
-                              <div
-                                key={profile.id}
-                                className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
-                                onClick={() => setSelectedProfile(profile)}
-                              >
-                                <div
-                                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium"
-                                  style={{ backgroundColor: getColorForLab(profile.labName || '') }}
-                                >
-                                  {getInitials(profile.firstName, profile.lastName)}
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium">{profile.firstName} {profile.lastName}</p>
-                                  <p className="text-xs text-muted-foreground">{profile.position}</p>
-                                </div>
-                                <PositionBadge positionLevel={profile.positionLevel} positionDisplayName={profile.positionDisplayName} />
-                              </div>
-                            ))}
+              {Array.from(institutesMap.entries()).map(([inst, labsMap]) => (
+                <div key={inst} className="ml-6 mb-4">
+                  <h4 className="font-medium mb-2 flex items-center gap-2 text-muted-foreground">
+                    <GraduationCap className="h-4 w-4" />
+                    {inst}
+                  </h4>
+                  {Array.from(labsMap.entries()).map(([lab, labProfiles]) => (
+                    <div key={lab} className="ml-6 mb-3">
+                      <h5 className="text-sm font-medium mb-2 flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        {lab}
+                      </h5>
+                      <div className="ml-6 space-y-1">
+                        {labProfiles.map(profile => (
+                          <div
+                            key={profile.id}
+                            role="button"
+                            tabIndex={0}
+                            className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500"
+                            onClick={() => setSelectedProfile(profile)}
+                            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelectedProfile(profile)}
+                          >
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium"
+                              style={{ backgroundColor: labColor(profile.labName) }}
+                            >
+                              {getInitials(profile.firstName, profile.lastName)}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{profile.firstName} {profile.lastName}</p>
+                              <p className="text-xs text-muted-foreground">{profile.position}</p>
+                            </div>
+                            <PositionBadge positionLevel={profile.positionLevel} positionDisplayName={profile.positionDisplayName} />
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })}
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -207,99 +273,122 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
 
       {/* Grid View */}
       {viewMode === "grid" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {profiles.map((profile) => {
-            const directReports = getDirectReports(profile.id)
+        <>
+          {profiles.length === 0 ? (
+            <div className="bg-card rounded-lg border border-border p-12 text-center">
+              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">No team members found</h3>
+              <p className="text-muted-foreground">Team members will appear here once they complete onboarding.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {profiles.map((profile) => {
+                const directReportCount = directReportCounts[profile.id] || 0
 
-            return (
-              <div
-                key={profile.id}
-                className="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => setSelectedProfile(profile)}
-              >
-                {/* Header */}
-                <div className="flex items-start gap-4 mb-4">
+                return (
                   <div
-                    className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold"
-                    style={{ backgroundColor: getColorForLab(profile.labName || '') }}
+                    key={profile.id}
+                    role="button"
+                    tabIndex={0}
+                    className="bg-card rounded-lg border border-border p-6 hover:shadow-lg transition-shadow cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    onClick={() => setSelectedProfile(profile)}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelectedProfile(profile)}
                   >
-                    {getInitials(profile.firstName, profile.lastName)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-lg text-foreground truncate">
-                      {profile.firstName} {profile.lastName}
-                    </h3>
-                    <div className="mt-1">
-                      <PositionBadge positionLevel={profile.positionLevel} positionDisplayName={profile.positionDisplayName} />
+                    {/* Header */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <div
+                        className="w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold"
+                        style={{ backgroundColor: labColor(profile.labName) }}
+                      >
+                        {getInitials(profile.firstName, profile.lastName)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-lg text-foreground truncate">
+                            {profile.firstName} {profile.lastName}
+                          </h3>
+                          {profile.orcidVerified && (
+                            <OrcidIcon size="sm" className="flex-shrink-0" />
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          <PositionBadge positionLevel={profile.positionLevel} positionDisplayName={profile.positionDisplayName} />
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Contact Info */}
-                <div className="space-y-2 mb-4">
-                  {profile.email && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Mail className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{profile.email}</span>
+                    {/* Contact Info */}
+                    <div className="space-y-2 mb-4">
+                      {profile.email && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Mail className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{profile.email}</span>
+                        </div>
+                      )}
+                      {profile.phone && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Phone className="h-4 w-4 flex-shrink-0" />
+                          <span>{profile.phone}</span>
+                        </div>
+                      )}
+                      {profile.officeLocation && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <MapPin className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">{profile.officeLocation}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {profile.phone && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Phone className="h-4 w-4 flex-shrink-0" />
-                      <span>{profile.phone}</span>
-                    </div>
-                  )}
-                  {profile.officeLocation && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 flex-shrink-0" />
-                      <span className="truncate">{profile.officeLocation}</span>
-                    </div>
-                  )}
-                </div>
 
-                {/* Organization Info */}
-                <div className="space-y-1 mb-4 pt-4 border-t border-border">
-                  {profile.labName && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-foreground truncate">{profile.labName}</span>
+                    {/* Organization Info */}
+                    <div className="space-y-1 mb-4 pt-4 border-t border-border">
+                      {profile.labName && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-foreground truncate">{profile.labName}</span>
+                        </div>
+                      )}
+                      {profile.instituteName && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <GraduationCap className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-muted-foreground truncate">{profile.instituteName}</span>
+                        </div>
+                      )}
+                      {profile.organisationName && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-muted-foreground truncate">{profile.organisationName}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {profile.instituteName && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <GraduationCap className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-muted-foreground truncate">{profile.instituteName}</span>
-                    </div>
-                  )}
-                  {profile.organisationName && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-muted-foreground truncate">{profile.organisationName}</span>
-                    </div>
-                  )}
-                </div>
 
-                {/* Additional Info */}
-                {profile.researchInterests && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {profile.researchInterests}
-                    </p>
+                    {/* Research Interests */}
+                    {Array.isArray(profile.researchInterests) && profile.researchInterests.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <div className="flex gap-1 flex-wrap">
+                          {profile.researchInterests.slice(0, 3).map((ri, i) => (
+                            <Badge key={i} variant="secondary" className="text-xs">{ri}</Badge>
+                          ))}
+                          {profile.researchInterests.length > 3 && (
+                            <Badge variant="secondary" className="text-xs">+{profile.researchInterests.length - 3}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Direct Reports */}
+                    {directReportCount > 0 && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <Badge variant="secondary" className="text-xs">
+                          {directReportCount} Direct Report{directReportCount !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                {/* Direct Reports */}
-                {directReports.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border">
-                    <Badge variant="secondary" className="text-xs">
-                      {directReports.length} Direct Report{directReports.length !== 1 ? 's' : ''}
-                    </Badge>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Selected Profile Detail Modal */}
@@ -316,7 +405,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
             <div className="flex items-start gap-4 mb-6">
               <div
                 className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold"
-                style={{ backgroundColor: getColorForLab(selectedProfile.labName || '') }}
+                style={{ backgroundColor: labColor(selectedProfile.labName) }}
               >
                 {getInitials(selectedProfile.firstName, selectedProfile.lastName)}
               </div>
@@ -405,10 +494,14 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
             </div>
 
             {/* Research Interests */}
-            {selectedProfile.researchInterests && (
+            {Array.isArray(selectedProfile.researchInterests) && selectedProfile.researchInterests.length > 0 && (
               <div className="space-y-4 mb-6">
                 <h3 className="font-semibold text-lg text-foreground">Research Interests</h3>
-                <p className="text-sm text-muted-foreground">{selectedProfile.researchInterests}</p>
+                <div className="flex gap-2 flex-wrap">
+                  {selectedProfile.researchInterests.map((ri, i) => (
+                    <Badge key={i} variant="secondary">{ri}</Badge>
+                  ))}
+                </div>
               </div>
             )}
 

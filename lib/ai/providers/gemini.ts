@@ -33,7 +33,7 @@ export class GeminiProvider implements AIProvider {
   capabilities: AICapability[] = ['ocr', 'vlm', 'llm']
 
   private apiKey: string
-  private baseURL = 'https://generativelanguage.googleapis.com/v1beta'
+  private baseURL = 'https://generativelanguage.googleapis.com/v1'
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
@@ -68,25 +68,30 @@ export class GeminiProvider implements AIProvider {
     try {
       // Convert image to base64
       const base64Image = await this.fileToBase64(image)
-      const imagePart = {
-        inlineData: {
-          data: base64Image,
-          mimeType: image.type
-        }
-      }
+
+      // Select appropriate OCR prompt
+      const promptText = options.handwritten
+        ? IMAGE_OCR_PROMPT.HANDWRITTEN
+        : IMAGE_OCR_PROMPT.TYPED
 
       const response = await fetch(
-        `${this.baseURL}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
+        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
           },
           body: JSON.stringify({
             contents: [{
               parts: [
-                { text: IMAGE_OCR_PROMPT },
-                imagePart
+                { text: promptText },
+                {
+                  inlineData: {
+                    data: base64Image,
+                    mimeType: image.type
+                  }
+                }
               ]
             }],
             generationConfig: {
@@ -142,25 +147,25 @@ export class GeminiProvider implements AIProvider {
     try {
       // Convert image to base64
       const base64Image = await this.fileToBase64(image)
-      const imagePart = {
-        inlineData: {
-          data: base64Image,
-          mimeType: image.type
-        }
-      }
 
       const response = await fetch(
-        `${this.baseURL}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
+        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
           },
           body: JSON.stringify({
             contents: [{
               parts: [
                 { text: prompt },
-                imagePart
+                {
+                  inlineData: {
+                    data: base64Image,
+                    mimeType: image.type
+                  }
+                }
               ]
             }],
             generationConfig: {
@@ -212,11 +217,12 @@ export class GeminiProvider implements AIProvider {
 
     try {
       const response = await fetch(
-        `${this.baseURL}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
+        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
           },
           body: JSON.stringify({
             contents: [{

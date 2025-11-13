@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { 
+import {
   UserIcon,
-  Save, 
+  Save,
   Edit,
   Mail,
   Phone,
@@ -25,6 +25,8 @@ import {
 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { updateProfile, updateUser } from "@/lib/firestoreService"
+import { OrcidBadge } from "@/components/OrcidBadge"
+import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
 
 interface PersonalProfilePageProps {
   currentUser: User | null
@@ -32,7 +34,7 @@ interface PersonalProfilePageProps {
 }
 
 export function PersonalProfilePage({ currentUser, currentUserProfile }: PersonalProfilePageProps) {
-  const allProfiles = useProfiles()
+  const allProfiles = useProfiles(currentUserProfile?.lab || null)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<Partial<PersonProfile>>({})
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)
@@ -57,8 +59,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
     }
   }, [currentUserProfile])
 
-  const handleSave = async () => {
-    if (!currentUserProfile || !formData.firstName || !formData.lastName || !formData.email || 
+  const handleSave = async (additionalData?: Partial<PersonProfile>) => {
+    if (!currentUserProfile || !formData.firstName || !formData.lastName || !formData.email ||
         !formData.organisation || !formData.institute || !formData.lab) {
       alert("Please fill in required fields: First Name, Last Name, Email, Organisation, Institute, and Lab")
       return
@@ -85,18 +87,19 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         principalInvestigatorProjects: formData.principalInvestigatorProjects || [],
         profileComplete: formData.profileComplete !== undefined ? formData.profileComplete : true,
         isAdministrator: formData.isAdministrator || false,
+        ...additionalData,
       }
 
       // Update profile in Firestore
       await updateProfile(currentUserProfile.id, updatedProfileData)
-      
+
       // Update User record if admin status changed
       if (formData.userId && currentUser?.id === formData.userId) {
-        await updateUser(currentUser.id, { 
-          isAdministrator: formData.isAdministrator || false 
+        await updateUser(currentUser.id, {
+          isAdministrator: formData.isAdministrator || false
         })
       }
-      
+
       setIsEditing(false)
       // No need to reload - Firestore real-time updates will handle it
     } catch (error) {
@@ -328,6 +331,75 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               />
             </div>
           </div>
+        </div>
+
+        {/* ORCID */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <svg className="h-5 w-5" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+              <path fill="#A6CE39" d="M256,128c0,70.7-57.3,128-128,128C57.3,256,0,198.7,0,128C0,57.3,57.3,0,128,0C198.7,0,256,57.3,256,128z"/>
+              <g><path fill="#FFF" d="M86.3,186.2H70.9V79.1h15.4v48.4V186.2z"/><path fill="#FFF" d="M108.9,79.1h41.6c39.6,0,57,28.3,57,53.6c0,27.5-21.5,53.6-56.8,53.6h-41.8V79.1z M124.3,172.4h24.5 c34.9,0,42.9-26.5,42.9-39.7c0-21.5-13.7-39.7-43.7-39.7h-23.7V172.4z"/><path fill="#FFF" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1 C84.2,46.7,88.7,51.3,88.7,56.8z"/></g>
+            </svg>
+            ORCID
+          </h2>
+
+          {formData.orcidId ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <OrcidBadge
+                  orcidId={formData.orcidId}
+                  verified={formData.orcidVerified}
+                  size="md"
+                  showLabel
+                />
+              </div>
+              {formData.orcidLastSynced && (
+                <p className="text-xs text-gray-500">
+                  Last synced: {new Date(formData.orcidLastSynced).toLocaleDateString()}
+                </p>
+              )}
+              {isEditing && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (confirm("Are you sure you want to disconnect your ORCID?")) {
+                      await handleSave({ orcidId: undefined, orcidUrl: undefined, orcidVerified: false })
+                    }
+                  }}
+                >
+                  Disconnect ORCID
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Connect your ORCID iD to verify your identity and link your research outputs.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const result = await linkOrcidToCurrentUser()
+                    await handleSave({
+                      orcidId: result.orcid,
+                      orcidUrl: result.orcidUrl,
+                      orcidVerified: true,
+                      orcidLastSynced: new Date().toISOString(),
+                      orcidClaims: result.claims,
+                    })
+                  } catch (err: any) {
+                    alert(err.message || "Failed to connect ORCID")
+                  }
+                }}
+                className="bg-[#A6CE39] hover:bg-[#8FB82E] text-white"
+              >
+                Connect ORCID
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Funding */}
@@ -604,7 +676,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
             }}>
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-brand-500 hover:bg-brand-600 text-white">
+            <Button onClick={() => handleSave()} className="bg-brand-500 hover:bg-brand-600 text-white">
               <Save className="h-4 w-4 mr-2" />
               Save Changes
             </Button>
@@ -622,6 +694,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
             setEditingProject(null)
           }}
           onSave={handleSaveProject}
+          currentUserProfile={currentUserProfile}
         />
       )}
     </div>
@@ -634,13 +707,15 @@ function ProjectDialog({
   project,
   onClose,
   onSave,
+  currentUserProfile,
 }: {
   open: boolean
   project: ProfileProject | null
   onClose: () => void
   onSave: (project: ProfileProject) => void
+  currentUserProfile: PersonProfile | null
 }) {
-  const allProfiles = useProfiles()
+  const allProfiles = useProfiles(currentUserProfile?.lab || null)
   const [formData, setFormData] = useState<ProfileProject>({
     id: "",
     name: "",

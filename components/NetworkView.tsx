@@ -50,7 +50,7 @@ interface NetworkViewProps {
 }
 
 export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
-  const allProfiles = useProfiles()
+  const allProfiles = useProfiles(currentUserProfile?.labId || null) || []
   const svgRef = useRef<SVGSVGElement>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [forceStrength, setForceStrength] = useState(-280)
@@ -62,9 +62,10 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
   })
 
   // Filter profiles by lab if currentUserProfile is provided
-  const profiles = currentUserProfile?.lab
-    ? allProfiles.filter(p => p.lab === currentUserProfile.lab)
-    : allProfiles
+  // Ensure profiles is always an array
+  const profiles = (currentUserProfile?.labId
+    ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
+    : allProfiles) || []
 
   useEffect(() => {
     if (!svgRef.current) return
@@ -92,13 +93,13 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
       }
 
       // Warn about missing organizational fields but don't filter out
-      if (isValid && (!p.organisation || !p.institute || !p.lab)) {
+      if (isValid && (!p.organisationName || !p.instituteName || !p.labName)) {
         console.info("Profile with incomplete org data (will show with defaults):", {
           id: p.id,
           name: `${p.firstName} ${p.lastName}`,
-          hasOrganisation: !!p.organisation,
-          hasInstitute: !!p.institute,
-          hasLab: !!p.lab,
+          hasOrganisation: !!p.organisationName,
+          hasInstitute: !!p.instituteName,
+          hasLab: !!p.labName,
         })
       }
 
@@ -184,15 +185,15 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
       // Ensure all profiles have org/institute/lab (use defaults if missing)
       const profilesWithDefaults = validProfiles.map(p => ({
         ...p,
-        organisation: p.organisation || DEFAULT_ORG,
-        institute: p.institute || DEFAULT_INSTITUTE,
-        lab: p.lab || DEFAULT_LAB
+        organisationName: p.organisationName || DEFAULT_ORG,
+        instituteName: p.instituteName || DEFAULT_INSTITUTE,
+        labName: p.labName || DEFAULT_LAB
       }))
 
       // Define hierarchy from profiles: Organisation -> Institute -> Lab -> People
-      const uniqueOrganisations = Array.from(new Set(profilesWithDefaults.map(p => p.organisation).filter(Boolean)))
-      const uniqueInstitutes = Array.from(new Set(profilesWithDefaults.map(p => p.institute).filter(Boolean)))
-      const uniqueLabs = Array.from(new Set(profilesWithDefaults.map(p => p.lab).filter(Boolean)))
+      const uniqueOrganisations = Array.from(new Set(profilesWithDefaults.map(p => p.organisationName).filter(Boolean)))
+      const uniqueInstitutes = Array.from(new Set(profilesWithDefaults.map(p => p.instituteName).filter(Boolean)))
+      const uniqueLabs = Array.from(new Set(profilesWithDefaults.map(p => p.labName).filter(Boolean)))
       
       // Create organisations
       const organisations: Organisation[] = uniqueOrganisations.map((org, idx) => ({
@@ -225,7 +226,7 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
 
       // Create labs (grouped by institute)
       const labs: Lab[] = uniqueLabs.map(lab => {
-        const profile = profilesWithDefaults.find(p => p.lab === lab)
+        const profile = profilesWithDefaults.find(p => p.labName === lab)
         if (!profile) {
           // Shouldn't happen with defaults, but handle gracefully
           return {
@@ -238,8 +239,8 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
         return {
           id: lab.replace(/\s+/g, '_'),
           label: lab,
-          institute: profile.institute.replace(/\s+/g, '_'),
-          organisation: profile.organisation.replace(/\s+/g, '_')
+          institute: profile.instituteName.replace(/\s+/g, '_'),
+          organisation: profile.organisationName.replace(/\s+/g, '_')
         }
       })
 
@@ -272,14 +273,14 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
           id: p.id,
           label: `${p.firstName?.charAt(0) || ''}${p.lastName?.charAt(0) || ''}`,
           role,
-          lab: p.lab?.replace(/\s+/g, '_') || '',
+          lab: p.labName?.replace(/\s+/g, '_') || '',
           employer: p.reportsTo || p.id,
           funders: (p.fundedBy || []).map(f => {
             const account = FUNDING_ACCOUNTS.find(a => a.name === f)
             return account ? account.name : f
           }),
-          organisation: p.organisation?.replace(/\s+/g, '_') || '',
-          institute: p.institute?.replace(/\s+/g, '_') || ''
+          organisation: p.organisationName?.replace(/\s+/g, '_') || '',
+          institute: p.instituteName?.replace(/\s+/g, '_') || ''
         }
       })
 

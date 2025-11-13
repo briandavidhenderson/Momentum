@@ -16,6 +16,7 @@ import {
   writeBatch,
   serverTimestamp,
   runTransaction,
+  Query,
 } from "firebase/firestore"
 import { db } from "./firebase"
 import {
@@ -253,7 +254,7 @@ export async function getAllProfiles(): Promise<PersonProfile[]> {
  */
 export async function findUserProfile(userId: string, profileId: string | null | undefined): Promise<PersonProfile | null> {
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
-    console.warn("findUserProfile called with invalid userId")
+    // Silently return null if no userId (user not logged in yet)
     return null
   }
   
@@ -330,10 +331,18 @@ export async function updateProfile(profileId: string, updates: Partial<PersonPr
   await updateDoc(profileRef, updates)
 }
 
-export function subscribeToProfiles(callback: (profiles: PersonProfile[]) => void): Unsubscribe {
+export function subscribeToProfiles(
+  filters: { labId?: string } | null,
+  callback: (profiles: PersonProfile[]) => void
+): Unsubscribe {
   try {
-    const q = collection(db, "personProfiles")
-    return onSnapshot(q, 
+    let q: Query = collection(db, "personProfiles")
+
+    if (filters?.labId) {
+      q = query(q, where("labId", "==", filters.labId))
+    }
+
+    return onSnapshot(q,
       (snapshot) => {
         const profiles = snapshot.docs.map(doc => {
           const data = doc.data()
@@ -374,16 +383,27 @@ export function subscribeToProfiles(callback: (profiles: PersonProfile[]) => voi
  * @returns The ID of the newly created organisation
  */
 export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'createdAt'>): Promise<string> {
+  console.log('[firestoreService] createOrganisation called with:', orgData)
   const orgRef = doc(collection(db, "organisations"))
   const orgId = orgRef.id
+  console.log('[firestoreService] Generated orgId:', orgId)
 
-  await setDoc(orgRef, {
+  const docData = {
     ...orgData,
     id: orgId,
     createdAt: new Date().toISOString(),
     memberCount: 0,
     instituteCount: 0,
-  })
+  }
+  console.log('[firestoreService] About to save document:', docData)
+
+  try {
+    await setDoc(orgRef, docData)
+    console.log('[firestoreService] Organisation saved successfully')
+  } catch (error) {
+    console.error('[firestoreService] Error saving organisation:', error)
+    throw error
+  }
 
   return orgId
 }
@@ -534,6 +554,13 @@ export async function createFunder(funderData: Omit<Funder, 'id' | 'createdAt'>)
     dataToSave.endDate = Timestamp.fromDate(funderData.endDate)
   }
 
+  // Remove undefined values - Firestore doesn't allow them
+  Object.keys(dataToSave).forEach(key => {
+    if (dataToSave[key] === undefined) {
+      delete dataToSave[key]
+    }
+  })
+
   await setDoc(funderRef, dataToSave)
 
   return funderId
@@ -683,7 +710,7 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
   await setDoc(projectRef, {
     ...projectData,
     id: projectId,
-    createdAt: new Date().toISOString(),
+    createdAt: serverTimestamp(),
     spentAmount: 0,
     committedAmount: 0,
     remainingBudget: projectData.totalBudget || 0,
@@ -773,16 +800,16 @@ export function subscribeToMasterProjects(
   filters: { labId?: string; funderId?: string; personId?: string } | null,
   callback: (projects: MasterProject[]) => void
 ): Unsubscribe {
-  let q = collection(db, "masterProjects")
+  let q: Query = collection(db, "masterProjects")
 
   if (filters?.labId) {
-    q = query(q as any, where("labId", "==", filters.labId)) as any
+    q = query(q, where("labId", "==", filters.labId))
   }
   if (filters?.funderId) {
-    q = query(q as any, where("funderId", "==", filters.funderId)) as any
+    q = query(q, where("funderId", "==", filters.funderId))
   }
   if (filters?.personId) {
-    q = query(q as any, where("teamMemberIds", "array-contains", filters.personId)) as any
+    q = query(q, where("teamMemberIds", "array-contains", filters.personId))
   }
 
   return onSnapshot(q, (snapshot) => {
@@ -873,16 +900,25 @@ export async function deleteProject(projectId: string): Promise<void> {
   await deleteDoc(doc(db, "projects", projectId))
 }
 
-export function subscribeToProjects(userId: string, callback: (projects: Project[]) => void): Unsubscribe {
-  if (!userId) {
+export function subscribeToProjects(
+  filters: { labId?: string; userId?: string } | null,
+  callback: (projects: Project[]) => void
+): Unsubscribe {
+  if (!filters?.userId) {
     console.warn("subscribeToProjects called with undefined or empty userId")
     // Return a no-op unsubscribe function
     return () => {}
   }
   
   try {
+    let q: Query = collection(db, "projects")
+
+    if (filters?.labId) {
+      q = query(q, where("labId", "==", filters.labId))
+    }
+
     return onSnapshot(
-      collection(db, "projects"), 
+      q,
       async (snapshot) => {
         const projects = snapshot.docs.map(doc => {
           const data = doc.data() as FirestoreProject
@@ -985,8 +1021,15 @@ export async function deleteWorkpackage(wpId: string): Promise<void> {
   await deleteDoc(doc(db, "workpackages", wpId))
 }
 
-export function subscribeToWorkpackages(profileProjectId: string, callback: (wps: Workpackage[]) => void): Unsubscribe {
-  const q = query(collection(db, "workpackages"), where("profileProjectId", "==", profileProjectId))
+export function subscribeToWorkpackages(
+  filters: { profileProjectId?: string } | null,
+  callback: (wps: Workpackage[]) => void
+): Unsubscribe {
+  let q: Query = collection(db, "workpackages")
+
+  if (filters?.profileProjectId) {
+    q = query(q, where("profileProjectId", "==", filters.profileProjectId))
+  }
 
   return onSnapshot(q, (snapshot) => {
     const wps = snapshot.docs.map(doc => {
@@ -1150,8 +1193,17 @@ export async function deleteOrder(orderId: string): Promise<void> {
   await deleteDoc(doc(db, "orders", orderId))
 }
 
-export function subscribeToOrders(callback: (orders: Order[]) => void): Unsubscribe {
-  return onSnapshot(collection(db, "orders"), (snapshot) => {
+export function subscribeToOrders(
+  filters: { labId?: string } | null,
+  callback: (orders: Order[]) => void
+): Unsubscribe {
+  let q: Query = collection(db, "orders")
+
+  if (filters?.labId) {
+    q = query(q, where("labId", "==", filters.labId))
+  }
+
+  return onSnapshot(q, (snapshot) => {
     const orders = snapshot.docs.map(doc => {
       const data = doc.data() as FirestoreOrder
       return {
@@ -1227,8 +1279,17 @@ export async function deleteInventoryItem(itemId: string): Promise<void> {
   await deleteDoc(doc(db, "inventory", itemId))
 }
 
-export function subscribeToInventory(callback: (inventory: InventoryItem[]) => void): Unsubscribe {
-  return onSnapshot(collection(db, "inventory"), (snapshot) => {
+export function subscribeToInventory(
+  filters: { labId?: string } | null,
+  callback: (inventory: InventoryItem[]) => void
+): Unsubscribe {
+  let q: Query = collection(db, "inventory")
+
+  if (filters?.labId) {
+    q = query(q, where("labId", "==", filters.labId))
+  }
+
+  return onSnapshot(q, (snapshot) => {
     const inventory = snapshot.docs.map(doc => {
       const data = doc.data() as FirestoreInventoryItem
       return {
@@ -1296,8 +1357,17 @@ export async function getEvents(): Promise<CalendarEvent[]> {
   })
 }
 
-export function subscribeToEvents(callback: (events: CalendarEvent[]) => void): Unsubscribe {
-  return onSnapshot(collection(db, "events"), (snapshot) => {
+export function subscribeToEvents(
+  filters: { labId?: string } | null,
+  callback: (events: CalendarEvent[]) => void
+): Unsubscribe {
+  let q: Query = collection(db, "events")
+
+  if (filters?.labId) {
+    q = query(q, where("labId", "==", filters.labId))
+  }
+
+  return onSnapshot(q, (snapshot) => {
     const events = snapshot.docs.map(d => {
       const data = d.data() as FirestoreCalendarEvent
       return {
@@ -1351,11 +1421,19 @@ export async function getAuditTrails(entityType: AuditTrail['entityType'], entit
     }) as AuditTrail)
 }
 
-export function subscribeToAuditTrails(entityType: AuditTrail['entityType'], entityId: string, callback: (entries: AuditTrail[]) => void): Unsubscribe {
-  return onSnapshot(collection(db, "auditTrails"), (snapshot) => {
+export function subscribeToAuditTrails(
+  filters: { entityType: string; entityId: string } | null,
+  callback: (entries: AuditTrail[]) => void
+): Unsubscribe {
+  let q: Query = collection(db, "auditTrails")
+
+  if (filters?.entityType && filters?.entityId) {
+    q = query(q, where("entityType", "==", filters.entityType), where("entityId", "==", filters.entityId))
+  }
+
+  return onSnapshot(q, (snapshot) => {
     const entries = snapshot.docs
       .map(d => d.data() as FirestoreAuditTrail)
-      .filter(a => a.entityType === entityType && a.entityId === entityId)
       .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
       .map(a => ({
         ...a,
@@ -1619,17 +1697,20 @@ export async function deleteDayToDayTask(taskId: string): Promise<void> {
   await deleteDoc(doc(db, "dayToDayTasks", taskId))
 }
 
-export function subscribeToDayToDayTasks(userId: string, callback: (tasks: any[]) => void): Unsubscribe {
-  if (!userId) {
-    console.warn("subscribeToDayToDayTasks called with undefined or empty userId")
-    // Return a no-op unsubscribe function
-    return () => {}
+export function subscribeToDayToDayTasks(
+  filters: { labId?: string; userId?: string } | null,
+  callback: (tasks: any[]) => void
+): Unsubscribe {
+  let q: Query = collection(db, "dayToDayTasks")
+
+  if (filters?.labId) {
+    q = query(q, where("labId", "==", filters.labId))
+  } else if (filters?.userId) {
+    q = query(q, where("createdBy", "==", filters.userId))
   }
-  
+
   try {
-    const q = query(collection(db, "dayToDayTasks"), where("createdBy", "==", userId))
-    
-    return onSnapshot(q, 
+    return onSnapshot(q,
       (snapshot) => {
         const tasks = snapshot.docs.map(doc => {
           const data = doc.data() as FirestoreDayToDayTask
@@ -1681,21 +1762,24 @@ export async function deleteLabPoll(pollId: string): Promise<void> {
   await deleteDoc(doc(db, "labPolls", pollId))
 }
 
-export function subscribeToLabPolls(labId: string | null, callback: (polls: LabPoll[]) => void): Unsubscribe {
-  if (!labId) {
+export function subscribeToLabPolls(
+  filters: { labId?: string } | null,
+  callback: (polls: LabPoll[]) => void
+): Unsubscribe {
+  if (!filters?.labId) {
     console.warn("subscribeToLabPolls called with undefined or empty labId")
     callback([])
     return () => {}
   }
-  
+
   try {
-    const q = query(
-      collection(db, "labPolls"),
-      where("labId", "==", labId),
-      orderBy("createdAt", "desc")
-    )
-    
-    return onSnapshot(q, 
+    let q: Query = collection(db, "labPolls")
+
+    if (filters?.labId) {
+      q = query(q, where("labId", "==", filters.labId), orderBy("createdAt", "desc"))
+    }
+
+    return onSnapshot(q,
       (snapshot) => {
         const polls = snapshot.docs.map(doc => {
           const data = doc.data()
@@ -1789,42 +1873,75 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
 export async function createELNExperiment(experimentData: Omit<ELNExperiment, 'id'>): Promise<string> {
   const experimentRef = doc(collection(db, "elnExperiments"))
   const experimentId = experimentRef.id
-  
+
+  // Remove undefined values from experimentData
+  const cleanData: any = {}
+  Object.entries(experimentData).forEach(([key, value]) => {
+    if (value !== undefined) {
+      cleanData[key] = value
+    }
+  })
+
   await setDoc(experimentRef, {
-    ...experimentData,
+    ...cleanData,
     id: experimentId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
-  
+
   return experimentId
 }
 
 export async function updateELNExperiment(experimentId: string, updates: Partial<ELNExperiment>): Promise<void> {
   const experimentRef = doc(db, "elnExperiments", experimentId)
-  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
-  await updateDoc(experimentRef, updateData)
+
+  // Deep clean function to remove undefined values and handle nested objects
+  function deepClean(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return null
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => deepClean(item)).filter(item => item !== null && item !== undefined)
+    }
+
+    if (typeof obj === 'object' && !(obj instanceof Date)) {
+      const cleaned: any = {}
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          cleaned[key] = deepClean(value)
+        }
+      }
+      return cleaned
+    }
+
+    return obj
+  }
+
+  const cleanUpdates = deepClean(updates)
+  const updateData: any = { ...cleanUpdates, updatedAt: serverTimestamp() }
+
+  await setDoc(experimentRef, updateData, { merge: true })
 }
 
 export async function deleteELNExperiment(experimentId: string): Promise<void> {
   await deleteDoc(doc(db, "elnExperiments", experimentId))
 }
 
-export function subscribeToELNExperiments(userId: string, callback: (experiments: ELNExperiment[]) => void): Unsubscribe {
-  if (!userId) {
-    console.warn("subscribeToELNExperiments called with undefined or empty userId")
-    callback([])
-    return () => {}
+export function subscribeToELNExperiments(
+  filters: { labId?: string; userId?: string } | null,
+  callback: (experiments: ELNExperiment[]) => void
+): Unsubscribe {
+  let q: Query = collection(db, "elnExperiments")
+
+  if (filters?.labId) {
+    q = query(q, where("labId", "==", filters.labId))
+  } else if (filters?.userId) {
+    q = query(q, where("createdBy", "==", filters.userId), orderBy("createdAt", "desc"))
   }
-  
+
   try {
-    const q = query(
-      collection(db, "elnExperiments"),
-      where("createdBy", "==", userId),
-      orderBy("createdAt", "desc")
-    )
-    
-    return onSnapshot(q, 
+    return onSnapshot(q,
       (snapshot) => {
         const experiments = snapshot.docs.map(doc => {
           const data = doc.data()

@@ -497,6 +497,16 @@ export interface PersonProfile {
   qualifications: string[]
   notes: string
 
+  // ORCID Integration (NEW)
+  orcidId?: string                    // ORCID iD in format "0000-0000-0000-0000"
+  orcidUrl?: string                   // Full URL "https://orcid.org/0000-0000-0000-0000"
+  orcidVerified?: boolean             // True once ORCID is linked via OAuth
+  orcidLastSynced?: string            // ISO date of last sync with ORCID record
+  orcidClaims?: {                     // Snapshot from OIDC/userinfo (non-sensitive)
+    name?: string
+    email?: string | null             // May be null if user hides email
+  }
+
   // Account
   userId?: string // Links to User account
   profileComplete?: boolean // Whether user has completed profile setup
@@ -874,6 +884,11 @@ export interface Order {
   taskId?: string                 // If ordered for specific task
   workpackageId?: string          // If ordered for specific work package
 
+  // Provenance fields (for traceability)
+  sourceDeviceId?: string         // Device this order originated from
+  sourceSupplyId?: string         // Supply this order originated from
+  sourceInventoryItemId?: string  // Inventory item this order originated from
+
   // Status
   status: OrderStatus
   orderedBy: string               // PersonProfile ID
@@ -901,6 +916,7 @@ export interface Order {
 
   // Legacy field (DEPRECATED)
   chargeToAccount?: string // Deprecated: use accountId
+  labId?: string // Added labId to fix build error
 }
 
 export interface InventoryItem {
@@ -1025,6 +1041,16 @@ export interface LabPoll {
 }
 
 // Electronic Lab Notebook (ELN) Types
+// ELN Item Types - unified multimodal input system
+export type ELNItemType =
+  | "image"
+  | "photo"
+  | "voice"
+  | "note"
+  | "document"
+  | "data"
+  | "video"
+
 export interface ELNStickyNote {
   id: string
   text: string
@@ -1038,6 +1064,48 @@ export interface ELNVoiceNote {
   audioUrl: string // Data URL or blob URL
   duration: number // Duration in seconds
   createdAt: string // ISO date string
+  transcript?: string // AI-generated transcript
+}
+
+// New unified multimodal item interface
+export interface ELNItem {
+  id: string
+  type: ELNItemType
+  title?: string
+  description?: string
+
+  // File data
+  fileUrl?: string // Download URL from Firebase Storage
+  storagePath?: string // Firebase Storage path for deletion
+  fileName?: string
+  fileType?: string // MIME type
+  fileSize?: number
+
+  // Metadata
+  position?: { x: number; y: number } // For canvas positioning
+  order: number // Display order
+
+  // AI Extraction
+  aiExtraction?: {
+    status: "pending" | "processing" | "completed" | "failed"
+    extractedText?: string
+    structuredData?: Record<string, any>
+    entities?: Array<{ type: string; value: string; confidence?: number }>
+    summary?: string
+    errorMessage?: string
+  }
+
+  // Voice-specific
+  duration?: number
+  transcript?: string
+
+  // Image/Photo-specific
+  stickyNotes?: ELNStickyNote[]
+
+  // Timestamps
+  createdAt: string
+  updatedAt?: string
+  createdBy?: string
 }
 
 export interface ELNPage {
@@ -1050,9 +1118,29 @@ export interface ELNPage {
   updatedAt?: string // ISO date string
 }
 
+// New: Experiment Report
+export interface ELNReport {
+  id: string
+  experimentId: string
+
+  // Report content
+  background?: string // AI-generated or user-written
+  protocols?: string // Extracted protocols
+  results?: string // Extracted results/findings
+  conclusion?: string
+
+  // Metadata
+  generatedAt: string
+  generatedBy?: string // "ai" or PersonProfile ID
+  version: number
+
+  // Source tracking
+  sourceItemIds: string[] // Which items were used to generate this
+}
+
 /**
  * ELNExperiment - Electronic Lab Notebook experiment
- * UPDATED: Now links to master projects for compliance and data ownership
+ * UPDATED: Now supports multimodal canvas with items and AI report generation
  */
 export interface ELNExperiment {
   id: string
@@ -1071,8 +1159,14 @@ export interface ELNExperiment {
   funderId?: string               // Cached from project
   funderName?: string             // Cached
 
-  // Pages
+  // Content - New multimodal system
+  items: ELNItem[]                // Unified multimodal items (images, voice, docs, data, etc.)
+
+  // Legacy support (for backward compatibility)
   pages: ELNPage[]
+
+  // Reports
+  reports?: ELNReport[]           // Generated experiment reports
 
   // Authorship
   createdBy: string // PersonProfile ID who created the experiment
@@ -1157,6 +1251,7 @@ export interface CalendarEvent {
     googleEventId?: string
     outlookEventId?: string
   }
+  labId?: string
 }
 
 // New: Audit trail entries for compliance and change history

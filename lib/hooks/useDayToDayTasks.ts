@@ -5,26 +5,27 @@ import { createDayToDayTask, subscribeToDayToDayTasks, updateDayToDayTask, delet
 import { useAuth } from './useAuth';
 
 export function useDayToDayTasks() {
-  const { currentUser } = useAuth();
+  const { currentUser, currentUserProfile: profile } = useAuth();
   const [dayToDayTasks, setDayToDayTasks] = useState<DayToDayTask[]>([]);
 
   useEffect(() => {
-    if (!currentUser || !currentUser.uid) return;
+    if (!profile?.labId) return;
 
-    const unsubscribe = subscribeToDayToDayTasks(currentUser.uid, (tasks) => {
+    const unsubscribe = subscribeToDayToDayTasks({ labId: profile.labId }, (tasks) => {
       setDayToDayTasks(tasks);
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [profile]);
 
-  const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order'>) => {
-    if (!currentUser) return;
+  const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId'>) => {
+    if (!currentUser || !profile?.labId) return;
     const order = dayToDayTasks.length;
     await createDayToDayTask({
       ...task,
       createdBy: currentUser.uid,
       order,
+      labId: profile.labId,
     });
   };
 

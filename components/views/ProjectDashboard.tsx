@@ -1,57 +1,36 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useProjects } from "@/lib/hooks/useProjects";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useProfiles } from "@/lib/useProfiles";
 import { Button } from "@/components/ui/button";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
-import { MasterProject, Task, Workpackage, Project } from "@/lib/types";
-import { Plus } from "lucide-react";
+import { MasterProject, Task, Workpackage, Project, Person } from "@/lib/types";
+import { Plus, FolderKanban, PackagePlus } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
-import { updateWorkpackage, updateMasterProject, updateWorkpackageWithProgress, getWorkpackages } from "@/lib/firestoreService";
+import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
 import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalculate, updateWorkpackageWithTaskProgress } from "@/lib/progressCalculation";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
-  const { projects, handleCreateMasterProject, handleUpdateMasterProject, handleUpdateWorkpackage } = useProjects();
-  const allProfiles = useProfiles();
+  const {
+    projects,
+    workpackages: allWorkpackages,
+    workpackagesMap,
+    handleCreateMasterProject,
+    handleUpdateMasterProject,
+    handleUpdateWorkpackage,
+    handleCreateWorkpackage: createWorkpackage,
+  } = useProjects();
+  const allProfiles = useProfiles(profile?.labId || null);
   const people = personProfilesToPeople(allProfiles);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [workpackagesMap, setWorkpackagesMap] = useState<Map<string, Workpackage>>(new Map());
-  
-  const [allWorkpackages, setAllWorkpackages] = useState<Workpackage[]>([]);
-  
-  // Load workpackages for all projects
-  useEffect(() => {
-    const loadWorkpackages = async () => {
-      const map = new Map<string, Workpackage>();
-      const allWps: Workpackage[] = [];
-      
-      for (const project of projects) {
-        try {
-          const wps = await getWorkpackages(project.id);
-          wps.forEach(wp => {
-            if (wp.profileProjectId === project.id) {
-              map.set(wp.id, wp);
-              allWps.push(wp);
-            }
-          });
-        } catch (error) {
-          console.error(`Error loading workpackages for project ${project.id}:`, error);
-        }
-      }
-      
-      setWorkpackagesMap(map);
-      setAllWorkpackages(allWps);
-    };
-    
-    if (projects.length > 0) {
-      loadWorkpackages();
-    }
-  }, [projects]);
   
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
@@ -90,6 +69,7 @@ export function ProjectDashboard() {
       workpackageIds: [],
       visibility: "lab",
       createdBy: user?.uid || "",
+      isExpanded: true,
     };
 
     handleCreateMasterProject(newProject);
@@ -614,21 +594,144 @@ export function ProjectDashboard() {
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
 
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);
+  const [workpackageForm, setWorkpackageForm] = useState({
+    name: "",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 30 days from now
+  });
+
+  const selectedProject = projects.find(p => p.id === selectedProjectId);
+
+  const handleCreateWorkpackage = async () => {
+    if (!selectedProjectId || !profile) return;
+
+    if (!workpackageForm.name.trim()) {
+      alert("Please enter a workpackage name");
+      return;
+    }
+
+    const newWorkpackage: Omit<Workpackage, "id"> = {
+      name: workpackageForm.name.trim(),
+      start: new Date(workpackageForm.startDate),
+      end: new Date(workpackageForm.endDate),
+      profileProjectId: selectedProjectId,
+      status: "planning",
+      progress: 0,
+      tasks: [],
+      isExpanded: true,
+      importance: "medium",
+    };
+
+    try {
+      // Create workpackage and get its ID
+      const workpackageId = await createWorkpackage(newWorkpackage);
+
+      // Add workpackage ID to project
+      if (selectedProject && workpackageId) {
+        await handleUpdateMasterProject(selectedProjectId, {
+          workpackageIds: [...(selectedProject.workpackageIds || []), workpackageId],
+        });
+      }
+
+      setShowWorkpackageDialog(false);
+      setWorkpackageForm({
+        name: "",
+        startDate: new Date().toISOString().split("T")[0],
+        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      });
+    } catch (error) {
+      console.error("Error creating workpackage:", error);
+      alert("Failed to create workpackage. Please try again.");
+    }
+  };
+
   return (
-    <>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Button onClick={handleCreateProject}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
-      </div>
-      <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4">
-        <div className="card-monday hidden xl:block">
-          <h2 className="text-lg font-bold text-foreground mb-3">Lab Personnel</h2>
+    <div className="h-[calc(100vh-12rem)] flex flex-col gap-4 overflow-hidden">
+      {/* Header with Controls */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <FolderKanban className="h-6 w-6 text-brand-500" />
+          <h1 className="text-2xl font-bold text-foreground">Project Dashboard</h1>
+          <div className="text-sm text-muted-foreground">
+            {people.length > 0 ? `${people.length} people` : 'Loading people...'}
+          </div>
         </div>
-        <div className="card-monday">
+
+        <div className="flex items-center gap-2">
+          {/* Project Selector */}
+          {projects.length > 0 && (
+            <select
+              value={selectedProjectId || ""}
+              onChange={(e) => setSelectedProjectId(e.target.value || null)}
+              className="px-3 py-2 border border-border rounded-lg bg-background text-sm"
+            >
+              <option value="">All Projects</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {selectedProjectId && (
+            <Button
+              onClick={() => setShowWorkpackageDialog(true)}
+              variant="outline"
+              className="gap-2"
+            >
+              <PackagePlus className="h-4 w-4" />
+              Add Workpackage
+            </Button>
+          )}
+
+          <Button onClick={handleCreateProject} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+            <Plus className="h-4 w-4" />
+            New Project
+          </Button>
+        </div>
+      </div>
+
+      {/* Instructions Banner */}
+      {projects.length === 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+          <p className="font-semibold text-blue-900 mb-2">Getting Started:</p>
+          <ol className="list-decimal list-inside space-y-1 text-blue-800">
+            <li>Click &ldquo;New Project&rdquo; to create a project</li>
+            <li>Select the project and click &ldquo;Add Workpackage&rdquo;</li>
+            <li>Right-click workpackages to add tasks</li>
+            <li>Drag people from the sidebar onto tasks to assign them</li>
+            <li>Click any task to view todos and subtasks</li>
+          </ol>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 overflow-hidden min-h-0">
+        {/* Personnel Sidebar - Always visible on larger screens */}
+        <div className="card-monday flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-3 flex-shrink-0">
+            <h2 className="text-lg font-bold text-foreground">Lab Personnel</h2>
+            <span className="text-xs text-muted-foreground">Drag to assign</span>
+          </div>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {people.length === 0 ? (
+              <div className="text-center p-4 text-muted-foreground text-sm">
+                <p className="mb-2">No lab members found</p>
+                <p className="text-xs">Add people in the People tab</p>
+              </div>
+            ) : (
+              <PersonnelList people={people} />
+            )}
+          </div>
+        </div>
+
+        {/* Gantt Chart */}
+        <div className="card-monday overflow-hidden flex flex-col">
           <GanttChart
-            projects={projects}
+            projects={selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects}
             workpackages={allWorkpackages}
             people={people}
             onDateChange={handleDateChange}
@@ -639,26 +742,101 @@ export function ProjectDashboard() {
           />
         </div>
       </div>
+
+      {/* Task Detail Slide-out Panel */}
       {selectedTask && (
-        <div className="mt-4">
-          <TaskDetailPanel
-            task={selectedTask}
-            profiles={allProfiles}
-            onToggleTodo={handleToggleTodo}
-            onAddTodo={handleAddTodo}
-            onDeleteTodo={handleDeleteTodo}
-            onAddSubtask={handleAddSubtask}
-            readOnly={false}
-          />
-          <Button
-            variant="outline"
-            onClick={() => setSelectedTask(null)}
-            className="mt-4"
-          >
-            Close Task Details
-          </Button>
-        </div>
+        <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Task Details</DialogTitle>
+              <DialogDescription>
+                View and manage task details, subtasks, and to-do items
+              </DialogDescription>
+            </DialogHeader>
+            <TaskDetailPanel
+              task={selectedTask}
+              profiles={allProfiles}
+              onToggleTodo={handleToggleTodo}
+              onAddTodo={handleAddTodo}
+              onDeleteTodo={handleDeleteTodo}
+              onAddSubtask={handleAddSubtask}
+              readOnly={false}
+            />
+          </DialogContent>
+        </Dialog>
       )}
-    </>
+
+      {/* Workpackage Creation Dialog */}
+      <Dialog open={showWorkpackageDialog} onOpenChange={setShowWorkpackageDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Workpackage</DialogTitle>
+            <DialogDescription>
+              Add a new workpackage to {selectedProject?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="wp-name">Workpackage Name *</Label>
+              <Input
+                id="wp-name"
+                value={workpackageForm.name}
+                onChange={(e) => setWorkpackageForm({ ...workpackageForm, name: e.target.value })}
+                placeholder="e.g., Data Collection & Analysis"
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="wp-start">Start Date</Label>
+                <Input
+                  id="wp-start"
+                  type="date"
+                  value={workpackageForm.startDate}
+                  onChange={(e) => setWorkpackageForm({ ...workpackageForm, startDate: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="wp-end">End Date</Label>
+                <Input
+                  id="wp-end"
+                  type="date"
+                  value={workpackageForm.endDate}
+                  onChange={(e) => setWorkpackageForm({ ...workpackageForm, endDate: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowWorkpackageDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateWorkpackage} className="bg-brand-500 hover:bg-brand-600 text-white">
+                Create Workpackage
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function PersonnelList({ people }: { people: Person[] }) {
+  return (
+    <div className="space-y-2">
+      {people.map((person) => (
+        <div key={person.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-100">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
+            style={{ backgroundColor: person.color }}
+          >
+            {person.name.charAt(0)}
+          </div>
+          <span className="text-sm font-medium text-foreground">{person.name}</span>
+        </div>
+      ))}
+    </div>
   );
 }

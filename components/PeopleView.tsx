@@ -15,7 +15,7 @@ interface PeopleViewProps {
 }
 
 export function PeopleView({ currentUserProfile }: PeopleViewProps = {}) {
-  const allProfiles = useProfiles()
+  const allProfiles = useProfiles(currentUserProfile?.lab || null)
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "orgchart" | "network">("grid")
 

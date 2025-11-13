@@ -12,7 +12,6 @@ import {
   PersonProfile,
   PositionLevel,
   POSITION_DISPLAY_NAMES,
-  POSITION_HIERARCHY_ORDER,
   POSITION_CATEGORIES,
 } from "@/lib/types"
 import {
@@ -23,17 +22,20 @@ import {
   createOrganisation,
   createInstitute,
   createLab,
-  createFunder,
   createProfile,
   createMasterProject,
   createFundingAccount,
   updateUser,
 } from "@/lib/firestoreService"
-import { Building, GraduationCap, BookOpen, Users, Briefcase, CheckCircle2, ChevronRight, ChevronLeft } from "lucide-react"
+import { Building, GraduationCap, BookOpen, Users, Briefcase, CheckCircle2, ChevronRight, ChevronLeft, X } from "lucide-react"
+import { FunderCreationDialog } from "./FunderCreationDialog"
+import { OrcidIcon } from "./OrcidBadge"
+import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
 
 interface OnboardingFlowProps {
-  user: { id: string; email: string; fullName: string }
+  user: { uid: string; email: string; fullName: string }
   onComplete: (profile: PersonProfile) => void
+  onCancel?: () => void
 }
 
 interface OnboardingState {
@@ -81,6 +83,7 @@ type OnboardingStep =
   | "lab"
   | "personal-details"
   | "position"
+  | "orcid"
   | "pi-status"
   | "project-choice"
   | "project-details"
@@ -88,7 +91,7 @@ type OnboardingStep =
   | "review"
   | "complete"
 
-export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps) {
+export default function OnboardingFlow({ user, onComplete, onCancel }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -103,10 +106,13 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
   const [orgSearchTerm, setOrgSearchTerm] = useState("")
   const [instSearchTerm, setInstSearchTerm] = useState("")
   const [labSearchTerm, setLabSearchTerm] = useState("")
+  const [funderSearchTerm, setFunderSearchTerm] = useState("")
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showCreateInst, setShowCreateInst] = useState(false)
   const [showCreateLab, setShowCreateLab] = useState(false)
+  const [showCreateFunder, setShowCreateFunder] = useState(false)
   const [selectedCountry, setSelectedCountry] = useState<string>("")
+  const [selectedFunderType, setSelectedFunderType] = useState<"public" | "private" | "charity" | "internal" | "government" | "industry" | "eu" | "other">("government")
 
   // Form state
   const [state, setState] = useState<OnboardingState>({
@@ -128,7 +134,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
     funderId: "",
     funderName: "",
     totalBudget: "",
-    currency: "GBP",
+    currency: "EUR", // Default to EUR for Ireland
     startDate: "",
     endDate: "",
     accountNumber: "",
@@ -136,88 +142,175 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
     accountType: "main",
   })
 
-  // Load organisations on mount
+  // ORCID state
+  const [orcidConnecting, setOrcidConnecting] = useState(false)
+  const [orcidData, setOrcidData] = useState<{
+    orcidId?: string
+    orcidUrl?: string
+    verified?: boolean
+  }>({})
+
+  // Dynamic step calculation
+  const getSteps = (): OnboardingStep[] => {
+    const base: OnboardingStep[] = [
+      "welcome",
+      "organisation",
+      "institute",
+      "lab",
+      "personal-details",
+      "position",
+      "orcid",
+      "pi-status",
+      "project-choice",
+    ]
+    if (state.createProject) {
+      base.push("project-details", "account-details")
+    }
+    base.push("review")
+    return base
+  }
+
+  const steps = getSteps()
+  const currentIndex = steps.indexOf(currentStep)
+  const totalSteps = steps.length
+
+  // Load organisations on mount with cleanup
   useEffect(() => {
-    loadOrganisations()
-    loadFunders()
+    let active = true
+    ;(async () => {
+      const orgs = await loadOrganisations()
+      if (active && orgs) setOrganisations(orgs)
+    })()
+    return () => {
+      active = false
+    }
   }, [])
 
-  // Load institutes when organisation selected
+  // Load funders on mount with cleanup
   useEffect(() => {
-    if (state.selectedOrganisation) {
-      loadInstitutes(state.selectedOrganisation.id)
+    let active = true
+    ;(async () => {
+      const fundersList = await loadFunders()
+      if (active && fundersList) setFunders(fundersList)
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // Load institutes when organisation selected with cleanup
+  useEffect(() => {
+    if (!state.selectedOrganisation) return
+    let active = true
+    ;(async () => {
+      const insts = await loadInstitutes(state.selectedOrganisation!.id)
+      if (active && insts) setInstitutes(insts)
+    })()
+    return () => {
+      active = false
     }
   }, [state.selectedOrganisation])
 
-  // Load labs when institute selected
+  // Load labs when institute selected with cleanup
   useEffect(() => {
-    if (state.selectedInstitute) {
-      loadLabs(state.selectedInstitute.id)
+    if (!state.selectedInstitute) return
+    let active = true
+    ;(async () => {
+      const labsList = await loadLabs(state.selectedInstitute!.id)
+      if (active && labsList) setLabs(labsList)
+    })()
+    return () => {
+      active = false
     }
   }, [state.selectedInstitute])
 
-  const loadOrganisations = async () => {
+  const loadOrganisations = async (): Promise<Organisation[] | null> => {
     try {
       const orgs = await getOrganisations()
       setOrganisations(orgs)
+      return orgs
     } catch (err) {
       console.error("Error loading organisations:", err)
       setError("Failed to load organisations")
+      return null
     }
   }
 
-  const loadInstitutes = async (orgId: string) => {
+  const loadInstitutes = async (orgId: string): Promise<Institute[] | null> => {
     try {
       const insts = await getInstitutes(orgId)
       setInstitutes(insts)
+      return insts
     } catch (err) {
       console.error("Error loading institutes:", err)
       setError("Failed to load institutes")
+      return null
     }
   }
 
-  const loadLabs = async (instId: string) => {
+  const loadLabs = async (instId: string): Promise<Lab[] | null> => {
     try {
       const labsList = await getLabs(instId)
       setLabs(labsList)
+      return labsList
     } catch (err) {
       console.error("Error loading labs:", err)
       setError("Failed to load labs")
+      return null
     }
   }
 
-  const loadFunders = async () => {
+  const loadFunders = async (): Promise<Funder[] | null> => {
     try {
       const fundersList = await getFunders()
       setFunders(fundersList)
+      return fundersList
     } catch (err) {
       console.error("Error loading funders:", err)
       setError("Failed to load funders")
+      return null
     }
   }
 
   const handleCreateOrganisation = async () => {
-    if (!orgSearchTerm.trim()) return
+    if (!orgSearchTerm.trim() || !selectedCountry) {
+      console.log("[OnboardingFlow] Validation failed - orgSearchTerm:", orgSearchTerm, "selectedCountry:", selectedCountry)
+      return
+    }
+
+    console.log("[OnboardingFlow] Creating organisation with data:", {
+      name: orgSearchTerm.trim(),
+      country: selectedCountry,
+      type: "university",
+      createdBy: user.uid,
+    })
 
     try {
       setLoading(true)
+      setError(null)
       const orgId = await createOrganisation({
         name: orgSearchTerm.trim(),
-        country: selectedCountry || "Unknown",
+        country: selectedCountry,
         type: "university",
-        createdBy: user.id,
+        createdBy: user.uid,
       })
+      console.log("[OnboardingFlow] Organisation created with ID:", orgId)
 
-      await loadOrganisations()
-      const newOrg = organisations.find(o => o.id === orgId)
-      if (newOrg) {
-        setState({ ...state, selectedOrganisation: newOrg })
-        setShowCreateOrg(false)
-        setOrgSearchTerm("")
+      const orgs = await loadOrganisations()
+      console.log("[OnboardingFlow] Reloaded organisations, count:", orgs?.length)
+      if (orgs) {
+        const newOrg = orgs.find((o) => o.id === orgId)
+        console.log("[OnboardingFlow] Found new organisation:", newOrg)
+        if (newOrg) {
+          setState((s) => ({ ...s, selectedOrganisation: newOrg }))
+          setShowCreateOrg(false)
+          setOrgSearchTerm("")
+          setSelectedCountry("")
+        }
       }
     } catch (err) {
-      console.error("Error creating organisation:", err)
-      setError("Failed to create organisation")
+      console.error("[OnboardingFlow] Error creating organisation:", err)
+      setError(`Failed to create organisation: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -232,15 +325,17 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
         name: instSearchTerm.trim(),
         organisationId: state.selectedOrganisation.id,
         organisationName: state.selectedOrganisation.name,
-        createdBy: user.id,
+        createdBy: user.uid,
       })
 
-      await loadInstitutes(state.selectedOrganisation.id)
-      const newInst = institutes.find(i => i.id === instId)
-      if (newInst) {
-        setState({ ...state, selectedInstitute: newInst })
-        setShowCreateInst(false)
-        setInstSearchTerm("")
+      const insts = await loadInstitutes(state.selectedOrganisation.id)
+      if (insts) {
+        const newInst = insts.find((i) => i.id === instId)
+        if (newInst) {
+          setState((s) => ({ ...s, selectedInstitute: newInst }))
+          setShowCreateInst(false)
+          setInstSearchTerm("")
+        }
       }
     } catch (err) {
       console.error("Error creating institute:", err)
@@ -263,15 +358,17 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
         organisationName: state.selectedOrganisation.name,
         principalInvestigators: [],
         labManagerIds: [],
-        createdBy: user.id,
+        createdBy: user.uid,
       })
 
-      await loadLabs(state.selectedInstitute.id)
-      const newLab = labs.find(l => l.id === labId)
-      if (newLab) {
-        setState({ ...state, selectedLab: newLab })
-        setShowCreateLab(false)
-        setLabSearchTerm("")
+      const labsList = await loadLabs(state.selectedInstitute.id)
+      if (labsList) {
+        const newLab = labsList.find((l) => l.id === labId)
+        if (newLab) {
+          setState((s) => ({ ...s, selectedLab: newLab }))
+          setShowCreateLab(false)
+          setLabSearchTerm("")
+        }
       }
     } catch (err) {
       console.error("Error creating lab:", err)
@@ -281,18 +378,48 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
     }
   }
 
+  const handleFunderCreated = async (funderId: string) => {
+    // Reload funders list
+    const fundersList = await loadFunders()
+    if (fundersList) {
+      const newFunder = fundersList.find((f) => f.id === funderId)
+      if (newFunder) {
+        setState((s) => ({
+          ...s,
+          funderId: newFunder.id,
+          funderName: newFunder.name,
+        }))
+      }
+    }
+  }
+
   const handleComplete = async () => {
-    if (!state.selectedOrganisation || !state.selectedInstitute || !state.selectedLab || !state.positionLevel) {
-      setError("Please complete all required steps")
+    if (!state.selectedOrganisation || !state.selectedInstitute || !state.selectedLab) {
+      setError("Please select organisation, institute, and lab")
       return
+    }
+
+    if (!state.positionLevel) {
+      setError("Please select a position")
+      return
+    }
+
+    // Date validation
+    if (state.createProject && state.startDate && state.endDate) {
+      if (new Date(state.endDate) < new Date(state.startDate)) {
+        setError("End date must be after start date")
+        return
+      }
     }
 
     try {
       setLoading(true)
       setError(null)
 
+      const positionDisplay = POSITION_DISPLAY_NAMES[state.positionLevel]
+
       // Create profile
-      const profileData: Omit<PersonProfile, 'id'> = {
+      const profileData: Omit<PersonProfile, "id"> = {
         firstName: state.firstName,
         lastName: state.lastName,
         email: state.email,
@@ -309,14 +436,22 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
 
         // Position
         positionLevel: state.positionLevel,
-        positionDisplayName: POSITION_DISPLAY_NAMES[state.positionLevel],
-        position: POSITION_DISPLAY_NAMES[state.positionLevel], // Legacy
+        positionDisplayName: positionDisplay,
+        position: positionDisplay, // Legacy
 
         // Reporting
         reportsToId: null,
 
         // PI Status
         isPrincipalInvestigator: state.isPrincipalInvestigator,
+
+        // ORCID fields (only include if connected to avoid Firestore undefined values)
+        ...(orcidData.orcidId ? {
+          orcidId: orcidData.orcidId,
+          orcidUrl: orcidData.orcidUrl,
+          orcidVerified: orcidData.verified || false,
+          orcidLastSynced: new Date().toISOString(),
+        } : {}),
 
         // Project membership (will be populated if project created)
         masterProjectIds: [],
@@ -340,19 +475,27 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
         notes: "",
 
         // Account
-        userId: user.id,
+        userId: user.uid,
         profileComplete: true,
         onboardingComplete: true,
         isAdministrator: false,
       }
 
-      const profileId = await createProfile(user.id, profileData)
+      const profileId = await createProfile(user.uid, profileData)
 
       // Update user document with profileId
-      await updateUser(user.id, { profileId })
+      await updateUser(user.uid, { profileId })
 
       // If creating a project, create it now
       if (state.createProject && state.projectName) {
+        // Parse and validate budget
+        const budgetValue = state.totalBudget ? parseFloat(state.totalBudget) : undefined
+        if (state.totalBudget && (isNaN(budgetValue!) || budgetValue! < 0)) {
+          setError("Invalid budget amount")
+          setLoading(false)
+          return
+        }
+
         const projectId = await createMasterProject({
           name: state.projectName,
           description: state.projectDescription,
@@ -370,7 +513,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
           grantNumber: state.grantNumber,
 
           // Financial
-          totalBudget: state.totalBudget ? parseFloat(state.totalBudget) : undefined,
+          totalBudget: budgetValue,
           currency: state.currency,
 
           // Dates
@@ -387,7 +530,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
           coPIIds: [],
           teamMemberIds: [profileId],
           teamRoles: {
-            [profileId]: state.isPrincipalInvestigator ? "PI" : "RA"
+            [profileId]: state.isPrincipalInvestigator ? "PI" : "RA",
           },
 
           // Status
@@ -401,7 +544,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
           visibility: "lab",
 
           // Metadata
-          createdBy: user.id,
+          createdBy: user.uid,
         })
 
         // Create account if specified
@@ -414,26 +557,25 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             masterProjectId: projectId,
             masterProjectName: state.projectName,
             accountType: state.accountType,
-            totalBudget: state.totalBudget ? parseFloat(state.totalBudget) : undefined,
+            totalBudget: budgetValue,
             currency: state.currency,
             startDate: state.startDate,
             endDate: state.endDate,
             status: "active",
-            createdBy: user.id,
+            createdBy: user.uid,
           })
         }
       }
 
       setCurrentStep("complete")
 
-      // Call onComplete after a brief delay to show success message
+      // Call onComplete immediately
       setTimeout(() => {
         onComplete({
           ...profileData,
           id: profileId,
         } as PersonProfile)
-      }, 2000)
-
+      }, 1500)
     } catch (err) {
       console.error("Error completing onboarding:", err)
       setError("Failed to complete onboarding. Please try again.")
@@ -458,7 +600,9 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
       case "project-choice":
         return true // Can skip project creation
       case "project-details":
-        return !state.createProject || !!(state.projectName && state.funderId && state.startDate && state.endDate)
+        return (
+          !state.createProject || !!(state.projectName && state.funderId && state.startDate && state.endDate)
+        )
       case "account-details":
         return !state.createProject || !!(state.accountNumber && state.accountName)
       default:
@@ -466,75 +610,35 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
     }
   }
 
-  const getNextStep = (current: OnboardingStep): OnboardingStep => {
-    const steps: OnboardingStep[] = [
-      "welcome",
-      "organisation",
-      "institute",
-      "lab",
-      "personal-details",
-      "position",
-      "pi-status",
-      "project-choice",
-    ]
-
-    if (state.createProject) {
-      steps.push("project-details", "account-details")
-    }
-
-    steps.push("review")
-
-    const currentIndex = steps.indexOf(current)
-    return steps[currentIndex + 1] || "complete"
-  }
-
-  const getPreviousStep = (current: OnboardingStep): OnboardingStep => {
-    const steps: OnboardingStep[] = [
-      "welcome",
-      "organisation",
-      "institute",
-      "lab",
-      "personal-details",
-      "position",
-      "pi-status",
-      "project-choice",
-    ]
-
-    if (state.createProject && (current === "project-details" || current === "account-details" || current === "review")) {
-      steps.push("project-details", "account-details")
-    }
-
-    steps.push("review")
-
-    const currentIndex = steps.indexOf(current)
-    return steps[currentIndex - 1] || "welcome"
-  }
-
   const handleNext = () => {
     if (canProceedFromStep(currentStep)) {
-      setCurrentStep(getNextStep(currentStep))
-      setError(null)
+      const nextIndex = currentIndex + 1
+      if (nextIndex < steps.length) {
+        setCurrentStep(steps[nextIndex])
+        setError(null)
+      }
     } else {
       setError("Please complete all required fields before proceeding")
     }
   }
 
   const handleBack = () => {
-    setCurrentStep(getPreviousStep(currentStep))
-    setError(null)
+    const prevIndex = currentIndex - 1
+    if (prevIndex >= 0) {
+      setCurrentStep(steps[prevIndex])
+      setError(null)
+    }
   }
 
-  const filteredOrganisations = organisations.filter(org =>
+  const filteredOrganisations = organisations.filter((org) =>
     org.name.toLowerCase().includes(orgSearchTerm.toLowerCase())
   )
 
-  const filteredInstitutes = institutes.filter(inst =>
+  const filteredInstitutes = institutes.filter((inst) =>
     inst.name.toLowerCase().includes(instSearchTerm.toLowerCase())
   )
 
-  const filteredLabs = labs.filter(lab =>
-    lab.name.toLowerCase().includes(labSearchTerm.toLowerCase())
-  )
+  const filteredLabs = labs.filter((lab) => lab.name.toLowerCase().includes(labSearchTerm.toLowerCase()))
 
   // Render different steps
   const renderStep = () => {
@@ -598,21 +702,18 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               {filteredOrganisations.length === 0 ? (
                 <div className="p-6 text-center text-gray-500">
                   <p>No organizations found.</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowCreateOrg(true)}
-                    className="mt-2"
-                  >
-                    Create &quot;{orgSearchTerm}&quot;
-                  </Button>
+                  {orgSearchTerm && (
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateOrg(true)} className="mt-2">
+                      Create &quot;{orgSearchTerm}&quot;
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y">
                   {filteredOrganisations.map((org) => (
                     <button
                       key={org.id}
-                      onClick={() => setState({ ...state, selectedOrganisation: org })}
+                      onClick={() => setState((s) => ({ ...s, selectedOrganisation: org }))}
                       className={`w-full p-4 text-left hover:bg-gray-50 transition ${
                         state.selectedOrganisation?.id === org.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
                       }`}
@@ -626,11 +727,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </div>
 
             {!showCreateOrg && orgSearchTerm && filteredOrganisations.length === 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setShowCreateOrg(true)}
-                className="w-full"
-              >
+              <Button variant="outline" onClick={() => setShowCreateOrg(true)} className="w-full">
                 Create new organization: &quot;{orgSearchTerm}&quot;
               </Button>
             )}
@@ -638,12 +735,10 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             {showCreateOrg && (
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold mb-2">Create New Organization</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Name: {orgSearchTerm}
-                </p>
+                <p className="text-sm text-gray-600 mb-4">Name: {orgSearchTerm}</p>
                 <div className="mb-4">
                   <Label htmlFor="org-country" className="text-sm font-medium mb-2 block">
-                    Country
+                    Country *
                   </Label>
                   <select
                     id="org-country"
@@ -652,6 +747,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <option value="">Select a country</option>
+                    <option value="Ireland">Ireland</option>
                     <option value="United Kingdom">United Kingdom</option>
                     <option value="United States">United States</option>
                     <option value="Canada">Canada</option>
@@ -677,13 +773,16 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                   </select>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handleCreateOrganisation} disabled={loading}>
+                  <Button onClick={handleCreateOrganisation} disabled={loading || !selectedCountry}>
                     {loading ? "Creating..." : "Confirm"}
                   </Button>
-                  <Button variant="outline" onClick={() => {
-                    setShowCreateOrg(false)
-                    setSelectedCountry("")
-                  }}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowCreateOrg(false)
+                      setSelectedCountry("")
+                    }}
+                  >
                     Cancel
                   </Button>
                 </div>
@@ -699,9 +798,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               <GraduationCap className="w-12 h-12 text-blue-600 mx-auto mb-3" />
               <h2 className="text-2xl font-bold">Select Your Institute</h2>
               <p className="text-gray-600">Choose your department or school</p>
-              <p className="text-sm text-gray-500 mt-1">
-                at {state.selectedOrganisation?.name}
-              </p>
+              <p className="text-sm text-gray-500 mt-1">at {state.selectedOrganisation?.name}</p>
             </div>
 
             <div>
@@ -719,29 +816,24 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               {filteredInstitutes.length === 0 ? (
                 <div className="p-6 text-center text-gray-500">
                   <p>No institutes found.</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowCreateInst(true)}
-                    className="mt-2"
-                  >
-                    Create &quot;{instSearchTerm}&quot;
-                  </Button>
+                  {instSearchTerm && (
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateInst(true)} className="mt-2">
+                      Create &quot;{instSearchTerm}&quot;
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y">
                   {filteredInstitutes.map((inst) => (
                     <button
                       key={inst.id}
-                      onClick={() => setState({ ...state, selectedInstitute: inst })}
+                      onClick={() => setState((s) => ({ ...s, selectedInstitute: inst }))}
                       className={`w-full p-4 text-left hover:bg-gray-50 transition ${
                         state.selectedInstitute?.id === inst.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
                       }`}
                     >
                       <div className="font-medium">{inst.name}</div>
-                      {inst.department && (
-                        <div className="text-sm text-gray-500">{inst.department}</div>
-                      )}
+                      {inst.department && <div className="text-sm text-gray-500">{inst.department}</div>}
                     </button>
                   ))}
                 </div>
@@ -749,11 +841,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </div>
 
             {!showCreateInst && instSearchTerm && filteredInstitutes.length === 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setShowCreateInst(true)}
-                className="w-full"
-              >
+              <Button variant="outline" onClick={() => setShowCreateInst(true)} className="w-full">
                 Create new institute: &quot;{instSearchTerm}&quot;
               </Button>
             )}
@@ -761,9 +849,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             {showCreateInst && (
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold mb-2">Create New Institute</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Name: {instSearchTerm}
-                </p>
+                <p className="text-sm text-gray-600 mb-4">Name: {instSearchTerm}</p>
                 <div className="flex gap-2">
                   <Button onClick={handleCreateInstitute} disabled={loading}>
                     {loading ? "Creating..." : "Confirm"}
@@ -784,9 +870,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               <BookOpen className="w-12 h-12 text-blue-600 mx-auto mb-3" />
               <h2 className="text-2xl font-bold">Select Your Lab</h2>
               <p className="text-gray-600">Choose your research group</p>
-              <p className="text-sm text-gray-500 mt-1">
-                at {state.selectedInstitute?.name}
-              </p>
+              <p className="text-sm text-gray-500 mt-1">at {state.selectedInstitute?.name}</p>
             </div>
 
             <div>
@@ -804,29 +888,24 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               {filteredLabs.length === 0 ? (
                 <div className="p-6 text-center text-gray-500">
                   <p>No labs found.</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowCreateLab(true)}
-                    className="mt-2"
-                  >
-                    Create &quot;{labSearchTerm}&quot;
-                  </Button>
+                  {labSearchTerm && (
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateLab(true)} className="mt-2">
+                      Create &quot;{labSearchTerm}&quot;
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y">
                   {filteredLabs.map((lab) => (
                     <button
                       key={lab.id}
-                      onClick={() => setState({ ...state, selectedLab: lab })}
+                      onClick={() => setState((s) => ({ ...s, selectedLab: lab }))}
                       className={`w-full p-4 text-left hover:bg-gray-50 transition ${
                         state.selectedLab?.id === lab.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
                       }`}
                     >
                       <div className="font-medium">{lab.name}</div>
-                      {lab.description && (
-                        <div className="text-sm text-gray-500 mt-1">{lab.description}</div>
-                      )}
+                      {lab.description && <div className="text-sm text-gray-500 mt-1">{lab.description}</div>}
                     </button>
                   ))}
                 </div>
@@ -834,11 +913,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </div>
 
             {!showCreateLab && labSearchTerm && filteredLabs.length === 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setShowCreateLab(true)}
-                className="w-full"
-              >
+              <Button variant="outline" onClick={() => setShowCreateLab(true)} className="w-full">
                 Create new lab: &quot;{labSearchTerm}&quot;
               </Button>
             )}
@@ -846,9 +921,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             {showCreateLab && (
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold mb-2">Create New Lab</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Name: {labSearchTerm}
-                </p>
+                <p className="text-sm text-gray-600 mb-4">Name: {labSearchTerm}</p>
                 <div className="flex gap-2">
                   <Button onClick={handleCreateLab} disabled={loading}>
                     {loading ? "Creating..." : "Confirm"}
@@ -872,32 +945,38 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="firstName">First Name *</Label>
+                <Label htmlFor="firstName">
+                  First Name <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="firstName"
                   value={state.firstName}
-                  onChange={(e) => setState({ ...state, firstName: e.target.value })}
+                  onChange={(e) => setState((s) => ({ ...s, firstName: e.target.value }))}
                   className="mt-1"
                 />
               </div>
               <div>
-                <Label htmlFor="lastName">Last Name *</Label>
+                <Label htmlFor="lastName">
+                  Last Name <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="lastName"
                   value={state.lastName}
-                  onChange={(e) => setState({ ...state, lastName: e.target.value })}
+                  onChange={(e) => setState((s) => ({ ...s, lastName: e.target.value }))}
                   className="mt-1"
                 />
               </div>
             </div>
 
             <div>
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="email">
+                Email <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="email"
                 type="email"
                 value={state.email}
-                onChange={(e) => setState({ ...state, email: e.target.value })}
+                onChange={(e) => setState((s) => ({ ...s, email: e.target.value }))}
                 className="mt-1"
               />
             </div>
@@ -907,9 +986,9 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               <Input
                 id="phone"
                 value={state.phone}
-                onChange={(e) => setState({ ...state, phone: e.target.value })}
+                onChange={(e) => setState((s) => ({ ...s, phone: e.target.value }))}
                 className="mt-1"
-                placeholder="e.g., +44 123 456 7890"
+                placeholder="e.g., +353 123 456 7890"
               />
             </div>
 
@@ -918,7 +997,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               <Input
                 id="office"
                 value={state.officeLocation}
-                onChange={(e) => setState({ ...state, officeLocation: e.target.value })}
+                onChange={(e) => setState((s) => ({ ...s, officeLocation: e.target.value }))}
                 className="mt-1"
                 placeholder="e.g., Building 3, Room 205"
               />
@@ -943,7 +1022,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                     {positions.map((pos) => (
                       <button
                         key={pos}
-                        onClick={() => setState({ ...state, positionLevel: pos })}
+                        onClick={() => setState((s) => ({ ...s, positionLevel: pos }))}
                         className={`w-full p-3 text-left rounded-lg border transition ${
                           state.positionLevel === pos
                             ? "bg-blue-50 border-blue-600"
@@ -960,6 +1039,87 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
           </div>
         )
 
+      case "orcid":
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <OrcidIcon size="lg" className="mx-auto mb-3" />
+              <h2 className="text-2xl font-bold">Verify Your ORCID</h2>
+              <p className="text-gray-600">
+                Connect your ORCID iD so collaborators can trust your profile
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="font-semibold mb-2">What is ORCID?</h3>
+              <p className="text-sm text-gray-700 mb-3">
+                ORCID provides a persistent identifier that distinguishes you from other researchers.
+                It&apos;s free and widely used in academic publishing and grants.
+              </p>
+              <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                <li>Link your research outputs and funding</li>
+                <li>Trusted by publishers and institutions worldwide</li>
+                <li>Control your research profile</li>
+              </ul>
+            </div>
+
+            {orcidData.orcidId ? (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
+                <h3 className="font-semibold mb-2">ORCID Connected!</h3>
+                <p className="text-sm text-gray-700">
+                  Your ORCID iD: <strong>{orcidData.orcidId}</strong>
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOrcidData({})}
+                  className="mt-4"
+                >
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <Button
+                  onClick={async () => {
+                    try {
+                      setOrcidConnecting(true)
+                      setError(null)
+                      const result = await linkOrcidToCurrentUser()
+                      setOrcidData({
+                        orcidId: result.orcid,
+                        orcidUrl: result.orcidUrl,
+                        verified: true,
+                      })
+                    } catch (err: any) {
+                      console.error("ORCID linking error:", err)
+                      setError(err.message || "Failed to connect ORCID")
+                    } finally {
+                      setOrcidConnecting(false)
+                    }
+                  }}
+                  disabled={orcidConnecting}
+                  className="bg-[#A6CE39] hover:bg-[#8FB82E] text-white"
+                >
+                  {orcidConnecting ? "Connecting..." : "Connect ORCID"}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={handleNext}
+                >
+                  Skip for Now
+                </Button>
+              </div>
+            )}
+
+            <p className="text-xs text-center text-gray-500">
+              You can connect ORCID later from your profile settings
+            </p>
+          </div>
+        )
+
       case "pi-status":
         return (
           <div className="space-y-6">
@@ -970,28 +1130,24 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
               <p className="text-sm text-gray-700 mb-4">
-                Note: You can be a PI on some projects but not others. This setting determines whether
-                you can create and manage your own research projects.
+                Note: You can be a PI on some projects but not others. This setting determines whether you can create
+                and manage your own research projects.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <button
-                onClick={() => setState({ ...state, isPrincipalInvestigator: true })}
+                onClick={() => setState((s) => ({ ...s, isPrincipalInvestigator: true }))}
                 className={`p-6 rounded-lg border-2 transition ${
-                  state.isPrincipalInvestigator
-                    ? "bg-blue-50 border-blue-600"
-                    : "border-gray-200 hover:border-gray-300"
+                  state.isPrincipalInvestigator ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div className="font-semibold mb-2">Yes, I am a PI</div>
-                <div className="text-sm text-gray-600">
-                  I lead research projects and can manage funding accounts
-                </div>
+                <div className="text-sm text-gray-600">I lead research projects and can manage funding accounts</div>
               </button>
 
               <button
-                onClick={() => setState({ ...state, isPrincipalInvestigator: false })}
+                onClick={() => setState((s) => ({ ...s, isPrincipalInvestigator: false }))}
                 className={`p-6 rounded-lg border-2 transition ${
                   !state.isPrincipalInvestigator
                     ? "bg-blue-50 border-blue-600"
@@ -999,9 +1155,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                 }`}
               >
                 <div className="font-semibold mb-2">No, I&apos;m not a PI</div>
-                <div className="text-sm text-gray-600">
-                  I work on projects led by other researchers
-                </div>
+                <div className="text-sm text-gray-600">I work on projects led by other researchers</div>
               </button>
             </div>
           </div>
@@ -1017,42 +1171,29 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
 
             <div className="grid grid-cols-2 gap-4">
               <button
-                onClick={() => setState({ ...state, createProject: true })}
+                onClick={() => setState((s) => ({ ...s, createProject: true }))}
                 className={`p-6 rounded-lg border-2 transition ${
-                  state.createProject
-                    ? "bg-blue-50 border-blue-600"
-                    : "border-gray-200 hover:border-gray-300"
+                  state.createProject ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div className="font-semibold mb-2">Create Project Now</div>
-                <div className="text-sm text-gray-600">
-                  Set up your research project with funding details
-                </div>
+                <div className="text-sm text-gray-600">Set up your research project with funding details</div>
               </button>
 
               <button
-                onClick={() => setState({ ...state, createProject: false })}
+                onClick={() => setState((s) => ({ ...s, createProject: false }))}
                 className={`p-6 rounded-lg border-2 transition ${
-                  !state.createProject
-                    ? "bg-blue-50 border-blue-600"
-                    : "border-gray-200 hover:border-gray-300"
+                  !state.createProject ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div className="font-semibold mb-2">Skip for Now</div>
-                <div className="text-sm text-gray-600">
-                  I&apos;ll create my project later from my dashboard
-                </div>
+                <div className="text-sm text-gray-600">I&apos;ll create my project later from my dashboard</div>
               </button>
             </div>
           </div>
         )
 
       case "project-details":
-        if (!state.createProject) {
-          handleNext()
-          return null
-        }
-
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -1061,11 +1202,13 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </div>
 
             <div>
-              <Label htmlFor="projectName">Project Name *</Label>
+              <Label htmlFor="projectName">
+                Project Name <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="projectName"
                 value={state.projectName}
-                onChange={(e) => setState({ ...state, projectName: e.target.value })}
+                onChange={(e) => setState((s) => ({ ...s, projectName: e.target.value }))}
                 className="mt-1"
                 placeholder="e.g., Quantum Computing Research"
               />
@@ -1076,7 +1219,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               <textarea
                 id="projectDesc"
                 value={state.projectDescription}
-                onChange={(e) => setState({ ...state, projectDescription: e.target.value })}
+                onChange={(e) => setState((s) => ({ ...s, projectDescription: e.target.value }))}
                 className="mt-1 w-full border rounded-md p-2 min-h-[100px]"
                 placeholder="Brief description of your research project..."
               />
@@ -1088,7 +1231,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                 <Input
                   id="grantName"
                   value={state.grantName}
-                  onChange={(e) => setState({ ...state, grantName: e.target.value })}
+                  onChange={(e) => setState((s) => ({ ...s, grantName: e.target.value }))}
                   className="mt-1"
                   placeholder="e.g., UKRI Fellowship"
                 />
@@ -1098,7 +1241,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                 <Input
                   id="grantNumber"
                   value={state.grantNumber}
-                  onChange={(e) => setState({ ...state, grantNumber: e.target.value })}
+                  onChange={(e) => setState((s) => ({ ...s, grantNumber: e.target.value }))}
                   className="mt-1"
                   placeholder="e.g., MR/X123456/1"
                 />
@@ -1106,27 +1249,39 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </div>
 
             <div>
-              <Label htmlFor="funder">Funder *</Label>
-              <select
-                id="funder"
-                value={state.funderId}
-                onChange={(e) => {
-                  const funder = funders.find(f => f.id === e.target.value)
-                  setState({
-                    ...state,
-                    funderId: e.target.value,
-                    funderName: funder?.name || ""
-                  })
-                }}
-                className="mt-1 w-full border rounded-md p-2"
-              >
-                <option value="">Select a funder...</option>
-                {funders.map((funder) => (
-                  <option key={funder.id} value={funder.id}>
-                    {funder.name}
-                  </option>
-                ))}
-              </select>
+              <Label htmlFor="funder">
+                Funder <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <select
+                  id="funder"
+                  value={state.funderId}
+                  onChange={(e) => {
+                    const funder = funders.find((f) => f.id === e.target.value)
+                    setState((s) => ({
+                      ...s,
+                      funderId: e.target.value,
+                      funderName: funder?.name || "",
+                    }))
+                  }}
+                  className="mt-1 flex-1 border rounded-md p-2"
+                >
+                  <option value="">Select a funder...</option>
+                  {funders.map((funder) => (
+                    <option key={funder.id} value={funder.id}>
+                      {funder.name}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  onClick={() => setShowCreateFunder(true)}
+                  variant="outline"
+                  className="mt-1"
+                >
+                  Create New
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -1135,8 +1290,10 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                 <Input
                   id="budget"
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={state.totalBudget}
-                  onChange={(e) => setState({ ...state, totalBudget: e.target.value })}
+                  onChange={(e) => setState((s) => ({ ...s, totalBudget: e.target.value }))}
                   className="mt-1"
                   placeholder="500000"
                 />
@@ -1146,47 +1303,50 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                 <select
                   id="currency"
                   value={state.currency}
-                  onChange={(e) => setState({ ...state, currency: e.target.value })}
+                  onChange={(e) => setState((s) => ({ ...s, currency: e.target.value }))}
                   className="mt-1 w-full border rounded-md p-2"
                 >
+                  <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
                   <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
                 </select>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="startDate">Start Date *</Label>
+                <Label htmlFor="startDate">
+                  Start Date <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="startDate"
                   type="date"
                   value={state.startDate}
-                  onChange={(e) => setState({ ...state, startDate: e.target.value })}
+                  onChange={(e) => setState((s) => ({ ...s, startDate: e.target.value }))}
                   className="mt-1"
                 />
               </div>
               <div>
-                <Label htmlFor="endDate">End Date *</Label>
+                <Label htmlFor="endDate">
+                  End Date <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="endDate"
                   type="date"
                   value={state.endDate}
-                  onChange={(e) => setState({ ...state, endDate: e.target.value })}
+                  min={state.startDate}
+                  onChange={(e) => setState((s) => ({ ...s, endDate: e.target.value }))}
                   className="mt-1"
                 />
+                {state.startDate && state.endDate && new Date(state.endDate) < new Date(state.startDate) && (
+                  <p className="text-xs text-red-500 mt-1">End date must be after start date</p>
+                )}
               </div>
             </div>
           </div>
         )
 
       case "account-details":
-        if (!state.createProject) {
-          handleNext()
-          return null
-        }
-
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -1195,22 +1355,26 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </div>
 
             <div>
-              <Label htmlFor="accountNumber">Account Number *</Label>
+              <Label htmlFor="accountNumber">
+                Account Number <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="accountNumber"
                 value={state.accountNumber}
-                onChange={(e) => setState({ ...state, accountNumber: e.target.value })}
+                onChange={(e) => setState((s) => ({ ...s, accountNumber: e.target.value }))}
                 className="mt-1"
                 placeholder="e.g., 1735578"
               />
             </div>
 
             <div>
-              <Label htmlFor="accountName">Account Name *</Label>
+              <Label htmlFor="accountName">
+                Account Name <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="accountName"
                 value={state.accountName}
-                onChange={(e) => setState({ ...state, accountName: e.target.value })}
+                onChange={(e) => setState((s) => ({ ...s, accountName: e.target.value }))}
                 className="mt-1"
                 placeholder="e.g., Main Research Account"
               />
@@ -1221,7 +1385,9 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               <select
                 id="accountType"
                 value={state.accountType}
-                onChange={(e) => setState({ ...state, accountType: e.target.value as any })}
+                onChange={(e) =>
+                  setState((s) => ({ ...s, accountType: e.target.value as OnboardingState["accountType"] }))
+                }
                 className="mt-1 w-full border rounded-md p-2"
               >
                 <option value="main">Main Account</option>
@@ -1254,10 +1420,21 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
               <div className="bg-gray-50 rounded-lg p-4">
                 <h3 className="font-semibold mb-2">Personal Details</h3>
                 <p className="text-sm text-gray-700">
-                  {state.firstName} {state.lastName}<br />
+                  {state.firstName} {state.lastName}
+                  <br />
                   {state.email}
-                  {state.phone && <><br />{state.phone}</>}
-                  {state.officeLocation && <><br />{state.officeLocation}</>}
+                  {state.phone && (
+                    <>
+                      <br />
+                      {state.phone}
+                    </>
+                  )}
+                  {state.officeLocation && (
+                    <>
+                      <br />
+                      {state.officeLocation}
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -1273,10 +1450,22 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
                 <div className="bg-gray-50 rounded-lg p-4">
                   <h3 className="font-semibold mb-2">Project</h3>
                   <p className="text-sm text-gray-700">
-                    <strong>{state.projectName}</strong><br />
-                    {state.projectDescription && <>{state.projectDescription}<br /></>}
-                    Funder: {state.funderName}<br />
-                    {state.totalBudget && <>Budget: {state.currency} {parseFloat(state.totalBudget).toLocaleString()}<br /></>}
+                    <strong>{state.projectName}</strong>
+                    <br />
+                    {state.projectDescription && (
+                      <>
+                        {state.projectDescription}
+                        <br />
+                      </>
+                    )}
+                    Funder: {state.funderName}
+                    <br />
+                    {state.totalBudget && (
+                      <>
+                        Budget: {state.currency} {parseFloat(state.totalBudget).toLocaleString()}
+                        <br />
+                      </>
+                    )}
                     Duration: {state.startDate} to {state.endDate}
                   </p>
                 </div>
@@ -1297,13 +1486,9 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </div>
             <div>
               <h2 className="text-3xl font-bold mb-2">All Set!</h2>
-              <p className="text-gray-600 text-lg">
-                Your account has been successfully set up.
-              </p>
+              <p className="text-gray-600 text-lg">Your account has been successfully set up.</p>
             </div>
-            <div className="text-sm text-gray-500">
-              Redirecting you to your dashboard...
-            </div>
+            <div className="text-sm text-gray-500">Redirecting you to your dashboard...</div>
           </div>
         )
 
@@ -1313,23 +1498,36 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
   }
 
   const isFirstStep = currentStep === "welcome"
-  const isLastStep = currentStep === "review"
   const isCompleteStep = currentStep === "complete"
+  const isLastStep = currentStep === "review"
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-8">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-8 relative">
+        {/* Cancel button */}
+        {!isCompleteStep && onCancel && (
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+            aria-label="Cancel onboarding"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        )}
+
         {!isCompleteStep && (
           <div className="mb-8">
             <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
-              <span>Step {["welcome", "organisation", "institute", "lab", "personal-details", "position", "pi-status", "project-choice", "project-details", "account-details", "review"].indexOf(currentStep) + 1} of 11</span>
+              <span>
+                Step {currentIndex + 1} of {totalSteps}
+              </span>
               <span>Momentum Onboarding</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all"
                 style={{
-                  width: `${(["welcome", "organisation", "institute", "lab", "personal-details", "position", "pi-status", "project-choice", "project-details", "account-details", "review"].indexOf(currentStep) + 1) / 11 * 100}%`
+                  width: `${((currentIndex + 1) / totalSteps) * 100}%`,
                 }}
               />
             </div>
@@ -1339,9 +1537,7 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
         {renderStep()}
 
         {error && (
-          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
-          </div>
+          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
         )}
 
         {!isFirstStep && !isCompleteStep && (
@@ -1351,16 +1547,22 @@ export default function OnboardingFlow({ user, onComplete }: OnboardingFlowProps
             </Button>
 
             {!isLastStep && (
-              <Button
-                onClick={handleNext}
-                disabled={!canProceedFromStep(currentStep) || loading}
-              >
+              <Button onClick={handleNext} disabled={!canProceedFromStep(currentStep) || loading}>
                 Continue <ChevronRight className="ml-2 w-4 h-4" />
               </Button>
             )}
           </div>
         )}
       </div>
+
+      {/* Funder Creation Dialog */}
+      <FunderCreationDialog
+        isOpen={showCreateFunder}
+        onClose={() => setShowCreateFunder(false)}
+        onFunderCreated={handleFunderCreated}
+        currentUserId={user.uid}
+        organisationId={state.selectedOrganisation?.id}
+      />
     </div>
   )
 }

@@ -9,6 +9,7 @@ export const metadata: Metadata = {
 
 
 import { AppWrapper } from "@/lib/AppContext";
+import { ToastProvider } from "@/components/ui/toast";
 
 export default function RootLayout({
   children,
@@ -18,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans">
-        <AppWrapper>{children}</AppWrapper>
+        <ToastProvider>
+          <AppWrapper>{children}</AppWrapper>
+        </ToastProvider>
       </body>
     </html>
   )

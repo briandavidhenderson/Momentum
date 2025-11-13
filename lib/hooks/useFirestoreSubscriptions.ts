@@ -25,17 +25,19 @@ import type { Unsubscribe } from "firebase/firestore"
  * Hook to subscribe to all person profiles
  * Automatically converts PersonProfiles to People for UI display
  */
-export function useProfilesSubscription() {
+export function useProfilesSubscription(labId: string | null) {
   const setProfiles = useStore((state) => state.setProfiles)
   const setPeople = useStore((state) => state.setPeople)
   const unsubscribeRef = useRef<Unsubscribe | null>(null)
 
   useEffect(() => {
-    unsubscribeRef.current = subscribeToProfiles((profiles) => {
-      setProfiles(profiles)
-      const people = personProfilesToPeople(profiles)
-      setPeople(people)
-    })
+    if (labId) {
+      unsubscribeRef.current = subscribeToProfiles({ labId }, (profiles) => {
+        setProfiles(profiles)
+        const people = personProfilesToPeople(profiles)
+        setPeople(people)
+      })
+    }
 
     return () => {
       if (unsubscribeRef.current) {
@@ -43,7 +45,7 @@ export function useProfilesSubscription() {
         unsubscribeRef.current = null
       }
     }
-  }, [setProfiles, setPeople])
+  }, [setProfiles, setPeople, labId])
 }
 
 /**
@@ -60,7 +62,7 @@ export function useProjectsSubscription(userId: string | null) {
       return
     }
 
-    unsubscribeRef.current = subscribeToProjects(userId, (projects) => {
+    unsubscribeRef.current = subscribeToProjects({ userId }, (projects) => {
       setProjects(projects)
     })
 
@@ -88,7 +90,7 @@ export function useWorkpackagesSubscription(profileProjectId: string | null) {
     }
 
     unsubscribeRef.current = subscribeToWorkpackages(
-      profileProjectId,
+      { profileProjectId },
       (workpackages) => {
         setWorkpackages(workpackages)
       }
@@ -106,14 +108,16 @@ export function useWorkpackagesSubscription(profileProjectId: string | null) {
 /**
  * Hook to subscribe to calendar events
  */
-export function useEventsSubscription() {
+export function useEventsSubscription(labId: string | null) {
   const setEvents = useStore((state) => state.setEvents)
   const unsubscribeRef = useRef<Unsubscribe | null>(null)
 
   useEffect(() => {
-    unsubscribeRef.current = subscribeToEvents((events) => {
-      setEvents(events)
-    })
+    if (labId) {
+      unsubscribeRef.current = subscribeToEvents({ labId }, (events) => {
+        setEvents(events)
+      })
+    }
 
     return () => {
       if (unsubscribeRef.current) {
@@ -121,20 +125,22 @@ export function useEventsSubscription() {
         unsubscribeRef.current = null
       }
     }
-  }, [setEvents])
+  }, [setEvents, labId])
 }
 
 /**
  * Hook to subscribe to orders
  */
-export function useOrdersSubscription() {
+export function useOrdersSubscription(labId: string | null) {
   const setOrders = useStore((state) => state.setOrders)
   const unsubscribeRef = useRef<Unsubscribe | null>(null)
 
   useEffect(() => {
-    unsubscribeRef.current = subscribeToOrders((orders) => {
-      setOrders(orders)
-    })
+    if (labId) {
+      unsubscribeRef.current = subscribeToOrders({ labId }, (orders) => {
+        setOrders(orders)
+      })
+    }
 
     return () => {
       if (unsubscribeRef.current) {
@@ -142,20 +148,22 @@ export function useOrdersSubscription() {
         unsubscribeRef.current = null
       }
     }
-  }, [setOrders])
+  }, [setOrders, labId])
 }
 
 /**
  * Hook to subscribe to inventory items
  */
-export function useInventorySubscription() {
+export function useInventorySubscription(labId: string | null) {
   const setInventory = useStore((state) => state.setInventory)
   const unsubscribeRef = useRef<Unsubscribe | null>(null)
 
   useEffect(() => {
-    unsubscribeRef.current = subscribeToInventory((inventory) => {
-      setInventory(inventory)
-    })
+    if (labId) {
+      unsubscribeRef.current = subscribeToInventory({ labId }, (inventory) => {
+        setInventory(inventory)
+      })
+    }
 
     return () => {
       if (unsubscribeRef.current) {
@@ -163,7 +171,7 @@ export function useInventorySubscription() {
         unsubscribeRef.current = null
       }
     }
-  }, [setInventory])
+  }, [setInventory, labId])
 }
 
 /**
@@ -207,7 +215,7 @@ export function useLabPollsSubscription(labId: string | null) {
       return
     }
 
-    unsubscribeRef.current = subscribeToLabPolls(labId, (polls) => {
+    unsubscribeRef.current = subscribeToLabPolls({ labId }, (polls) => {
       setPolls(polls)
     })
 
@@ -234,7 +242,7 @@ export function useELNExperimentsSubscription(labId: string | null) {
       return
     }
 
-    unsubscribeRef.current = subscribeToELNExperiments(labId, (experiments) => {
+    unsubscribeRef.current = subscribeToELNExperiments({ labId }, (experiments) => {
       setELNExperiments(experiments)
     })
 
@@ -261,7 +269,7 @@ export function useDayToDayTasksSubscription(userId: string | null) {
       return
     }
 
-    unsubscribeRef.current = subscribeToDayToDayTasks(userId, (tasks) => {
+    unsubscribeRef.current = subscribeToDayToDayTasks({ userId }, (tasks) => {
       setDayToDayTasks(tasks)
     })
 
@@ -284,11 +292,11 @@ export function useAllSubscriptions(
   userId: string | null,
   labId: string | null
 ) {
-  useProfilesSubscription()
+  useProfilesSubscription(labId)
   useProjectsSubscription(userId)
-  useEventsSubscription()
-  useOrdersSubscription()
-  useInventorySubscription()
+  useEventsSubscription(labId)
+  useOrdersSubscription(labId)
+  useInventorySubscription(labId)
   useEquipmentSubscription(labId)
   useLabPollsSubscription(labId)
   useELNExperimentsSubscription(labId)

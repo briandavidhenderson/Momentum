@@ -1,60 +1,231 @@
 "use client"
 
-import { useState } from "react"
-import { useAppContext } from "@/lib/AppContext"
+import { useState, useEffect, useMemo } from "react"
+import { useOrders } from "@/lib/hooks/useOrders"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { Order, OrderStatus, InventoryItem, InventoryLevel } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { Plus, Package, ShoppingCart, CheckCircle, Clock, Archive, AlertCircle } from "lucide-react"
+import { OrderCard } from "@/components/OrderCard"
+import { OrderEditDialog } from "@/components/OrderEditDialog"
+import { OrderFormDialog } from "@/components/OrderFormDialog"
+import { createInventoryItem, deleteOrder } from "@/lib/firestoreService"
 import {
-  Package,
-  ShoppingCart,
-  Plus,
-  Trash2,
-  Edit2,
-  CheckCircle,
-  Clock,
-  XCircle,
-  Archive
-} from "lucide-react"
-import { Order, InventoryItem } from "@/lib/types"
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+  useDroppable,
+} from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+
+// Droppable Column Component
+function DroppableColumn({
+  id,
+  children,
+  className
+}: {
+  id: string
+  children: React.ReactNode
+  className?: string
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`${className} ${isOver ? 'ring-2 ring-brand-500' : ''}`}
+    >
+      {children}
+    </div>
+  )
+}
 
 export function OrdersInventory() {
+  const { currentUserProfile } = useAuth()
   const {
     orders,
     inventory,
     handleCreateOrder,
     handleDeleteOrder,
-    handleUpdateOrderField,
-  } = useAppContext()
+    handleUpdateOrder,
+    handleReorder,
+    handleUpdateInventoryLevel,
+    handleDeleteInventoryItem,
+  } = useOrders()
 
+  const [showOrderDialog, setShowOrderDialog] = useState(false)
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'orders' | 'inventory'>('orders')
 
-  const getStatusColor = (status: Order['status']) => {
-    switch (status) {
-      case 'to-order': return 'bg-yellow-100 text-yellow-800'
-      case 'ordered': return 'bg-blue-100 text-blue-800'
-      case 'received': return 'bg-green-100 text-green-800'
-      default: return 'bg-gray-100 text-gray-800'
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  )
+
+  // Auto-delete received orders older than 7 days
+  useEffect(() => {
+    if (!orders || !currentUserProfile) return
+
+    const checkAndDeleteOldOrders = async () => {
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+      const oldReceivedOrders = orders.filter(order => {
+        if (order.status !== 'received' || !order.receivedDate) return false
+        const receivedDate = new Date(order.receivedDate)
+        return receivedDate < sevenDaysAgo
+      })
+
+      for (const order of oldReceivedOrders) {
+        await deleteOrder(order.id)
+      }
+    }
+
+    // Check immediately and then every hour
+    checkAndDeleteOldOrders()
+    const interval = setInterval(checkAndDeleteOldOrders, 60 * 60 * 1000)
+
+    return () => clearInterval(interval)
+  }, [orders, currentUserProfile])
+
+  // Organize orders by status
+  const ordersByStatus = useMemo(() => {
+    const toOrder = (orders || []).filter(o => o.status === 'to-order')
+    const ordered = (orders || []).filter(o => o.status === 'ordered')
+    const received = (orders || []).filter(o => o.status === 'received')
+    return { toOrder, ordered, received }
+  }, [orders])
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string)
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveId(null)
+
+    if (!over || !currentUserProfile) return
+
+    const orderId = active.id as string
+    const newStatus = over.id as OrderStatus
+
+    // Find the order being dragged
+    const order = orders?.find(o => o.id === orderId)
+    if (!order || order.status === newStatus) return
+
+    const wasReceived = order.status === 'received'
+    const nowReceived = newStatus === 'received'
+
+    // Update order status and dates
+    const updates: Partial<Order> = { status: newStatus }
+
+    if (newStatus === 'ordered' && !order.orderedDate) {
+      updates.orderedDate = new Date()
+    }
+
+    if (nowReceived && !order.receivedDate) {
+      updates.receivedDate = new Date()
+
+      // Create inventory item when moved to received
+      try {
+        const inventoryLevel: InventoryLevel = 'medium' // Default to medium stock level
+
+        await createInventoryItem({
+          productName: order.productName,
+          catNum: order.catNum,
+          inventoryLevel,
+          receivedDate: new Date(),
+          lastOrderedDate: order.orderedDate || new Date(),
+          chargeToAccount: order.accountId,
+          category: order.category,
+          subcategory: order.subcategory,
+          priceExVAT: order.priceExVAT,
+          currentQuantity: 1,
+          minQuantity: 0,
+          notes: `Created from order received on ${new Date().toLocaleDateString()}`,
+          createdBy: currentUserProfile.id,
+        })
+      } catch (error) {
+        console.error('Failed to create inventory item:', error)
+      }
+    }
+
+    await handleUpdateOrder(orderId, updates)
+  }
+
+  const handleEdit = (order: Order) => {
+    setEditingOrder(order)
+  }
+
+  const handleSaveEdit = async (orderId: string, updates: Partial<Order>) => {
+    await handleUpdateOrder(orderId, updates)
+    setEditingOrder(null)
+  }
+
+  const handleDelete = async (orderId: string) => {
+    if (confirm('Are you sure you want to delete this order?')) {
+      await handleDeleteOrder(orderId)
     }
   }
 
-  const getStatusIcon = (status: Order['status']) => {
+  const activeOrder = activeId ? orders?.find(o => o.id === activeId) : null
+
+  const getColumnColor = (status: OrderStatus) => {
     switch (status) {
-      case 'to-order': return <Clock className="h-4 w-4" />
-      case 'ordered': return <ShoppingCart className="h-4 w-4" />
-      case 'received': return <CheckCircle className="h-4 w-4" />
-      default: return <Package className="h-4 w-4" />
+      case 'to-order':
+        return 'bg-yellow-50 border-yellow-300'
+      case 'ordered':
+        return 'bg-blue-50 border-blue-300'
+      case 'received':
+        return 'bg-green-50 border-green-300'
+      default:
+        return 'bg-gray-50 border-gray-300'
     }
   }
 
-  const getInventoryLevelColor = (level: InventoryItem['inventoryLevel']) => {
+  const getColumnIcon = (status: OrderStatus) => {
+    switch (status) {
+      case 'to-order':
+        return <Clock className="h-5 w-5 text-yellow-600" />
+      case 'ordered':
+        return <ShoppingCart className="h-5 w-5 text-blue-600" />
+      case 'received':
+        return <CheckCircle className="h-5 w-5 text-green-600" />
+    }
+  }
+
+  const getColumnTitle = (status: OrderStatus) => {
+    switch (status) {
+      case 'to-order':
+        return 'To Order'
+      case 'ordered':
+        return 'Ordered'
+      case 'received':
+        return 'Received'
+    }
+  }
+
+  const getInventoryLevelColor = (level: InventoryLevel) => {
     switch (level) {
-      case 'empty': return 'bg-red-100 text-red-800 border-red-300'
-      case 'low': return 'bg-orange-100 text-orange-800 border-orange-300'
-      case 'medium': return 'bg-green-100 text-green-800 border-green-300'
-      case 'full': return 'bg-purple-100 text-purple-800 border-purple-300'
-      default: return 'bg-gray-100 text-gray-800 border-gray-300'
+      case 'empty':
+        return 'border-red-300 bg-red-50'
+      case 'low':
+        return 'border-orange-300 bg-orange-50'
+      case 'medium':
+        return 'border-green-300 bg-green-50'
+      case 'full':
+        return 'border-blue-300 bg-blue-50'
+      default:
+        return 'border-gray-300 bg-gray-50'
     }
   }
 
@@ -63,42 +234,46 @@ export function OrdersInventory() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Orders & Inventory</h1>
-          <p className="text-muted-foreground mt-1">Manage lab orders and track inventory levels</p>
+          <h2 className="text-2xl font-bold text-foreground">Orders & Inventory</h2>
+          <p className="text-sm text-muted-foreground">
+            Manage lab orders and track inventory levels
+          </p>
         </div>
-        <Button
-          onClick={handleCreateOrder}
-          className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          New Order
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setShowOrderDialog(true)}
+            className="bg-brand-500 hover:bg-brand-600 text-white"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            New Order
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-border">
         <Button
-          onClick={() => setActiveTab('orders')}
           variant={activeTab === 'orders' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('orders')}
           className={activeTab === 'orders' ? 'bg-brand-500 text-white' : ''}
         >
           <ShoppingCart className="h-4 w-4 mr-2" />
-          Orders ({orders?.length || 0})
+          Orders
         </Button>
         <Button
-          onClick={() => setActiveTab('inventory')}
           variant={activeTab === 'inventory' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('inventory')}
           className={activeTab === 'inventory' ? 'bg-brand-500 text-white' : ''}
         >
           <Package className="h-4 w-4 mr-2" />
-          Inventory ({inventory?.length || 0})
+          Inventory
         </Button>
       </div>
 
-      {/* Orders Tab */}
+      {/* Orders Kanban Board */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
-          {/* Stats Cards */}
+          {/* Stats Summary */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-card rounded-lg p-4 border border-border">
               <div className="flex items-center gap-3">
@@ -107,7 +282,7 @@ export function OrdersInventory() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
-                    {orders?.filter((o: Order) => o.status === 'to-order').length || 0}
+                    {ordersByStatus.toOrder.length}
                   </p>
                   <p className="text-sm text-muted-foreground">To Order</p>
                 </div>
@@ -120,7 +295,7 @@ export function OrdersInventory() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
-                    {orders?.filter((o: Order) => o.status === 'ordered').length || 0}
+                    {ordersByStatus.ordered.length}
                   </p>
                   <p className="text-sm text-muted-foreground">Ordered</p>
                 </div>
@@ -133,7 +308,7 @@ export function OrdersInventory() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
-                    {orders?.filter((o: Order) => o.status === 'received').length || 0}
+                    {ordersByStatus.received.length}
                   </p>
                   <p className="text-sm text-muted-foreground">Received</p>
                 </div>
@@ -154,90 +329,75 @@ export function OrdersInventory() {
             </div>
           </div>
 
-          {/* Orders List */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Product
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Cat. Number
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Supplier
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Price
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Created
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {orders && orders.length > 0 ? (
-                    orders.map((order: Order) => (
-                      <tr key={order.id} className="hover:bg-muted/50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium text-foreground">
-                              {order.productName || 'Unnamed Product'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {order.catNum || '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {order.supplier || '-'}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-foreground">
-                          {order.currency} {order.priceExVAT?.toFixed(2) || '0.00'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge className={`${getStatusColor(order.status)} gap-1`}>
-                            {getStatusIcon(order.status)}
-                            {order.status}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">
-                          {order.createdDate ? new Date(order.createdDate).toLocaleDateString() : '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteOrder(order.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
-                        No orders yet. Click &quot;New Order&quot; to create one.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          {/* Kanban Board */}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(['to-order', 'ordered', 'received'] as OrderStatus[]).map(status => (
+                <DroppableColumn
+                  key={status}
+                  id={status}
+                  className={`rounded-lg border-2 p-4 ${getColumnColor(status)} min-h-[500px] transition-all`}
+                >
+                  <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-300">
+                    {getColumnIcon(status)}
+                    <h3 className="font-bold text-foreground text-lg">
+                      {getColumnTitle(status)}
+                    </h3>
+                    <span className="ml-auto bg-white px-2 py-1 rounded text-sm font-semibold">
+                      {status === 'to-order' && ordersByStatus.toOrder.length}
+                      {status === 'ordered' && ordersByStatus.ordered.length}
+                      {status === 'received' && ordersByStatus.received.length}
+                    </span>
+                  </div>
+
+                  <SortableContext
+                    id={status}
+                    items={(status === 'to-order' ? ordersByStatus.toOrder :
+                           status === 'ordered' ? ordersByStatus.ordered :
+                           ordersByStatus.received).map(o => o.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      {(status === 'to-order' ? ordersByStatus.toOrder :
+                        status === 'ordered' ? ordersByStatus.ordered :
+                        ordersByStatus.received).map(order => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                        />
+                      ))}
+                      {(status === 'to-order' ? ordersByStatus.toOrder :
+                        status === 'ordered' ? ordersByStatus.ordered :
+                        ordersByStatus.received).length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground text-sm">
+                          Drag orders here
+                        </div>
+                      )}
+                    </div>
+                  </SortableContext>
+                </DroppableColumn>
+              ))}
             </div>
-          </div>
+
+            <DragOverlay>
+              {activeOrder ? (
+                <div className="opacity-90">
+                  <OrderCard
+                    order={activeOrder}
+                    onEdit={() => {}}
+                    onDelete={() => {}}
+                  />
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </div>
       )}
 
@@ -249,11 +409,11 @@ export function OrdersInventory() {
             <div className="bg-card rounded-lg p-4 border border-red-300">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-500/10 rounded">
-                  <XCircle className="h-5 w-5 text-red-500" />
+                  <AlertCircle className="h-5 w-5 text-red-500" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
-                    {inventory?.filter((i: InventoryItem) => i.inventoryLevel === 'empty').length || 0}
+                    {inventory?.filter(i => i.inventoryLevel === 'empty').length || 0}
                   </p>
                   <p className="text-sm text-muted-foreground">Empty</p>
                 </div>
@@ -266,7 +426,7 @@ export function OrdersInventory() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
-                    {inventory?.filter((i: InventoryItem) => i.inventoryLevel === 'low').length || 0}
+                    {inventory?.filter(i => i.inventoryLevel === 'low').length || 0}
                   </p>
                   <p className="text-sm text-muted-foreground">Low Stock</p>
                 </div>
@@ -279,9 +439,9 @@ export function OrdersInventory() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
-                    {inventory?.filter((i: InventoryItem) => i.inventoryLevel === 'medium').length || 0}
+                    {inventory?.filter(i => i.inventoryLevel === 'medium' || i.inventoryLevel === 'full').length || 0}
                   </p>
-                  <p className="text-sm text-muted-foreground">Medium</p>
+                  <p className="text-sm text-muted-foreground">Stocked</p>
                 </div>
               </div>
             </div>
@@ -309,13 +469,18 @@ export function OrdersInventory() {
                   className={`bg-card rounded-lg border-2 p-4 ${getInventoryLevelColor(item.inventoryLevel)}`}
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Package className="h-5 w-5" />
-                      <h3 className="font-semibold text-foreground">{item.productName}</h3>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Package className="h-5 w-5 flex-shrink-0" />
+                      <h3 className="font-semibold text-foreground truncate">{item.productName}</h3>
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {item.inventoryLevel}
-                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReorder(item)}
+                      className="text-xs ml-2"
+                    >
+                      Reorder
+                    </Button>
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -323,17 +488,16 @@ export function OrdersInventory() {
                       <span className="font-medium">{item.catNum || '-'}</span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Level:</span>
+                      <span className="font-medium capitalize">{item.inventoryLevel}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Quantity:</span>
                       <span className="font-medium">{item.currentQuantity || 0}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Min. Qty:</span>
-                      <span className="font-medium">{item.minQuantity || 0}</span>
-                    </div>
                     {item.notes && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Notes:</span>
-                        <span className="font-medium text-xs">{item.notes}</span>
+                      <div className="pt-2 border-t border-gray-200">
+                        <p className="text-xs text-muted-foreground">{item.notes}</p>
                       </div>
                     )}
                   </div>
@@ -347,6 +511,21 @@ export function OrdersInventory() {
           </div>
         </div>
       )}
+
+      {/* Dialogs */}
+      {showOrderDialog && (
+        <OrderFormDialog
+          open={showOrderDialog}
+          onClose={() => setShowOrderDialog(false)}
+          onSave={handleCreateOrder}
+        />
+      )}
+      <OrderEditDialog
+        order={editingOrder}
+        open={!!editingOrder}
+        onClose={() => setEditingOrder(null)}
+        onSave={handleSaveEdit}
+      />
     </div>
   )
 }

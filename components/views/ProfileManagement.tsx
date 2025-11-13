@@ -2,9 +2,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, User } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, User, MasterProject } from "@/lib/types"
 import { profiles as staticProfiles } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
+import { useProjects } from "@/lib/hooks/useProjects"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -42,7 +43,8 @@ interface ProfileManagementProps {
 }
 
 export function ProfileManagement({ currentUser, currentUserProfile }: ProfileManagementProps = {}) {
-  const allProfiles = useProfiles()
+  const allProfiles = useProfiles(currentUserProfile?.lab || null)
+  const { handleCreateMasterProject } = useProjects()
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -168,31 +170,37 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
   }
 
   const handleSaveProject = (project: ProfileProject) => {
-    const currentProjects = formData.projects || []
-    const isPI = project.id && formData.principalInvestigatorProjects?.includes(project.id)
-    const isNew = !currentProjects.find(p => p.id === project.id)
-
-    if (isNew) {
-      // Add new project
-      const updatedProjects = [...currentProjects, project]
-      const updatedPIs = isPI 
-        ? [...(formData.principalInvestigatorProjects || []), project.id]
-        : formData.principalInvestigatorProjects || []
-      
-      setFormData({
-        ...formData,
-        projects: updatedProjects,
-        principalInvestigatorProjects: updatedPIs,
-      })
-    } else {
-      // Update existing project
-      const updatedProjects = currentProjects.map(p => p.id === project.id ? project : p)
-      setFormData({
-        ...formData,
-        projects: updatedProjects,
-      })
+    if (!currentUserProfile) return
+    const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+      name: project.name,
+      description: project.description || "",
+      labId: currentUserProfile.labId,
+      labName: currentUserProfile.labName,
+      instituteId: currentUserProfile.instituteId,
+      instituteName: currentUserProfile.instituteName,
+      organisationId: currentUserProfile.organisationId,
+      organisationName: currentUserProfile.organisationName,
+      grantName: project.grantName || "",
+      grantNumber: project.grantNumber || "",
+      totalBudget: project.budget || 0,
+      currency: "GBP",
+      startDate: project.startDate,
+      endDate: project.endDate,
+      funderId: "",
+      funderName: "",
+      accountIds: [],
+      principalInvestigatorIds: project.principalInvestigatorId ? [project.principalInvestigatorId] : [],
+      coPIIds: [],
+      teamMemberIds: [],
+      teamRoles: {},
+      status: project.status,
+      progress: 0,
+      workpackageIds: [],
+      visibility: "lab",
+      createdBy: currentUser?.id || "",
+      isExpanded: true,
     }
-
+    handleCreateMasterProject(newProject)
     setProjectDialogOpen(false)
     setEditingProject(null)
   }
@@ -1087,6 +1095,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
             setEditingProject(null)
           }}
           onSave={handleSaveProject}
+          currentUserProfile={currentUserProfile}
         />
       )}
     </div>
@@ -1099,13 +1108,15 @@ function ProjectDialog({
   project,
   onClose,
   onSave,
+  currentUserProfile,
 }: {
   open: boolean
   project: ProfileProject
   onClose: () => void
   onSave: (project: ProfileProject) => void
+  currentUserProfile?: PersonProfile | null
 }) {
-  const allProfiles = useProfiles()
+  const allProfiles = useProfiles(currentUserProfile?.lab || null)
   const [formData, setFormData] = useState<ProfileProject>(project)
 
   useEffect(() => {

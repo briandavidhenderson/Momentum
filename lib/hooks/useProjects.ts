@@ -14,6 +14,7 @@ import {
   createWorkpackage as createWorkpackageInFirestore,
   updateWorkpackage,
   deleteWorkpackage as deleteWorkpackageFromFirestore,
+  getWorkpackages,
 } from '@/lib/firestoreService';
 import { useAuth } from './useAuth';
 
@@ -21,13 +22,32 @@ export function useProjects() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
   const [projects, setProjects] = useState<MasterProject[]>([]);
   const [workpackages, setWorkpackages] = useState<Workpackage[]>([]);
+  const [workpackagesMap, setWorkpackagesMap] = useState<Map<string, Workpackage>>(new Map());
 
   useEffect(() => {
     if (profile?.labId) {
       const unsubscribe = subscribeToMasterProjects(
         { labId: profile.labId },
-        (newProjects) => {
+        async (newProjects) => {
           setProjects(newProjects);
+
+          // Fetch workpackages for all new projects
+          const map = new Map<string, Workpackage>();
+          const allWps: Workpackage[] = [];
+
+          for (const project of newProjects) {
+            try {
+              const wps = await getWorkpackages(project.id);
+              wps.forEach(wp => {
+                map.set(wp.id, wp);
+                allWps.push(wp);
+              });
+            } catch (error) {
+              console.error(`Error loading workpackages for project ${project.id}:`, error);
+            }
+          }
+          setWorkpackagesMap(map);
+          setWorkpackages(allWps);
         }
       );
       return () => unsubscribe();
@@ -78,6 +98,7 @@ export function useProjects() {
   return {
     projects,
     workpackages,
+    workpackagesMap,
     handleCreateMasterProject,
     handleUpdateMasterProject,
     handleDeleteMasterProject,

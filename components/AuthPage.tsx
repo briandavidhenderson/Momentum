@@ -11,7 +11,7 @@ import { auth } from "@/lib/firebase"
 import { createUser } from "@/lib/firestoreService"
 
 interface AuthPageProps {
-  onLogin: (uid: string, email: string, fullName: string) => void
+  onLogin: (uid: string) => void
   onSignup: (uid: string, email: string, fullName: string) => void
 }
 
@@ -57,8 +57,8 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
           return
         }
 
-        // Call onLogin with uid, email, and displayName (or email as fallback)
-        onLogin(user.uid, user.email || email, user.displayName || email)
+        // Call onLogin with uid
+        onLogin(user.uid)
       } else {
         // Sign up with Firebase Auth
         const userCredential = await createUserWithEmailAndPassword(auth, email, password)

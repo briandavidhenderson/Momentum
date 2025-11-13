@@ -11,7 +11,7 @@ export function usePolls() {
   useEffect(() => {
     if (!currentUserProfile || !currentUserProfile.labId) return;
 
-    const unsubscribe = subscribeToLabPolls(currentUserProfile.labId, (polls) => {
+    const unsubscribe = subscribeToLabPolls({ labId: currentUserProfile.labId }, (polls) => {
       setPolls(polls);
     });
 

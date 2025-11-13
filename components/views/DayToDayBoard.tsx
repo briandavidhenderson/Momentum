@@ -85,7 +85,7 @@ function DraggableTaskCard({
       }
     : undefined
 
-  const assignee = people.find((p) => p.id === task.assigneeId)
+  const assignee = (people || []).find((p) => p.id === task.assigneeId)
 
   const importanceColors = {
     low: "bg-gray-100 text-gray-700",
@@ -284,7 +284,7 @@ function DayToDayTaskEditDialog({
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Unassigned</option>
-              {people.map((person) => (
+              {(people || []).map((person) => (
                 <option key={person.id} value={person.id}>
                   {person.name}
                 </option>
@@ -325,7 +325,7 @@ export function DayToDayBoard() {
     handleMoveDayToDayTask: onMoveTask,
   } = useAppContext()
 
-  const tasks = dayToDayTasks as DayToDayTask[]
+  const tasks = (dayToDayTasks || []) as DayToDayTask[]
 
   const [activeTask, setActiveTask] = useState<DayToDayTask | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState("")
@@ -395,7 +395,6 @@ export function DayToDayBoard() {
       title: newTaskTitle,
       status: "todo",
       importance: newTaskImportance,
-      createdBy: "", // Will be set by parent
     })
 
     setNewTaskTitle("")

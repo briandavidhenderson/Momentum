@@ -392,3 +392,279 @@ export const photoToProtocol = (
     protocolOptions?: ProtocolOptions
   }
 ) => defaultRouter.photoToProtocol(image, options)
+
+/**
+ * Extract structure and function from a single ELN item
+ * Automatically determines the best approach based on item type
+ */
+export async function extractItemStructure(
+  file: File,
+  itemType: string
+): Promise<AIResponse<{
+  text?: string
+  structuredData?: Record<string, any>
+  entities?: Array<{ type: string; value: string; confidence?: number }>
+  summary?: string
+}>> {
+  try {
+    // Handle different file types
+    if (itemType === 'voice' || file.type.startsWith('audio/')) {
+      const transcript = await defaultRouter.transcribeAudio(file)
+      const entities = await defaultRouter.extractEntities(
+        transcript.data.text,
+        ['chemical', 'equipment', 'measurement', 'procedure', 'reagent']
+      )
+
+      return {
+        data: {
+          text: transcript.data.text,
+          entities: entities.data.map(e => ({
+            type: e.type,
+            value: e.name,
+            confidence: e.confidence
+          })),
+          summary: transcript.data.text.substring(0, 200) + '...'
+        },
+        provider: transcript.provider,
+        confidence: transcript.confidence,
+        latency: transcript.latency + entities.latency,
+        cost: (transcript.cost || 0) + (entities.cost || 0)
+      }
+    } else if (itemType === 'image' || itemType === 'photo' || file.type.startsWith('image/')) {
+      const ocr = await defaultRouter.extractTextFromImage(file)
+      const entities = await defaultRouter.extractEntities(
+        ocr.data.text,
+        ['chemical', 'equipment', 'measurement', 'procedure', 'reagent']
+      )
+
+      return {
+        data: {
+          text: ocr.data.text,
+          entities: entities.data.map(e => ({
+            type: e.type,
+            value: e.name,
+            confidence: e.confidence
+          })),
+          summary: ocr.data.text.substring(0, 200) + '...'
+        },
+        provider: ocr.provider,
+        confidence: ocr.confidence,
+        latency: ocr.latency + entities.latency,
+        cost: (ocr.cost || 0) + (entities.cost || 0)
+      }
+    } else if (itemType === 'document') {
+      // For documents, we'd need to extract text first (could use OCR or text extraction)
+      // For now, return placeholder
+      return {
+        data: {
+          text: 'Document text extraction not yet implemented',
+          summary: 'Document uploaded'
+        },
+        provider: 'local',
+        confidence: 100,
+        latency: 0
+      }
+    } else if (itemType === 'data') {
+      // Handle data files (CSV, Excel, JSON, text)
+      try {
+        const text = await file.text()
+
+        // Try to parse as JSON
+        if (file.name.endsWith('.json')) {
+          const jsonData = JSON.parse(text)
+          const summary = `JSON data file with ${Object.keys(jsonData).length} top-level keys`
+
+          return {
+            data: {
+              text,
+              structuredData: jsonData,
+              summary
+            },
+            provider: 'local',
+            confidence: 100,
+            latency: 0
+          }
+        }
+
+        // For CSV/text files, extract basic stats
+        const lines = text.split('\n').filter(line => line.trim())
+        const summary = `Data file with ${lines.length} lines`
+
+        // Try to extract entities from the text
+        const entities = await defaultRouter.extractEntities(
+          text.substring(0, 5000), // Limit to first 5000 chars for entity extraction
+          ['chemical', 'equipment', 'measurement', 'procedure', 'reagent']
+        )
+
+        return {
+          data: {
+            text,
+            entities: entities.data.map(e => ({
+              type: e.type,
+              value: e.name,
+              confidence: e.confidence
+            })),
+            summary
+          },
+          provider: 'local',
+          confidence: 100,
+          latency: entities.latency,
+          cost: entities.cost || 0
+        }
+      } catch (error) {
+        console.error('Error parsing data file:', error)
+        return {
+          data: {
+            text: 'Failed to parse data file',
+            summary: 'Data file uploaded but could not be parsed'
+          },
+          provider: 'local',
+          confidence: 50,
+          latency: 0
+        }
+      }
+    } else if (itemType === 'video') {
+      // Video files - for now just return metadata
+      return {
+        data: {
+          text: 'Video content extraction not yet implemented',
+          summary: `Video file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`
+        },
+        provider: 'local',
+        confidence: 100,
+        latency: 0
+      }
+    } else {
+      throw new Error(`Unsupported item type: ${itemType}`)
+    }
+  } catch (error) {
+    throw new Error(`Failed to extract structure: ${error}`)
+  }
+}
+
+/**
+ * Generate comprehensive experiment report from multiple items
+ * Analyzes all items and creates structured report with background, protocols, and results
+ */
+export async function generateExperimentReport(
+  items: Array<{
+    type: string
+    extractedText?: string
+    structuredData?: Record<string, any>
+    description?: string
+  }>,
+  experimentTitle: string,
+  experimentDescription?: string
+): Promise<AIResponse<{
+  background: string
+  protocols: string
+  results: string
+  conclusion: string
+}>> {
+  try {
+    // Compile all extracted text and structured data
+    const compiledText = items
+      .map((item, idx) => {
+        let content = `\n\n=== Item ${idx + 1} (${item.type}) ===\n`
+        if (item.description) content += `Description: ${item.description}\n`
+        if (item.extractedText) content += `Content: ${item.extractedText}\n`
+        if (item.structuredData) content += `Data: ${JSON.stringify(item.structuredData, null, 2)}\n`
+        return content
+      })
+      .join('\n')
+
+    const prompt = `You are a scientific researcher analyzing experimental data. Generate a comprehensive lab report from the following experimental data.
+
+Experiment Title: ${experimentTitle}
+${experimentDescription ? `Experiment Description: ${experimentDescription}\n` : ''}
+
+Experimental Data:
+${compiledText}
+
+Please generate a structured report with the following sections:
+
+1. BACKGROUND: Provide context for the experiment, including scientific rationale, relevant background information, and objectives. Infer from the experimental data what the scientific question or hypothesis might be.
+
+2. PROTOCOLS: Extract and organize all experimental protocols, procedures, and methods described in the data. Include materials, reagents, equipment, and step-by-step procedures.
+
+3. RESULTS: Summarize all observations, measurements, and data presented. Highlight key findings and patterns.
+
+4. CONCLUSION: Synthesize the findings, discuss their implications, and suggest next steps or future work.
+
+Format your response as JSON with these four keys: background, protocols, results, conclusion.
+Each should be a string containing well-formatted markdown text.`
+
+    const response = await defaultRouter.generateText(prompt, {
+      temperature: 0.7,
+      maxTokens: 4000
+    })
+
+    // Parse JSON response
+    try {
+      // Extract JSON from markdown code blocks if present
+      let jsonText = response.data.trim()
+      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/)
+      if (jsonMatch) {
+        jsonText = jsonMatch[1].trim()
+      } else {
+        // Try to find JSON object without code block markers
+        const jsonObjMatch = jsonText.match(/\{[\s\S]*\}/)
+        if (jsonObjMatch) {
+          jsonText = jsonObjMatch[0]
+        }
+      }
+
+      const reportData = JSON.parse(jsonText)
+
+      // Validate that we have all required sections
+      if (!reportData.background || !reportData.protocols || !reportData.results || !reportData.conclusion) {
+        throw new Error('Missing required report sections')
+      }
+
+      return {
+        data: reportData,
+        provider: response.provider,
+        confidence: response.confidence,
+        latency: response.latency,
+        cost: response.cost
+      }
+    } catch (parseError) {
+      console.error('Failed to parse report JSON:', parseError)
+      console.log('Raw response:', response.data.substring(0, 500))
+
+      // If JSON parsing fails, try to split by markdown headers
+      const sections = response.data.split(/#{1,2}\s+(?:BACKGROUND|Background|PROTOCOLS|Protocols|RESULTS|Results|CONCLUSION|Conclusion)/gi)
+
+      if (sections.length >= 4) {
+        return {
+          data: {
+            background: sections[1]?.trim() || '',
+            protocols: sections[2]?.trim() || '',
+            results: sections[3]?.trim() || '',
+            conclusion: sections[4]?.trim() || ''
+          },
+          provider: response.provider,
+          confidence: response.confidence,
+          latency: response.latency,
+          cost: response.cost
+        }
+      }
+
+      // Last resort: return the full text in background
+      return {
+        data: {
+          background: response.data,
+          protocols: 'Unable to parse protocols section',
+          results: 'Unable to parse results section',
+          conclusion: 'Unable to parse conclusion section'
+        },
+        provider: response.provider,
+        confidence: response.confidence,
+        latency: response.latency,
+        cost: response.cost
+      }
+    }
+  } catch (error) {
+    throw new Error(`Failed to generate report: ${error}`)
+  }
+}

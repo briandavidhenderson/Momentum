@@ -50,10 +50,12 @@ export function useAuth() {
               setAuthState('setup');
             }
           } else {
+            // Extract name from email safely
+            const emailName = firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'
             const tempUser: User = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
-              fullName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              fullName: firebaseUser.displayName || emailName,
               profileId: null,
               createdAt: Timestamp.now(),
               isAdministrator: false,
@@ -87,12 +89,41 @@ export function useAuth() {
     };
   }, []);
 
-  const handleLogin = async (uid: string, email: string, fullName: string) => {
-    // Logic is handled by onAuthStateChanged
+  const handleLogin = async (uid: string) => {
+    // Re-check user data on login to ensure it's fresh
+    try {
+      const userData = await getUser(uid);
+      if (userData) {
+        const user: User = {
+          uid: userData.uid,
+          email: userData.email,
+          fullName: userData.fullName,
+          profileId: userData.profileId,
+          createdAt: userData.createdAt,
+          isAdministrator: userData.isAdministrator,
+        };
+        setCurrentUser(user);
+
+        const profile = await findUserProfile(userData.uid, userData.profileId);
+        if (profile) {
+          setCurrentUserProfile(profile);
+          setCurrentUserProfileId(profile.id);
+          setAuthState('app');
+        } else {
+          setAuthState('setup');
+        }
+      } else {
+        // Fallback if user data isn't found immediately after login
+        setAuthState('setup');
+      }
+    } catch (error) {
+      console.error('Error fetching user data on login:', error);
+      setAuthState('auth');
+    }
   };
 
   const handleSignup = async (uid: string, email: string, fullName: string) => {
-    // Logic is handled by onAuthStateChanged
+    // Logic is handled by onAuthStateChanged after email verification
   };
 
   const handleSignOut = async () => {

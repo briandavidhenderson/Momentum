@@ -1,364 +1,170 @@
-
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import Image from "next/image"
+import { useState, useEffect } from "react"
+import { ELNExperiment, ELNItem, ELNReport } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { ELNExperiment, ELNPage, ELNStickyNote, ELNVoiceNote, PersonProfile } from "@/lib/types"
-import { Plus, Camera, Mic, Square, X, Save, Download, Upload, ChevronLeft, ChevronRight, Edit2, Trash2, FileText } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Plus, FileText, Download, Upload, Trash2 } from "lucide-react"
 import { useAppContext } from "@/lib/AppContext"
-import { VoiceRecorder } from "@/components/VoiceRecorder"
-import { PhotoUploader } from "@/components/PhotoUploader"
-import { voiceToProtocol, photoToProtocol } from "@/lib/ai/router"
-
-const STICKY_NOTE_COLORS = [
-  { name: "Yellow", value: "#FFEB3B" },
-  { name: "Pink", value: "#F48FB1" },
-  { name: "Blue", value: "#90CAF9" },
-  { name: "Green", value: "#A5D6A7" },
-  { name: "Orange", value: "#FFCC80" },
-  { name: "Purple", value: "#CE93D8" },
-]
+import { useToast } from "@/components/ui/toast"
+import { ELNJupyterCanvasV2 } from "@/components/ELNJupyterCanvasV2"
+import { ELNReportGenerator } from "@/components/ELNReportGenerator"
+import { deleteELNFile } from "@/lib/storage"
 
 export function ElectronicLabNotebook() {
-  // Get state and handlers from context
   const {
     elnExperiments,
     currentUserProfile,
-    handleExperimentsUpdate: onExperimentsUpdate,
+    handleCreateExperiment,
+    handleUpdateExperiment,
+    handleDeleteExperiment,
   } = useAppContext()
 
   const experiments = elnExperiments as ELNExperiment[]
-
-  // AI feature state
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false)
-  const [showPhotoUploader, setShowPhotoUploader] = useState(false)
+  const toast = useToast()
 
   const [selectedExperiment, setSelectedExperiment] = useState<ELNExperiment | null>(null)
-  const [currentPageIndex, setCurrentPageIndex] = useState<number>(-1)
-  const [isRecording, setIsRecording] = useState(false)
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([])
   const [isCreatingExperiment, setIsCreatingExperiment] = useState(false)
   const [newExperimentTitle, setNewExperimentTitle] = useState("")
   const [newExperimentDescription, setNewExperimentDescription] = useState("")
-  const [editingPageTitle, setEditingPageTitle] = useState("")
-  const [stickyNoteText, setStickyNoteText] = useState("")
-  const [selectedColor, setSelectedColor] = useState(STICKY_NOTE_COLORS[0].value)
-  const [isAddingStickyNote, setIsAddingStickyNote] = useState(false)
-  const [pendingStickyNotePosition, setPendingStickyNotePosition] = useState<{ x: number; y: number } | null>(null)
-  const imageRef = useRef<HTMLImageElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
-  const currentPage = selectedExperiment && currentPageIndex >= 0 
-    ? selectedExperiment.pages[currentPageIndex] 
-    : null
+  // Debug: Log profile and experiments on mount
+  useEffect(() => {
+    console.log('[ELN Component] Current user profile:', currentUserProfile);
+    console.log('[ELN Component] Has labId:', currentUserProfile?.labId);
+    console.log('[ELN Component] Experiments count:', experiments?.length || 0);
+  }, [currentUserProfile, experiments])
 
   // Initialize with first experiment if available
   useEffect(() => {
     if (experiments.length > 0 && !selectedExperiment) {
       setSelectedExperiment(experiments[0])
-      setCurrentPageIndex(0)
     }
   }, [experiments, selectedExperiment])
 
-  // Update editing title when page changes
-  useEffect(() => {
-    if (currentPage) {
-      setEditingPageTitle(currentPage.title)
-    }
-  }, [currentPage])
-
-  // Handle image capture/upload
-  const handleImageCapture = useCallback(() => {
-    // Try camera first (mobile), then fallback to file picker
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click()
-    } else if (fileInputRef.current) {
-      fileInputRef.current.click()
-    }
-  }, [])
-
-  const handleImageSelected = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      const imageUrl = reader.result as string
-      
-      if (!selectedExperiment) return
-
-      const newPage: ELNPage = {
-        id: `page-${Date.now()}`,
-        title: `Page ${selectedExperiment.pages.length + 1}`,
-        imageUrl,
-        voiceNotes: [],
-        stickyNotes: [],
-        createdAt: new Date().toISOString(),
-      }
-
-      const updatedExperiment = {
-        ...selectedExperiment,
-        pages: [...selectedExperiment.pages, newPage],
-      }
-
-      updateExperiment(updatedExperiment)
-      setCurrentPageIndex(updatedExperiment.pages.length - 1)
-    }
-    reader.readAsDataURL(file)
-    
-    // Reset input
-  }, [selectedExperiment, setCurrentPageIndex])
-
-  // Handle voice recording
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
-      const chunks: Blob[] = []
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data)
-        }
-      }
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "audio/webm" })
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          const audioUrl = reader.result as string
-          addVoiceNoteToPage(audioUrl, blob.size)
-        }
-        reader.readAsDataURL(blob)
-        
-        stream.getTracks().forEach(track => track.stop())
-      }
-
-      recorder.start()
-      setMediaRecorder(recorder)
-      setAudioChunks(chunks)
-      setIsRecording(true)
-    } catch (error) {
-      console.error("Error starting recording:", error)
-      alert("Could not access microphone. Please check permissions.")
-    }
-  }
-
-  const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop()
-      setIsRecording(false)
-      setMediaRecorder(null)
-    }
-  }
-
-  const addVoiceNoteToPage = (audioUrl: string, estimatedDuration: number) => {
-    if (!currentPage || !selectedExperiment) return
-
-    const audio = new Audio(audioUrl)
-    audio.addEventListener("loadedmetadata", () => {
-      const voiceNote: ELNVoiceNote = {
-        id: `voice-${Date.now()}`,
-        audioUrl,
-        duration: audio.duration || estimatedDuration / 1000, // Approximate duration
-        createdAt: new Date().toISOString(),
-      }
-
-      const updatedPage = {
-        ...currentPage,
-        voiceNotes: [...currentPage.voiceNotes, voiceNote],
-        updatedAt: new Date().toISOString(),
-      }
-
-      const updatedPages = [...selectedExperiment.pages]
-      updatedPages[currentPageIndex] = updatedPage
-
-      const updatedExperiment = {
-        ...selectedExperiment,
-        pages: updatedPages,
-        updatedAt: new Date().toISOString(),
-      }
-
-      updateExperiment(updatedExperiment)
-    })
-    audio.load()
-  }
-
-  // Handle sticky note placement
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    if (!isAddingStickyNote || !imageRef.current) return
-
-    const rect = imageRef.current.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / rect.width) * 100
-    const y = ((e.clientY - rect.top) / rect.height) * 100
-
-    setPendingStickyNotePosition({ x, y })
-  }
-
-  const confirmStickyNote = () => {
-    if (!currentPage || !selectedExperiment || !pendingStickyNotePosition || !stickyNoteText.trim()) return
-
-    const stickyNote: ELNStickyNote = {
-      id: `note-${Date.now()}`,
-      text: stickyNoteText.trim(),
-      color: selectedColor,
-      position: pendingStickyNotePosition,
-      createdAt: new Date().toISOString(),
-    }
-
-    const updatedPage = {
-      ...currentPage,
-      stickyNotes: [...currentPage.stickyNotes, stickyNote],
-      updatedAt: new Date().toISOString(),
-    }
-
-    const updatedPages = [...selectedExperiment.pages]
-    updatedPages[currentPageIndex] = updatedPage
-
-    const updatedExperiment = {
-      ...selectedExperiment,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    }
-
-    updateExperiment(updatedExperiment)
-    
-    // Reset
-    setIsAddingStickyNote(false)
-    setStickyNoteText("")
-    setPendingStickyNotePosition(null)
-  }
-
-  const cancelStickyNote = () => {
-    setIsAddingStickyNote(false)
-    setStickyNoteText("")
-    setPendingStickyNotePosition(null)
-  }
-
-  const updatePageTitle = () => {
-    if (!currentPage || !selectedExperiment) return
-
-    const updatedPage = {
-      ...currentPage,
-      title: editingPageTitle.trim() || currentPage.title,
-      updatedAt: new Date().toISOString(),
-    }
-
-    const updatedPages = [...selectedExperiment.pages]
-    updatedPages[currentPageIndex] = updatedPage
-
-    const updatedExperiment = {
-      ...selectedExperiment,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    }
-
-    updateExperiment(updatedExperiment)
-  }
-
-  const deletePage = (pageIndex: number) => {
-    if (!selectedExperiment || !confirm("Delete this page?")) return
-
-    const updatedPages = selectedExperiment.pages.filter((_, i) => i !== pageIndex)
-    const updatedExperiment = {
-      ...selectedExperiment,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    }
-
-    updateExperiment(updatedExperiment)
-    
-    // Adjust current page index
-    if (currentPageIndex >= updatedPages.length) {
-      setCurrentPageIndex(Math.max(0, updatedPages.length - 1))
-    } else if (currentPageIndex === pageIndex && updatedPages.length > 0) {
-      setCurrentPageIndex(Math.max(0, pageIndex - 1))
-    }
-  }
-
-  const deleteStickyNote = (noteId: string) => {
-    if (!currentPage || !selectedExperiment) return
-
-    const updatedPage = {
-      ...currentPage,
-      stickyNotes: currentPage.stickyNotes.filter(n => n.id !== noteId),
-      updatedAt: new Date().toISOString(),
-    }
-
-    const updatedPages = [...selectedExperiment.pages]
-    updatedPages[currentPageIndex] = updatedPage
-
-    const updatedExperiment = {
-      ...selectedExperiment,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    }
-
-    updateExperiment(updatedExperiment)
-  }
-
-  const deleteVoiceNote = (noteId: string) => {
-    if (!currentPage || !selectedExperiment) return
-
-    const updatedPage = {
-      ...currentPage,
-      voiceNotes: currentPage.voiceNotes.filter(n => n.id !== noteId),
-      updatedAt: new Date().toISOString(),
-    }
-
-    const updatedPages = [...selectedExperiment.pages]
-    updatedPages[currentPageIndex] = updatedPage
-
-    const updatedExperiment = {
-      ...selectedExperiment,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    }
-
-    updateExperiment(updatedExperiment)
-  }
-
-  const updateExperiment = (experiment: ELNExperiment) => {
-    const updated = experiments.map(e => e.id === experiment.id ? experiment : e)
-    onExperimentsUpdate(updated)
-    setSelectedExperiment(experiment)
-  }
-
-  const createNewExperiment = () => {
+  const createNewExperiment = async () => {
     if (!newExperimentTitle.trim()) {
-      alert("Please enter an experiment title")
+      toast.warning("Please enter an experiment title")
       return
     }
 
-    const newExperiment: ELNExperiment = {
-      id: `experiment-${Date.now()}`,
-      title: newExperimentTitle.trim(),
-      description: newExperimentDescription.trim() || undefined,
-      // Temporary placeholders until proper project selection is implemented
-      masterProjectId: "temp_project_placeholder",
-      masterProjectName: "No Project Selected",
-      labId: currentUserProfile?.lab || "temp_lab_placeholder",
-      labName: currentUserProfile?.lab || "Unknown Lab",
-      createdBy: currentUserProfile?.id || "",
-      pages: [],
-      createdAt: new Date().toISOString(),
+    if (!currentUserProfile?.labId) {
+      toast.error("Cannot create experiment: No lab associated with your profile")
+      return
     }
 
-    const updated = [...experiments, newExperiment]
-    onExperimentsUpdate(updated)
-    setSelectedExperiment(newExperiment)
-    setCurrentPageIndex(-1)
-    setIsCreatingExperiment(false)
-    setNewExperimentTitle("")
-    setNewExperimentDescription("")
+    const newExperiment: Omit<ELNExperiment, "id" | "createdAt" | "labId" | "createdBy"> = {
+      title: newExperimentTitle.trim(),
+      description: newExperimentDescription.trim() || undefined,
+      masterProjectId: "temp_project_placeholder",
+      masterProjectName: "No Project Selected",
+      labName: currentUserProfile?.labName || "Unknown Lab",
+      pages: [],
+      items: [], // New multimodal items array
+      reports: [] // New reports array
+    }
+
+    try {
+      await handleCreateExperiment(newExperiment)
+      setIsCreatingExperiment(false)
+      setNewExperimentTitle("")
+      setNewExperimentDescription("")
+      toast.success("Experiment created successfully!")
+    } catch (error) {
+      console.error("Error creating experiment:", error)
+      toast.error("Failed to create experiment. Please try again.")
+    }
+  }
+
+  const handleAddItem = (item: Omit<ELNItem, "id" | "order" | "createdAt">) => {
+    if (!selectedExperiment) return
+
+    const newItem: ELNItem = {
+      ...item,
+      id: `item-${Date.now()}`,
+      order: selectedExperiment.items?.length || 0,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUserProfile?.id
+    }
+
+    const updatedExperiment = {
+      ...selectedExperiment,
+      items: [...(selectedExperiment.items || []), newItem],
+      updatedAt: new Date().toISOString()
+    }
+
+    handleUpdateExperiment(updatedExperiment.id, updatedExperiment)
+    setSelectedExperiment(updatedExperiment)
+  }
+
+  const handleUpdateItem = (itemId: string, updates: Partial<ELNItem>) => {
+    if (!selectedExperiment) return
+
+    const updatedItems = (selectedExperiment.items || []).map(item =>
+      item.id === itemId ? { ...item, ...updates, updatedAt: new Date().toISOString() } : item
+    )
+
+    const updatedExperiment = {
+      ...selectedExperiment,
+      items: updatedItems,
+      updatedAt: new Date().toISOString()
+    }
+
+    handleUpdateExperiment(updatedExperiment.id, updatedExperiment)
+    setSelectedExperiment(updatedExperiment)
+  }
+
+  const handleDeleteItem = async (itemId: string) => {
+    if (!selectedExperiment) return
+
+    // Find the item to check if it has a storage file
+    const itemToDelete = (selectedExperiment.items || []).find(item => item.id === itemId)
+
+    // Delete from Firebase Storage if it has a storage path
+    if (itemToDelete?.storagePath) {
+      try {
+        await deleteELNFile(itemToDelete.storagePath)
+      } catch (error) {
+        console.error("Error deleting file from storage:", error)
+        // Continue with Firestore deletion even if storage deletion fails
+      }
+    }
+
+    const updatedItems = (selectedExperiment.items || []).filter(item => item.id !== itemId)
+
+    const updatedExperiment = {
+      ...selectedExperiment,
+      items: updatedItems,
+      updatedAt: new Date().toISOString()
+    }
+
+    handleUpdateExperiment(updatedExperiment.id, updatedExperiment)
+    setSelectedExperiment(updatedExperiment)
+    toast.success("Item deleted")
+  }
+
+  const handleReportGenerated = (report: Omit<ELNReport, "id">) => {
+    if (!selectedExperiment) return
+
+    const newReport: ELNReport = {
+      ...report,
+      id: `report-${Date.now()}`,
+      experimentId: selectedExperiment.id
+    }
+
+    const updatedExperiment = {
+      ...selectedExperiment,
+      reports: [...(selectedExperiment.reports || []), newReport],
+      updatedAt: new Date().toISOString()
+    }
+
+    handleUpdateExperiment(updatedExperiment.id, updatedExperiment)
+    setSelectedExperiment(updatedExperiment)
   }
 
   const exportExperiment = (experiment: ELNExperiment) => {
@@ -372,6 +178,7 @@ export function ElectronicLabNotebook() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+    toast.success("Experiment exported!")
   }
 
   const importExperiment = () => {
@@ -386,37 +193,19 @@ export function ElectronicLabNotebook() {
       reader.onloadend = () => {
         try {
           const imported = JSON.parse(reader.result as string) as ELNExperiment
-          imported.id = `experiment-${Date.now()}` // New ID to avoid conflicts
+          imported.id = `experiment-${Date.now()}`
           imported.createdAt = new Date().toISOString()
-          const updated = [...experiments, imported]
-          onExperimentsUpdate(updated)
+          handleCreateExperiment(imported)
           setSelectedExperiment(imported)
-          setCurrentPageIndex(imported.pages.length > 0 ? 0 : -1)
+          toast.success("Experiment imported successfully!")
         } catch (error) {
           console.error("Error importing experiment:", error)
-          alert("Failed to import experiment. Please check the file format.")
+          toast.error("Failed to import experiment. Please check the file format.")
         }
       }
       reader.readAsText(file)
     }
     input.click()
-  }
-
-  const reorderPage = (fromIndex: number, toIndex: number) => {
-    if (!selectedExperiment) return
-
-    const updatedPages = [...selectedExperiment.pages]
-    const [moved] = updatedPages.splice(fromIndex, 1)
-    updatedPages.splice(toIndex, 0, moved)
-
-    const updatedExperiment = {
-      ...selectedExperiment,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    }
-
-    updateExperiment(updatedExperiment)
-    setCurrentPageIndex(toIndex)
   }
 
   return (
@@ -427,125 +216,80 @@ export function ElectronicLabNotebook() {
           <FileText className="h-6 w-6 text-brand-500" />
           <div>
             <h1 className="text-2xl font-bold text-foreground">Electronic Lab Notebook</h1>
-            <p className="text-sm text-muted-foreground">Capture experiments with photos, voice notes, and sticky notes</p>
+            <p className="text-sm text-muted-foreground">
+              Multimodal experimental canvas with AI-powered report generation
+            </p>
+            {!currentUserProfile?.labId && (
+              <p className="text-xs text-red-500 mt-1">
+                ⚠️ Warning: No lab associated with your profile. Experiments cannot be created.
+              </p>
+            )}
+            {currentUserProfile?.labId && (
+              <p className="text-xs text-green-600 mt-1">
+                ✓ Lab: {currentUserProfile.labName || currentUserProfile.labId} | Experiments: {experiments?.length || 0}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={importExperiment}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={importExperiment} className="gap-2">
             <Upload className="h-4 w-4" />
             Import
           </Button>
           {selectedExperiment && (
-            <Button
-              variant="outline"
-              onClick={() => exportExperiment(selectedExperiment)}
-              className="gap-2"
-            >
+            <Button variant="outline" onClick={() => exportExperiment(selectedExperiment)} className="gap-2">
               <Download className="h-4 w-4" />
               Export
             </Button>
           )}
-          {/* AI Features */}
-          <Button
-            onClick={() => setShowVoiceRecorder(true)}
-            className="bg-purple-500 hover:bg-purple-600 text-white gap-2"
-          >
-            <Mic className="h-4 w-4" />
-            Voice Transcription
-          </Button>
-          <Button
-            onClick={() => setShowPhotoUploader(true)}
-            className="bg-blue-500 hover:bg-blue-600 text-white gap-2"
-          >
-            <Camera className="h-4 w-4" />
-            Photo OCR
-          </Button>
-          <Button
-            className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
-            onClick={() => setIsCreatingExperiment(true)}
-          >
+          <Button className="bg-brand-500 hover:bg-brand-600 text-white gap-2" onClick={() => setIsCreatingExperiment(true)}>
             <Plus className="h-4 w-4" />
             New Experiment
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 flex gap-4 overflow-hidden">
-        {/* Sidebar - Experiment List and Pages */}
-        <div className="w-64 bg-card border-r border-border p-4 overflow-y-auto">
+      <div className="flex-1 flex gap-4 overflow-hidden px-4">
+        {/* Sidebar - Experiment List */}
+        <div className="w-64 bg-card border-r border-border p-4 overflow-y-auto rounded-lg">
           <div className="space-y-4">
-            {/* Experiments */}
             <div>
-              <Label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">Experiments</Label>
+              <Label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">
+                Experiments
+              </Label>
               <div className="space-y-1">
                 {experiments.map((exp) => (
-                  <button
-                    key={exp.id}
-                    onClick={() => {
-                      setSelectedExperiment(exp)
-                      setCurrentPageIndex(exp.pages.length > 0 ? 0 : -1)
-                    }}
-                    className={`w-full text-left p-2 rounded-lg transition-colors ${
-                      selectedExperiment?.id === exp.id
-                        ? "bg-brand-500 text-white"
-                        : "hover:bg-gray-100"
-                    }`}
-                  >
-                    <div className="font-medium text-sm truncate">{exp.title}</div>
-                    <div className={`text-xs ${selectedExperiment?.id === exp.id ? "text-white/80" : "text-muted-foreground"}`}>
-                      {exp.pages.length} page{exp.pages.length !== 1 ? "s" : ""}
-                    </div>
-                  </button>
+                  <div key={exp.id} className="relative group">
+                    <button
+                      onClick={() => setSelectedExperiment(exp)}
+                      className={`w-full text-left p-3 rounded-lg transition-colors ${
+                        selectedExperiment?.id === exp.id
+                          ? "bg-brand-500 text-white"
+                          : "hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="font-medium text-sm truncate">{exp.title}</div>
+                      <div className={`text-xs mt-1 ${selectedExperiment?.id === exp.id ? "text-white/80" : "text-muted-foreground"}`}>
+                        {exp.items?.length || 0} items • {exp.reports?.length || 0} reports
+                      </div>
+                    </button>
+                    {experiments.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeleteConfirmId(exp.id)
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
-
-            {/* Pages for Selected Experiment */}
-            {selectedExperiment && selectedExperiment.pages.length > 0 && (
-              <div>
-                <Label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">Pages</Label>
-                <div className="space-y-1">
-                  {selectedExperiment.pages.map((page, index) => (
-                    <div
-                      key={page.id}
-                      className={`group relative p-2 rounded-lg border cursor-pointer transition-colors ${
-                        currentPageIndex === index
-                          ? "bg-brand-500 text-white border-brand-500"
-                          : "bg-white border-border hover:border-brand-300"
-                      }`}
-                      onClick={() => setCurrentPageIndex(index)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{page.title}</div>
-                          <div className={`text-xs flex items-center gap-1 ${
-                            currentPageIndex === index ? "text-white/80" : "text-muted-foreground"
-                          }`}>
-                            {page.stickyNotes.length > 0 && <span>📌 {page.stickyNotes.length}</span>}
-                            {page.voiceNotes.length > 0 && <span>🎙️ {page.voiceNotes.length}</span>}
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deletePage(index)
-                          }}
-                          className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 ${
-                            currentPageIndex === index ? "text-white hover:text-red-200" : "text-red-500 hover:text-red-700"
-                          }`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -557,268 +301,62 @@ export function ElectronicLabNotebook() {
                 <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                 <p className="text-lg font-medium text-foreground mb-2">No experiment selected</p>
                 <p className="text-sm text-muted-foreground mb-4">Create a new experiment to get started</p>
-                <Button
-                  className="bg-brand-500 hover:bg-brand-600 text-white"
-                  onClick={() => setIsCreatingExperiment(true)}
-                >
+                <Button className="bg-brand-500 hover:bg-brand-600 text-white" onClick={() => setIsCreatingExperiment(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   New Experiment
                 </Button>
               </div>
             </div>
-          ) : !currentPage ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <Camera className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <p className="text-lg font-medium text-foreground mb-2">No pages yet</p>
-                <p className="text-sm text-muted-foreground mb-4">Add your first page by taking or uploading a photo</p>
-                <Button
-                  className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
-                  onClick={handleImageCapture}
-                >
-                  <Camera className="h-4 w-4" />
-                  Take / Add Photo
-                </Button>
-              </div>
-            </div>
           ) : (
-            <>
-              {/* Page Controls */}
-              <div className="flex items-center justify-between p-4 bg-card border-b border-border">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPageIndex(Math.max(0, currentPageIndex - 1))}
-                      disabled={currentPageIndex === 0}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm text-muted-foreground">
-                      Page {currentPageIndex + 1} of {selectedExperiment.pages.length}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPageIndex(Math.min(selectedExperiment.pages.length - 1, currentPageIndex + 1))}
-                      disabled={currentPageIndex === selectedExperiment.pages.length - 1}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  
-                  <Input
-                    value={editingPageTitle}
-                    onChange={(e) => setEditingPageTitle(e.target.value)}
-                    onBlur={updatePageTitle}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.currentTarget.blur()
-                      }
-                    }}
-                    className="max-w-xs"
-                    placeholder="Page title..."
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Experiment Header */}
+              <div className="mb-4">
+                <h2 className="text-xl font-bold">{selectedExperiment.title}</h2>
+                {selectedExperiment.description && (
+                  <p className="text-sm text-muted-foreground mt-1">{selectedExperiment.description}</p>
+                )}
+              </div>
+
+              {/* Tabs */}
+              <Tabs defaultValue="canvas" className="flex-1 flex flex-col overflow-hidden">
+                <TabsList className="w-fit">
+                  <TabsTrigger value="canvas">Canvas</TabsTrigger>
+                  <TabsTrigger value="reports">Reports</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="canvas" className="flex-1 overflow-y-auto mt-4">
+                  <ELNJupyterCanvasV2
+                    items={selectedExperiment.items || []}
+                    experimentId={selectedExperiment.id}
+                    onAddItem={handleAddItem}
+                    onUpdateItem={handleUpdateItem}
+                    onDeleteItem={handleDeleteItem}
                   />
-                </div>
+                </TabsContent>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsAddingStickyNote(true)}
-                    className={isAddingStickyNote ? "bg-brand-500 text-white" : ""}
-                  >
-                    📌 Add Sticky Note
-                  </Button>
-                  {isRecording ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={stopRecording}
-                      className="bg-red-500 text-white hover:bg-red-600"
-                    >
-                      <Square className="h-4 w-4 mr-2" />
-                      Stop Recording
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={startRecording}
-                    >
-                      <Mic className="h-4 w-4 mr-2" />
-                      Record Voice Note
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleImageCapture}
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Add Photo
-                  </Button>
-                </div>
-              </div>
-
-              {/* Page Content */}
-              <div className="flex-1 overflow-auto p-4 bg-gray-50">
-                <div className="max-w-4xl mx-auto">
-                  {/* Image with Sticky Notes */}
-                  <div className="relative bg-white rounded-lg shadow-lg p-4 mb-4">
-                    <div className="relative">
-                      <Image
-                        ref={imageRef}
-                        src={currentPage.imageUrl}
-                        alt={currentPage.title}
-                        width={1024}
-                        height={768}
-                        className="w-full h-auto rounded-lg"
-                        onClick={handleImageClick}
-                        style={{ cursor: isAddingStickyNote ? "crosshair" : "default" }}
-                      />
-                      
-                      {/* Sticky Notes Overlay */}
-                      {currentPage.stickyNotes.map((note) => (
-                        <div
-                          key={note.id}
-                          className="absolute p-2 rounded shadow-lg min-w-[120px] max-w-[200px]"
-                          style={{
-                            left: `${note.position.x}%`,
-                            top: `${note.position.y}%`,
-                            backgroundColor: note.color,
-                            transform: "translate(-50%, -50%)",
-                          }}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs font-medium flex-1">{note.text}</p>
-                            <button
-                              onClick={() => deleteStickyNote(note.id)}
-                              className="text-gray-600 hover:text-red-600 flex-shrink-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Sticky Note Placement Dialog */}
-                  {isAddingStickyNote && pendingStickyNotePosition && (
-                    <Dialog open={isAddingStickyNote} onOpenChange={cancelStickyNote}>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add Sticky Note</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label>Note Text</Label>
-                            <Textarea
-                              value={stickyNoteText}
-                              onChange={(e) => setStickyNoteText(e.target.value)}
-                              placeholder="Enter your note..."
-                              rows={3}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label>Color</Label>
-                            <div className="flex gap-2 mt-2">
-                              {STICKY_NOTE_COLORS.map((color) => (
-                                <button
-                                  key={color.value}
-                                  onClick={() => setSelectedColor(color.value)}
-                                  className={`w-10 h-10 rounded border-2 ${
-                                    selectedColor === color.value
-                                      ? "border-gray-800 scale-110"
-                                      : "border-gray-300"
-                                  }`}
-                                  style={{ backgroundColor: color.value }}
-                                  title={color.name}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={cancelStickyNote}>
-                              Cancel
-                            </Button>
-                            <Button
-                              onClick={confirmStickyNote}
-                              className="bg-brand-500 hover:bg-brand-600 text-white"
-                              disabled={!stickyNoteText.trim()}
-                            >
-                              Add Note
-                            </Button>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-
-                  {/* Voice Notes */}
-                  {currentPage.voiceNotes.length > 0 && (
-                    <div className="bg-white rounded-lg shadow p-4 mb-4">
-                      <h3 className="font-semibold mb-3 flex items-center gap-2">
-                        <Mic className="h-4 w-4" />
-                        Voice Notes ({currentPage.voiceNotes.length})
-                      </h3>
-                      <div className="space-y-2">
-                        {currentPage.voiceNotes.map((voiceNote) => (
-                          <div
-                            key={voiceNote.id}
-                            className="flex items-center gap-3 p-2 bg-gray-50 rounded border"
-                          >
-                            <audio
-                              src={voiceNote.audioUrl}
-                              controls
-                              className="flex-1"
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {Math.round(voiceNote.duration)}s
-                            </span>
-                            <button
-                              onClick={() => deleteVoiceNote(voiceNote.id)}
-                              className="text-red-500 hover:text-red-700 p-1"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
+                <TabsContent value="reports" className="flex-1 overflow-y-auto mt-4">
+                  <ELNReportGenerator
+                    experimentTitle={selectedExperiment.title}
+                    experimentDescription={selectedExperiment.description}
+                    items={selectedExperiment.items || []}
+                    reports={selectedExperiment.reports || []}
+                    onReportGenerated={handleReportGenerated}
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
           )}
         </div>
       </div>
-
-      {/* Hidden Inputs */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleImageSelected}
-        className="hidden"
-      />
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleImageSelected}
-        className="hidden"
-      />
 
       {/* Create Experiment Dialog */}
       <Dialog open={isCreatingExperiment} onOpenChange={setIsCreatingExperiment}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New Experiment</DialogTitle>
+            <DialogDescription>
+              Create a new experiment to document your lab work with multimodal content and AI-powered reports.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -826,7 +364,7 @@ export function ElectronicLabNotebook() {
               <Input
                 value={newExperimentTitle}
                 onChange={(e) => setNewExperimentTitle(e.target.value)}
-                placeholder="e.g., Buffer Optimization Study"
+                placeholder="e.g., Protein Purification Study"
                 className="mt-1"
               />
             </div>
@@ -856,108 +394,47 @@ export function ElectronicLabNotebook() {
         </DialogContent>
       </Dialog>
 
-      {/* AI Features */}
-      {showVoiceRecorder && (
-        <Dialog open={showVoiceRecorder} onOpenChange={setShowVoiceRecorder}>
-          <DialogContent className="max-w-md">
-            <VoiceRecorder
-              onRecordingComplete={async (audioBlob, audioFile) => {
-                try {
-                  // Send audio to AI for transcription and protocol extraction
-                  const result = await voiceToProtocol(audioFile)
-
-                  // Add transcribed text as a sticky note to current page
-                  if (currentPage && selectedExperiment) {
-                    const transcriptText = result.transcript.data.text
-                    const protocolData = result.protocol.data
-                    const protocolText = `AI Transcription:\n${transcriptText}\n\nProtocol:\n${JSON.stringify(protocolData, null, 2)}`
-
-                    const newStickyNote = {
-                      id: Date.now().toString(),
-                      content: protocolText,
-                      x: 50,
-                      y: 50,
-                      color: "#E1F5FE", // Light blue for AI notes
-                      createdAt: new Date().toISOString()
+      {/* Delete Experiment Confirmation */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Experiment</DialogTitle>
+            <DialogDescription>
+              Confirm permanent deletion of this experiment and all its associated data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this experiment? All items and reports will be permanently removed. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (deleteConfirmId) {
+                    try {
+                      await handleDeleteExperiment(deleteConfirmId)
+                      if (selectedExperiment?.id === deleteConfirmId) {
+                        setSelectedExperiment(null)
+                      }
+                      setDeleteConfirmId(null)
+                      toast.success("Experiment deleted successfully")
+                    } catch (error) {
+                      console.error("Error deleting experiment:", error)
+                      toast.error("Failed to delete experiment. Please try again.")
                     }
-
-                    const updatedPage = {
-                      ...currentPage,
-                      stickyNotes: [...currentPage.stickyNotes, newStickyNote]
-                    }
-                    const updatedPages = selectedExperiment.pages.map(p =>
-                      p.id === currentPage.id ? updatedPage : p
-                    )
-                    const updatedExperiment = {
-                      ...selectedExperiment,
-                      pages: updatedPages
-                    }
-                    const updatedExperiments = experiments.map(e =>
-                      e.id === selectedExperiment.id ? updatedExperiment : e
-                    )
-                    onExperimentsUpdate(updatedExperiments)
                   }
-                  setShowVoiceRecorder(false)
-                } catch (error) {
-                  console.error("Voice transcription failed:", error)
-                }
-              }}
-              onCancel={() => setShowVoiceRecorder(false)}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {showPhotoUploader && (
-        <Dialog open={showPhotoUploader} onOpenChange={setShowPhotoUploader}>
-          <DialogContent className="max-w-2xl">
-            <PhotoUploader
-              onPhotoSelected={async (imageFile) => {
-                try {
-                  // Send photo to AI for OCR and protocol extraction
-                  const result = await photoToProtocol(imageFile)
-
-                  // Add extracted protocol as a sticky note to current page
-                  if (currentPage && selectedExperiment) {
-                    const extractedText = result.ocr.data.text
-                    const protocolData = result.protocol.data
-                    const protocolText = `AI OCR Extraction:\n${extractedText}\n\nProtocol:\n${JSON.stringify(protocolData, null, 2)}`
-
-                    const newStickyNote = {
-                      id: Date.now().toString(),
-                      content: protocolText,
-                      x: 50,
-                      y: 150,
-                      color: "#F1F8E9", // Light green for OCR notes
-                      createdAt: new Date().toISOString()
-                    }
-
-                    const updatedPage = {
-                      ...currentPage,
-                      stickyNotes: [...currentPage.stickyNotes, newStickyNote]
-                    }
-                    const updatedPages = selectedExperiment.pages.map(p =>
-                      p.id === currentPage.id ? updatedPage : p
-                    )
-                    const updatedExperiment = {
-                      ...selectedExperiment,
-                      pages: updatedPages
-                    }
-                    const updatedExperiments = experiments.map(e =>
-                      e.id === selectedExperiment.id ? updatedExperiment : e
-                    )
-                    onExperimentsUpdate(updatedExperiments)
-                  }
-                  setShowPhotoUploader(false)
-                } catch (error) {
-                  console.error("Photo protocol extraction failed:", error)
-                }
-              }}
-              onCancel={() => setShowPhotoUploader(false)}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+                }}
+                className="bg-red-500 hover:bg-red-600 text-white"
+              >
+                Delete Experiment
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

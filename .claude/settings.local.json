@@ -16,7 +16,8 @@
       "Bash(firebase hosting:channel:list:*)",
       "Bash(firebase hosting:sites:list:*)",
       "Bash(firebase hosting:releases:list:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

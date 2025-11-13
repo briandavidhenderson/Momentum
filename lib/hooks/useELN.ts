@@ -5,26 +5,37 @@ import { ELNExperiment } from '@/lib/types';
 import { subscribeToELNExperiments, createELNExperiment, updateELNExperiment, deleteELNExperiment } from '@/lib/firestoreService';
 
 export function useELN() {
-  const { currentUser } = useAuth();
+  const { currentUser, currentUserProfile: profile } = useAuth();
   const [elnExperiments, setElnExperiments] = useState<ELNExperiment[]>([]);
 
   useEffect(() => {
-    if (!currentUser || !currentUser.uid) return;
+    if (!profile?.labId) {
+      // User not logged in or profile not loaded yet - silently return
+      return;
+    }
 
-    const unsubscribe = subscribeToELNExperiments(currentUser.uid, (experiments) => {
+    console.log('[useELN] Subscribing to experiments for labId:', profile.labId);
+    const unsubscribe = subscribeToELNExperiments({ labId: profile.labId }, (experiments) => {
+      console.log('[useELN] Received experiments:', experiments.length);
       setElnExperiments(experiments);
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [profile]);
 
-  const handleCreateExperiment = async (experimentData: Omit<ELNExperiment, 'id' | 'createdAt'>) => {
-    if (!currentUser) return;
+  const handleCreateExperiment = async (experimentData: Omit<ELNExperiment, 'id' | 'createdAt' | 'labId' | 'createdBy'>) => {
+    if (!currentUser || !profile?.labId) {
+      console.error('[useELN] Cannot create experiment - missing user or labId');
+      throw new Error('User or lab information not available');
+    }
+    console.log('[useELN] Creating experiment:', experimentData.title);
     const experimentId = await createELNExperiment({
       ...experimentData,
       createdBy: currentUser.uid,
+      labId: profile.labId,
       createdAt: new Date().toISOString(),
     });
+    console.log('[useELN] Experiment created with ID:', experimentId);
     return experimentId;
   };
 
@@ -36,23 +47,8 @@ export function useELN() {
     await deleteELNExperiment(experimentId);
   };
 
-  // Legacy handler for batch updates (used by ELN component)
-  const handleExperimentsUpdate = async (updatedExperiments: ELNExperiment[]) => {
-    // Find the experiment that changed by comparing with current state
-    for (const updated of updatedExperiments) {
-      const original = elnExperiments.find(e => e.id === updated.id);
-      if (original && JSON.stringify(original) !== JSON.stringify(updated)) {
-        await updateELNExperiment(updated.id, updated);
-      } else if (!original) {
-        // New experiment
-        await createELNExperiment(updated);
-      }
-    }
-  };
-
   return {
     elnExperiments,
-    handleExperimentsUpdate,
     handleCreateExperiment,
     handleUpdateExperiment,
     handleDeleteExperiment,

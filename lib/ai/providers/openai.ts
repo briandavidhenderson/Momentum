@@ -75,7 +75,11 @@ export class OpenAIProvider implements AIProvider {
       })
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`)
+        const errorText = await response.text()
+        if (response.status === 429) {
+          throw new Error(`OpenAI rate limit exceeded. Please wait a moment and try again.`)
+        }
+        throw new Error(`OpenAI API error (${response.status}): ${response.statusText} - ${errorText}`)
       }
 
       const data = await response.json()

@@ -5,29 +5,31 @@ import { EquipmentDevice } from '@/lib/types';
 import { subscribeToEquipment, createEquipment, updateEquipment } from '@/lib/firestoreService';
 
 export function useEquipment() {
-  const { currentUserProfile } = useAuth();
+  const { currentUserProfile: profile } = useAuth();
   const [equipment, setEquipment] = useState<EquipmentDevice[]>([]);
 
   useEffect(() => {
-    if (!currentUserProfile || !currentUserProfile.labId) return;
+    if (!profile?.labId) return;
 
-    const unsubscribe = subscribeToEquipment(currentUserProfile.labId, (equipment) => {
+    const unsubscribe = subscribeToEquipment(profile.labId, (equipment) => {
       setEquipment(equipment);
     });
 
     return () => unsubscribe();
-  }, [currentUserProfile]);
+  }, [profile]);
 
-  const handleEquipmentUpdate = async (updatedEquipment: EquipmentDevice) => {
-    if (updatedEquipment.id) {
-      await updateEquipment(updatedEquipment.id, updatedEquipment);
-    } else {
-      await createEquipment(updatedEquipment);
-    }
+  const handleCreateEquipment = async (equipmentData: Omit<EquipmentDevice, 'id'>) => {
+    if (!profile) return;
+    await createEquipment({ ...equipmentData, labId: profile.labId });
+  };
+
+  const handleUpdateEquipment = async (equipmentId: string, updates: Partial<EquipmentDevice>) => {
+    await updateEquipment(equipmentId, updates);
   };
 
   return {
     equipment,
-    handleEquipmentUpdate,
+    handleCreateEquipment,
+    handleUpdateEquipment,
   };
 }

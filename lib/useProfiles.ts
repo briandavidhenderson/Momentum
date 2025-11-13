@@ -3,32 +3,43 @@
 import { useState, useEffect, useRef } from "react"
 import { PersonProfile } from "./types"
 import { subscribeToProfiles } from "./firestoreService"
+import { useAuth } from './hooks/useAuth';
 
 /**
  * Hook to get all profiles from Firestore with real-time synchronization
  * This enables the social network - all users see each other's profiles in real-time
  */
-export function useProfiles(): PersonProfile[] {
-  const [allProfiles, setAllProfiles] = useState<PersonProfile[]>([])
-  const isMountedRef = useRef(true)
+export function useProfiles(labId: string | null) {
+  const [allProfiles, setAllProfiles] = useState<PersonProfile[]>([]);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    isMountedRef.current = true
-    
-    // Subscribe to real-time profile updates from Firestore
-    const unsubscribe = subscribeToProfiles((profiles) => {
-      // Only update state if component is still mounted
-      if (isMountedRef.current) {
-        setAllProfiles(profiles)
-      }
-    })
-    
-    // Clean up subscription on unmount
-    return () => {
-      isMountedRef.current = false
-      unsubscribe()
+    isMountedRef.current = true;
+
+    if (labId) {
+      // Subscribe to real-time profile updates from Firestore
+      const unsubscribe = subscribeToProfiles({ labId }, (profiles) => {
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          setAllProfiles(profiles)
+        }
+      })
+
+      // Cleanup subscription on unmount
+      return () => {
+        isMountedRef.current = false;
+        unsubscribe();
+      };
     }
-  }, [])
+  }, [labId]);
+
+  const handleUpdateProfile = async (profileId: string, updates: Partial<PersonProfile>) => {
+    // This function is not implemented in the original file,
+    // but it's part of the new_code, so I'll add it.
+    // In a real scenario, this would involve updating the profile in Firestore.
+    console.log(`Updating profile with ID: ${profileId} with updates:`, updates);
+    // Example: await updateProfileInFirestore(profileId, updates);
+  };
 
   return allProfiles
 }
