@@ -1511,7 +1511,7 @@ export function subscribeToCalendarConnections(
  * Creates a new sync conflict
  */
 export async function createSyncConflict(
-  conflictData: Omit<CalendarSyncConflict, 'id'>
+  conflictData: Omit<CalendarConflict, 'id'>
 ): Promise<string> {
   const conflictRef = doc(collection(db, "calendarSyncConflicts"))
   const conflictId = conflictRef.id
@@ -1527,14 +1527,14 @@ export async function createSyncConflict(
 /**
  * Gets unresolved conflicts for a connection
  */
-export async function getUnresolvedConflicts(connectionId: string): Promise<CalendarSyncConflict[]> {
+export async function getUnresolvedConflicts(connectionId: string): Promise<CalendarConflict[]> {
   const q = query(
     collection(db, "calendarSyncConflicts"),
     where("connectionId", "==", connectionId),
     where("resolved", "==", false)
   )
   const querySnapshot = await getDocs(q)
-  return querySnapshot.docs.map(doc => doc.data() as CalendarSyncConflict)
+  return querySnapshot.docs.map(doc => doc.data() as CalendarConflict)
 }
 
 /**
@@ -1559,7 +1559,7 @@ export async function resolveSyncConflict(
  */
 export function subscribeToUnresolvedConflicts(
   connectionId: string,
-  callback: (conflicts: CalendarSyncConflict[]) => void
+  callback: (conflicts: CalendarConflict[]) => void
 ): Unsubscribe {
   const q = query(
     collection(db, "calendarSyncConflicts"),
@@ -1570,7 +1570,7 @@ export function subscribeToUnresolvedConflicts(
   return onSnapshot(
     q,
     (snapshot) => {
-      const conflicts = snapshot.docs.map(doc => doc.data() as CalendarSyncConflict)
+      const conflicts = snapshot.docs.map(doc => doc.data() as CalendarConflict)
       callback(conflicts)
     },
     (error) => {
