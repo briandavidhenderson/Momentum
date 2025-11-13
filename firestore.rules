@@ -430,17 +430,22 @@ service cloud.firestore {
     // DAY-TO-DAY TASKS
     // ============================================================================
     match /dayToDayTasks/{taskId} {
-      // Users can read their own tasks
-      allow read: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      
-      // Users can create their own tasks
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-      
-      // Users can update their own tasks
-      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      
-      // Users can delete their own tasks
-      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      // Users can read all tasks in their lab
+      allow read: if isAuthenticated() && resource.data.labId == getUserLab();
+
+      // Users can create tasks for their lab
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.labId == getUserLab();
+
+      // Users can update tasks in their lab
+      allow update: if isAuthenticated() && resource.data.labId == getUserLab();
+
+      // Users can delete tasks they created or admins can delete any
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
     }
 
     // ============================================================================
