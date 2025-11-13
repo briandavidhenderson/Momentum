@@ -244,6 +244,7 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
 
     const tokenData = await tokenResponse.json()
     const orcidId = tokenData.orcid
+    const accessToken = tokenData.access_token
     const name = tokenData.name
 
     if (!orcidId) {
@@ -260,19 +261,40 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       orcidVerified: true,
     })
 
-    // Store ORCID data in Firestore profile
-    await admin.firestore().collection("profiles").doc(context.auth.uid).update({
-      orcidId,
-      orcidUrl: `${config.baseUrl}/${orcidId}`,
-      orcidVerified: true,
-      orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
-    })
+    // Fetch ORCID data with the access token
+    const orcidData = await fetchOrcidData(orcidId, accessToken, config)
+
+    // Find the user's profile by userId
+    const profilesSnapshot = await admin.firestore()
+      .collection("personProfiles")
+      .where("userId", "==", context.auth.uid)
+      .limit(1)
+      .get()
+
+    if (!profilesSnapshot.empty) {
+      const profileDoc = profilesSnapshot.docs[0]
+
+      // Store ORCID data in Firestore profile
+      await profileDoc.ref.update({
+        orcidId,
+        orcidUrl: `${config.baseUrl}/${orcidId}`,
+        orcidVerified: true,
+        orcidBio: orcidData.bio,
+        orcidPublications: orcidData.publications,
+        orcidEmploymentHistory: orcidData.employmentHistory,
+        orcidEducationHistory: orcidData.educationHistory,
+        orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    }
 
     return {
       success: true,
       orcidId,
       orcidUrl: `${config.baseUrl}/${orcidId}`,
       name,
+      publicationsCount: orcidData.publications.length,
+      employmentsCount: orcidData.employmentHistory.length,
+      educationsCount: orcidData.educationHistory.length,
     }
   } catch (error) {
     console.error("ORCID link error:", error)
