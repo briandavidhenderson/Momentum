@@ -195,6 +195,107 @@ export const orcidAuthCallback = functions.https.onCall(async (data, context) =>
 /**
  * Link ORCID to existing Firebase user
  */
+/**
+ * Fetch ORCID public record data
+ */
+async function fetchOrcidRecord(orcidId: string, accessToken: string, config: OrcidConfig) {
+  try {
+    // Fetch the public ORCID record
+    const recordUrl = `${config.baseUrl}/v3.0/${orcidId}/record`
+    const response = await fetch(recordUrl, {
+      headers: {
+        "Accept": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      console.error("Failed to fetch ORCID record:", response.statusText)
+      return null
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Error fetching ORCID record:", error)
+    return null
+  }
+}
+
+/**
+ * Extract useful profile data from ORCID record
+ */
+function extractOrcidProfileData(record: any) {
+  const data: any = {}
+
+  try {
+    // Extract person details
+    const person = record?.person
+    if (person) {
+      // Name
+      if (person.name) {
+        const givenNames = person.name["given-names"]?.value
+        const familyName = person.name["family-name"]?.value
+        if (givenNames) data.firstName = givenNames
+        if (familyName) data.lastName = familyName
+      }
+
+      // Biography
+      if (person.biography?.content) {
+        data.notes = person.biography.content
+      }
+
+      // Emails
+      if (person.emails?.email && person.emails.email.length > 0) {
+        // Get primary or first verified email
+        const primaryEmail = person.emails.email.find((e: any) => e.primary) || person.emails.email[0]
+        if (primaryEmail?.email) {
+          data.email = primaryEmail.email
+        }
+      }
+    }
+
+    // Extract employment (most recent)
+    const employments = record?.["activities-summary"]?.employments?.["affiliation-group"]
+    if (employments && employments.length > 0) {
+      const recentEmployment = employments[0]?.summaries?.[0]?.["employment-summary"]
+      if (recentEmployment) {
+        const orgName = recentEmployment.organization?.name
+        const roleTitle = recentEmployment["role-title"]
+        const departmentName = recentEmployment["department-name"]
+
+        if (orgName) data.organisation = orgName
+        if (departmentName) data.institute = departmentName
+        if (roleTitle) data.position = roleTitle
+      }
+    }
+
+    // Extract education (most recent degree)
+    const educations = record?.["activities-summary"]?.educations?.["affiliation-group"]
+    if (educations && educations.length > 0) {
+      const degrees: string[] = []
+      for (const eduGroup of educations.slice(0, 3)) { // Get top 3
+        const edu = eduGroup?.summaries?.[0]?.["education-summary"]
+        if (edu?.["role-title"]) {
+          degrees.push(edu["role-title"])
+        }
+      }
+      if (degrees.length > 0) {
+        data.qualifications = degrees
+      }
+    }
+
+    // Extract research interests from keywords
+    const keywords = person?.keywords?.keyword
+    if (keywords && keywords.length > 0) {
+      data.researchInterests = keywords.map((k: any) => k.content).filter(Boolean).slice(0, 10)
+    }
+  } catch (error) {
+    console.error("Error extracting ORCID profile data:", error)
+  }
+
+  return data
+}
+
 export const orcidLinkAccount = functions.https.onCall(async (data, context) => {
   // Ensure user is authenticated
   if (!context.auth) {
@@ -241,6 +342,7 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
 
     const tokenData = await tokenResponse.json()
     const orcidId = tokenData.orcid
+    const accessToken = tokenData.access_token
     const name = tokenData.name
 
     if (!orcidId) {
@@ -250,6 +352,12 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       )
     }
 
+    // Fetch full ORCID record
+    const orcidRecord = await fetchOrcidRecord(orcidId, accessToken, config)
+
+    // Extract profile data from ORCID record
+    const extractedData = orcidRecord ? extractOrcidProfileData(orcidRecord) : {}
+
     // Update user's custom claims
     await admin.auth().setCustomUserClaims(context.auth.uid, {
       ...context.auth.token,
@@ -257,22 +365,158 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       orcidVerified: true,
     })
 
-    // Store ORCID data in Firestore profile
-    await admin.firestore().collection("profiles").doc(context.auth.uid).update({
+    // Prepare update data for Firestore
+    const firestoreUpdate: any = {
       orcidId,
       orcidUrl: `${config.baseUrl}/${orcidId}`,
       orcidVerified: true,
       orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
-    })
+      orcidClaims: {
+        name: name || extractedData.firstName ? `${extractedData.firstName || ""} ${extractedData.lastName || ""}`.trim() : null,
+        email: extractedData.email || null,
+      },
+    }
+
+    // Merge extracted data (only if fields are not already set)
+    const currentProfile = await admin.firestore().collection("profiles").doc(context.auth.uid).get()
+    const currentData = currentProfile.data() || {}
+
+    // Only update fields if they're empty or missing
+    if (extractedData.firstName && !currentData.firstName) firestoreUpdate.firstName = extractedData.firstName
+    if (extractedData.lastName && !currentData.lastName) firestoreUpdate.lastName = extractedData.lastName
+    if (extractedData.email && !currentData.email) firestoreUpdate.email = extractedData.email
+    if (extractedData.organisation && !currentData.organisation) firestoreUpdate.organisation = extractedData.organisation
+    if (extractedData.institute && !currentData.institute) firestoreUpdate.institute = extractedData.institute
+    if (extractedData.position && !currentData.position) firestoreUpdate.position = extractedData.position
+    if (extractedData.notes && !currentData.notes) firestoreUpdate.notes = extractedData.notes
+    if (extractedData.qualifications && (!currentData.qualifications || currentData.qualifications.length === 0)) {
+      firestoreUpdate.qualifications = extractedData.qualifications
+    }
+    if (extractedData.researchInterests && (!currentData.researchInterests || currentData.researchInterests.length === 0)) {
+      firestoreUpdate.researchInterests = extractedData.researchInterests
+    }
+
+    // Store ORCID data in Firestore profile
+    await admin.firestore().collection("profiles").doc(context.auth.uid).update(firestoreUpdate)
 
     return {
       success: true,
       orcidId,
       orcidUrl: `${config.baseUrl}/${orcidId}`,
       name,
+      extractedData,
     }
   } catch (error) {
     console.error("ORCID link error:", error)
     throw new functions.https.HttpsError("internal", "Failed to link ORCID account")
+  }
+})
+
+/**
+ * Resync ORCID profile data
+ * Fetches the latest data from ORCID and updates the user's profile
+ */
+export const orcidResyncProfile = functions.https.onCall(async (data, context) => {
+  // Ensure user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated"
+    )
+  }
+
+  const config = getOrcidConfig()
+
+  try {
+    // Get current profile to check if ORCID is linked
+    const profileDoc = await admin.firestore().collection("profiles").doc(context.auth.uid).get()
+    const profileData = profileDoc.data()
+
+    if (!profileData?.orcidId) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "No ORCID linked to this account"
+      )
+    }
+
+    const orcidId = profileData.orcidId
+
+    // Note: We don't have the access token anymore after initial linking
+    // ORCID public API allows reading public data without authentication
+    // Fetch public ORCID record without access token
+    const recordUrl = `${config.baseUrl}/v3.0/${orcidId}/record`
+    const response = await fetch(recordUrl, {
+      headers: {
+        "Accept": "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to fetch ORCID record"
+      )
+    }
+
+    const orcidRecord = await response.json()
+
+    // Extract profile data from ORCID record
+    const extractedData = extractOrcidProfileData(orcidRecord)
+
+    // Prepare update data for Firestore
+    const firestoreUpdate: any = {
+      orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
+      orcidClaims: {
+        name: extractedData.firstName ? `${extractedData.firstName || ""} ${extractedData.lastName || ""}`.trim() : null,
+        email: extractedData.email || null,
+      },
+    }
+
+    // Option to force update all fields (if requested)
+    const forceUpdate = data?.forceUpdate || false
+
+    if (forceUpdate) {
+      // Force update all fields
+      if (extractedData.firstName) firestoreUpdate.firstName = extractedData.firstName
+      if (extractedData.lastName) firestoreUpdate.lastName = extractedData.lastName
+      if (extractedData.email) firestoreUpdate.email = extractedData.email
+      if (extractedData.organisation) firestoreUpdate.organisation = extractedData.organisation
+      if (extractedData.institute) firestoreUpdate.institute = extractedData.institute
+      if (extractedData.position) firestoreUpdate.position = extractedData.position
+      if (extractedData.notes) firestoreUpdate.notes = extractedData.notes
+      if (extractedData.qualifications) firestoreUpdate.qualifications = extractedData.qualifications
+      if (extractedData.researchInterests) firestoreUpdate.researchInterests = extractedData.researchInterests
+    } else {
+      // Only update empty fields
+      const currentData = profileData
+      if (extractedData.firstName && !currentData.firstName) firestoreUpdate.firstName = extractedData.firstName
+      if (extractedData.lastName && !currentData.lastName) firestoreUpdate.lastName = extractedData.lastName
+      if (extractedData.email && !currentData.email) firestoreUpdate.email = extractedData.email
+      if (extractedData.organisation && !currentData.organisation) firestoreUpdate.organisation = extractedData.organisation
+      if (extractedData.institute && !currentData.institute) firestoreUpdate.institute = extractedData.institute
+      if (extractedData.position && !currentData.position) firestoreUpdate.position = extractedData.position
+      if (extractedData.notes && !currentData.notes) firestoreUpdate.notes = extractedData.notes
+      if (extractedData.qualifications && (!currentData.qualifications || currentData.qualifications.length === 0)) {
+        firestoreUpdate.qualifications = extractedData.qualifications
+      }
+      if (extractedData.researchInterests && (!currentData.researchInterests || currentData.researchInterests.length === 0)) {
+        firestoreUpdate.researchInterests = extractedData.researchInterests
+      }
+    }
+
+    // Update Firestore profile
+    await admin.firestore().collection("profiles").doc(context.auth.uid).update(firestoreUpdate)
+
+    return {
+      success: true,
+      message: "Profile synced successfully",
+      extractedData,
+    }
+  } catch (error) {
+    console.error("ORCID resync error:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
+    throw new functions.https.HttpsError("internal", "Failed to resync ORCID profile")
   }
 })

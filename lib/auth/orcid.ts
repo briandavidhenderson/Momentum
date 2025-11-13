@@ -285,3 +285,31 @@ export function getOrcidUrl(orcid: string, sandbox: boolean = false): string {
   const domain = sandbox ? "sandbox.orcid.org" : "orcid.org"
   return `https://${domain}/${normalized}`
 }
+
+/**
+ * Resync ORCID profile data
+ * Fetches the latest data from ORCID and updates the user's profile
+ */
+export async function resyncOrcidProfile(forceUpdate: boolean = false) {
+  const auth = getAuth()
+
+  if (!auth.currentUser) {
+    throw new Error("No user is currently signed in")
+  }
+
+  try {
+    const functions = getFunctionsInstance()
+    const resync = httpsCallable(functions, "orcidResyncProfile")
+
+    const result: any = await resync({ forceUpdate })
+
+    return {
+      success: true,
+      message: result.data.message,
+      extractedData: result.data.extractedData,
+    }
+  } catch (error: any) {
+    console.error("ORCID resync error:", error)
+    throw new Error(error.message || "Failed to resync ORCID profile")
+  }
+}

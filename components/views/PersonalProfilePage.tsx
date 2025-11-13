@@ -26,7 +26,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { updateProfile, updateUser } from "@/lib/firestoreService"
 import { OrcidBadge } from "@/components/OrcidBadge"
-import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
+import { linkOrcidToCurrentUser, resyncOrcidProfile } from "@/lib/auth/orcid"
 
 interface PersonalProfilePageProps {
   currentUser: User | null
@@ -358,38 +358,81 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                   Last synced: {new Date(formData.orcidLastSynced).toLocaleDateString()}
                 </p>
               )}
-              {isEditing && (
+              {formData.orcidClaims && (
+                <div className="text-xs text-gray-600 bg-green-50 p-3 rounded border border-green-200">
+                  <p className="font-semibold text-green-800 mb-1">ORCID Profile Information:</p>
+                  {formData.orcidClaims.name && (
+                    <p><strong>Name:</strong> {formData.orcidClaims.name}</p>
+                  )}
+                  {formData.orcidClaims.email && (
+                    <p><strong>Email:</strong> {formData.orcidClaims.email}</p>
+                  )}
+                  <p className="text-xs mt-2 text-gray-500">
+                    Your profile has been automatically populated with information from your ORCID record.
+                  </p>
+                </div>
+              )}
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    if (confirm("Are you sure you want to disconnect your ORCID?")) {
-                      await handleSave({ orcidId: undefined, orcidUrl: undefined, orcidVerified: false })
+                    try {
+                      await resyncOrcidProfile(false)
+                      alert("Profile updated successfully with latest ORCID data (empty fields only)")
+                    } catch (err: any) {
+                      alert(err.message || "Failed to resync ORCID profile")
                     }
                   }}
                 >
-                  Disconnect ORCID
+                  Resync (Empty Fields)
                 </Button>
-              )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (confirm("This will overwrite your current profile data with information from ORCID. Continue?")) {
+                      try {
+                        await resyncOrcidProfile(true)
+                        alert("Profile fully updated with latest ORCID data")
+                      } catch (err: any) {
+                        alert(err.message || "Failed to resync ORCID profile")
+                      }
+                    }
+                  }}
+                >
+                  Force Resync (All Fields)
+                </Button>
+                {isEditing && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to disconnect your ORCID?")) {
+                        await handleSave({ orcidId: undefined, orcidUrl: undefined, orcidVerified: false })
+                      }
+                    }}
+                    className="text-red-600 hover:bg-red-50"
+                  >
+                    Disconnect ORCID
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-gray-600">
-                Connect your ORCID iD to verify your identity and link your research outputs.
+                Connect your ORCID iD to verify your identity and automatically import your profile information including employment, education, and research interests.
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={async () => {
                   try {
-                    const result = await linkOrcidToCurrentUser()
-                    await handleSave({
-                      orcidId: result.orcid,
-                      orcidUrl: result.orcidUrl,
-                      orcidVerified: true,
-                      orcidLastSynced: new Date().toISOString(),
-                      orcidClaims: result.claims,
-                    })
+                    await linkOrcidToCurrentUser()
+                    // The Firebase function handles all the data fetching and saving
+                    // Real-time Firestore listener will update the UI automatically
+                    alert("ORCID connected successfully! Your profile has been updated with information from ORCID.")
                   } catch (err: any) {
                     alert(err.message || "Failed to connect ORCID")
                   }
