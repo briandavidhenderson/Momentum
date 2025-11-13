@@ -56,6 +56,23 @@ npm run dev
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
+### Code Protection (Optional but Recommended)
+
+The repository includes a code protection system to safeguard core code and create snapshots before major revisions:
+
+```bash
+# The hooks are already installed, but you can reinstall if needed
+npm run protection:install
+
+# Create a snapshot before making major changes
+npm run snapshot:create
+
+# List all snapshots
+npm run snapshot:list
+```
+
+See [CODE_PROTECTION.md](CODE_PROTECTION.md) for full documentation.
+
 ### Quick Start Guide
 
 For first-time users, see [QUICK_START_NEXT_SESSION.md](QUICK_START_NEXT_SESSION.md) for:
@@ -181,6 +198,7 @@ firebase deploy --only firestore
 
 ## Documentation
 
+- **[CODE_PROTECTION.md](CODE_PROTECTION.md)** - Code protection and snapshot system guide
 - **[SESSION_FINAL_SUMMARY.md](SESSION_FINAL_SUMMARY.md)** - Latest session achievements and status
 - **[NEXT_SESSION_TODO.md](NEXT_SESSION_TODO.md)** - Prioritized development tasks
 - **[QUICK_START_NEXT_SESSION.md](QUICK_START_NEXT_SESSION.md)** - Quick reference for developers
@@ -201,6 +219,7 @@ firebase deploy --only firestore
 - Network visualization
 - Day-to-day task board
 - Lab polls
+- Code protection & snapshot system
 
 ### ⚠️ In Progress
 - Multi-person color coding for Gantt chart
