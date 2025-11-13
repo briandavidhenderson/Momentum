@@ -15,6 +15,7 @@ import { Calendar, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { CalendarConnection, ConnectedCalendar } from '@/lib/types'
 import { updateCalendarConnection } from '@/lib/firestoreCalendarService'
 import { syncGoogleCalendar } from '@/lib/calendar/google'
+import { syncMicrosoftCalendar } from '@/lib/calendar/microsoft'
 
 interface CalendarSettingsProps {
   connection: CalendarConnection
@@ -56,6 +57,10 @@ export function CalendarSettings({ connection, onUpdate }: CalendarSettingsProps
     try {
       if (connection.provider === 'google') {
         await syncGoogleCalendar(connection.id)
+        alert('Calendar synced successfully!')
+        onUpdate?.()
+      } else if (connection.provider === 'microsoft') {
+        await syncMicrosoftCalendar(connection.id)
         alert('Calendar synced successfully!')
         onUpdate?.()
       }

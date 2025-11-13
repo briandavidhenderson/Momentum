@@ -804,3 +804,599 @@ export const renewGoogleCalendarChannels = functions.pubsub
       return null
     }
   })
+
+// ============================================================================
+// MICROSOFT CALENDAR OAUTH
+// ============================================================================
+
+/**
+ * Microsoft Calendar OAuth Configuration
+ * Set via Firebase Functions config:
+ * firebase functions:config:set microsoft.client_id="YOUR_CLIENT_ID"
+ * firebase functions:config:set microsoft.client_secret="YOUR_CLIENT_SECRET"
+ * firebase functions:config:set microsoft.redirect_uri="YOUR_REDIRECT_URI"
+ * firebase functions:config:set microsoft.tenant_id="common"
+ */
+
+interface MicrosoftCalendarConfig {
+  clientId: string
+  clientSecret: string
+  redirectUri: string
+  tenantId: string
+  authorizeUrl: string
+  tokenUrl: string
+  scopes: string
+}
+
+function getMicrosoftCalendarConfig(): MicrosoftCalendarConfig {
+  const tenantId = functions.config().microsoft?.tenant_id || process.env.MICROSOFT_TENANT_ID || "common"
+
+  return {
+    clientId: functions.config().microsoft?.client_id || process.env.MICROSOFT_CLIENT_ID || "",
+    clientSecret: functions.config().microsoft?.client_secret || process.env.MICROSOFT_CLIENT_SECRET || "",
+    redirectUri: functions.config().microsoft?.redirect_uri || process.env.MICROSOFT_REDIRECT_URI || "",
+    tenantId,
+    authorizeUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`,
+    tokenUrl: `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
+    scopes: "https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/Calendars.ReadWrite offline_access",
+  }
+}
+
+/**
+ * Initiate Microsoft Calendar OAuth flow
+ * Returns the authorization URL to redirect the user to
+ */
+export const microsoftCalendarAuthStart = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const config = getMicrosoftCalendarConfig()
+
+  if (!config.clientId) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Microsoft Calendar client ID not configured"
+    )
+  }
+
+  // Generate state parameter for CSRF protection
+  const state = `${context.auth.uid}-${Math.random().toString(36).substring(2, 15)}`
+
+  // Build authorization URL
+  const authUrl = new URL(config.authorizeUrl)
+  authUrl.searchParams.set("client_id", config.clientId)
+  authUrl.searchParams.set("redirect_uri", config.redirectUri)
+  authUrl.searchParams.set("response_type", "code")
+  authUrl.searchParams.set("scope", config.scopes)
+  authUrl.searchParams.set("state", state)
+  authUrl.searchParams.set("response_mode", "query")
+
+  return {
+    authUrl: authUrl.toString(),
+    state,
+  }
+})
+
+/**
+ * Handle Microsoft Calendar OAuth callback
+ * Exchanges authorization code for tokens and creates calendar connection
+ */
+export const microsoftCalendarAuthCallback = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const config = getMicrosoftCalendarConfig()
+
+  if (!config.clientId || !config.clientSecret) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Microsoft Calendar not properly configured"
+    )
+  }
+
+  // Get authorization code from request
+  const { code, state } = data
+
+  if (!code) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Authorization code is required"
+    )
+  }
+
+  // Verify state parameter
+  if (!state || !state.startsWith(context.auth.uid)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Invalid state parameter"
+    )
+  }
+
+  try {
+    // Exchange authorization code for tokens
+    const tokenResponse = await fetch(config.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: config.redirectUri,
+      }),
+    })
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error("Microsoft token exchange failed:", errorText)
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to exchange authorization code"
+      )
+    }
+
+    const tokenData = await tokenResponse.json()
+    const accessToken = tokenData.access_token
+    const refreshToken = tokenData.refresh_token
+    const expiresIn = tokenData.expires_in || 3600
+
+    if (!accessToken) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "No access token in response"
+      )
+    }
+
+    // Get user's calendar list
+    const calendarsResponse = await fetch(
+      "https://graph.microsoft.com/v1.0/me/calendars",
+      {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+        },
+      }
+    )
+
+    if (!calendarsResponse.ok) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to fetch calendar list"
+      )
+    }
+
+    const calendarsData = await calendarsResponse.json()
+    const calendars = calendarsData.value || []
+
+    // Get user info to get email
+    const userinfoResponse = await fetch(
+      "https://graph.microsoft.com/v1.0/me",
+      {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+        },
+      }
+    )
+
+    let email = "unknown@microsoft.com"
+    let userId = ""
+    if (userinfoResponse.ok) {
+      const userinfo = await userinfoResponse.json()
+      email = userinfo.mail || userinfo.userPrincipalName || email
+      userId = userinfo.id || ""
+    }
+
+    // Create connection ID
+    const connectionId = admin.firestore().collection("calendarConnections").doc().id
+
+    // Store tokens in Firestore (TODO: migrate to Secret Manager for production)
+    await admin.firestore().collection("_calendarTokens").doc(connectionId).set({
+      accessToken,
+      refreshToken,
+      expiresAt: Date.now() + (expiresIn * 1000),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    // Create calendar connection document
+    const connection = {
+      id: connectionId,
+      userId: context.auth.uid,
+      provider: "microsoft",
+      providerAccountId: userId || email,
+      providerAccountName: email,
+      calendars: calendars.map((cal: any) => ({
+        id: cal.id,
+        name: cal.name,
+        description: cal.description || "",
+        isPrimary: cal.isDefaultCalendar || false,
+        isSelected: cal.isDefaultCalendar || false, // Auto-select primary calendar
+        color: cal.color || "",
+        timeZone: cal.timeZone || "",
+        accessRole: cal.canEdit ? "owner" : "reader",
+      })),
+      syncEnabled: true,
+      syncDirection: "import",
+      status: "active",
+      tokenExpiresAt: new Date(Date.now() + (expiresIn * 1000)).toISOString(),
+      createdAt: new Date().toISOString(),
+    }
+
+    await admin.firestore().collection("calendarConnections").doc(connectionId).set(connection)
+
+    // Update user profile with connection reference
+    await admin.firestore().collection("personProfiles").doc(context.auth.uid).update({
+      "calendarConnections.microsoft": connectionId,
+    })
+
+    return {
+      success: true,
+      connectionId,
+      email,
+      calendarsCount: calendars.length,
+    }
+  } catch (error: any) {
+    console.error("Microsoft Calendar callback error:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
+    throw new functions.https.HttpsError("internal", "Internal server error")
+  }
+})
+
+/**
+ * Unlink Microsoft Calendar from user
+ */
+export const unlinkMicrosoftCalendar = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const { connectionId } = data
+
+  if (!connectionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Connection ID is required"
+    )
+  }
+
+  try {
+    // Verify connection belongs to user
+    const connectionRef = admin.firestore().collection("calendarConnections").doc(connectionId)
+    const connectionDoc = await connectionRef.get()
+
+    if (!connectionDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Connection not found"
+      )
+    }
+
+    const connectionData = connectionDoc.data()
+    if (connectionData?.userId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "You do not have permission to delete this connection"
+      )
+    }
+
+    // Delete subscription if it exists
+    if (connectionData?.subscriptionId) {
+      try {
+        const tokensDoc = await admin.firestore().collection("_calendarTokens").doc(connectionId).get()
+        if (tokensDoc.exists) {
+          const tokens = tokensDoc.data()
+          if (tokens?.accessToken) {
+            await fetch(`https://graph.microsoft.com/v1.0/subscriptions/${connectionData.subscriptionId}`, {
+              method: "DELETE",
+              headers: {
+                "Authorization": `Bearer ${tokens.accessToken}`,
+              },
+            })
+          }
+        }
+      } catch (error) {
+        console.error("Error deleting Microsoft subscription:", error)
+        // Continue with unlinking even if subscription deletion fails
+      }
+    }
+
+    // Delete tokens
+    await admin.firestore().collection("_calendarTokens").doc(connectionId).delete()
+
+    // Delete connection
+    await connectionRef.delete()
+
+    // Update user profile
+    await admin.firestore().collection("personProfiles").doc(context.auth.uid).update({
+      "calendarConnections.microsoft": admin.firestore.FieldValue.delete(),
+    })
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Unlink Microsoft Calendar error:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
+    throw new functions.https.HttpsError("internal", "Failed to unlink Microsoft Calendar")
+  }
+})
+
+// ============================================================================
+// MICROSOFT CALENDAR SYNC
+// ============================================================================
+
+import { syncMicrosoftCalendarEvents } from "./calendar-sync"
+
+/**
+ * Manual sync trigger for Microsoft Calendar
+ * Allows users to manually sync their calendar
+ */
+export const syncMicrosoftCalendar = functions.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be logged in"
+    )
+  }
+
+  const { connectionId } = data
+
+  if (!connectionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Connection ID is required"
+    )
+  }
+
+  try {
+    // Verify connection belongs to user
+    const connectionDoc = await admin
+      .firestore()
+      .collection("calendarConnections")
+      .doc(connectionId)
+      .get()
+
+    if (!connectionDoc.exists) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Connection not found"
+      )
+    }
+
+    const connectionData = connectionDoc.data()
+    if (connectionData?.userId !== context.auth.uid) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "You do not have permission to sync this connection"
+      )
+    }
+
+    // Trigger sync
+    const syncLog = await syncMicrosoftCalendarEvents(context.auth.uid, connectionId)
+
+    return {
+      success: true,
+      syncLog,
+    }
+  } catch (error: any) {
+    console.error("Manual sync error:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
+    throw new functions.https.HttpsError("internal", "Failed to sync calendar")
+  }
+})
+
+/**
+ * Scheduled function to sync all Microsoft Calendar connections
+ * Runs every hour to keep calendars in sync
+ */
+export const scheduledMicrosoftCalendarSync = functions.pubsub
+  .schedule("every 60 minutes")
+  .onRun(async (context) => {
+    try {
+      console.log("Starting scheduled Microsoft Calendar sync...")
+
+      // Get all active Microsoft Calendar connections
+      const connectionsSnapshot = await admin
+        .firestore()
+        .collection("calendarConnections")
+        .where("provider", "==", "microsoft")
+        .where("status", "==", "active")
+        .where("syncEnabled", "==", true)
+        .get()
+
+      console.log(`Found ${connectionsSnapshot.size} connections to sync`)
+
+      // Sync each connection
+      const syncPromises = connectionsSnapshot.docs.map(async (doc) => {
+        const connection = doc.data()
+        try {
+          await syncMicrosoftCalendarEvents(connection.userId, doc.id)
+          console.log(`Synced connection ${doc.id}`)
+        } catch (error) {
+          console.error(`Failed to sync connection ${doc.id}:`, error)
+        }
+      })
+
+      await Promise.all(syncPromises)
+
+      console.log("Scheduled sync completed")
+      return null
+    } catch (error) {
+      console.error("Scheduled sync error:", error)
+      return null
+    }
+  })
+
+/**
+ * Webhook handler for Microsoft Graph push notifications
+ * Microsoft sends notifications when calendar events change
+ */
+export const microsoftCalendarWebhook = functions.https.onRequest(async (req, res) => {
+  try {
+    // Handle validation token (Microsoft requires this on first setup)
+    if (req.query.validationToken) {
+      console.log("Webhook validation requested")
+      res.status(200).send(req.query.validationToken)
+      return
+    }
+
+    // Parse notifications
+    const notifications = req.body.value || []
+
+    console.log(`Webhook received ${notifications.length} notifications`)
+
+    // Acknowledge immediately
+    res.status(202).send("Accepted")
+
+    // Process each notification asynchronously
+    for (const notification of notifications) {
+      const connectionId = notification.clientState
+
+      if (!connectionId) {
+        console.error("No clientState in notification")
+        continue
+      }
+
+      // Find connection
+      const connectionDoc = await admin
+        .firestore()
+        .collection("calendarConnections")
+        .doc(connectionId)
+        .get()
+
+      if (!connectionDoc.exists) {
+        console.error(`No connection found for ${connectionId}`)
+        continue
+      }
+
+      const connection = connectionDoc.data()
+
+      // Trigger sync for this connection
+      try {
+        await syncMicrosoftCalendarEvents(connection?.userId || "", connectionId)
+        console.log(`Webhook sync completed for connection ${connectionId}`)
+      } catch (error) {
+        console.error(`Webhook sync failed for ${connectionId}:`, error)
+      }
+    }
+  } catch (error) {
+    console.error("Webhook error:", error)
+    res.status(500).send("Internal server error")
+  }
+})
+
+/**
+ * Scheduled function to renew Microsoft Graph subscriptions
+ * Subscriptions expire after 3 days and need to be renewed
+ * Runs every 2 days to check and renew expiring subscriptions
+ */
+export const renewMicrosoftSubscriptions = functions.pubsub
+  .schedule("every 48 hours")
+  .onRun(async (context) => {
+    try {
+      console.log("Checking for expiring Microsoft Calendar subscriptions...")
+
+      // Get connections with expiring subscriptions (within next 24 hours)
+      const oneDayFromNow = new Date()
+      oneDayFromNow.setDate(oneDayFromNow.getDate() + 1)
+
+      const connectionsSnapshot = await admin
+        .firestore()
+        .collection("calendarConnections")
+        .where("provider", "==", "microsoft")
+        .where("status", "==", "active")
+        .get()
+
+      const renewPromises = connectionsSnapshot.docs
+        .filter((doc) => {
+          const connection = doc.data()
+          if (!connection.subscriptionExpiration) return false
+
+          const expiration = new Date(connection.subscriptionExpiration)
+          return expiration <= oneDayFromNow
+        })
+        .map(async (doc) => {
+          try {
+            const connection = doc.data()
+
+            // Get access token
+            const tokensDoc = await admin.firestore().collection("_calendarTokens").doc(doc.id).get()
+            if (!tokensDoc.exists) {
+              console.error(`No tokens found for connection ${doc.id}`)
+              return
+            }
+
+            const tokens = tokensDoc.data()
+            const accessToken = tokens?.accessToken
+
+            if (!accessToken) {
+              console.error(`No access token for connection ${doc.id}`)
+              return
+            }
+
+            // Renew subscription
+            const newExpiration = new Date()
+            newExpiration.setDate(newExpiration.getDate() + 3) // 3 days from now
+
+            const renewResponse = await fetch(
+              `https://graph.microsoft.com/v1.0/subscriptions/${connection.subscriptionId}`,
+              {
+                method: "PATCH",
+                headers: {
+                  "Authorization": `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  expirationDateTime: newExpiration.toISOString(),
+                }),
+              }
+            )
+
+            if (renewResponse.ok) {
+              await doc.ref.update({
+                subscriptionExpiration: newExpiration.toISOString(),
+              })
+              console.log(`Subscription renewed for connection ${doc.id}`)
+            } else {
+              const errorText = await renewResponse.text()
+              console.error(`Failed to renew subscription for ${doc.id}:`, errorText)
+
+              // Mark as expired
+              await doc.ref.update({
+                status: "expired",
+                syncError: "Subscription expired, please reconnect",
+              })
+            }
+          } catch (error) {
+            console.error(`Failed to renew subscription for ${doc.id}:`, error)
+          }
+        })
+
+      await Promise.all(renewPromises)
+
+      console.log("Subscription renewal check completed")
+      return null
+    } catch (error) {
+      console.error("Subscription renewal error:", error)
+      return null
+    }
+  })
