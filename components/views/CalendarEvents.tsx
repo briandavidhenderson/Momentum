@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Calendar, Clock, MapPin, Users, Plus, Edit2, Trash2 } from "lucide-react"
 import { CalendarEvent } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
+import { EventDialog } from "@/components/EventDialog"
 
 export function CalendarEvents() {
   const {
     events,
+    people,
     handleCreateEvent,
     handleUpdateEvent,
     handleDeleteEvent,
@@ -17,6 +19,8 @@ export function CalendarEvents() {
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
 
   const getEventTypeColor = (type: CalendarEvent['type']) => {
     switch (type) {
@@ -63,16 +67,10 @@ export function CalendarEvents() {
           </p>
         </div>
         <Button
-          onClick={() => handleCreateEvent?.({
-            title: 'New Event',
-            description: '',
-            start: new Date().toISOString(),
-            end: new Date(Date.now() + 3600000).toISOString(),
-            type: 'meeting',
-            location: '',
-            attendees: [],
-            isAllDay: false,
-          })}
+          onClick={() => {
+            setEditingEvent(null)
+            setIsEventDialogOpen(true)
+          }}
           className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
         >
           <Plus className="h-4 w-4" />
@@ -266,6 +264,31 @@ export function CalendarEvents() {
           </div>
         </div>
       </div>
+
+      <EventDialog
+        open={isEventDialogOpen}
+        mode={editingEvent ? "edit" : "create"}
+        people={people || []}
+        onClose={() => {
+          setIsEventDialogOpen(false)
+          setEditingEvent(null)
+        }}
+        onSubmit={(event) => {
+          if (editingEvent) {
+            handleUpdateEvent?.(editingEvent.id, event)
+          } else {
+            handleCreateEvent?.(event)
+          }
+          setIsEventDialogOpen(false)
+          setEditingEvent(null)
+        }}
+        initialEvent={editingEvent || undefined}
+        onDelete={(eventId) => {
+          handleDeleteEvent?.(eventId)
+          setIsEventDialogOpen(false)
+          setEditingEvent(null)
+        }}
+      />
     </div>
   )
 }

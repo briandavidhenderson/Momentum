@@ -58,7 +58,15 @@ export function useOrders() {
   };
 
   const handleUpdateOrder = async (orderId: string, updates: Partial<Order>) => {
-    await updateOrder(orderId, updates);
+    try {
+      console.log(`Updating order ${orderId}:`, updates);
+      await updateOrder(orderId, updates);
+      console.log(`Successfully updated order ${orderId}`);
+    } catch (error) {
+      console.error('Error updating order:', error);
+      alert('Failed to update order: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      throw error;
+    }
   };
 
   const handleUpdateOrderField = (orderId: string, field: keyof Order, value: any) => {

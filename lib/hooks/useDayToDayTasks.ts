@@ -57,7 +57,16 @@ export function useDayToDayTasks() {
   };
 
   const handleMoveDayToDayTask = async (taskId: string, newStatus: 'todo' | 'working' | 'done') => {
-    await updateDayToDayTask(taskId, { status: newStatus });
+    try {
+      console.log(`Moving task ${taskId} to status: ${newStatus}`);
+      await updateDayToDayTask(taskId, { status: newStatus });
+      console.log(`Successfully moved task ${taskId} to ${newStatus}`);
+    } catch (error) {
+      console.error('Error moving day-to-day task:', error);
+      alert('Failed to move task: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      // Re-throw to allow the UI to handle it if needed
+      throw error;
+    }
   };
 
   return {
