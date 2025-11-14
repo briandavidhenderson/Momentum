@@ -383,6 +383,58 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                 </p>
               )}
 
+              {/* ORCID Claims Display */}
+              {formData.orcidClaims && (
+                <div className="text-xs text-gray-600 bg-green-50 p-3 rounded border border-green-200">
+                  <p className="font-semibold text-green-800 mb-1">ORCID Profile Information:</p>
+                  {formData.orcidClaims.name && (
+                    <p><strong>Name:</strong> {formData.orcidClaims.name}</p>
+                  )}
+                  {formData.orcidClaims.email && (
+                    <p><strong>Email:</strong> {formData.orcidClaims.email}</p>
+                  )}
+                  <p className="text-xs mt-2 text-gray-500">
+                    Your profile has been automatically populated with information from your ORCID record.
+                  </p>
+                </div>
+              )}
+
+              {/* Resync Buttons */}
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await resyncOrcidProfile(false)
+                      alert("Profile updated successfully with latest ORCID data (empty fields only)")
+                      window.location.reload()
+                    } catch (err: any) {
+                      alert(err.message || "Failed to resync ORCID profile")
+                    }
+                  }}
+                >
+                  Resync (Empty Fields)
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (confirm("This will overwrite your current profile data with information from ORCID. Continue?")) {
+                      try {
+                        await resyncOrcidProfile(true)
+                        alert("Profile fully updated with latest ORCID data")
+                        window.location.reload()
+                      } catch (err: any) {
+                        alert(err.message || "Failed to resync ORCID profile")
+                      }
+                    }
+                  }}
+                >
+                  Force Resync (All Fields)
+                </Button>
+              </div>
+
               {/* Biography */}
               {formData.orcidData?.biography && (
                 <div className="border-t pt-4">
