@@ -1,7 +1,9 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { MasterProject, Workpackage, PersonProfile, FundingAccount } from "@/lib/types"
+import { useState, useEffect, useMemo } from "react"
+import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order } from "@/lib/types"
+import { db } from "@/lib/firebase"
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -25,6 +27,7 @@ import {
   Plus,
   Eye,
   Edit2,
+  ShoppingCart,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
 
@@ -55,6 +58,38 @@ export function ProjectDetailPage({
   const [workpackageDialogOpen, setWorkpackageDialogOpen] = useState(false)
   const [selectedWorkpackage, setSelectedWorkpackage] = useState<Workpackage | null>(null)
   const [workpackageDialogMode, setWorkpackageDialogMode] = useState<"create" | "edit" | "view">("view")
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loadingOrders, setLoadingOrders] = useState(false)
+
+  // Fetch project orders
+  useEffect(() => {
+    const fetchProjectOrders = async () => {
+      setLoadingOrders(true)
+      try {
+        const ordersQuery = query(
+          collection(db, "orders"),
+          where("masterProjectId", "==", project.id),
+          orderBy("createdDate", "desc")
+        )
+        const ordersSnapshot = await getDocs(ordersQuery)
+        const ordersData = ordersSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdDate: doc.data().createdDate?.toDate?.() || new Date(),
+          orderedDate: doc.data().orderedDate?.toDate?.(),
+          receivedDate: doc.data().receivedDate?.toDate?.(),
+          expectedDeliveryDate: doc.data().expectedDeliveryDate?.toDate?.(),
+        })) as Order[]
+        setOrders(ordersData)
+      } catch (error) {
+        console.error("Error fetching project orders:", error)
+      } finally {
+        setLoadingOrders(false)
+      }
+    }
+
+    fetchProjectOrders()
+  }, [project.id])
 
   // Calculate project statistics
   const stats = useMemo(() => {
@@ -75,6 +110,31 @@ export function ProjectDetailPage({
       taskCompletionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
     }
   }, [workpackages])
+
+  // Calculate order statistics
+  const orderStats = useMemo(() => {
+    const totalOrders = orders.length
+    const toOrderCount = orders.filter(o => o.status === "to-order").length
+    const orderedCount = orders.filter(o => o.status === "ordered").length
+    const receivedCount = orders.filter(o => o.status === "received").length
+
+    const totalSpent = orders
+      .filter(o => o.status === "received")
+      .reduce((sum, o) => sum + (o.priceExVAT || 0), 0)
+
+    const totalCommitted = orders
+      .filter(o => o.status === "ordered")
+      .reduce((sum, o) => sum + (o.priceExVAT || 0), 0)
+
+    return {
+      totalOrders,
+      toOrderCount,
+      orderedCount,
+      receivedCount,
+      totalSpent,
+      totalCommitted,
+    }
+  }, [orders])
 
   // Get project health status
   const getHealthStatus = () => {
@@ -588,6 +648,104 @@ export function ProjectDetailPage({
                         </div>
                       ))}
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Project Orders */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingCart className="h-5 w-5" />
+                    Project Orders
+                  </CardTitle>
+                  <CardDescription>
+                    {orderStats.totalOrders} order{orderStats.totalOrders !== 1 ? 's' : ''} • {formatCurrency(orderStats.totalSpent, project.currency)} spent, {formatCurrency(orderStats.totalCommitted, project.currency)} committed
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingOrders ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading orders...</div>
+                  ) : orders.length === 0 ? (
+                    <div className="text-center py-8">
+                      <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No orders linked to this project</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Orders will appear here when created through project funding accounts
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Order Statistics */}
+                      <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-surface-2 rounded-lg">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-yellow-600">{orderStats.toOrderCount}</div>
+                          <div className="text-xs text-muted-foreground mt-1">To Order</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">{orderStats.orderedCount}</div>
+                          <div className="text-xs text-muted-foreground mt-1">Ordered</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">{orderStats.receivedCount}</div>
+                          <div className="text-xs text-muted-foreground mt-1">Received</div>
+                        </div>
+                      </div>
+
+                      {/* Recent Orders List */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium mb-3">Recent Orders</h4>
+                        {orders.slice(0, 10).map((order) => (
+                          <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-surface-2 transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{order.productName}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-xs text-muted-foreground">{order.catNum}</p>
+                                {order.supplier && (
+                                  <>
+                                    <span className="text-xs text-muted-foreground">•</span>
+                                    <p className="text-xs text-muted-foreground">{order.supplier}</p>
+                                  </>
+                                )}
+                                {order.allocationName && (
+                                  <>
+                                    <span className="text-xs text-muted-foreground">•</span>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {order.allocationName}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 ml-4">
+                              <div className="text-right">
+                                <p className="font-medium">{formatCurrency(order.priceExVAT, order.currency)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(order.createdDate).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${
+                                  order.status === 'received' ? 'bg-green-50 text-green-700 border-green-200' :
+                                  order.status === 'ordered' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                }`}
+                              >
+                                {order.status === 'to-order' ? 'To Order' :
+                                 order.status === 'ordered' ? 'Ordered' :
+                                 'Received'}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                        {orders.length > 10 && (
+                          <p className="text-xs text-muted-foreground text-center mt-2">
+                            Showing 10 of {orders.length} orders
+                          </p>
+                        )}
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
