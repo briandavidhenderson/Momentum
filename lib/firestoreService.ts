@@ -37,6 +37,9 @@ import {
   Funder,
   FundingAccount,
   MasterProject,
+  CalendarConnection,
+  CalendarSyncLog,
+  CalendarConflict,
 } from "./types"
 
 // ============================================================================
@@ -1379,6 +1382,252 @@ export function subscribeToEvents(
     })
     callback(events)
   })
+}
+
+// ============================================================================
+// CALENDAR CONNECTIONS (Phase 1)
+// ============================================================================
+
+/**
+ * Creates a new calendar connection
+ * Note: OAuth tokens are stored server-side in Google Secret Manager, not here
+ */
+export async function createCalendarConnection(
+  connectionData: Omit<CalendarConnection, 'id' | 'createdAt'>
+): Promise<string> {
+  const connectionRef = doc(collection(db, "calendarConnections"))
+  const connectionId = connectionRef.id
+
+  await setDoc(connectionRef, {
+    ...connectionData,
+    id: connectionId,
+    createdAt: new Date().toISOString(),
+  })
+
+  return connectionId
+}
+
+/**
+ * Gets calendar connections for a specific user
+ */
+export async function getCalendarConnections(userId: string): Promise<CalendarConnection[]> {
+  const q = query(
+    collection(db, "calendarConnections"),
+    where("userId", "==", userId)
+  )
+  const querySnapshot = await getDocs(q)
+  return querySnapshot.docs.map(doc => doc.data() as CalendarConnection)
+}
+
+/**
+ * Gets a single calendar connection by ID
+ */
+export async function getCalendarConnection(connectionId: string): Promise<CalendarConnection | null> {
+  const connectionRef = doc(db, "calendarConnections", connectionId)
+  const connectionSnap = await getDoc(connectionRef)
+  if (!connectionSnap.exists()) return null
+  return connectionSnap.data() as CalendarConnection
+}
+
+/**
+ * Updates a calendar connection
+ */
+export async function updateCalendarConnection(
+  connectionId: string,
+  updates: Partial<CalendarConnection>
+): Promise<void> {
+  const connectionRef = doc(db, "calendarConnections", connectionId)
+  const updateData: any = {
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  }
+  await updateDoc(connectionRef, updateData)
+}
+
+/**
+ * Deletes a calendar connection
+ */
+export async function deleteCalendarConnection(connectionId: string): Promise<void> {
+  // Also delete associated sync conflicts and logs
+  const batch = writeBatch(db)
+
+  // Delete the connection
+  const connectionRef = doc(db, "calendarConnections", connectionId)
+  batch.delete(connectionRef)
+
+  // Delete associated conflicts
+  const conflictsQuery = query(
+    collection(db, "calendarSyncConflicts"),
+    where("connectionId", "==", connectionId)
+  )
+  const conflictsSnapshot = await getDocs(conflictsQuery)
+  conflictsSnapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref)
+  })
+
+  // Delete associated logs
+  const logsQuery = query(
+    collection(db, "calendarSyncLogs"),
+    where("connectionId", "==", connectionId)
+  )
+  const logsSnapshot = await getDocs(logsQuery)
+  logsSnapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref)
+  })
+
+  await batch.commit()
+}
+
+/**
+ * Subscribes to calendar connections for a user with real-time updates
+ */
+export function subscribeToCalendarConnections(
+  userId: string,
+  callback: (connections: CalendarConnection[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "calendarConnections"),
+    where("userId", "==", userId)
+  )
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const connections = snapshot.docs.map(doc => doc.data() as CalendarConnection)
+      callback(connections)
+    },
+    (error) => {
+      console.error("Error in subscribeToCalendarConnections:", error)
+      callback([])
+    }
+  )
+}
+
+// ============================================================================
+// CALENDAR SYNC CONFLICTS
+// ============================================================================
+
+/**
+ * Creates a new sync conflict
+ */
+export async function createSyncConflict(
+  conflictData: Omit<CalendarConflict, 'id'>
+): Promise<string> {
+  const conflictRef = doc(collection(db, "calendarSyncConflicts"))
+  const conflictId = conflictRef.id
+
+  await setDoc(conflictRef, {
+    ...conflictData,
+    id: conflictId,
+  })
+
+  return conflictId
+}
+
+/**
+ * Gets unresolved conflicts for a connection
+ */
+export async function getUnresolvedConflicts(connectionId: string): Promise<CalendarConflict[]> {
+  const q = query(
+    collection(db, "calendarSyncConflicts"),
+    where("connectionId", "==", connectionId),
+    where("resolved", "==", false)
+  )
+  const querySnapshot = await getDocs(q)
+  return querySnapshot.docs.map(doc => doc.data() as CalendarConflict)
+}
+
+/**
+ * Resolves a sync conflict
+ */
+export async function resolveSyncConflict(
+  conflictId: string,
+  resolution: "keep_momentum" | "keep_external" | "merge" | "manual",
+  resolvedBy: string
+): Promise<void> {
+  const conflictRef = doc(db, "calendarSyncConflicts", conflictId)
+  await updateDoc(conflictRef, {
+    resolved: true,
+    resolvedAt: new Date().toISOString(),
+    resolution,
+    resolvedBy,
+  })
+}
+
+/**
+ * Subscribes to unresolved conflicts for a user
+ */
+export function subscribeToUnresolvedConflicts(
+  connectionId: string,
+  callback: (conflicts: CalendarConflict[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "calendarSyncConflicts"),
+    where("connectionId", "==", connectionId),
+    where("resolved", "==", false)
+  )
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const conflicts = snapshot.docs.map(doc => doc.data() as CalendarConflict)
+      callback(conflicts)
+    },
+    (error) => {
+      console.error("Error in subscribeToUnresolvedConflicts:", error)
+      callback([])
+    }
+  )
+}
+
+// ============================================================================
+// CALENDAR SYNC LOGS
+// ============================================================================
+
+/**
+ * Creates a new sync log entry
+ */
+export async function createSyncLog(
+  logData: Omit<CalendarSyncLog, 'id'>
+): Promise<string> {
+  const logRef = doc(collection(db, "calendarSyncLogs"))
+  const logId = logRef.id
+
+  await setDoc(logRef, {
+    ...logData,
+    id: logId,
+  })
+
+  return logId
+}
+
+/**
+ * Gets recent sync logs for a connection
+ */
+export async function getSyncLogs(
+  connectionId: string,
+  limit: number = 50
+): Promise<CalendarSyncLog[]> {
+  const q = query(
+    collection(db, "calendarSyncLogs"),
+    where("connectionId", "==", connectionId),
+    orderBy("syncStartedAt", "desc")
+  )
+  const querySnapshot = await getDocs(q)
+  return querySnapshot.docs
+    .slice(0, limit)
+    .map(doc => doc.data() as CalendarSyncLog)
+}
+
+/**
+ * Updates a sync log entry (e.g., when sync completes)
+ */
+export async function updateSyncLog(
+  logId: string,
+  updates: Partial<CalendarSyncLog>
+): Promise<void> {
+  const logRef = doc(db, "calendarSyncLogs", logId)
+  await updateDoc(logRef, updates)
 }
 
 // ============================================================================

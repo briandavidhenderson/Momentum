@@ -9,9 +9,11 @@ export function useDayToDayTasks() {
   const [dayToDayTasks, setDayToDayTasks] = useState<DayToDayTask[]>([]);
 
   useEffect(() => {
-    if (!profile?.labId) return;
+    // Get labId with fallback to legacy lab field
+    const labId = profile?.labId || profile?.lab;
+    if (!labId) return;
 
-    const unsubscribe = subscribeToDayToDayTasks({ labId: profile.labId }, (tasks) => {
+    const unsubscribe = subscribeToDayToDayTasks({ labId }, (tasks) => {
       setDayToDayTasks(tasks);
     });
 
@@ -19,14 +21,31 @@ export function useDayToDayTasks() {
   }, [profile]);
 
   const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId'>) => {
-    if (!currentUser || !profile?.labId) return;
-    const order = dayToDayTasks.length;
-    await createDayToDayTask({
-      ...task,
-      createdBy: currentUser.uid,
-      order,
-      labId: profile.labId,
-    });
+    if (!currentUser) {
+      console.error('No current user for task creation');
+      return;
+    }
+
+    // Get labId with fallback to legacy lab field
+    const labId = profile?.labId || profile?.lab;
+    if (!labId) {
+      console.error('No labId found on profile:', profile);
+      alert('Cannot create task: Your profile is missing a lab assignment. Please update your profile.');
+      return;
+    }
+
+    try {
+      const order = dayToDayTasks.length;
+      await createDayToDayTask({
+        ...task,
+        createdBy: currentUser.uid,
+        order,
+        labId,
+      });
+    } catch (error) {
+      console.error('Error creating day-to-day task:', error);
+      alert('Failed to create task: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   const handleUpdateDayToDayTask = async (taskId: string, updates: Partial<DayToDayTask>) => {

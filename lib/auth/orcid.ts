@@ -8,12 +8,6 @@ import { getAuth, signInWithCustomToken, unlink } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
 
 /**
- * Configuration for ORCID OAuth2
- * Set to true to use sandbox, false for production
- */
-const USE_ORCID_SANDBOX = true
-
-/**
  * Get Firebase Functions instance
  */
 function getFunctionsInstance() {
@@ -37,9 +31,23 @@ async function initiateOrcidAuth(): Promise<{ code: string; state: string }> {
   const startAuth = httpsCallable(functions, "orcidAuthStart")
 
   const redirectUri = getRedirectUri()
-  const result: any = await startAuth({ redirect_uri: redirectUri })
+
+  let result: any
+  try {
+    result = await startAuth({ redirect_uri: redirectUri })
+  } catch (error: any) {
+    console.error("Error calling orcidAuthStart:", error)
+    throw new Error(`Failed to initiate ORCID authentication: ${error.message || "Unknown error"}`)
+  }
 
   const { authUrl, state } = result.data
+
+  if (!authUrl) {
+    console.error("No authUrl returned from orcidAuthStart. Full result:", result)
+    throw new Error("Invalid response from authentication service - no authorization URL received")
+  }
+
+  console.log("Opening ORCID authorization URL:", authUrl)
 
   // Open popup for ORCID authorization
   const width = 500
@@ -284,4 +292,63 @@ export function getOrcidUrl(orcid: string, sandbox: boolean = false): string {
 
   const domain = sandbox ? "sandbox.orcid.org" : "orcid.org"
   return `https://${domain}/${normalized}`
+}
+
+/**
+ * Sync ORCID data (publications, bio, employment, education)
+ * Re-links ORCID which triggers data sync on the backend
+ */
+export async function syncOrcidData(): Promise<{
+  success: boolean
+  message: string
+  publicationsCount?: number
+  employmentsCount?: number
+  educationsCount?: number
+}> {
+  const auth = getAuth()
+
+  if (!auth.currentUser) {
+    throw new Error("User must be authenticated")
+  }
+
+  try {
+    // Re-link ORCID which will trigger data fetch with the new /read-limited scope
+    await linkOrcidToCurrentUser()
+
+    return {
+      success: true,
+      message: "ORCID data synced successfully"
+    }
+  } catch (error: any) {
+    console.error("ORCID sync error:", error)
+    throw new Error(error.message || "Failed to sync ORCID data")
+  }
+}
+
+/**
+ * Resync ORCID profile data
+ * Fetches the latest data from ORCID and updates the user's profile
+ */
+export async function resyncOrcidProfile(forceUpdate: boolean = false) {
+  const auth = getAuth()
+
+  if (!auth.currentUser) {
+    throw new Error("No user is currently signed in")
+  }
+
+  try {
+    const functions = getFunctionsInstance()
+    const resync = httpsCallable(functions, "orcidResyncProfile")
+
+    const result: any = await resync({ forceUpdate })
+
+    return {
+      success: true,
+      message: result.data.message,
+      extractedData: result.data.extractedData,
+    }
+  } catch (error: any) {
+    console.error("ORCID resync error:", error)
+    throw new Error(error.message || "Failed to resync ORCID profile")
+  }
 }
