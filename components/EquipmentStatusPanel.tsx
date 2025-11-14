@@ -196,10 +196,11 @@ export function EquipmentStatusPanel({
     })
   }
 
-  // Handle add device
+  // Handle add device - opens modal with empty form
   const handleAddDevice = () => {
-    const newDevice: Omit<EquipmentDevice, 'id'> = {
-      name: 'New Device',
+    const newDevice: EquipmentDevice = {
+      id: '', // Temporary ID, will be replaced on save
+      name: '',
       make: '',
       model: '',
       serialNumber: '',
@@ -213,7 +214,8 @@ export function EquipmentStatusPanel({
       labId: currentUserProfile?.labId,
       createdAt: new Date().toISOString(),
     }
-    onEquipmentCreate(newDevice)
+    setEditingDevice(newDevice)
+    setIsModalOpen(true)
   }
 
   // Handle edit device
@@ -763,6 +765,20 @@ function EquipmentEditorModal({
   }
 
   const handleSave = async () => {
+    // Validate required fields
+    if (!formData.name.trim()) {
+      alert('Please enter a device name')
+      return
+    }
+    if (!formData.make.trim()) {
+      alert('Please enter the device make (manufacturer)')
+      return
+    }
+    if (!formData.model.trim()) {
+      alert('Please enter the device model')
+      return
+    }
+
     // Handle image upload
     let finalImageUrl = formData.imageUrl
     if (imageFile) {
@@ -771,7 +787,7 @@ function EquipmentEditorModal({
         finalImageUrl = base64Image
       }
     }
-    
+
     const updatedDevice: EquipmentDevice = {
       ...device,
       name: formData.name,
@@ -811,12 +827,16 @@ function EquipmentEditorModal({
     setSupplies(supplies.filter((_, i) => i !== index))
   }
 
+  const isNewDevice = !device.id || device.id === '';
+
   return (
     <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Device</DialogTitle>
+          <DialogTitle>{isNewDevice ? 'Add New Device' : 'Edit Device'}</DialogTitle>
           <DialogDescription>
-            Update device details, maintenance schedule, and supply management.
+            {isNewDevice
+              ? 'Configure device details, maintenance schedule, and supply management.'
+              : 'Update device details, maintenance schedule, and supply management.'}
           </DialogDescription>
         </DialogHeader>
 
