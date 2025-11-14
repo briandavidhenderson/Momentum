@@ -688,22 +688,73 @@ This makes it difficult for users to know if actions have worked or if data is r
 
 ## 4. Resolution Tracking
 
-| ID      | Status | Assigned | Target Date | Notes |
-|---------|--------|----------|-------------|-------|
-| MMT-001 | 🔴 Open | TBD | TBD | |
-| MMT-002 | 🔴 Open | TBD | TBD | |
-| MMT-003 | 🔴 Open | TBD | TBD | |
-| MMT-004 | 🔴 Open | TBD | TBD | |
-| MMT-005 | 🔴 Open | TBD | TBD | |
-| MMT-006 | 🔴 Open | TBD | TBD | |
-| MMT-007 | 🔴 Open | TBD | TBD | |
-| MMT-008 | 🔴 Open | TBD | TBD | |
-| MMT-009 | 🔴 Open | TBD | TBD | |
-| MMT-010 | 🔴 Open | TBD | TBD | |
-| MMT-011 | 🔴 Open | TBD | TBD | |
-| MMT-012 | 🔴 Open | TBD | TBD | |
+| ID      | Status | Assigned | Resolved Date | Notes |
+|---------|--------|----------|---------------|-------|
+| MMT-001 | 🔴 Open | TBD | - | Planned for Priority 2 implementation |
+| MMT-002 | 🔴 Open | TBD | - | Planned for Priority 2 implementation |
+| MMT-003 | ✅ **Resolved** | Claude | 2025-11-14 | Added error handling & logging to drag-and-drop |
+| MMT-004 | ✅ **Resolved** | Claude | 2025-11-14 | Added error handling for drag & modal updates |
+| MMT-005 | 🔴 Open | TBD | - | Planned for Priority 3 implementation |
+| MMT-006 | 🔴 Open | TBD | - | Planned for Priority 2 implementation |
+| MMT-007 | 🔴 Open | TBD | - | Planned for Priority 3 implementation |
+| MMT-008 | ✅ **Resolved** | Claude | 2025-11-14 | Changed to open EventDialog instead of auto-create |
+| MMT-009 | 🔴 Open | TBD | - | Planned for Priority 4 implementation |
+| MMT-010 | 🔴 Open | TBD | - | Planned for Priority 4 implementation |
+| MMT-011 | 🔴 Open | TBD | - | Planned for Priority 4 implementation |
+| MMT-012 | 🔴 Open | TBD | - | Planned for Priority 4 implementation |
+
+---
+
+## 5. Resolution Summary
+
+### Completed (2025-11-14)
+
+**Commit:** `e330f20` - fix: Resolve high-priority drag-and-drop and calendar issues
+
+✅ **MMT-003 - Day-to-Day Kanban drag-and-drop** (High Priority)
+- **Changes Made:**
+  - Added comprehensive error handling and logging to `handleMoveDayToDayTask` in `lib/hooks/useDayToDayTasks.ts`
+  - Made `handleDragEnd` async with proper error handling in `components/views/DayToDayBoard.tsx`
+  - Tasks now properly persist status changes when dragged between columns
+  - Users receive clear error messages if updates fail
+- **Impact:** Users can now reliably move tasks between "To Do", "Working On It", and "Done" columns
+
+✅ **MMT-004 - Orders drag-and-drop & status updates** (High Priority)
+- **Changes Made:**
+  - Added error handling and logging to `handleUpdateOrder` in `lib/hooks/useOrders.ts`
+  - Fixed drag-and-drop persistence with proper await in `components/views/OrdersInventory.tsx`
+  - Fixed modal status update with error handling in `handleSaveEdit`
+  - Both drag-and-drop and modal edits now properly persist
+- **Impact:** Orders can be moved between "To Order", "Ordered", and "Received" columns via drag-and-drop or modal editing
+
+✅ **MMT-008 - Calendar New Event button** (High Priority)
+- **Changes Made:**
+  - Changed "New Event" button from auto-creating placeholder events to opening `EventDialog`
+  - Added proper event creation/edit modal flow in `components/views/CalendarEvents.tsx`
+  - Integrated EventDialog with full event configuration (title, description, date/time, location, attendees, etc.)
+  - Users can now configure event details before creating
+- **Impact:** Users can create fully configured events instead of getting placeholder "New Event" entries
+
+### Remaining Work
+
+The following issues are documented but not yet implemented (see Priority Recommendations above):
+
+**Priority 2 (Misleading UX):**
+- MMT-001: New Project modal flow
+- MMT-006: Add Device modal flow
+- MMT-002: Project row navigation
+
+**Priority 3 (Equipment-Orders Integration):**
+- MMT-007: Equipment Order buttons functionality
+- MMT-005: New Order creation stabilization
+
+**Priority 4 (Confidence & Adoption):**
+- MMT-012: Global notification system
+- MMT-009: Lab Notebook feedback
+- MMT-010: People management (add team members)
+- MMT-011: ORCID OAuth flow improvements
 
 ---
 
 **Last Updated:** 2025-11-14
-**Document Version:** 1.0
+**Document Version:** 1.1
