@@ -107,6 +107,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [instSearchTerm, setInstSearchTerm] = useState("")
   const [labSearchTerm, setLabSearchTerm] = useState("")
   const [funderSearchTerm, setFunderSearchTerm] = useState("")
+  const [positionFilter, setPositionFilter] = useState("")
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showCreateInst, setShowCreateInst] = useState(false)
   const [showCreateLab, setShowCreateLab] = useState(false)
@@ -1005,7 +1006,20 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
           </div>
         )
 
-      case "position":
+      case "position": {
+        const filteredPositionCategories = Object.entries(POSITION_CATEGORIES).reduce(
+          (acc, [category, positions]) => {
+            const filtered = positions.filter((pos) =>
+              POSITION_DISPLAY_NAMES[pos].toLowerCase().includes(positionFilter.toLowerCase())
+            )
+            if (filtered.length > 0) {
+              acc[category] = filtered
+            }
+            return acc
+          },
+          {} as Record<string, PositionLevel[]>
+        )
+
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -1014,8 +1028,19 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <p className="text-gray-600">What is your role in the lab?</p>
             </div>
 
-            <div className="space-y-4">
-              {Object.entries(POSITION_CATEGORIES).map(([category, positions]) => (
+            <div>
+              <Label htmlFor="position-search">Search positions</Label>
+              <Input
+                id="position-search"
+                placeholder="e.g., PhD Student, Postdoc, Professor..."
+                value={positionFilter}
+                onChange={(e) => setPositionFilter(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+              {Object.entries(filteredPositionCategories).map(([category, positions]) => (
                 <div key={category} className="border rounded-lg p-4">
                   <h3 className="font-semibold mb-3 text-sm text-gray-700">{category}</h3>
                   <div className="space-y-2">
@@ -1035,9 +1060,27 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                   </div>
                 </div>
               ))}
+              {Object.keys(filteredPositionCategories).length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No positions match your search. Try a different keyword.
+                </div>
+              )}
             </div>
+
+            {state.positionLevel && (
+              <div className="sticky bottom-0 left-0 right-0 bg-white pt-4 border-t">
+                <Button
+                  onClick={handleNext}
+                  className="w-full"
+                  size="lg"
+                >
+                  Continue with {POSITION_DISPLAY_NAMES[state.positionLevel]} <ChevronRight className="ml-2 w-4 h-4" />
+                </Button>
+              </div>
+            )}
           </div>
         )
+      }
 
       case "orcid":
         return (

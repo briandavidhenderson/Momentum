@@ -7,11 +7,12 @@ import { useProfiles } from "@/lib/useProfiles";
 import { Button } from "@/components/ui/button";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
-import { MasterProject, Task, Workpackage, Project, Person } from "@/lib/types";
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
+import { MasterProject, Task, Workpackage, Project, Person, ProfileProject } from "@/lib/types";
 import { Plus, FolderKanban, PackagePlus } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
-import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
+import { updateWorkpackageWithProgress, createProfileProject } from "@/lib/firestoreService";
 import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalculate, updateWorkpackageWithTaskProgress } from "@/lib/progressCalculation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ export function ProjectDashboard() {
   const allProfiles = useProfiles(profile?.labId || null);
   const people = personProfilesToPeople(allProfiles);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
   
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
@@ -39,7 +41,11 @@ export function ProjectDashboard() {
       .filter((wp): wp is Workpackage => wp !== undefined);
   }, [workpackagesMap]);
 
-  const handleCreateProject = () => {
+  const handleCreateProjectClick = () => {
+    setShowProjectDialog(true);
+  };
+
+  const handleCreateRegularProject = () => {
     if (!profile) return;
 
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
@@ -73,6 +79,45 @@ export function ProjectDashboard() {
     };
 
     handleCreateMasterProject(newProject);
+    setShowProjectDialog(false);
+  };
+
+  const handleCreateMasterProjectFromDialog = async (projectData: ProfileProject & { funderId?: string }) => {
+    if (!profile || !user) return;
+
+    // Create the master project with proper data from dialog
+    const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+      name: projectData.name,
+      description: projectData.description || "",
+      labId: profile.labId,
+      labName: profile.labName,
+      instituteId: profile.instituteId,
+      instituteName: profile.instituteName,
+      organisationId: profile.organisationId,
+      organisationName: profile.organisationName,
+      grantName: projectData.grantName || "",
+      grantNumber: projectData.grantNumber || "",
+      totalBudget: projectData.budget || 0,
+      currency: "GBP",
+      startDate: projectData.startDate,
+      endDate: projectData.endDate,
+      funderId: projectData.funderId || "",
+      funderName: "", // Will be populated by the handler
+      accountIds: [],
+      principalInvestigatorIds: profile.id ? [profile.id] : [],
+      coPIIds: [],
+      teamMemberIds: profile.id ? [profile.id] : [],
+      teamRoles: profile.id ? { [profile.id]: "PI" } : {},
+      status: projectData.status as "planning" | "active" | "completed" | "on-hold" | "cancelled",
+      progress: 0,
+      workpackageIds: [],
+      visibility: projectData.visibility as "private" | "lab" | "institute" | "organisation",
+      createdBy: user.uid,
+      isExpanded: true,
+    };
+
+    await handleCreateMasterProject(newProject);
+    setShowProjectDialog(false);
   };
 
   const handleDateChange = useCallback(async (ganttTask: GanttTask) => {
@@ -687,7 +732,7 @@ export function ProjectDashboard() {
             </Button>
           )}
 
-          <Button onClick={handleCreateProject} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+          <Button onClick={handleCreateProjectClick} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
           </Button>
@@ -819,6 +864,17 @@ export function ProjectDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Project Creation Dialog */}
+      <ProjectCreationDialog
+        open={showProjectDialog}
+        onClose={() => setShowProjectDialog(false)}
+        onCreateRegular={handleCreateRegularProject}
+        onCreateMaster={handleCreateMasterProjectFromDialog}
+        currentUserProfileId={profile?.id || null}
+        currentUserId={user?.uid || ""}
+        organisationId={profile?.organisationId}
+      />
     </div>
   );
 }
