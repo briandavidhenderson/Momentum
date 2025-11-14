@@ -16,6 +16,8 @@ import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalcula
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
+import { ProfileProject } from "@/lib/types";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -31,6 +33,7 @@ export function ProjectDashboard() {
   const allProfiles = useProfiles(profile?.labId || null);
   const people = personProfilesToPeople(allProfiles);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
@@ -39,9 +42,10 @@ export function ProjectDashboard() {
       .filter((wp): wp is Workpackage => wp !== undefined);
   }, [workpackagesMap]);
 
-  const handleCreateProject = () => {
-    if (!profile) return;
+  const handleCreateRegularProject = () => {
+    if (!profile || !user) return;
 
+    // Create a simple project with minimal defaults
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
       name: `New Project ${projects.length + 1}`,
       description: "",
@@ -54,21 +58,80 @@ export function ProjectDashboard() {
       grantName: "",
       grantNumber: "",
       totalBudget: 0,
-      currency: "GBP",
+      currency: "EUR",
       startDate: new Date().toISOString(),
-      endDate: new Date().toISOString(),
+      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       funderId: "",
       funderName: "",
       accountIds: [],
-      principalInvestigatorIds: [],
+      principalInvestigatorIds: profile.id ? [profile.id] : [],
       coPIIds: [],
-      teamMemberIds: [],
-      teamRoles: {},
+      teamMemberIds: profile.id ? [profile.id] : [],
+      teamRoles: profile.id ? { [profile.id]: "PI" } : {},
       status: "planning",
       progress: 0,
       workpackageIds: [],
       visibility: "lab",
-      createdBy: user?.uid || "",
+      createdBy: user.uid,
+      isExpanded: true,
+    };
+
+    handleCreateMasterProject(newProject);
+  };
+
+  const handleCreateMasterProjectFromDialog = (projectData: ProfileProject & { funderId?: string }) => {
+    if (!profile || !user) return;
+
+    // Map ProjectVisibility to MasterProject visibility
+    const mapVisibility = (vis: typeof projectData.visibility): "private" | "lab" | "institute" | "organisation" => {
+      switch (vis) {
+        case "private":
+        case "postdocs":
+        case "pi-researchers":
+        case "custom":
+          return "private";
+        case "lab":
+          return "lab";
+        case "institute":
+          return "institute";
+        case "organisation":
+          return "organisation";
+        default:
+          return "lab";
+      }
+    };
+
+    // Convert ProfileProject to MasterProject format
+    const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+      name: projectData.name,
+      description: projectData.description || "",
+      labId: profile.labId,
+      labName: profile.labName,
+      instituteId: profile.instituteId,
+      instituteName: profile.instituteName,
+      organisationId: profile.organisationId,
+      organisationName: profile.organisationName,
+      grantName: projectData.grantName || "",
+      grantNumber: projectData.grantNumber || "",
+      totalBudget: projectData.budget || 0,
+      currency: "EUR",
+      startDate: projectData.startDate,
+      endDate: projectData.endDate,
+      funderId: projectData.funderId || "",
+      funderName: "", // Will be populated by backend or fetched separately
+      accountIds: projectData.fundedBy || [],
+      principalInvestigatorIds: projectData.principalInvestigatorId ? [projectData.principalInvestigatorId] : (profile.id ? [profile.id] : []),
+      coPIIds: [],
+      teamMemberIds: projectData.principalInvestigatorId ? [projectData.principalInvestigatorId] : (profile.id ? [profile.id] : []),
+      teamRoles: projectData.principalInvestigatorId ? { [projectData.principalInvestigatorId]: "PI" } : (profile.id ? { [profile.id]: "PI" } : {}),
+      status: projectData.status,
+      progress: 0,
+      workpackageIds: [],
+      visibility: mapVisibility(projectData.visibility),
+      visibleTo: projectData.visibleTo,
+      tags: projectData.tags,
+      notes: projectData.notes,
+      createdBy: user.uid,
       isExpanded: true,
     };
 
@@ -687,7 +750,7 @@ export function ProjectDashboard() {
             </Button>
           )}
 
-          <Button onClick={handleCreateProject} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+          <Button onClick={() => setProjectDialogOpen(true)} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
           </Button>
@@ -819,6 +882,17 @@ export function ProjectDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Project Creation Dialog */}
+      <ProjectCreationDialog
+        open={projectDialogOpen}
+        onClose={() => setProjectDialogOpen(false)}
+        onCreateRegular={handleCreateRegularProject}
+        onCreateMaster={handleCreateMasterProjectFromDialog}
+        currentUserProfileId={profile?.id || null}
+        currentUserId={user?.uid || ""}
+        organisationId={profile?.organisationId}
+      />
     </div>
   );
 }

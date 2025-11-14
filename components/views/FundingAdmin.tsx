@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/lib/AuthContext"
+import { useAuth } from "@/lib/hooks/useAuth"
 import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
 import {
@@ -481,7 +481,7 @@ function TransactionsTable({ transactions }: { transactions: FundingTransaction[
                       {transaction.status}
                     </Badge>
                   </td>
-                  <td className="p-2">{transaction.createdByName || transaction.createdBy || "System"}</td>
+                  <td className="p-2">{transaction.createdBy || "System"}</td>
                 </tr>
               ))}
             </tbody>
@@ -518,7 +518,7 @@ function FundingAccountsTable({ accounts }: { accounts: FundingAccount[] }) {
               {accounts.map((account) => (
                 <tr key={account.id} className="border-b hover:bg-gray-50">
                   <td className="p-2 font-medium">{account.accountName}</td>
-                  <td className="p-2">{account.fundingSource || "N/A"}</td>
+                  <td className="p-2">{account.funderName || "N/A"}</td>
                   <td className="text-right p-2">
                     {formatCurrency(account.totalBudget || 0, account.currency)}
                   </td>

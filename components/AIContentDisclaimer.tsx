@@ -7,6 +7,7 @@ import { Sparkles, Check, Info } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { collection, addDoc } from "firebase/firestore"
 import { AIGeneratedContent } from "@/lib/types"
+import { useAuth } from "@/lib/hooks/useAuth"
 
 interface AIContentDisclaimerProps {
   entityType: "eln_report" | "experiment_summary" | "task_suggestion" | "protocol_extraction"
@@ -25,19 +26,24 @@ export function AIContentDisclaimer({
   generatedContent,
   onAccept,
 }: AIContentDisclaimerProps) {
+  const { currentUser } = useAuth()
   const [accepted, setAccepted] = useState(false)
   const [edited, setEdited] = useState(false)
 
   const recordAIGeneration = async (approved: boolean) => {
+    const now = new Date().toISOString()
     const aiRecord: Omit<AIGeneratedContent, "id"> = {
       entityType,
       entityId,
       modelName,
       promptHash,
-      generatedAt: new Date().toISOString(),
+      generatedAt: now,
+      generatedBy: currentUser?.uid || "anonymous",
       disclaimerShown: true,
       userEdited: edited,
       userApproved: approved,
+      userOverrideAllowed: true,
+      createdAt: now,
     }
 
     try {

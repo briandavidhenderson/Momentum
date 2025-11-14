@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/lib/AuthContext"
+import { useAuth } from "@/lib/hooks/useAuth"
 import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
 import { FundingAllocation, FundingTransaction } from "@/lib/types"
@@ -23,6 +23,8 @@ export function PersonalLedger() {
   }, [currentUser])
 
   const loadPersonalFunding = async () => {
+    if (!currentUser) return
+
     setLoading(true)
     try {
       // Load user's allocations
