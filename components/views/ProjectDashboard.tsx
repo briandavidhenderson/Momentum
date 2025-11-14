@@ -16,6 +16,7 @@ import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalcula
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -615,6 +616,7 @@ export function ProjectDashboard() {
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [workpackageForm, setWorkpackageForm] = useState({
     name: "",
     startDate: new Date().toISOString().split("T")[0],
@@ -716,7 +718,7 @@ export function ProjectDashboard() {
             </>
           )}
 
-          <Button onClick={handleCreateProject} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+          <Button onClick={() => setIsProjectDialogOpen(true)} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
           </Button>
@@ -848,6 +850,58 @@ export function ProjectDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Project Creation Dialog */}
+      <ProjectCreationDialog
+        open={isProjectDialogOpen}
+        onClose={() => setIsProjectDialogOpen(false)}
+        onCreateRegular={handleCreateProject}
+        onCreateMaster={(projectData) => {
+          if (!profile) return;
+
+          // Ensure visibility is a valid MasterProject visibility type
+          const validVisibilities = ["private", "lab", "institute", "organisation"] as const;
+          const visibility = projectData.visibility && validVisibilities.includes(projectData.visibility as any)
+            ? projectData.visibility as "private" | "lab" | "institute" | "organisation"
+            : "lab";
+
+          const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+            name: projectData.name || "New Project",
+            description: projectData.description || "",
+            labId: profile.labId,
+            labName: profile.labName,
+            instituteId: profile.instituteId,
+            instituteName: profile.instituteName,
+            organisationId: profile.organisationId,
+            organisationName: profile.organisationName,
+            grantName: projectData.name || "",
+            grantNumber: projectData.grantNumber || "",
+            totalBudget: projectData.budget || 0,
+            currency: "GBP",
+            startDate: projectData.startDate ? new Date(projectData.startDate).toISOString() : new Date().toISOString(),
+            endDate: projectData.endDate ? new Date(projectData.endDate).toISOString() : new Date().toISOString(),
+            funderId: projectData.funderId || "",
+            funderName: "",
+            accountIds: projectData.fundedBy || [],
+            principalInvestigatorIds: [],
+            coPIIds: [],
+            teamMemberIds: [],
+            teamRoles: {},
+            status: "planning",
+            progress: 0,
+            workpackageIds: [],
+            visibility: visibility,
+            createdBy: user?.uid || "",
+            isExpanded: true,
+          };
+
+          handleCreateMasterProject(newProject);
+          setIsProjectDialogOpen(false);
+        }}
+        currentUserProfileId={profile?.id || null}
+        currentUserId={user?.uid || ""}
+        organisationId={profile?.organisationId}
+      />
     </div>
   );
 }
