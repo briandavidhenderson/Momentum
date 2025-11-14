@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { WorkpackageDialog } from "@/components/WorkpackageDialog"
+import { CommentsSection } from "@/components/CommentsSection"
 import {
   ArrowLeft,
   Calendar,
@@ -596,12 +597,21 @@ export function ProjectDetailPage({
           {/* Activity Tab */}
           <TabsContent value="activity" className="p-6 m-0">
             <Card>
-              <CardContent className="pt-6 text-center">
-                <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Activity feed coming soon</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  View recent updates, comments, and changes to this project
-                </p>
+              <CardHeader>
+                <CardTitle>Project Activity</CardTitle>
+                <CardDescription>
+                  Discuss progress, ask questions, and collaborate with your team
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CommentsSection
+                  entityType="project"
+                  entityId={project.id}
+                  teamMembers={teamMembers.map(m => ({
+                    id: m.id,
+                    name: `${m.firstName} ${m.lastName}`
+                  }))}
+                />
               </CardContent>
             </Card>
           </TabsContent>

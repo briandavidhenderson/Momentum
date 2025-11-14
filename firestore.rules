@@ -683,6 +683,32 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // COMMENTS
+    // ============================================================================
+    match /comments/{commentId} {
+      // Users can read comments on entities they have access to
+      // Note: This is simplified - ideally we'd check access to the parent entity
+      allow read: if isAuthenticated();
+
+      // Users can create comments
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == getUserProfileId() &&
+        request.resource.data.createdAt is timestamp;
+
+      // Users can update their own comments (for editing)
+      allow update: if isAuthenticated() && (
+        resource.data.authorId == getUserProfileId() ||
+        isAdmin()
+      );
+
+      // Users can delete their own comments
+      allow delete: if isAuthenticated() && (
+        resource.data.authorId == getUserProfileId() ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
     // DEFAULT DENY (catch-all)
     // ============================================================================
     match /{document=**} {
