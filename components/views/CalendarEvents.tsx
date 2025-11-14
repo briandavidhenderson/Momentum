@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar, Clock, MapPin, Users, Plus, Edit2, Trash2 } from "lucide-react"
 import { CalendarEvent } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
+import { EventDialog } from "@/components/EventDialog"
 
 export function CalendarEvents() {
   const {
@@ -13,10 +14,15 @@ export function CalendarEvents() {
     handleCreateEvent,
     handleUpdateEvent,
     handleDeleteEvent,
+    people = [],  // Fix Bug #9: Get people from context for event attendees
   } = useAppContext()
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
+
+  // Fix Bug #9: Add dialog state for event creation
+  const [eventDialogOpen, setEventDialogOpen] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(undefined)
 
   const getEventTypeColor = (type: CalendarEvent['type']) => {
     switch (type) {
@@ -63,16 +69,10 @@ export function CalendarEvents() {
           </p>
         </div>
         <Button
-          onClick={() => handleCreateEvent?.({
-            title: 'New Event',
-            description: '',
-            start: new Date().toISOString(),
-            end: new Date(Date.now() + 3600000).toISOString(),
-            type: 'meeting',
-            location: '',
-            attendees: [],
-            isAllDay: false,
-          })}
+          onClick={() => {
+            setSelectedEvent(undefined)
+            setEventDialogOpen(true)
+          }}
           className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
         >
           <Plus className="h-4 w-4" />
@@ -266,6 +266,32 @@ export function CalendarEvents() {
           </div>
         </div>
       </div>
+
+      {/* Fix Bug #9: Event creation dialog */}
+      <EventDialog
+        open={eventDialogOpen}
+        mode={selectedEvent ? "edit" : "create"}
+        people={people}
+        onClose={() => {
+          setEventDialogOpen(false)
+          setSelectedEvent(undefined)
+        }}
+        onSubmit={(event) => {
+          if (selectedEvent) {
+            handleUpdateEvent?.(event.id, event)
+          } else {
+            handleCreateEvent?.(event)
+          }
+          setEventDialogOpen(false)
+          setSelectedEvent(undefined)
+        }}
+        initialEvent={selectedEvent}
+        onDelete={(eventId) => {
+          handleDeleteEvent?.(eventId)
+          setEventDialogOpen(false)
+          setSelectedEvent(undefined)
+        }}
+      />
     </div>
   )
 }

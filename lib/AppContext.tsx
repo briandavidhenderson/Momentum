@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { useProjects } from './hooks/useProjects';
 import { useOrders } from './hooks/useOrders';
@@ -11,6 +11,8 @@ import { useELN } from './hooks/useELN';
 import { useCalendar } from './hooks/useCalendar';
 import { useInterface } from './hooks/useInterface';
 import { useUI } from './hooks/useUI';
+import { useProfiles } from './useProfiles';
+import { personProfilesToPeople } from './personHelpers';
 
 const AppContext = createContext<any>(null);
 
@@ -26,6 +28,10 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
   const interfaceState = useInterface();
   const uiState = useUI();
 
+  // Fix Bug #3 & #4: Add profiles and convert to people for UI
+  const allProfiles = useProfiles(auth.currentUserProfile?.labId || null);
+  const people = useMemo(() => personProfilesToPeople(allProfiles), [allProfiles]);
+
   const value = {
     ...auth,
     ...projectsAndWorkpackages,
@@ -37,6 +43,8 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     ...calendar,
     ...interfaceState,
     ...uiState,
+    allProfiles,  // Expose profiles for components that need full profile data
+    people,       // Expose people for UI components (assignee dropdowns, etc.)
   };
 
   return (
