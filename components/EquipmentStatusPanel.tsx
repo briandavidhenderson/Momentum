@@ -52,9 +52,17 @@ export function EquipmentStatusPanel({
   const [devices, setDevices] = useState<EquipmentDevice[]>(equipment)
   const [editingDevice, setEditingDevice] = useState<EquipmentDevice | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [showDeviceCreationModal, setShowDeviceCreationModal] = useState(false)
   const [checkStockItem, setCheckStockItem] = useState<{ deviceId: string; supplyId: string; currentQty: number } | null>(null)
   const [tempStockQty, setTempStockQty] = useState<string>("")
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
+  const [newDeviceForm, setNewDeviceForm] = useState({
+    name: '',
+    make: '',
+    model: '',
+    serialNumber: '',
+    maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
+  })
 
   useEffect(() => {
     setDevices(equipment)
@@ -198,14 +206,24 @@ export function EquipmentStatusPanel({
 
   // Handle add device
   const handleAddDevice = () => {
+    setShowDeviceCreationModal(true)
+  }
+
+  // Handle create device from modal
+  const handleCreateDevice = () => {
+    if (!newDeviceForm.name.trim()) {
+      alert('Please enter a device name')
+      return
+    }
+
     const newDevice: Omit<EquipmentDevice, 'id'> = {
-      name: 'New Device',
-      make: '',
-      model: '',
-      serialNumber: '',
+      name: newDeviceForm.name,
+      make: newDeviceForm.make,
+      model: newDeviceForm.model,
+      serialNumber: newDeviceForm.serialNumber,
       imageUrl: '',
       type: 'Device',
-      maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
+      maintenanceDays: newDeviceForm.maintenanceDays,
       lastMaintained: toISODateString(new Date()),
       threshold: EQUIPMENT_CONFIG.maintenance.defaultThreshold,
       supplies: [],
@@ -213,7 +231,16 @@ export function EquipmentStatusPanel({
       labId: currentUserProfile?.labId,
       createdAt: new Date().toISOString(),
     }
+
     onEquipmentCreate(newDevice)
+    setShowDeviceCreationModal(false)
+    setNewDeviceForm({
+      name: '',
+      make: '',
+      model: '',
+      serialNumber: '',
+      maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
+    })
   }
 
   // Handle edit device
@@ -609,6 +636,81 @@ export function EquipmentStatusPanel({
           </div>
         </div>
       </div>
+
+      {/* Device Creation Modal */}
+      <Dialog open={showDeviceCreationModal} onOpenChange={setShowDeviceCreationModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Device</DialogTitle>
+            <DialogDescription>
+              Add a new equipment device to your lab
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="device-name">Device Name *</Label>
+              <Input
+                id="device-name"
+                value={newDeviceForm.name}
+                onChange={(e) => setNewDeviceForm({ ...newDeviceForm, name: e.target.value })}
+                placeholder="e.g., PCR Thermocycler"
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="device-make">Make</Label>
+                <Input
+                  id="device-make"
+                  value={newDeviceForm.make}
+                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, make: e.target.value })}
+                  placeholder="e.g., Applied Biosystems"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="device-model">Model</Label>
+                <Input
+                  id="device-model"
+                  value={newDeviceForm.model}
+                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, model: e.target.value })}
+                  placeholder="e.g., Veriti 96-Well"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="device-serial">Serial Number (Optional)</Label>
+              <Input
+                id="device-serial"
+                value={newDeviceForm.serialNumber}
+                onChange={(e) => setNewDeviceForm({ ...newDeviceForm, serialNumber: e.target.value })}
+                placeholder="Device serial number"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="device-maintenance">Maintenance Interval (days)</Label>
+              <Input
+                id="device-maintenance"
+                type="number"
+                min={1}
+                value={newDeviceForm.maintenanceDays}
+                onChange={(e) => setNewDeviceForm({ ...newDeviceForm, maintenanceDays: parseInt(e.target.value) || 90 })}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowDeviceCreationModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateDevice} className="bg-brand-500 hover:bg-brand-600 text-white">
+                Create Device
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Check Stock Modal */}
       <Dialog open={!!checkStockItem} onOpenChange={() => setCheckStockItem(null)}>
