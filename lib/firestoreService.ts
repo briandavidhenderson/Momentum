@@ -25,6 +25,7 @@ import {
   Project,
   Workpackage,
   Order,
+  OrderStatus,
   InventoryItem,
   CalendarEvent,
   AuditTrail,
@@ -1160,6 +1161,7 @@ export interface FirestoreOrder {
   createdBy: string
   createdDate: Timestamp
   chargeToAccount?: string
+  accountId?: string
   category?: string
   subcategory?: string
   priceExVAT?: number
@@ -1223,8 +1225,8 @@ export async function updateOrder(orderId: string, updates: Partial<Order>): Pro
         await updateAccountBudget(
           currentOrder.accountId,
           currentOrder.priceExVAT,
-          oldStatus,
-          newStatus
+          oldStatus as OrderStatus | null,
+          newStatus as OrderStatus | null
         )
       }
     }
@@ -1249,7 +1251,7 @@ export async function deleteOrder(orderId: string): Promise<void> {
       await updateAccountBudget(
         order.accountId,
         order.priceExVAT,
-        order.status,
+        order.status as OrderStatus | null,
         null // deleting order
       )
     }

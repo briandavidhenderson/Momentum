@@ -117,12 +117,13 @@ const POSITION_DESCRIPTIONS: Record<PositionLevel, string> = {
   [PositionLevel.SENIOR_RESEARCH_FELLOW]: "Senior researcher leading projects. May have PI status on some grants.",
   [PositionLevel.ASSISTANT_PROFESSOR]: "Early-career faculty establishing independent research program. Can be PI on grants.",
   [PositionLevel.ASSOCIATE_PROFESSOR]: "Established faculty with independent lab. PI on multiple projects, supervises trainees.",
-  [PositionLevel.FULL_PROFESSOR]: "Senior faculty leader with extensive experience. PI on major grants, mentors junior faculty.",
+  [PositionLevel.PROFESSOR]: "Senior faculty leader with extensive experience. PI on major grants, mentors junior faculty.",
+  [PositionLevel.HEAD_OF_DEPARTMENT]: "Senior leader managing department operations and strategy. Oversees faculty and resources.",
+  [PositionLevel.ADMINISTRATIVE_STAFF]: "Administrative support for lab operations, coordinating activities and managing documentation.",
 
   [PositionLevel.VISITING_RESEARCHER]: "Temporary researcher from another institution. Collaborating on specific projects.",
   [PositionLevel.EXTERNAL_COLLABORATOR]: "Researcher based elsewhere collaborating remotely. Limited access to lab resources.",
   [PositionLevel.LAB_MANAGER]: "Manages day-to-day lab operations, budgets, and staff. Ensures compliance and safety.",
-  [PositionLevel.PROJECT_COORDINATOR]: "Coordinates multi-site or large-scale projects. Manages timelines and collaborations.",
 }
 
 export default function OnboardingFlow({ user, onComplete, onCancel }: OnboardingFlowProps) {
