@@ -889,6 +889,8 @@ export interface Order {
   // Linking (UPDATED: Account is now REQUIRED)
   accountId: string               // ✅ REQUIRED: Link to funding account
   accountName: string             // Cached
+  fundingAllocationId?: string    // Optional: Specific allocation within the account
+  allocationName?: string         // Cached
   funderId: string                // ✅ Cached from account
   funderName: string              // Cached
   masterProjectId: string         // ✅ Cached from account
