@@ -3,6 +3,63 @@ import * as functions from "firebase-functions"
 
 admin.initializeApp()
 
+// Import GDPR functions
+import { processDataExportRequest, processAccountDeletion } from "./gdpr"
+import { enforceDataRetention } from "./retention"
+import {
+  logAuditEvent,
+  logUserLogin,
+  logUserDeletion,
+  logConsentChanges,
+  logPrivacySettingsChanges,
+  logDataExportRequests,
+  logAccountDeletionRequests,
+  logSpecialCategoryData,
+} from "./audit"
+import {
+  onOrderStatusChange,
+  createDefaultAllocation,
+} from "./funding"
+import {
+  checkFundingAlertNotifications,
+  notifyLargeOrder,
+  notifyAllocationCreated,
+  notifyTransactionFinalized,
+} from "./notifications"
+
+// Export GDPR functions
+export {
+  processDataExportRequest,
+  processAccountDeletion,
+  enforceDataRetention,
+}
+
+// Export Audit functions
+export {
+  logAuditEvent,
+  logUserLogin,
+  logUserDeletion,
+  logConsentChanges,
+  logPrivacySettingsChanges,
+  logDataExportRequests,
+  logAccountDeletionRequests,
+  logSpecialCategoryData,
+}
+
+// Export Funding functions
+export {
+  onOrderStatusChange,
+  createDefaultAllocation,
+}
+
+// Export Notification functions
+export {
+  checkFundingAlertNotifications,
+  notifyLargeOrder,
+  notifyAllocationCreated,
+  notifyTransactionFinalized,
+}
+
 /**
  * ORCID OAuth Configuration
  * These should be set via Firebase Functions config:
