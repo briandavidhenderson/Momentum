@@ -171,17 +171,18 @@ const CustomTaskListTable: React.FC<{
   )
 }
 
-export function GanttChart({ 
-  projects, 
+export function GanttChart({
+  projects,
   workpackages = [],
-  people, 
-  onDateChange, 
+  people,
+  onDateChange,
   onTaskClick,
   onPersonDropOnBar,
   onToggleExpand,
   onContextAction,
 }: GanttChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Day)
+  const [selectedTaskId, setSelectedTaskId] = useState<string>("")
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -416,6 +417,31 @@ export function GanttChart({
 
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
+  // Handle clicking on task names in the list to open details
+  const handleTaskListClick = useCallback((taskId: string) => {
+    setSelectedTaskId(taskId)
+    const meta = metaMap.get(taskId)
+    if (!meta) return
+
+    // Only call onTaskClick for actual tasks (not projects or workpackages)
+    if (meta.type === "task" && onTaskClick) {
+      onTaskClick(meta.reference as Task)
+    } else if (meta.type === "subtask" && onTaskClick) {
+      // For subtasks, find and open the parent task
+      const subtask = meta.reference as Subtask
+      for (const ganttTask of ganttTasks) {
+        const taskMeta = metaMap.get(ganttTask.id)
+        if (taskMeta?.type === "task") {
+          const parentTask = taskMeta.reference as Task
+          if (parentTask.subtasks?.some(st => st.id === subtask.id)) {
+            onTaskClick(parentTask)
+            return
+          }
+        }
+      }
+    }
+  }, [metaMap, ganttTasks, onTaskClick])
+
   if (ganttTasks.length === 0) {
     return (
       <div className="flex items-center justify-center h-96 border-2 border-dashed border-gray-300 rounded-lg">
@@ -501,8 +527,10 @@ export function GanttChart({
         columnWidth={columnWidth}
         TaskListHeader={CustomTaskListHeader}
         TaskListTable={(props) => (
-          <CustomTaskListTable 
-            {...props} 
+          <CustomTaskListTable
+            {...props}
+            selectedTaskId={selectedTaskId}
+            setSelectedTask={handleTaskListClick}
             onToggleExpand={onToggleExpand}
             taskMeta={metaMap}
             childCount={childCount}
