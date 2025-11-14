@@ -1,0 +1,39 @@
+# Code Ownership and Protection
+#
+# This file defines ownership of core code sections to ensure
+# proper review and protection of critical components.
+#
+# Format: <file-pattern> @owner
+# When someone opens a pull request that modifies these files,
+# the specified owners will be automatically requested for review.
+
+# Default owner for everything (fallback)
+* @briandavidhenderson
+
+# Core Application Code
+/app/** @briandavidhenderson
+/components/** @briandavidhenderson
+/lib/** @briandavidhenderson
+
+# Configuration Files
+/firebase.json @briandavidhenderson
+/firestore.rules @briandavidhenderson
+/firestore.indexes.json @briandavidhenderson
+/next.config.js @briandavidhenderson
+/tsconfig.json @briandavidhenderson
+/tailwind.config.ts @briandavidhenderson
+
+# Package Management
+/package.json @briandavidhenderson
+/package-lock.json @briandavidhenderson
+
+# Firebase Functions
+/firebase/functions/** @briandavidhenderson
+
+# Code Protection System
+/.code-protection.json @briandavidhenderson
+/scripts/** @briandavidhenderson
+
+# Security & Environment
+/.env* @briandavidhenderson
+/firestore.rules @briandavidhenderson

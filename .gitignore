@@ -28,3 +28,6 @@ firebase/functions/lib/
 .env.local
 .env
 .env.*
+
+# Code protection snapshots
+.snapshots/

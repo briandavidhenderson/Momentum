@@ -17,7 +17,11 @@
       "Bash(firebase hosting:sites:list:*)",
       "Bash(firebase hosting:releases:list:*)",
       "Bash(cat:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(git stash push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

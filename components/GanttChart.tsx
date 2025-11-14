@@ -5,7 +5,6 @@ import "gantt-task-react/dist/index.css"
 import { MasterProject, Workpackage, Task, Person, Subtask, Deliverable } from "@/lib/types"
 import { useMemo, useState, useCallback } from "react"
 import type { MouseEvent } from "react"
-import { useDroppable } from "@dnd-kit/core"
 import { ChevronDown, ChevronRight, ZoomIn, ZoomOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
