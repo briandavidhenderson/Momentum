@@ -15,6 +15,7 @@ import { ProfileManagement } from "@/components/views/ProfileManagement"
 import { OrdersInventory } from "@/components/views/OrdersInventory"
 import { EquipmentManagement } from "@/components/views/EquipmentManagement"
 import { CalendarEvents } from "@/components/views/CalendarEvents"
+import { CookieConsentBanner } from "@/components/CookieConsentBanner"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -217,6 +218,9 @@ export default function Home() {
         {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
         {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
       </div>
+
+      {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}
+      <CookieConsentBanner />
     </main>
   )
 }
