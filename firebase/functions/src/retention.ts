@@ -51,7 +51,8 @@ export const enforceDataRetention = functions
         if (data.downloadUrl) {
           try {
             const fileName = extractFileNameFromUrl(data.downloadUrl)
-            const file = storage.bucket().file(fileName)
+            const bucketName = "momentum-gdpr-exports"
+            const file = storage.bucket(bucketName).file(fileName)
             await file.delete()
             functions.logger.info(`Deleted expired export file: ${fileName}`)
           } catch (error) {
