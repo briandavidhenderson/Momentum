@@ -26,7 +26,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { updateProfile, updateUser } from "@/lib/firestoreService"
 import { OrcidBadge } from "@/components/OrcidBadge"
-import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
+import { linkOrcidToCurrentUser, resyncOrcidProfile } from "@/lib/auth/orcid"
 import { deleteField } from "firebase/firestore"
 
 interface PersonalProfilePageProps {

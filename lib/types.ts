@@ -576,6 +576,10 @@ export interface PersonProfile {
   orcidVerified?: boolean             // True once ORCID is linked via OAuth
   orcidLastSynced?: string            // ISO date of last sync with ORCID record
   orcidData?: OrcidProfileData        // Full ORCID record data
+  orcidClaims?: {
+    name?: string | null              // Name from ORCID
+    email?: string | null             // Email from ORCID
+  }
 
   // Calendar Integration
   calendarConnections?: {
