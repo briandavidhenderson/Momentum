@@ -18,17 +18,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Plus, GripVertical, Trash2, Edit2, Clock } from "lucide-react"
-import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent } from "@dnd-kit/core"
+import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { useAppContext } from "@/lib/AppContext"
 
-function DroppableColumn({ 
-  id, 
-  title, 
-  tasks, 
+function DroppableColumn({
+  id,
+  title,
+  tasks,
   children,
-  count 
-}: { 
+  count
+}: {
   id: string
   title: string
   tasks: DayToDayTask[]
@@ -39,6 +41,9 @@ function DroppableColumn({
     id: `column-${id}`,
     data: { type: "column", status: id },
   })
+
+  // Feature #2: Enable sortable items within column
+  const taskIds = tasks.map(t => t.id)
 
   return (
     <div
@@ -55,9 +60,11 @@ function DroppableColumn({
           <Badge variant="secondary">{count}</Badge>
         </div>
       </div>
-      <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-        {children}
-      </div>
+      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+        <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+          {children}
+        </div>
+      </SortableContext>
     </div>
   )
 }
@@ -75,17 +82,17 @@ function DraggableTaskCard({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  // Feature #2: Use useSortable for both column switching and reordering
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: "task", task },
   })
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0.5 : 1,
-      }
-    : undefined
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
 
   const assignee = (people || []).find((p) => p.id === task.assigneeId)
   const linkedProject = (projects || []).find((p: any) => p.id === task.linkedProjectId)
@@ -454,15 +461,44 @@ export function DayToDayBoard() {
 
     if (!over) return
 
-    const task = active.data.current?.task as DayToDayTask | undefined
+    const activeTask = active.data.current?.task as DayToDayTask | undefined
     const overData = over.data.current
+    const overTask = overData?.task as DayToDayTask | undefined
 
-    if (!task || !overData) return
+    if (!activeTask) return
 
-    if (overData.type === "column") {
+    // Feature #2: Handle reordering within same column
+    if (overTask && activeTask.status === overTask.status) {
+      // Reordering within same column
+      const tasksInColumn = tasks.filter(t => t.status === activeTask.status)
+      const oldIndex = tasksInColumn.findIndex(t => t.id === activeTask.id)
+      const newIndex = tasksInColumn.findIndex(t => t.id === overTask.id)
+
+      if (oldIndex !== newIndex) {
+        // Reorder tasks
+        const reorderedTasks = arrayMove(tasksInColumn, oldIndex, newIndex)
+
+        // Update order field for all affected tasks
+        const updates = reorderedTasks.map((task, index) => ({
+          id: task.id,
+          order: index,
+        }))
+
+        // Batch update tasks
+        Promise.all(
+          updates.map(update => onUpdateTask(update.id, { order: update.order }))
+        ).catch(error => {
+          console.error('Error reordering tasks:', error)
+        })
+      }
+      return
+    }
+
+    // Handle moving to different column
+    if (overData?.type === "column") {
       const newStatus = overData.status as TaskStatus
-      if (task.status !== newStatus) {
-        onMoveTask(task.id, newStatus)
+      if (activeTask.status !== newStatus) {
+        onMoveTask(activeTask.id, newStatus)
       }
     }
   }
