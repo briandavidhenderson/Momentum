@@ -1168,7 +1168,18 @@ export interface FirestoreOrder {
 export async function createOrder(orderData: Omit<Order, 'id'> & { createdBy: string }): Promise<string> {
   const orderRef = doc(collection(db, "orders"))
   const orderId = orderRef.id
-  
+
+  // Feature #7: Update budget tracking when creating order
+  if (orderData.accountId && orderData.priceExVAT) {
+    const { updateAccountBudget } = await import('./budgetUtils')
+    await updateAccountBudget(
+      orderData.accountId,
+      orderData.priceExVAT,
+      null, // old status (creating new order)
+      orderData.status // new status
+    )
+  }
+
   await setDoc(orderRef, {
     ...orderData,
     id: orderId,
@@ -1177,7 +1188,7 @@ export async function createOrder(orderData: Omit<Order, 'id'> & { createdBy: st
     createdDate: Timestamp.fromDate(orderData.createdDate),
     createdAt: serverTimestamp(),
   })
-  
+
   return orderId
 }
 
@@ -1198,16 +1209,53 @@ export async function getOrders(): Promise<Order[]> {
 export async function updateOrder(orderId: string, updates: Partial<Order>): Promise<void> {
   const orderRef = doc(db, "orders", orderId)
   const updateData: any = { ...updates }
-  
+
+  // Feature #7: Update budget tracking when order status changes
+  if (updates.status) {
+    const orderDoc = await getDoc(orderRef)
+    if (orderDoc.exists()) {
+      const currentOrder = orderDoc.data() as FirestoreOrder
+      const oldStatus = currentOrder.status
+      const newStatus = updates.status
+
+      if (oldStatus !== newStatus && currentOrder.accountId && currentOrder.priceExVAT) {
+        const { updateAccountBudget } = await import('./budgetUtils')
+        await updateAccountBudget(
+          currentOrder.accountId,
+          currentOrder.priceExVAT,
+          oldStatus,
+          newStatus
+        )
+      }
+    }
+  }
+
   if (updates.orderedDate) updateData.orderedDate = Timestamp.fromDate(updates.orderedDate)
   if (updates.receivedDate) updateData.receivedDate = Timestamp.fromDate(updates.receivedDate)
   if (updates.createdDate) updateData.createdDate = Timestamp.fromDate(updates.createdDate)
-  
+
   await updateDoc(orderRef, updateData)
 }
 
 export async function deleteOrder(orderId: string): Promise<void> {
-  await deleteDoc(doc(db, "orders", orderId))
+  // Feature #7: Update budget tracking when deleting order
+  const orderRef = doc(db, "orders", orderId)
+  const orderDoc = await getDoc(orderRef)
+
+  if (orderDoc.exists()) {
+    const order = orderDoc.data() as FirestoreOrder
+    if (order.accountId && order.priceExVAT) {
+      const { updateAccountBudget } = await import('./budgetUtils')
+      await updateAccountBudget(
+        order.accountId,
+        order.priceExVAT,
+        order.status,
+        null // deleting order
+      )
+    }
+  }
+
+  await deleteDoc(orderRef)
 }
 
 export function subscribeToOrders(

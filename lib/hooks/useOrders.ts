@@ -32,6 +32,16 @@ export function useOrders() {
 
   const handleCreateOrder = async (orderData: Partial<Omit<Order, 'id' | 'createdBy' | 'orderedBy'>>) => {
     if (!profile) return;
+
+    // Feature #7: Validate budget before creating order if status is 'ordered'
+    if (orderData.status === 'ordered' && orderData.accountId && orderData.priceExVAT) {
+      const { validateOrderCreation } = await import('@/lib/budgetUtils');
+      const validation = await validateOrderCreation(orderData.accountId, orderData.priceExVAT);
+      if (!validation.valid) {
+        throw new Error(validation.message || 'Insufficient funds');
+      }
+    }
+
     const newOrder: Omit<Order, 'id'> = {
       productName: orderData.productName || 'New Order',
       catNum: orderData.catNum || '',
