@@ -81,11 +81,11 @@ export default function Home() {
 
   // Main application
   return (
-    <main className="min-h-screen bg-background p-4 pb-8">
-      <div className="max-w-[2000px] mx-auto space-y-4">
+    <main className="min-h-screen bg-gray-50 p-4 pb-8">
+      <div className="max-w-[2000px] mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between">
+        <div className="bg-white rounded-xl shadow-navigation p-6">
+          <div className="flex items-start justify-between mb-4">
             <div>
               <h1 className="h1 text-foreground mb-2">
                 Momentum Lab Management
@@ -120,7 +120,7 @@ export default function Home() {
           </div>
 
           {/* Main Navigation Tabs */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               onClick={() => setMainView('projects')}
               variant={mainView === 'projects' ? 'default' : 'outline'}
@@ -206,16 +206,19 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Render selected view */}
-        {mainView === 'projects' && <ProjectDashboard />}
-        {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
-        {mainView === 'daytoday' && <DayToDayBoard />}
-        {mainView === 'eln' && <ElectronicLabNotebook />}
-        {mainView === 'orders' && <OrdersInventory />}
-        {mainView === 'equipment' && <EquipmentManagement />}
-        {mainView === 'calendar' && <CalendarEvents />}
-        {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
-        {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+        {/* Main Content Area */}
+        <div className="bg-white rounded-xl shadow-card p-6">
+          {/* Render selected view */}
+          {mainView === 'projects' && <ProjectDashboard />}
+          {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
+          {mainView === 'daytoday' && <DayToDayBoard />}
+          {mainView === 'eln' && <ElectronicLabNotebook />}
+          {mainView === 'orders' && <OrdersInventory />}
+          {mainView === 'equipment' && <EquipmentManagement />}
+          {mainView === 'calendar' && <CalendarEvents />}
+          {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+          {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+        </div>
       </div>
     </main>
   )
