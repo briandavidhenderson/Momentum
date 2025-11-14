@@ -142,58 +142,100 @@ export function EquipmentStatusPanel({
 
   // Handle reorder - adds to "To Order" section
   // FIXED: Now takes explicit neededQty to avoid calculation errors
-  const handleReorder = (deviceId: string, supply: EquipmentSupply, explicitNeededQty?: number) => {
-    const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
-    if (neededQty <= 0) return
+  const handleReorder = async (deviceId: string, supply: EquipmentSupply, explicitNeededQty?: number, silent = false) => {
+    try {
+      const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+      if (neededQty <= 0) {
+        console.log('No reorder needed - sufficient quantity')
+        return false
+      }
 
-    const device = devices.find(d => d.id === deviceId)
-    if (!device) return
+      const device = devices.find(d => d.id === deviceId)
+      if (!device) {
+        console.error('Device not found:', deviceId)
+        return false
+      }
 
-    // Create order
-    const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
-    const newOrder: Order = {
-      id: generateId('order'), // FIXED: Use crypto.randomUUID()
-      productName: supply.name,
-      catNum: inventoryItem?.catNum || '',
-      supplier: '',
-      // Use account from inventory item, or placeholder
-      accountId: inventoryItem?.chargeToAccount || "temp_account_placeholder",
-      accountName: "Select Account",
-      funderId: "temp_funder_placeholder",
-      funderName: "Select Funder",
-      masterProjectId: "temp_project_placeholder",
-      masterProjectName: "Select Project",
-      priceExVAT: supply.price,
-      currency: EQUIPMENT_CONFIG.currency.code, // FIXED: Use centralized currency
-      status: 'to-order',
-      orderedBy: currentUserProfile?.id || '',
-      orderedDate: undefined, // Will be set when order is actually placed
-      receivedDate: undefined,
-      createdBy: currentUserProfile?.id || '',
-      createdDate: new Date(),
-      category: inventoryItem?.category,
-      subcategory: inventoryItem?.subcategory,
-      // Legacy field for backward compatibility
-      chargeToAccount: inventoryItem?.chargeToAccount,
-      // Add provenance for traceability
-      sourceDeviceId: deviceId,
-      sourceSupplyId: supply.id,
-      sourceInventoryItemId: supply.inventoryItemId,
+      // Create order
+      const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
+      const newOrder: Order = {
+        id: generateId('order'), // FIXED: Use crypto.randomUUID()
+        productName: supply.name,
+        catNum: inventoryItem?.catNum || '',
+        supplier: '',
+        // Use account from inventory item, or placeholder
+        accountId: inventoryItem?.chargeToAccount || "temp_account_placeholder",
+        accountName: "Select Account",
+        funderId: "temp_funder_placeholder",
+        funderName: "Select Funder",
+        masterProjectId: "temp_project_placeholder",
+        masterProjectName: "Select Project",
+        priceExVAT: supply.price,
+        currency: EQUIPMENT_CONFIG.currency.code, // FIXED: Use centralized currency
+        status: 'to-order',
+        orderedBy: currentUserProfile?.id || '',
+        orderedDate: undefined, // Will be set when order is actually placed
+        receivedDate: undefined,
+        createdBy: currentUserProfile?.id || '',
+        createdDate: new Date(),
+        category: inventoryItem?.category,
+        subcategory: inventoryItem?.subcategory,
+        // Legacy field for backward compatibility
+        chargeToAccount: inventoryItem?.chargeToAccount,
+        // Add provenance for traceability
+        sourceDeviceId: deviceId,
+        sourceSupplyId: supply.id,
+        sourceInventoryItemId: supply.inventoryItemId,
+      }
+
+      console.log(`Creating order for ${supply.name}`)
+      onOrderCreate(newOrder)
+
+      if (!silent) {
+        alert(`✓ Order created for "${supply.name}"\n\nGo to the Orders tab to complete the order details.`)
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error creating order:', error)
+      if (!silent) {
+        alert(`Failed to create order: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      throw error
     }
-
-    onOrderCreate(newOrder)
   }
 
   // Handle order missing supplies
   // FIXED: Calculate needed qty from ORIGINAL device state, not mutated
-  const handleOrderMissing = (device: EquipmentDevice) => {
-    device.supplies.forEach(supply => {
-      const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
-      if (neededQty > 0) {
-        // Pass explicit needed qty to avoid recalculation
-        handleReorder(device.id, supply, neededQty)
+  const handleOrderMissing = async (device: EquipmentDevice) => {
+    try {
+      const missingSupplies = device.supplies.filter(supply => {
+        const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+        return neededQty > 0
+      })
+
+      if (missingSupplies.length === 0) {
+        alert(`No missing supplies for ${device.name}`)
+        return
       }
-    })
+
+      console.log(`Creating ${missingSupplies.length} orders for ${device.name}`)
+
+      let successCount = 0
+      for (const supply of missingSupplies) {
+        const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+        // Pass explicit needed qty and silent=true to avoid multiple alerts
+        const success = await handleReorder(device.id, supply, neededQty, true)
+        if (success) successCount++
+      }
+
+      if (successCount > 0) {
+        alert(`✓ Created ${successCount} order(s) for missing supplies on ${device.name}\n\nGo to the Orders tab to complete the order details.`)
+      }
+    } catch (error) {
+      console.error('Error creating orders:', error)
+      alert(`Failed to create orders: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   // Handle add device - opens modal with empty form
