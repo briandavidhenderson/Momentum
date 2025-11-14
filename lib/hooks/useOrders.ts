@@ -18,7 +18,7 @@ export function useOrders() {
   const { currentUserProfile: profile } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const { toast } = useToast();
+  const { success, error } = useToast();
 
   useEffect(() => {
     if (!profile?.labId) return;
@@ -54,34 +54,20 @@ export function useOrders() {
         accountId: orderData.accountId || '',
       };
       await createOrder(newOrder);
-      toast({
-        title: "Order created",
-        description: `"${newOrder.productName}" has been added to orders.`,
-      });
-    } catch (error) {
-      console.error('Error creating order:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create order. Please try again.",
-        variant: "destructive",
-      });
+      success(`"${newOrder.productName}" has been added to orders.`);
+    } catch (err) {
+      console.error('Error creating order:', err);
+      error("Failed to create order. Please try again.");
     }
   };
 
   const handleDeleteOrder = async (orderId: string) => {
     try {
       await deleteOrder(orderId);
-      toast({
-        title: "Order deleted",
-        description: "The order has been removed.",
-      });
-    } catch (error) {
-      console.error('Error deleting order:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete order. Please try again.",
-        variant: "destructive",
-      });
+      success("The order has been removed.");
+    } catch (err) {
+      console.error('Error deleting order:', err);
+      error("Failed to delete order. Please try again.");
     }
   };
 
@@ -94,23 +80,13 @@ export function useOrders() {
           'ordered': 'Ordered',
           'received': 'Received'
         };
-        toast({
-          title: "Order updated",
-          description: `Order moved to ${statusNames[updates.status]}.`,
-        });
+        success(`Order moved to ${statusNames[updates.status]}.`);
       } else {
-        toast({
-          title: "Order updated",
-          description: "Your changes have been saved.",
-        });
+        success("Your changes have been saved.");
       }
-    } catch (error) {
-      console.error('Error updating order:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update order. Please try again.",
-        variant: "destructive",
-      });
+    } catch (err) {
+      console.error('Error updating order:', err);
+      error("Failed to update order. Please try again.");
     }
   };
 
@@ -144,17 +120,10 @@ export function useOrders() {
       };
       await createOrder(newOrder);
       await updateInventoryItem(item.id, { inventoryLevel: 'empty', lastOrderedDate: new Date() });
-      toast({
-        title: "Reorder created",
-        description: `Order created for "${item.productName}".`,
-      });
-    } catch (error) {
-      console.error('Error creating reorder:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create reorder. Please try again.",
-        variant: "destructive",
-      });
+      success(`Order created for "${item.productName}".`);
+    } catch (err) {
+      console.error('Error creating reorder:', err);
+      error("Failed to create reorder. Please try again.");
     }
   };
 

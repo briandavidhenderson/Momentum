@@ -8,7 +8,7 @@ import { useToast } from '@/lib/toast';
 export function useDayToDayTasks() {
   const { currentUser, currentUserProfile: profile } = useAuth();
   const [dayToDayTasks, setDayToDayTasks] = useState<DayToDayTask[]>([]);
-  const { toast } = useToast();
+  const { success, error } = useToast();
 
   useEffect(() => {
     if (!profile?.labId) return;
@@ -30,51 +30,30 @@ export function useDayToDayTasks() {
         order,
         labId: profile.labId,
       });
-      toast({
-        title: "Task created",
-        description: `"${task.title}" has been added to your board.`,
-      });
-    } catch (error) {
-      console.error('Error creating task:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create task. Please try again.",
-        variant: "destructive",
-      });
+      success(`"${task.title}" has been added to your board.`);
+    } catch (err) {
+      console.error('Error creating task:', err);
+      error("Failed to create task. Please try again.");
     }
   };
 
   const handleUpdateDayToDayTask = async (taskId: string, updates: Partial<DayToDayTask>) => {
     try {
       await updateDayToDayTask(taskId, updates);
-      toast({
-        title: "Task updated",
-        description: "Your changes have been saved.",
-      });
-    } catch (error) {
-      console.error('Error updating task:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update task. Please try again.",
-        variant: "destructive",
-      });
+      success("Your changes have been saved.");
+    } catch (err) {
+      console.error('Error updating task:', err);
+      error("Failed to update task. Please try again.");
     }
   };
 
   const handleDeleteDayToDayTask = async (taskId: string) => {
     try {
       await deleteDayToDayTask(taskId);
-      toast({
-        title: "Task deleted",
-        description: "The task has been removed.",
-      });
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete task. Please try again.",
-        variant: "destructive",
-      });
+      success("The task has been removed.");
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      error("Failed to delete task. Please try again.");
     }
   };
 
@@ -86,17 +65,10 @@ export function useDayToDayTasks() {
         'working': 'Working On It',
         'done': 'Done'
       };
-      toast({
-        title: "Task moved",
-        description: `Task moved to ${statusNames[newStatus]}.`,
-      });
-    } catch (error) {
-      console.error('Error moving task:', error);
-      toast({
-        title: "Error",
-        description: "Failed to move task. Please try again.",
-        variant: "destructive",
-      });
+      success(`Task moved to ${statusNames[newStatus]}.`);
+    } catch (err) {
+      console.error('Error moving task:', err);
+      error("Failed to move task. Please try again.");
     }
   };
 

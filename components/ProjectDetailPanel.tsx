@@ -58,13 +58,13 @@ export function ProjectDetailPanel({
 
   // Filter tasks linked to this project
   const projectTasks = (dayToDayTasks || []).filter(
-    (task) => task.linkedProjectId === project.id
+    (task: DayToDayTask) => task.linkedProjectId === project.id
   )
 
   // Calculate task statistics
-  const todoTasks = projectTasks.filter((t) => t.status === "todo")
-  const workingTasks = projectTasks.filter((t) => t.status === "working")
-  const doneTasks = projectTasks.filter((t) => t.status === "done")
+  const todoTasks = projectTasks.filter((t: DayToDayTask) => t.status === "todo")
+  const workingTasks = projectTasks.filter((t: DayToDayTask) => t.status === "working")
+  const doneTasks = projectTasks.filter((t: DayToDayTask) => t.status === "done")
   const completionPercentage =
     projectTasks.length > 0
       ? Math.round((doneTasks.length / projectTasks.length) * 100)
@@ -241,8 +241,8 @@ export function ProjectDetailPanel({
             </div>
           ) : (
             <div className="space-y-3">
-              {projectTasks.map((task) => {
-                const assignee = people.find((p) => p.id === task.assigneeId)
+              {projectTasks.map((task: DayToDayTask) => {
+                const assignee = people.find((p: Person) => p.id === task.assigneeId)
                 return (
                   <div
                     key={task.id}
