@@ -130,6 +130,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [instSearchTerm, setInstSearchTerm] = useState("")
   const [labSearchTerm, setLabSearchTerm] = useState("")
   const [funderSearchTerm, setFunderSearchTerm] = useState("")
+  const [positionSearchTerm, setPositionSearchTerm] = useState("")
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showCreateInst, setShowCreateInst] = useState(false)
   const [showCreateLab, setShowCreateLab] = useState(false)
@@ -1030,6 +1031,17 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         )
 
       case "position":
+        // Filter positions based on search term
+        const filteredCategories = Object.entries(POSITION_CATEGORIES).reduce((acc, [category, positions]) => {
+          const filtered = positions.filter(pos =>
+            POSITION_DISPLAY_NAMES[pos].toLowerCase().includes(positionSearchTerm.toLowerCase())
+          );
+          if (filtered.length > 0) {
+            acc[category] = filtered;
+          }
+          return acc;
+        }, {} as Record<string, PositionLevel[]>);
+
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -1038,27 +1050,87 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <p className="text-gray-600">What is your role in the lab?</p>
             </div>
 
-            <div className="space-y-4">
-              {Object.entries(POSITION_CATEGORIES).map(([category, positions]) => (
-                <div key={category} className="border rounded-lg p-4">
-                  <h3 className="font-semibold mb-3 text-sm text-gray-700">{category}</h3>
-                  <div className="space-y-2">
-                    {positions.map((pos) => (
-                      <button
-                        key={pos}
-                        onClick={() => setState((s) => ({ ...s, positionLevel: pos }))}
-                        className={`w-full p-3 text-left rounded-lg border transition ${
-                          state.positionLevel === pos
-                            ? "bg-blue-50 border-blue-600"
-                            : "hover:bg-gray-50 border-gray-200"
-                        }`}
-                      >
-                        {POSITION_DISPLAY_NAMES[pos]}
-                      </button>
-                    ))}
-                  </div>
+            {/* Search Filter */}
+            <div className="mb-4">
+              <Input
+                type="text"
+                placeholder="Search for a position..."
+                value={positionSearchTerm}
+                onChange={(e) => setPositionSearchTerm(e.target.value)}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Type to filter positions by name
+              </p>
+            </div>
+
+            {/* Helper Text */}
+            {!state.positionLevel && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                Please select your position to continue
+              </div>
+            )}
+
+            {/* Position List */}
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+              {Object.keys(filteredCategories).length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No positions match your search.</p>
+                  <Button
+                    variant="link"
+                    onClick={() => setPositionSearchTerm("")}
+                    className="mt-2"
+                  >
+                    Clear search
+                  </Button>
                 </div>
-              ))}
+              ) : (
+                Object.entries(filteredCategories).map(([category, positions]) => (
+                  <div key={category} className="border rounded-lg p-4 bg-white">
+                    <h3 className="font-semibold mb-3 text-sm text-gray-700 uppercase tracking-wide">{category}</h3>
+                    <div className="space-y-2">
+                      {positions.map((pos) => {
+                        const isSelected = state.positionLevel === pos;
+                        const displayName = POSITION_DISPLAY_NAMES[pos];
+                        const searchIndex = positionSearchTerm
+                          ? displayName.toLowerCase().indexOf(positionSearchTerm.toLowerCase())
+                          : -1;
+
+                        return (
+                          <button
+                            key={pos}
+                            onClick={() => setState((s) => ({ ...s, positionLevel: pos }))}
+                            className={`w-full p-3 text-left rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? "bg-blue-600 border-blue-600 text-white shadow-lg scale-[1.02]"
+                                : "bg-white border-gray-200 hover:bg-gray-50 hover:border-blue-300"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={`font-medium ${isSelected ? "text-white" : "text-gray-900"}`}>
+                                {searchIndex >= 0 && positionSearchTerm ? (
+                                  <>
+                                    {displayName.substring(0, searchIndex)}
+                                    <span className={isSelected ? "underline" : "bg-yellow-200 px-0.5"}>
+                                      {displayName.substring(searchIndex, searchIndex + positionSearchTerm.length)}
+                                    </span>
+                                    {displayName.substring(searchIndex + positionSearchTerm.length)}
+                                  </>
+                                ) : (
+                                  displayName
+                                )}
+                              </span>
+                              {isSelected && (
+                                <CheckCircle2 className="w-5 h-5 text-white" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )
