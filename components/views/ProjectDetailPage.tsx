@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { WorkpackageDialog } from "@/components/WorkpackageDialog"
 import {
   ArrowLeft,
   Calendar,
@@ -19,7 +20,10 @@ import {
   BarChart3,
   CheckCircle2,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Eye,
+  Edit2,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
 
@@ -30,6 +34,9 @@ interface ProjectDetailPageProps {
   fundingAccounts: FundingAccount[]
   onBack: () => void
   onEdit?: () => void
+  onCreateWorkpackage?: (workpackageData: Partial<Workpackage>) => void
+  onUpdateWorkpackage?: (workpackageId: string, updates: Partial<Workpackage>) => void
+  onDeleteWorkpackage?: (workpackageId: string) => void
 }
 
 export function ProjectDetailPage({
@@ -39,8 +46,14 @@ export function ProjectDetailPage({
   fundingAccounts,
   onBack,
   onEdit,
+  onCreateWorkpackage,
+  onUpdateWorkpackage,
+  onDeleteWorkpackage,
 }: ProjectDetailPageProps) {
   const [activeTab, setActiveTab] = useState("overview")
+  const [workpackageDialogOpen, setWorkpackageDialogOpen] = useState(false)
+  const [selectedWorkpackage, setSelectedWorkpackage] = useState<Workpackage | null>(null)
+  const [workpackageDialogMode, setWorkpackageDialogMode] = useState<"create" | "edit" | "view">("view")
 
   // Calculate project statistics
   const stats = useMemo(() => {
@@ -83,6 +96,43 @@ export function ProjectDetailPage({
   const daysRemaining = Math.ceil(
     (new Date(project.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
   )
+
+  // Workpackage dialog handlers
+  const handleCreateWorkpackageClick = () => {
+    setSelectedWorkpackage(null)
+    setWorkpackageDialogMode("create")
+    setWorkpackageDialogOpen(true)
+  }
+
+  const handleViewWorkpackage = (wp: Workpackage) => {
+    setSelectedWorkpackage(wp)
+    setWorkpackageDialogMode("view")
+    setWorkpackageDialogOpen(true)
+  }
+
+  const handleEditWorkpackage = (wp: Workpackage) => {
+    setSelectedWorkpackage(wp)
+    setWorkpackageDialogMode("edit")
+    setWorkpackageDialogOpen(true)
+  }
+
+  const handleSaveWorkpackage = (workpackageData: Partial<Workpackage>) => {
+    if (workpackageDialogMode === "create" && onCreateWorkpackage) {
+      onCreateWorkpackage(workpackageData)
+    } else if (workpackageDialogMode === "edit" && selectedWorkpackage && onUpdateWorkpackage) {
+      onUpdateWorkpackage(selectedWorkpackage.id, workpackageData)
+    }
+    setWorkpackageDialogOpen(false)
+  }
+
+  const handleDeleteWorkpackage = () => {
+    if (selectedWorkpackage && onDeleteWorkpackage) {
+      if (confirm(`Are you sure you want to delete "${selectedWorkpackage.name}"?`)) {
+        onDeleteWorkpackage(selectedWorkpackage.id)
+        setWorkpackageDialogOpen(false)
+      }
+    }
+  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -327,6 +377,21 @@ export function ProjectDetailPage({
 
           {/* Work Packages Tab */}
           <TabsContent value="workpackages" className="p-6 m-0">
+            {onCreateWorkpackage && (
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-semibold">Work Packages</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Organize project tasks into work packages
+                  </p>
+                </div>
+                <Button onClick={handleCreateWorkpackageClick} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Work Package
+                </Button>
+              </div>
+            )}
+
             <div className="space-y-4">
               {workpackages.length === 0 ? (
                 <Card>
@@ -336,6 +401,12 @@ export function ProjectDetailPage({
                     <p className="text-sm text-muted-foreground mt-1">
                       Add work packages to organize your project tasks
                     </p>
+                    {onCreateWorkpackage && (
+                      <Button onClick={handleCreateWorkpackageClick} className="mt-4">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create First Work Package
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ) : (
@@ -349,15 +420,39 @@ export function ProjectDetailPage({
                             {new Date(wp.start).toLocaleDateString()} - {new Date(wp.end).toLocaleDateString()}
                           </CardDescription>
                         </div>
-                        <Badge
-                          variant={
-                            wp.status === "completed" ? "default" :
-                            wp.status === "atRisk" ? "destructive" :
-                            "secondary"
-                          }
-                        >
-                          {wp.status || "planning"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              wp.status === "completed" ? "default" :
+                              wp.status === "atRisk" ? "destructive" :
+                              "secondary"
+                            }
+                          >
+                            {wp.status || "planning"}
+                          </Badge>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleViewWorkpackage(wp)}
+                              title="View details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {onUpdateWorkpackage && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleEditWorkpackage(wp)}
+                                title="Edit workpackage"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -512,6 +607,17 @@ export function ProjectDetailPage({
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Workpackage Dialog */}
+      <WorkpackageDialog
+        open={workpackageDialogOpen}
+        onOpenChange={setWorkpackageDialogOpen}
+        workpackage={selectedWorkpackage}
+        projectId={project.id}
+        onSave={handleSaveWorkpackage}
+        onDelete={workpackageDialogMode === "edit" ? handleDeleteWorkpackage : undefined}
+        mode={workpackageDialogMode}
+      />
     </div>
   )
 }

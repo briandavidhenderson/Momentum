@@ -739,6 +739,31 @@ export function ProjectDashboard() {
           // TODO: Open project edit dialog
           alert("Edit functionality coming soon")
         }}
+        onCreateWorkpackage={async (workpackageData) => {
+          // Create workpackage and link it to the project
+          const workpackageId = await createWorkpackage({
+            ...workpackageData,
+            profileProjectId: selectedProjectForDetail.id,
+            createdBy: user?.uid || "",
+          } as any)
+
+          if (workpackageId) {
+            await handleUpdateMasterProject(selectedProjectForDetail.id, {
+              workpackageIds: [...(selectedProjectForDetail.workpackageIds || []), workpackageId],
+            })
+          }
+        }}
+        onUpdateWorkpackage={async (workpackageId, updates) => {
+          await handleUpdateWorkpackage(workpackageId, updates)
+        }}
+        onDeleteWorkpackage={async (workpackageId) => {
+          // Remove from project's workpackageIds
+          await handleUpdateMasterProject(selectedProjectForDetail.id, {
+            workpackageIds: (selectedProjectForDetail.workpackageIds || []).filter(id => id !== workpackageId),
+          })
+          // Note: The actual workpackage document deletion should be handled by the backend or here
+          // For now, we just remove the reference
+        }}
       />
     )
   }
