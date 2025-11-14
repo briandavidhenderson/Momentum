@@ -52,9 +52,9 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
       try {
         const labId = currentUserProfile.labId
 
-        // Load funding accounts
+        // Fix Bug #6: Correct collection name is "accounts" not "fundingAccounts"
         const accountsSnapshot = await getDocs(
-          query(collection(db, "fundingAccounts"), where("labId", "==", labId))
+          query(collection(db, "accounts"), where("labId", "==", labId))
         )
         const accounts = accountsSnapshot.docs.map((doc) => ({
           id: doc.id,

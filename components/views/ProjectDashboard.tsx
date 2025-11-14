@@ -81,8 +81,14 @@ export function ProjectDashboard() {
     handleCreateMasterProject(newProject);
   };
 
-  const handleCreateMasterProjectFromDialog = (projectData: ProfileProject & { funderId?: string }) => {
+  const handleCreateMasterProjectFromDialog = async (projectData: ProfileProject & { funderId?: string }) => {
     if (!profile || !user) return;
+
+    // Fix Bug #1: Validate project name before creation
+    if (!projectData.name || !projectData.name.trim()) {
+      alert("Project name is required. Please enter a project name.");
+      return;
+    }
 
     // Map ProjectVisibility to MasterProject visibility
     const mapVisibility = (vis: typeof projectData.visibility): "private" | "lab" | "institute" | "organisation" => {
@@ -105,7 +111,7 @@ export function ProjectDashboard() {
 
     // Convert ProfileProject to MasterProject format
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
-      name: projectData.name,
+      name: projectData.name.trim(), // Fix Bug #1: Ensure name is trimmed
       description: projectData.description || "",
       labId: profile.labId,
       labName: profile.labName,
@@ -137,7 +143,12 @@ export function ProjectDashboard() {
       isExpanded: true,
     };
 
-    handleCreateMasterProject(newProject);
+    try {
+      await handleCreateMasterProject(newProject);
+    } catch (error) {
+      console.error("Error creating master project:", error);
+      alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   };
 
   const handleDateChange = useCallback(async (ganttTask: GanttTask) => {

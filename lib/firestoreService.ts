@@ -704,19 +704,28 @@ export function subscribeToFundingAccounts(
  * @returns The ID of the newly created master project
  */
 export async function createMasterProject(projectData: Omit<MasterProject, 'id' | 'createdAt'>): Promise<string> {
+  // Fix Bug #1: Validate that required fields are present
+  if (!projectData.name || !projectData.name.trim()) {
+    throw new Error("Project name is required")
+  }
+
   const projectRef = doc(collection(db, "masterProjects"))
   const projectId = projectRef.id
 
-  await setDoc(projectRef, {
+  // Fix Bug #1: Ensure name is explicitly included and not empty
+  const projectToSave = {
     ...projectData,
+    name: projectData.name.trim(), // Ensure name is trimmed and explicit
     id: projectId,
     createdAt: serverTimestamp(),
     spentAmount: 0,
     committedAmount: 0,
     remainingBudget: projectData.totalBudget || 0,
     progress: 0,
-    workpackageIds: [],
-  })
+    workpackageIds: projectData.workpackageIds || [],
+  }
+
+  await setDoc(projectRef, projectToSave)
 
   // Update lab's active project count
   const labRef = doc(db, "labs", projectData.labId)
@@ -964,20 +973,28 @@ export interface FirestoreWorkpackage {
 export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'> & { createdBy: string }): Promise<string> {
   const wpRef = doc(collection(db, "workpackages"))
   const wpId = wpRef.id
-  
+
+  // Fix Bug #2: Handle tasks array properly (could be empty for new workpackages)
+  const tasksWithTimestamps = (workpackageData.tasks || []).map(task => ({
+    ...task,
+    start: task.start instanceof Date ? Timestamp.fromDate(task.start) : task.start,
+    end: task.end instanceof Date ? Timestamp.fromDate(task.end) : task.end,
+    subtasks: (task.subtasks || []).map(st => ({
+      ...st,
+      start: st.start instanceof Date ? Timestamp.fromDate(st.start) : st.start,
+      end: st.end instanceof Date ? Timestamp.fromDate(st.end) : st.end,
+    })),
+  }))
+
   await setDoc(wpRef, {
     ...workpackageData,
     id: wpId,
-    start: Timestamp.fromDate(workpackageData.start),
-    end: Timestamp.fromDate(workpackageData.end),
-    tasks: workpackageData.tasks.map(task => ({
-      ...task,
-      start: Timestamp.fromDate(task.start),
-      end: Timestamp.fromDate(task.end),
-    })),
+    start: workpackageData.start instanceof Date ? Timestamp.fromDate(workpackageData.start) : workpackageData.start,
+    end: workpackageData.end instanceof Date ? Timestamp.fromDate(workpackageData.end) : workpackageData.end,
+    tasks: tasksWithTimestamps,
     createdAt: serverTimestamp(),
   })
-  
+
   return wpId
 }
 
