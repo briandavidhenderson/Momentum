@@ -75,7 +75,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         organisation: formData.organisation!,
         institute: formData.institute!,
         lab: formData.lab!,
-        reportsTo: formData.reportsTo || null,
+        reportsToId: formData.reportsToId || null, // Fix Bug #8: Use reportsToId instead of deprecated reportsTo
         fundedBy: formData.fundedBy || [],
         startDate: formData.startDate || new Date().toISOString().split("T")[0],
         phone: formData.phone || "",
@@ -87,6 +87,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         principalInvestigatorProjects: formData.principalInvestigatorProjects || [],
         profileComplete: formData.profileComplete !== undefined ? formData.profileComplete : true,
         isAdministrator: formData.isAdministrator || false,
+        isPrincipalInvestigator: formData.isPrincipalInvestigator || false, // Fix Bug #8: Preserve PI status
         ...additionalData,
       }
 
@@ -296,12 +297,17 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               <Label htmlFor="reportsTo">Reports To</Label>
               <select
                 id="reportsTo"
-                value={formData.reportsTo || ""}
-                onChange={(e) => setFormData({ ...formData, reportsTo: e.target.value || null })}
+                value={formData.reportsToId || ""}
+                onChange={(e) => setFormData({ ...formData, reportsToId: e.target.value || null })}
                 disabled={!isEditing}
                 className="w-full px-3 py-2 rounded-md border border-border bg-background"
               >
-                <option value="">None (I&apos;m a PI)</option>
+                {/* Fix Bug #8: Show correct option based on PI status */}
+                {formData.isPrincipalInvestigator ? (
+                  <option value="">None (I&apos;m a PI)</option>
+                ) : (
+                  <option value="">Not set - Please select supervisor</option>
+                )}
                 {allProfiles.filter(p => p.id !== currentUserProfile.id).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.firstName} {p.lastName} - {p.lab}

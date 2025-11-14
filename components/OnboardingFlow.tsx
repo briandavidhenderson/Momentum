@@ -372,7 +372,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       }
     } catch (err) {
       console.error("Error creating lab:", err)
-      setError("Failed to create lab")
+      // Fix Bug #7: Show specific error message instead of generic message
+      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
+      setError(`Failed to create lab: ${errorMessage}. Please try again or contact support if the issue persists.`)
     } finally {
       setLoading(false)
     }
