@@ -58,7 +58,7 @@ export function ProjectDetailPanel({
 
   // Filter tasks linked to this project
   const projectTasks = (dayToDayTasks || []).filter(
-    (task) => task.linkedProjectId === project.id
+    (task: DayToDayTask) => task.linkedProjectId === project.id
   )
 
   // Calculate task statistics
