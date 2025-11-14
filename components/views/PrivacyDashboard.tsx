@@ -78,6 +78,8 @@ export function PrivacyDashboard() {
     if (!user) return
 
     async function loadData() {
+      if (!user) return
+
       try {
         // Load consent
         const consentDoc = await getDoc(doc(db, "userConsents", user.uid))
@@ -589,7 +591,7 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
                     <div>
                       <Label>Project Assignment Notifications</Label>
                       <p className="text-sm text-muted-foreground">
-                        Get notified when you're assigned to projects
+                        Get notified when you&apos;re assigned to projects
                       </p>
                     </div>
                     <Checkbox
@@ -846,8 +848,8 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
                   Minimal audit trail for legal compliance (12 months) - no personal identifiers
                 </li>
                 <li>
-                  Shared project data will remain but your name will be replaced with "Deleted
-                  User"
+                  Shared project data will remain but your name will be replaced with &quot;Deleted
+                  User&quot;
                 </li>
               </ul>
             </div>
@@ -870,13 +872,13 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
             <DialogTitle className="text-red-600">Confirm Account Deletion</DialogTitle>
             <DialogDescription>
               This action is permanent and irreversible. Please type{" "}
-              <strong>"DELETE MY ACCOUNT"</strong> to confirm.
+              <strong>&quot;DELETE MY ACCOUNT&quot;</strong> to confirm.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div>
-              <Label htmlFor="delete-confirm">Type "DELETE MY ACCOUNT" to confirm</Label>
+              <Label htmlFor="delete-confirm">Type &quot;DELETE MY ACCOUNT&quot; to confirm</Label>
               <Input
                 id="delete-confirm"
                 value={deleteConfirmation}

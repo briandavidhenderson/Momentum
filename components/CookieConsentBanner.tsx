@@ -364,7 +364,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
 
           <div className="text-xs text-muted-foreground text-center pt-2">
             By continuing to use Momentum, you agree to our Privacy Policy and Terms of Service.
-            For questions about data protection, contact your lab's Data Protection Officer.
+            For questions about data protection, contact your lab&apos;s Data Protection Officer.
           </div>
         </DialogContent>
       </Dialog>
