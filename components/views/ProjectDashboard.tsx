@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
 import { ProfileProject } from "@/lib/types";
+import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -34,6 +35,7 @@ export function ProjectDashboard() {
   const people = personProfilesToPeople(allProfiles);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
   
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
@@ -295,6 +297,15 @@ export function ProjectDashboard() {
     try {
       switch (action.action) {
         case "open-details":
+          // Check if it's a project
+          if (action.targetType === "project") {
+            const project = projects.find(p => p.id === action.targetId);
+            if (project) {
+              setSelectedProjectForDetail(project);
+              return;
+            }
+          }
+
           // Find and open the task details
           for (const project of projects) {
             for (const wp of getProjectWorkpackages(project)) {
@@ -709,6 +720,28 @@ export function ProjectDashboard() {
       alert("Failed to create workpackage. Please try again.");
     }
   };
+
+  // If a project is selected for detail view, show the detail page
+  if (selectedProjectForDetail) {
+    const projectWorkpackages = getProjectWorkpackages(selectedProjectForDetail)
+    const projectTeamMembers = allProfiles.filter(p =>
+      selectedProjectForDetail.teamMemberIds?.includes(p.id)
+    )
+
+    return (
+      <ProjectDetailPage
+        project={selectedProjectForDetail}
+        workpackages={projectWorkpackages}
+        teamMembers={projectTeamMembers}
+        fundingAccounts={[]} // TODO: Add funding accounts fetch
+        onBack={() => setSelectedProjectForDetail(null)}
+        onEdit={() => {
+          // TODO: Open project edit dialog
+          alert("Edit functionality coming soon")
+        }}
+      />
+    )
+  }
 
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col gap-4 overflow-hidden">
