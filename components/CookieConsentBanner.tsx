@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { UserConsent } from "@/lib/types"
+import { PRIVACY_POLICY_VERSION } from "@/lib/constants"
 
 /**
  * CookieConsentBanner - GDPR & ePrivacy Directive Compliance
@@ -26,8 +27,6 @@ import type { UserConsent } from "@/lib/types"
  * - Must allow easy withdrawal of consent
  * - Consent must be freely given, specific, informed, and unambiguous
  */
-
-const PRIVACY_POLICY_VERSION = "1.0" // Update when privacy policy changes
 
 interface CookieConsentBannerProps {
   onConsentChange?: (consent: UserConsent) => void
