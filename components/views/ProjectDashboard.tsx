@@ -7,6 +7,7 @@ import { useProfiles } from "@/lib/useProfiles";
 import { Button } from "@/components/ui/button";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
+import { ProjectDetailPanel } from "@/components/ProjectDetailPanel";
 import { MasterProject, Task, Workpackage, Project, Person } from "@/lib/types";
 import { Plus, FolderKanban, PackagePlus } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
@@ -31,7 +32,8 @@ export function ProjectDashboard() {
   const allProfiles = useProfiles(profile?.labId || null);
   const people = personProfilesToPeople(allProfiles);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  
+  const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
+
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
     return project.workpackageIds
@@ -241,6 +243,13 @@ export function ProjectDashboard() {
                 return;
               }
             }
+          }
+          break;
+        case "open-project-details":
+          // Open project detail panel
+          const project = projects.find(p => p.id === action.targetId);
+          if (project) {
+            setSelectedProjectForDetail(project);
           }
           break;
         case "mark-complete":
@@ -677,14 +686,27 @@ export function ProjectDashboard() {
           )}
 
           {selectedProjectId && (
-            <Button
-              onClick={() => setShowWorkpackageDialog(true)}
-              variant="outline"
-              className="gap-2"
-            >
-              <PackagePlus className="h-4 w-4" />
-              Add Workpackage
-            </Button>
+            <>
+              <Button
+                onClick={() => {
+                  const project = projects.find(p => p.id === selectedProjectId);
+                  if (project) setSelectedProjectForDetail(project);
+                }}
+                variant="outline"
+                className="gap-2"
+              >
+                <FolderKanban className="h-4 w-4" />
+                View Details
+              </Button>
+              <Button
+                onClick={() => setShowWorkpackageDialog(true)}
+                variant="outline"
+                className="gap-2"
+              >
+                <PackagePlus className="h-4 w-4" />
+                Add Workpackage
+              </Button>
+            </>
           )}
 
           <Button onClick={handleCreateProject} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
@@ -819,6 +841,15 @@ export function ProjectDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Project Detail Panel */}
+      {selectedProjectForDetail && (
+        <ProjectDetailPanel
+          project={selectedProjectForDetail}
+          people={people}
+          onClose={() => setSelectedProjectForDetail(null)}
+        />
+      )}
     </div>
   );
 }

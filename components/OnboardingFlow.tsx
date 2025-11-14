@@ -91,6 +91,29 @@ type OnboardingStep =
   | "review"
   | "complete"
 
+/**
+ * Splits a full name into first and last name components.
+ * Never uses email-like strings (e.g., "alice.smith") as names.
+ */
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = fullName.trim()
+
+  // If empty or looks like an email local part (contains dots/underscores but no spaces), return empty
+  if (!trimmed || (!trimmed.includes(' ') && (trimmed.includes('.') || trimmed.includes('_')))) {
+    return { firstName: '', lastName: '' }
+  }
+
+  const parts = trimmed.split(/\s+/)
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '' }
+  }
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  }
+}
+
 export default function OnboardingFlow({ user, onComplete, onCancel }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome")
   const [loading, setLoading] = useState(false)
@@ -115,12 +138,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [selectedFunderType, setSelectedFunderType] = useState<"public" | "private" | "charity" | "internal" | "government" | "industry" | "eu" | "other">("government")
 
   // Form state
+  const { firstName: initialFirstName, lastName: initialLastName } = splitFullName(user.fullName)
   const [state, setState] = useState<OnboardingState>({
     selectedOrganisation: null,
     selectedInstitute: null,
     selectedLab: null,
-    firstName: user.fullName.split(" ")[0] || "",
-    lastName: user.fullName.split(" ").slice(1).join(" ") || "",
+    firstName: initialFirstName,
+    lastName: initialLastName,
     email: user.email,
     phone: "",
     officeLocation: "",

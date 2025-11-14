@@ -9,20 +9,29 @@ export interface DayToDayTask {
   status: TaskStatus
   importance: ImportanceLevel
   assigneeId?: string // PersonProfile ID
+  watcherIds?: string[] // PersonProfile IDs who are watching this task
   dueDate?: Date
   createdAt: Date
   updatedAt: Date
   createdBy: string // User ID
   tags?: string[]
-  linkedProjectId?: string
-  linkedTaskId?: string
-  order: number // For manual ordering within a column
 
-  // Equipment-related fields
+  // Linking to other modules
+  linkedProjectId?: string // Link to Master Project
+  linkedTaskId?: string // Link to Project Task/Subtask
+  relatedExperimentId?: string // Link to ELN Experiment
+  relatedOrderId?: string // Link to Order
+
+  // Task type for special tasks
+  taskType?: EquipmentTaskType | "ORDER_REQUEST" | "EXPERIMENT" | "GENERAL"
+
+  order: number // For manual ordering within a column
+  labId?: string // Lab this task belongs to
+
+  // Equipment-related fields (for equipment maintenance tasks)
   equipmentId?: string
   equipmentSupplyId?: string
   inventoryItemId?: string
-  taskType?: EquipmentTaskType
   metadata?: {
     maintenanceHealth?: number
     weeksRemaining?: number
