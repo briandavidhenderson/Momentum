@@ -96,6 +96,35 @@ type OnboardingStep =
   | "review"
   | "complete"
 
+// Feature #9: Role descriptions to help users understand each position
+const POSITION_DESCRIPTIONS: Record<PositionLevel, string> = {
+  [PositionLevel.RESEARCH_INTERN]: "Short-term role, typically for students gaining initial research experience. Limited project responsibilities.",
+  [PositionLevel.RESEARCH_ASSISTANT]: "Entry-level research role supporting ongoing projects. Can assist with experiments and data collection.",
+  [PositionLevel.RESEARCH_ASSOCIATE]: "Independent researcher contributing to projects. Can manage specific project components.",
+  [PositionLevel.LAB_TECHNICIAN]: "Maintains lab equipment and assists with experiments. Ensures smooth daily operations.",
+  [PositionLevel.SENIOR_LAB_TECHNICIAN]: "Experienced technician managing lab operations and training junior staff. May oversee equipment budgets.",
+
+  [PositionLevel.UNDERGRADUATE_STUDENT]: "Undergraduate working on research projects. Learning fundamental research skills.",
+  [PositionLevel.MASTERS_STUDENT]: "Graduate student pursuing Master's degree. Conducts supervised research for thesis.",
+  [PositionLevel.PHD_STUDENT]: "Early-stage doctoral student. Developing research proposal and beginning dissertation work.",
+  [PositionLevel.PHD_CANDIDATE]: "Advanced doctoral student. Actively conducting dissertation research and preparing publications.",
+
+  [PositionLevel.POSTDOC_RESEARCH_ASSOCIATE]: "Early postdoctoral position. Develops independent research while collaborating on projects.",
+  [PositionLevel.POSTDOC_RESEARCH_FELLOW]: "Established postdoc with independent funding. Greater autonomy in research direction.",
+  [PositionLevel.SENIOR_POSTDOC_RESEARCHER]: "Experienced postdoc, may mentor junior researchers. Often collaborates with PIs on grant proposals.",
+
+  [PositionLevel.RESEARCH_FELLOW]: "Independent researcher, often with external funding. Can lead projects and supervise students.",
+  [PositionLevel.SENIOR_RESEARCH_FELLOW]: "Senior researcher leading projects. May have PI status on some grants.",
+  [PositionLevel.ASSISTANT_PROFESSOR]: "Early-career faculty establishing independent research program. Can be PI on grants.",
+  [PositionLevel.ASSOCIATE_PROFESSOR]: "Established faculty with independent lab. PI on multiple projects, supervises trainees.",
+  [PositionLevel.FULL_PROFESSOR]: "Senior faculty leader with extensive experience. PI on major grants, mentors junior faculty.",
+
+  [PositionLevel.VISITING_RESEARCHER]: "Temporary researcher from another institution. Collaborating on specific projects.",
+  [PositionLevel.EXTERNAL_COLLABORATOR]: "Researcher based elsewhere collaborating remotely. Limited access to lab resources.",
+  [PositionLevel.LAB_MANAGER]: "Manages day-to-day lab operations, budgets, and staff. Ensures compliance and safety.",
+  [PositionLevel.PROJECT_COORDINATOR]: "Coordinates multi-site or large-scale projects. Manages timelines and collaborations.",
+}
+
 export default function OnboardingFlow({ user, onComplete, onCancel }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome")
   const [loading, setLoading] = useState(false)
@@ -1047,6 +1076,14 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <p className="text-gray-600">What is your role in the lab?</p>
             </div>
 
+            {/* Feature #9: Add informative help text */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-gray-700">
+                Select the position that best describes your current role. This helps determine default permissions
+                and visibility settings for your work.
+              </p>
+            </div>
+
             <div className="space-y-4">
               {Object.entries(POSITION_CATEGORIES).map(([category, positions]) => (
                 <div key={category} className="border rounded-lg p-4">
@@ -1062,7 +1099,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                             : "hover:bg-gray-50 border-gray-200"
                         }`}
                       >
-                        {POSITION_DISPLAY_NAMES[pos]}
+                        {/* Feature #9: Show position name and description */}
+                        <div className="font-medium text-sm">{POSITION_DISPLAY_NAMES[pos]}</div>
+                        <div className="text-xs text-gray-600 mt-1">{POSITION_DESCRIPTIONS[pos]}</div>
                       </button>
                     ))}
                   </div>
