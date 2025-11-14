@@ -26,6 +26,7 @@ import {
   createMasterProject,
   createFundingAccount,
   updateUser,
+  subscribeToProfiles,  // Feature #8: For supervisor selection
 } from "@/lib/firestoreService"
 import { Building, GraduationCap, BookOpen, Users, Briefcase, CheckCircle2, ChevronRight, ChevronLeft, X } from "lucide-react"
 import { FunderCreationDialog } from "./FunderCreationDialog"
@@ -57,6 +58,9 @@ interface OnboardingState {
   // Step 6: PI Status
   isPrincipalInvestigator: boolean
 
+  // Step 6b: Supervisor Selection (for non-PIs) - Feature #8
+  supervisorId: string | null
+
   // Step 7: Create/Join Project (optional - can skip)
   createProject: boolean
   projectName: string
@@ -85,6 +89,7 @@ type OnboardingStep =
   | "position"
   | "orcid"
   | "pi-status"
+  | "supervisor-selection"  // Feature #8: Add supervisor assignment step
   | "project-choice"
   | "project-details"
   | "account-details"
@@ -101,6 +106,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [institutes, setInstitutes] = useState<Institute[]>([])
   const [labs, setLabs] = useState<Lab[]>([])
   const [funders, setFunders] = useState<Funder[]>([])
+  const [profiles, setProfiles] = useState<PersonProfile[]>([])  // Feature #8: For supervisor selection
 
   // Search/create states
   const [orgSearchTerm, setOrgSearchTerm] = useState("")
@@ -126,6 +132,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
     officeLocation: "",
     positionLevel: null,
     isPrincipalInvestigator: false,
+    supervisorId: null,  // Feature #8
     createProject: false,
     projectName: "",
     projectDescription: "",
@@ -161,8 +168,15 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       "position",
       "orcid",
       "pi-status",
-      "project-choice",
     ]
+
+    // Feature #8: Add supervisor selection for non-PIs
+    if (!state.isPrincipalInvestigator) {
+      base.push("supervisor-selection")
+    }
+
+    base.push("project-choice")
+
     if (state.createProject) {
       base.push("project-details", "account-details")
     }
@@ -197,6 +211,23 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       active = false
     }
   }, [])
+
+  // Feature #8: Load profiles when lab selected (for supervisor selection)
+  useEffect(() => {
+    if (!state.selectedLab?.id) {
+      setProfiles([])
+      return
+    }
+
+    const unsubscribe = subscribeToProfiles(
+      { labId: state.selectedLab.id },
+      (loadedProfiles) => {
+        setProfiles(loadedProfiles)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [state.selectedLab])
 
   // Load institutes when organisation selected with cleanup
   useEffect(() => {
@@ -441,8 +472,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         positionDisplayName: positionDisplay,
         position: positionDisplay, // Legacy
 
-        // Reporting
-        reportsToId: null,
+        // Reporting - Feature #8: Save supervisor assignment
+        reportsToId: state.supervisorId,
 
         // PI Status
         isPrincipalInvestigator: state.isPrincipalInvestigator,
@@ -1159,6 +1190,63 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                 <div className="font-semibold mb-2">No, I&apos;m not a PI</div>
                 <div className="text-sm text-gray-600">I work on projects led by other researchers</div>
               </button>
+            </div>
+          </div>
+        )
+
+      case "supervisor-selection":
+        // Feature #8: Supervisor assignment for non-PIs
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold">Select Your Supervisor</h2>
+              <p className="text-gray-600">
+                Who is your primary supervisor or PI?
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+              <p className="text-sm text-gray-700">
+                Your supervisor will be able to view your projects and track your progress.
+                You can update this later from your profile settings.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Available Supervisors / PIs in {state.selectedLab?.name}</Label>
+              {profiles
+                .filter((p) => p.isPrincipalInvestigator && p.labId === state.selectedLab?.id)
+                .map((supervisor) => (
+                  <button
+                    key={supervisor.id}
+                    onClick={() => setState((s) => ({ ...s, supervisorId: supervisor.id }))}
+                    className={`w-full p-4 rounded-lg border-2 transition text-left ${
+                      state.supervisorId === supervisor.id
+                        ? "bg-blue-50 border-blue-600"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="font-semibold">
+                      {supervisor.firstName} {supervisor.lastName}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {supervisor.positionDisplayName || supervisor.position}
+                    </div>
+                  </button>
+                ))}
+              {profiles.filter((p) => p.isPrincipalInvestigator && p.labId === state.selectedLab?.id).length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No supervisors found in this lab yet.</p>
+                  <p className="text-sm mt-2">You can select a supervisor later from your profile.</p>
+                  <Button
+                    onClick={() => setState((s) => ({ ...s, supervisorId: null }))}
+                    variant="outline"
+                    className="mt-4"
+                  >
+                    Continue Without Supervisor
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )
