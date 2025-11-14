@@ -785,6 +785,7 @@ export function ProjectDetailPage({
         onSave={handleSaveWorkpackage}
         onDelete={workpackageDialogMode === "edit" ? handleDeleteWorkpackage : undefined}
         mode={workpackageDialogMode}
+        availableLeads={teamMembers}
       />
     </div>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Workpackage, Task, ImportanceLevel } from "@/lib/types"
+import { Workpackage, Task, ImportanceLevel, PersonProfile } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,12 +17,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   CheckCircle2,
   Circle,
   Clock,
   Trash2,
   Plus,
   Edit2,
+  AlertTriangle,
 } from "lucide-react"
 
 interface WorkpackageDialogProps {
@@ -33,6 +44,7 @@ interface WorkpackageDialogProps {
   onSave: (workpackageData: Partial<Workpackage>) => void
   onDelete?: () => void
   mode: "create" | "edit" | "view"
+  availableLeads?: PersonProfile[]  // Feature #5: For workpackage lead assignment
 }
 
 export function WorkpackageDialog({
@@ -43,6 +55,7 @@ export function WorkpackageDialog({
   onSave,
   onDelete,
   mode,
+  availableLeads = [],
 }: WorkpackageDialogProps) {
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
@@ -51,6 +64,8 @@ export function WorkpackageDialog({
   const [importance, setImportance] = useState<ImportanceLevel>("medium")
   const [status, setStatus] = useState<Workpackage["status"]>("planning")
   const [tasks, setTasks] = useState<Task[]>([])
+  const [ownerId, setOwnerId] = useState<string | undefined>(undefined)  // Feature #5: Workpackage lead
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)  // Feature #5: Delete confirmation
 
   useEffect(() => {
     if (workpackage && open) {
@@ -61,6 +76,7 @@ export function WorkpackageDialog({
       setImportance(workpackage.importance)
       setStatus(workpackage.status || "planning")
       setTasks(workpackage.tasks || [])
+      setOwnerId(workpackage.ownerId)  // Feature #5: Load workpackage lead
     } else if (!workpackage && open) {
       // Reset for new workpackage
       setName("")
@@ -70,6 +86,7 @@ export function WorkpackageDialog({
       setImportance("medium")
       setStatus("planning")
       setTasks([])
+      setOwnerId(undefined)  // Feature #5: Reset lead
     }
   }, [workpackage, open])
 
@@ -84,6 +101,7 @@ export function WorkpackageDialog({
       importance,
       status,
       tasks,
+      ownerId,  // Feature #5: Save workpackage lead
     }
 
     if (!workpackage) {
@@ -95,6 +113,19 @@ export function WorkpackageDialog({
 
     onSave(workpackageData)
     onOpenChange(false)
+  }
+
+  // Feature #5: Handle delete with confirmation
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true)
+  }
+
+  const handleConfirmDelete = () => {
+    if (onDelete) {
+      onDelete()
+      setShowDeleteConfirm(false)
+      onOpenChange(false)
+    }
   }
 
   const handleAddTask = () => {
@@ -237,6 +268,30 @@ export function WorkpackageDialog({
               </div>
             </div>
 
+            {/* Feature #5: Workpackage Lead Assignment */}
+            {availableLeads && availableLeads.length > 0 && (
+              <div className="grid gap-2">
+                <Label htmlFor="wp-lead">Work Package Lead</Label>
+                <select
+                  id="wp-lead"
+                  value={ownerId || ""}
+                  onChange={(e) => setOwnerId(e.target.value || undefined)}
+                  disabled={isReadOnly}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">No lead assigned</option>
+                  {availableLeads.map((lead) => (
+                    <option key={lead.id} value={lead.id}>
+                      {lead.firstName} {lead.lastName}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Assign a team member to coordinate and oversee this work package
+                </p>
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="wp-notes">Notes</Label>
               <Textarea
@@ -340,8 +395,9 @@ export function WorkpackageDialog({
 
         <DialogFooter className="flex items-center justify-between">
           <div>
+            {/* Feature #5: Delete button with confirmation */}
             {isEditing && onDelete && (
-              <Button variant="destructive" onClick={onDelete}>
+              <Button variant="destructive" onClick={handleDeleteClick}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </Button>
@@ -359,6 +415,35 @@ export function WorkpackageDialog({
           </div>
         </DialogFooter>
       </DialogContent>
+
+      {/* Feature #5: Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete Work Package?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{name}&quot;? This action cannot be undone.
+              {tasks.length > 0 && (
+                <span className="block mt-2 text-destructive font-medium">
+                  Warning: This work package contains {tasks.length} task{tasks.length !== 1 ? "s" : ""} that will also be deleted.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Work Package
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }
