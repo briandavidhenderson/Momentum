@@ -65,11 +65,13 @@ function DroppableColumn({
 function DraggableTaskCard({
   task,
   people,
+  projects,
   onEdit,
   onDelete,
 }: {
   task: DayToDayTask
   people: Person[]
+  projects: any[]
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -86,6 +88,7 @@ function DraggableTaskCard({
     : undefined
 
   const assignee = (people || []).find((p) => p.id === task.assigneeId)
+  const linkedProject = (projects || []).find((p: any) => p.id === task.linkedProjectId)
 
   const importanceColors = {
     low: "bg-gray-100 text-gray-700",
@@ -139,6 +142,12 @@ function DraggableTaskCard({
               {task.importance}
             </Badge>
 
+            {linkedProject && (
+              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                📁 {linkedProject.name}
+              </Badge>
+            )}
+
             {task.dueDate && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
@@ -167,12 +176,16 @@ function DayToDayTaskEditDialog({
   onOpenChange,
   task,
   people,
+  projects,
+  workpackages,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   task: DayToDayTask | null
   people: Person[]
+  projects: any[]
+  workpackages: any[]
   onSave: (taskId: string, updates: Partial<DayToDayTask>) => void
 }) {
   const [title, setTitle] = useState("")
@@ -180,6 +193,8 @@ function DayToDayTaskEditDialog({
   const [importance, setImportance] = useState<ImportanceLevel>("medium")
   const [assigneeId, setAssigneeId] = useState<string>("")
   const [dueDate, setDueDate] = useState("")
+  const [linkedProjectId, setLinkedProjectId] = useState<string>("")
+  const [linkedTaskId, setLinkedTaskId] = useState<string>("")
 
   useEffect(() => {
     if (task) {
@@ -188,12 +203,16 @@ function DayToDayTaskEditDialog({
       setImportance(task.importance)
       setAssigneeId(task.assigneeId || "")
       setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "")
+      setLinkedProjectId(task.linkedProjectId || "")
+      setLinkedTaskId(task.linkedTaskId || "")
     } else {
       setTitle("")
       setDescription("")
       setImportance("medium")
       setAssigneeId("")
       setDueDate("")
+      setLinkedProjectId("")
+      setLinkedTaskId("")
     }
   }, [task, open])
 
@@ -206,10 +225,19 @@ function DayToDayTaskEditDialog({
       importance,
       assigneeId: assigneeId || undefined,
       dueDate: dueDate ? new Date(dueDate) : undefined,
+      linkedProjectId: linkedProjectId || undefined,
+      linkedTaskId: linkedTaskId || undefined,
     })
 
     onOpenChange(false)
   }
+
+  // Get tasks from selected project's workpackages
+  const availableTasks = linkedProjectId
+    ? workpackages
+        .filter((wp: any) => wp.profileProjectId === linkedProjectId)
+        .flatMap((wp: any) => wp.tasks || [])
+    : []
 
   const importanceOptions: { value: ImportanceLevel; label: string }[] = [
     { value: "low", label: "Low" },
@@ -300,6 +328,53 @@ function DayToDayTaskEditDialog({
               onChange={(e) => setDueDate(e.target.value)}
             />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="linkedProject">Linked Project</Label>
+            <select
+              id="linkedProject"
+              value={linkedProjectId}
+              onChange={(e) => {
+                setLinkedProjectId(e.target.value)
+                setLinkedTaskId("") // Reset task selection when project changes
+              }}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">None</option>
+              {(projects || []).map((project: any) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            {linkedProjectId && (
+              <p className="text-xs text-muted-foreground">
+                This task will appear in the project&apos;s activity feed
+              </p>
+            )}
+          </div>
+          {linkedProjectId && availableTasks.length > 0 && (
+            <div className="grid gap-2">
+              <Label htmlFor="linkedTask">Linked Task/Workpackage</Label>
+              <select
+                id="linkedTask"
+                value={linkedTaskId}
+                onChange={(e) => setLinkedTaskId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">None</option>
+                {availableTasks.map((task: any) => (
+                  <option key={task.id} value={task.id}>
+                    {task.name}
+                  </option>
+                ))}
+              </select>
+              {linkedTaskId && (
+                <p className="text-xs text-muted-foreground">
+                  This day-to-day task is related to a project task
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -319,6 +394,8 @@ export function DayToDayBoard() {
   const {
     dayToDayTasks,
     people,
+    projects,
+    workpackages,
     handleCreateDayToDayTask: onCreateTask,
     handleUpdateDayToDayTask: onUpdateTask,
     handleDeleteDayToDayTask: onDeleteTask,
@@ -326,6 +403,8 @@ export function DayToDayBoard() {
   } = useAppContext()
 
   const tasks = (dayToDayTasks || []) as DayToDayTask[]
+  const allProjects = (projects || [])
+  const allWorkpackages = (workpackages || [])
 
   const [activeTask, setActiveTask] = useState<DayToDayTask | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState("")
@@ -498,6 +577,7 @@ export function DayToDayBoard() {
                 key={task.id}
                 task={task}
                 people={people}
+                projects={allProjects}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
@@ -523,6 +603,7 @@ export function DayToDayBoard() {
                 key={task.id}
                 task={task}
                 people={people}
+                projects={allProjects}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
@@ -548,6 +629,7 @@ export function DayToDayBoard() {
                 key={task.id}
                 task={task}
                 people={people}
+                projects={allProjects}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
@@ -590,6 +672,8 @@ export function DayToDayBoard() {
         }}
         task={editingTask}
         people={people}
+        projects={allProjects}
+        workpackages={allWorkpackages}
         onSave={onUpdateTask}
       />
     </div>
