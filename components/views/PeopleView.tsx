@@ -15,17 +15,21 @@ interface PeopleViewProps {
 }
 
 export default function PeopleView({ currentUserProfile }: PeopleViewProps = {}) {
-  // Fixed: use labId instead of lab
-  const allProfiles = useProfiles(currentUserProfile?.labId ?? null) || []
+  // Fetch ALL profiles - not filtered by lab
+  const allProfiles = useProfiles(null) || []
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "orgchart" | "network">("grid")
   const [orcidFilter, setOrcidFilter] = useState<"all" | "with" | "without">("all")
+  const [labFilter, setLabFilter] = useState<string>("all") // New: Lab filter state
 
-  // Filter profiles by lab if currentUserProfile is provided
+  // Filter profiles by lab if a specific lab is selected
   // Ensure profiles is always an array to prevent .map() errors
-  let profiles = (currentUserProfile?.labId
-    ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
-    : allProfiles) || []
+  let profiles = allProfiles || []
+
+  // Apply lab filter if selected
+  if (labFilter !== "all") {
+    profiles = profiles.filter(p => p.labId === labFilter)
+  }
 
   // Apply ORCID filter
   if (orcidFilter === "with") {
@@ -40,20 +44,22 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
       console.log("PeopleView: Profile loading status", {
         allProfilesCount: allProfiles?.length || 0,
         filteredProfilesCount: profiles.length,
+        labFilter,
+        orcidFilter,
         currentUserProfile: currentUserProfile ? {
           id: currentUserProfile.id,
           labId: currentUserProfile.labId,
           name: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
-        } : null,
-        allProfiles: allProfiles?.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`, labId: p.labId })) || []
+        } : null
       })
     }
-  }, [allProfiles, profiles, currentUserProfile])
+  }, [allProfiles, profiles, currentUserProfile, labFilter, orcidFilter])
 
-  // Memoize arrays to avoid recompute on every render
+  // Memoize arrays based on ALL profiles to avoid recompute on every render
+  // These are used for filters and stats, so should show all available options
   const labs = useMemo(() =>
-    Array.from(new Set(profiles.map(p => p.labName).filter(Boolean))),
-    [profiles]
+    Array.from(new Set(allProfiles.map(p => p.labName).filter(Boolean))),
+    [allProfiles]
   )
   const institutes = useMemo(() =>
     Array.from(new Set(profiles.map(p => p.instituteName).filter(Boolean))),
@@ -132,6 +138,20 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
           <p className="text-muted-foreground mt-1">Research team members and organizational structure</p>
         </div>
         <div className="flex gap-2 items-center">
+          {/* Lab Filter */}
+          <select
+            value={labFilter}
+            onChange={(e) => setLabFilter(e.target.value)}
+            className="border rounded-md px-3 py-2 text-sm bg-background"
+          >
+            <option value="all">All Labs</option>
+            {labs.map(lab => (
+              <option key={lab} value={allProfiles.find(p => p.labName === lab)?.labId || lab}>
+                {lab}
+              </option>
+            ))}
+          </select>
+
           {/* ORCID Filter */}
           <select
             value={orcidFilter}

@@ -38,6 +38,8 @@ import {
   Funder,
   FundingAccount,
   MasterProject,
+  Message,
+  Conversation,
 } from "./types"
 
 // ============================================================================
@@ -2029,5 +2031,278 @@ export function subscribeToELNExperiments(
     console.error("Error setting up ELN experiments subscription:", error)
     return () => {}
   }
+}
+
+// ============================================================================
+// MESSAGING SYSTEM
+// ============================================================================
+
+/**
+ * Get or create a conversation between two users
+ * Returns existing conversation if it exists, creates new one if not
+ */
+export async function getOrCreateConversation(
+  user1Id: string,
+  user2Id: string,
+  user1Profile: PersonProfile,
+  user2Profile: PersonProfile
+): Promise<Conversation> {
+  // Sort user IDs to ensure consistent conversation ID
+  const participantIds = [user1Id, user2Id].sort()
+
+  // Check if conversation already exists
+  const conversationsRef = collection(db, "conversations")
+  const q = query(
+    conversationsRef,
+    where("participantIds", "==", participantIds),
+    where("type", "==", "direct")
+  )
+
+  const snapshot = await getDocs(q)
+
+  if (!snapshot.empty) {
+    // Conversation exists, return it
+    const doc = snapshot.docs[0]
+    return { id: doc.id, ...doc.data() } as Conversation
+  }
+
+  // Create new conversation
+  const newConversation: Omit<Conversation, "id"> = {
+    participantIds,
+    participantNames: [
+      `${user1Profile.firstName} ${user1Profile.lastName}`,
+      `${user2Profile.firstName} ${user2Profile.lastName}`
+    ].sort(),
+    participantEmails: [user1Profile.email, user2Profile.email].sort(),
+    type: "direct",
+    unreadCounts: {
+      [user1Id]: 0,
+      [user2Id]: 0
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isArchived: false
+  }
+
+  const docRef = await addDoc(conversationsRef, newConversation)
+
+  return { id: docRef.id, ...newConversation } as Conversation
+}
+
+/**
+ * Send a message in a conversation
+ */
+export async function sendMessage(
+  conversationId: string,
+  senderId: string,
+  senderProfile: PersonProfile,
+  content: string
+): Promise<string> {
+  const messagesRef = collection(db, "messages")
+
+  const newMessage: Omit<Message, "id"> = {
+    conversationId,
+    content,
+    senderId,
+    senderName: `${senderProfile.firstName} ${senderProfile.lastName}`,
+    senderEmail: senderProfile.email,
+    read: false,
+    createdAt: new Date().toISOString(),
+    isEdited: false,
+    isDeleted: false
+  }
+
+  const messageDocRef = await addDoc(messagesRef, newMessage)
+
+  // Update conversation metadata
+  const conversationRef = doc(db, "conversations", conversationId)
+  const conversationSnap = await getDoc(conversationRef)
+
+  if (conversationSnap.exists()) {
+    const conversation = conversationSnap.data() as Conversation
+
+    // Increment unread count for all participants except sender
+    const updatedUnreadCounts = { ...conversation.unreadCounts }
+    conversation.participantIds.forEach(participantId => {
+      if (participantId !== senderId) {
+        updatedUnreadCounts[participantId] = (updatedUnreadCounts[participantId] || 0) + 1
+      }
+    })
+
+    await updateDoc(conversationRef, {
+      lastMessageContent: content,
+      lastMessageSenderId: senderId,
+      lastMessageSenderName: newMessage.senderName,
+      lastMessageAt: newMessage.createdAt,
+      unreadCounts: updatedUnreadCounts,
+      updatedAt: serverTimestamp()
+    })
+
+    // Create notification for recipient
+    const recipientId = conversation.participantIds.find(id => id !== senderId)
+    if (recipientId) {
+      const notificationsRef = collection(db, "notifications")
+      await addDoc(notificationsRef, {
+        userId: recipientId,
+        type: "NEW_MESSAGE",
+        title: "New Message",
+        message: `${newMessage.senderName}: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`,
+        priority: "low",
+        relatedEntityType: "conversation",
+        relatedEntityId: conversationId,
+        createdAt: serverTimestamp(),
+        read: false,
+        actionUrl: `/messages?conversation=${conversationId}`
+      })
+    }
+  }
+
+  return messageDocRef.id
+}
+
+/**
+ * Subscribe to conversations for a user
+ */
+export function subscribeToConversations(
+  userId: string,
+  callback: (conversations: Conversation[]) => void
+): Unsubscribe {
+  const conversationsRef = collection(db, "conversations")
+  const q = query(
+    conversationsRef,
+    where("participantIds", "array-contains", userId),
+    orderBy("updatedAt", "desc")
+  )
+
+  try {
+    return onSnapshot(q,
+      (snapshot) => {
+        const conversations = snapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : new Date().toISOString()
+          } as Conversation
+        })
+        callback(conversations)
+      },
+      (error) => {
+        console.error("Error in subscribeToConversations:", error)
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up conversations subscription:", error)
+    return () => {}
+  }
+}
+
+/**
+ * Subscribe to messages in a conversation
+ */
+export function subscribeToMessages(
+  conversationId: string,
+  callback: (messages: Message[]) => void
+): Unsubscribe {
+  const messagesRef = collection(db, "messages")
+  const q = query(
+    messagesRef,
+    where("conversationId", "==", conversationId),
+    orderBy("createdAt", "asc")
+  )
+
+  try {
+    return onSnapshot(q,
+      (snapshot) => {
+        const messages = snapshot.docs.map(doc => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || undefined,
+            readAt: data.readAt || undefined
+          } as Message
+        })
+        callback(messages)
+      },
+      (error) => {
+        console.error("Error in subscribeToMessages:", error)
+        callback([])
+      }
+    )
+  } catch (error) {
+    console.error("Error setting up messages subscription:", error)
+    return () => {}
+  }
+}
+
+/**
+ * Mark messages as read in a conversation
+ */
+export async function markMessagesAsRead(
+  conversationId: string,
+  userId: string
+): Promise<void> {
+  // Get all unread messages in this conversation that were sent by others
+  const messagesRef = collection(db, "messages")
+  const q = query(
+    messagesRef,
+    where("conversationId", "==", conversationId),
+    where("read", "==", false)
+  )
+
+  const snapshot = await getDocs(q)
+  const batch = writeBatch(db)
+
+  // Mark all messages from other users as read
+  snapshot.docs.forEach(doc => {
+    const message = doc.data() as Message
+    if (message.senderId !== userId) {
+      batch.update(doc.ref, {
+        read: true,
+        readAt: new Date().toISOString()
+      })
+    }
+  })
+
+  // Reset unread count for this user in the conversation
+  const conversationRef = doc(db, "conversations", conversationId)
+  const conversationSnap = await getDoc(conversationRef)
+
+  if (conversationSnap.exists()) {
+    const conversation = conversationSnap.data() as Conversation
+    const updatedUnreadCounts = { ...conversation.unreadCounts }
+    updatedUnreadCounts[userId] = 0
+
+    batch.update(conversationRef, {
+      unreadCounts: updatedUnreadCounts
+    })
+  }
+
+  await batch.commit()
+}
+
+/**
+ * Get total unread message count for a user
+ */
+export async function getUnreadMessageCount(userId: string): Promise<number> {
+  const conversationsRef = collection(db, "conversations")
+  const q = query(
+    conversationsRef,
+    where("participantIds", "array-contains", userId)
+  )
+
+  const snapshot = await getDocs(q)
+  let totalUnread = 0
+
+  snapshot.docs.forEach(doc => {
+    const conversation = doc.data() as Conversation
+    totalUnread += conversation.unreadCounts?.[userId] || 0
+  })
+
+  return totalUnread
 }
 

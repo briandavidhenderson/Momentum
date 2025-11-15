@@ -4,7 +4,7 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield } from "lucide-react"
+import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield, MessageSquare } from "lucide-react"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
@@ -17,6 +17,8 @@ import { EquipmentManagement } from "@/components/views/EquipmentManagement"
 import { CalendarEvents } from "@/components/views/CalendarEvents"
 import { CookieConsentBanner } from "@/components/CookieConsentBanner"
 import { PrivacyDashboard } from "@/components/views/PrivacyDashboard"
+import { NotificationBell } from "@/components/NotificationBell"
+import { MessengerView } from "@/components/views/MessengerView"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -97,8 +99,11 @@ export default function Home() {
               </p>
             </div>
 
-            {/* User Info & Sign Out Button */}
+            {/* User Info, Notifications & Sign Out Button */}
             <div className="flex items-center gap-3">
+              {/* Notification Bell */}
+              <NotificationBell />
+
               {currentUserProfile && (
                 <div className="text-right">
                   <p className="text-sm font-medium text-foreground">
@@ -186,6 +191,15 @@ export default function Home() {
               Calendar
             </Button>
             <Button
+              onClick={() => setMainView('messages')}
+              variant={mainView === 'messages' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'messages' ? 'bg-brand-500 text-white' : ''}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Messages
+            </Button>
+            <Button
               onClick={() => setMainView('myprofile')}
               variant={mainView === 'myprofile' ? 'default' : 'outline'}
               size="lg"
@@ -225,6 +239,7 @@ export default function Home() {
         {mainView === 'orders' && <OrdersInventory />}
         {mainView === 'equipment' && <EquipmentManagement />}
         {mainView === 'calendar' && <CalendarEvents />}
+        {mainView === 'messages' && <MessengerView currentUserProfile={currentUserProfile} />}
         {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
         {mainView === 'privacy' && <PrivacyDashboard />}
         {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}

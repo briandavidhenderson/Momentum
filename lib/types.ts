@@ -1732,3 +1732,75 @@ export interface Comment {
   deletedAt?: string
   deletedBy?: string           // User who deleted it
 }
+
+// ============================================================================
+// MESSAGING SYSTEM TYPES
+// ============================================================================
+
+/**
+ * Message - Individual message in a conversation
+ * Supports direct messages between users
+ */
+export interface Message {
+  id: string
+  conversationId: string       // ID of the conversation this message belongs to
+
+  // Content
+  content: string              // Message text
+  attachments?: string[]       // URLs to attachments (optional)
+
+  // Sender
+  senderId: string             // PersonProfile ID of sender
+  senderName: string           // Cached for display
+  senderEmail?: string         // Cached for display
+
+  // Status
+  read: boolean                // Has recipient read the message
+  readAt?: string              // When message was read
+
+  // Metadata
+  createdAt: string
+  updatedAt?: string
+  editedAt?: string            // When message was last edited
+  isEdited: boolean            // Flag to show "edited" indicator
+
+  // Moderation
+  isDeleted: boolean           // Soft delete
+  deletedAt?: string
+  deletedBy?: string
+}
+
+/**
+ * Conversation - Messaging thread between users
+ * Supports 1:1 conversations (can be extended to groups later)
+ */
+export interface Conversation {
+  id: string
+
+  // Participants (for 1:1, this will be an array of 2 user IDs)
+  participantIds: string[]     // Array of PersonProfile IDs
+  participantNames: string[]   // Cached for display
+  participantEmails?: string[] // Cached for display
+
+  // Conversation type
+  type: "direct" | "group"     // For now, only "direct" is used
+
+  // Last message info (cached for quick display)
+  lastMessageContent?: string
+  lastMessageSenderId?: string
+  lastMessageSenderName?: string
+  lastMessageAt?: string
+
+  // Unread counts per user
+  unreadCounts: {
+    [userId: string]: number   // userId -> unread count
+  }
+
+  // Metadata
+  createdAt: string
+  updatedAt: string
+
+  // Moderation
+  isArchived: boolean          // For hiding conversations
+  archivedBy?: string[]        // Users who archived this conversation
+}
