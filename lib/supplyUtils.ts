@@ -11,6 +11,7 @@
 
 import { EquipmentDevice, EquipmentSupply, InventoryItem, InventoryLevel } from './types'
 import { calculateWeeksRemaining, weeksToHealthPercentage } from './equipmentMath'
+import { logger } from './logger'
 
 /**
  * Enriched supply with inventory data joined in
@@ -52,9 +53,10 @@ export function enrichSupply(
   const item = inventory.find(i => i.id === supply.inventoryItemId)
 
   if (!item) {
-    console.warn(
-      `Supply ${supply.id} references missing inventory item ${supply.inventoryItemId}`
-    )
+    logger.warn("Supply references missing inventory item", {
+      supplyId: supply.id,
+      inventoryItemId: supply.inventoryItemId,
+    })
     return null
   }
 
@@ -124,7 +126,7 @@ export function updateInventoryQuantity(
 ): InventoryItem | null {
   const item = inventory.find(i => i.id === inventoryItemId)
   if (!item) {
-    console.warn(`Inventory item ${inventoryItemId} not found`)
+    logger.warn("Inventory item not found", { inventoryItemId })
     return null
   }
 
