@@ -24,6 +24,7 @@ import {
 } from "@/lib/equipmentMath"
 import { formatCurrency, getHealthClass, getHealthColor, getHealthTextColor, generateId, EQUIPMENT_CONFIG } from "@/lib/equipmentConfig"
 import { enrichSupply, enrichDeviceSupplies, updateInventoryQuantity, EnrichedSupply } from "@/lib/supplyUtils"
+import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
@@ -31,6 +32,7 @@ interface EquipmentStatusPanelProps {
   orders: Order[]
   masterProjects: MasterProject[]
   currentUserProfile: PersonProfile | null
+  allProfiles: PersonProfile[] // For notification recipients
   onEquipmentCreate: (equipment: Omit<EquipmentDevice, 'id'>) => void
   onEquipmentUpdate: (equipmentId: string, updates: Partial<EquipmentDevice>) => void
   onInventoryUpdate: (inventory: InventoryItem[]) => void
@@ -44,6 +46,7 @@ export function EquipmentStatusPanel({
   orders,
   masterProjects,
   currentUserProfile,
+  allProfiles,
   onEquipmentCreate,
   onEquipmentUpdate,
   onInventoryUpdate,
@@ -130,7 +133,7 @@ export function EquipmentStatusPanel({
   }
 
   // Handle save stock quantity - CRITICAL: Updates inventory, not device supplies
-  const handleSaveStock = () => {
+  const handleSaveStock = async () => {
     if (!checkStockItem) return
 
     const newQty = parseFloat(tempStockQty)
@@ -154,6 +157,24 @@ export function EquipmentStatusPanel({
       item.id === updatedItem.id ? updatedItem : item
     )
     onInventoryUpdate(updatedInventory)
+
+    // PHASE 4: Trigger low stock notifications
+    try {
+      const weeksRemaining = calculateWeeksRemaining(newQty, supply.burnPerWeek)
+      const managers = getLabManagers(allProfiles)
+
+      // Critical stock: empty or less than 1 week remaining
+      if (newQty === 0 || updatedItem.inventoryLevel === 'empty') {
+        await notifyCriticalStock(updatedItem, managers)
+      }
+      // Low stock: less than 2 weeks remaining
+      else if (weeksRemaining < 2 || updatedItem.inventoryLevel === 'low') {
+        await notifyLowStock(updatedItem, managers, weeksRemaining)
+      }
+    } catch (error) {
+      console.error('Error sending stock notification:', error)
+      // Don't block the UI on notification failure
+    }
 
     setCheckStockItem(null)
     setTempStockQty("")
