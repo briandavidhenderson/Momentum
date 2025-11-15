@@ -134,7 +134,7 @@ export function EquipmentEditorDialog({
   // DEPRECATED: Inline supply editor removed - use inventory-first approach
   // Supplies should be added via AddSupplyDialog which creates InventoryItem first
   const handleAddSupplyRow = () => {
-    console.warn('Inline supply editor is deprecated. Please use "Add Supply" button in main equipment panel.')
+    logger.warn('Inline supply editor is deprecated - use Add Supply button instead')
     // This functionality has been removed in favor of inventory-first approach
     // where supplies are created from the inventory panel, then linked to devices
   }

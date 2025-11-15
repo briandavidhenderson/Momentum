@@ -57,7 +57,7 @@ export function CheckStockDialog({
     // Find the inventory item and update it
     const itemIndex = inventory.findIndex((item) => item.id === supply.inventoryItemId)
     if (itemIndex === -1) {
-      console.error(`Inventory item ${supply.inventoryItemId} not found`)
+      logger.error("Inventory item not found", { inventoryItemId: supply.inventoryItemId })
       return
     }
 
@@ -94,7 +94,7 @@ export function CheckStockDialog({
         await notifyLowStock(updatedItem, managers, weeksRemaining)
       }
     } catch (error) {
-      console.error("Error sending stock notification:", error)
+      logger.error("Error sending stock notification", error)
       // Don't block the UI on notification failure
     }
 

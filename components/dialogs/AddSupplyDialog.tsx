@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { InventoryItem, EquipmentSupply } from "@/lib/types"
+import { logger } from "@/lib/logger"
 
 interface AddSupplyDialogProps {
   open: boolean
@@ -56,7 +57,7 @@ export function AddSupplyDialog({
 
     const selectedItem = inventory.find((item) => item.id === selectedInventoryId)
     if (!selectedItem) {
-      console.error("Selected inventory item not found")
+      logger.error("Selected inventory item not found", { selectedInventoryId })
       return
     }
 
@@ -75,7 +76,7 @@ export function AddSupplyDialog({
       handleReset()
       onClose()
     } catch (error) {
-      console.error("Error adding supply:", error)
+      logger.error("Error adding supply", error)
       alert("Failed to add supply. Please try again.")
     }
   }
