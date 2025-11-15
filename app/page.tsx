@@ -32,6 +32,7 @@ export default function Home() {
     handleSignup,
     handleSignOut,
     handleProfileSetupComplete,
+    handleCancelOnboarding,
 
     // UI state
     mainView,
@@ -80,7 +81,7 @@ export default function Home() {
 
   // Show onboarding/setup
   if (authState === 'setup' && currentUser) {
-    return <OnboardingFlow user={currentUser} onComplete={handleProfileSetupComplete} />
+    return <OnboardingFlow user={currentUser} onComplete={handleProfileSetupComplete} onCancel={handleCancelOnboarding} />
   }
 
   // Main application
@@ -127,7 +128,7 @@ export default function Home() {
           </div>
 
           {/* Main Navigation Tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => setMainView('projects')}
               variant={mainView === 'projects' ? 'default' : 'outline'}

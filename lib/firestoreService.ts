@@ -477,8 +477,21 @@ export function subscribeToInstitutes(orgId: string | null, callback: (institute
 /**
  * Creates a new lab (research group/laboratory)
  * @returns The ID of the newly created lab
+ * @throws Error if a lab with the same name already exists in the institute
  */
 export async function createLab(labData: Omit<Lab, 'id' | 'createdAt'>): Promise<string> {
+  // Check for duplicate lab name in the same institute
+  const existingLabsQuery = query(
+    collection(db, "labs"),
+    where("instituteId", "==", labData.instituteId),
+    where("name", "==", labData.name)
+  )
+  const existingLabsSnapshot = await getDocs(existingLabsQuery)
+
+  if (!existingLabsSnapshot.empty) {
+    throw new Error(`A lab named "${labData.name}" already exists in this institute. Please choose a different name or select the existing lab.`)
+  }
+
   const labRef = doc(collection(db, "labs"))
   const labId = labRef.id
 

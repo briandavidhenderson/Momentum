@@ -146,6 +146,15 @@ export function useAuth() {
     window.dispatchEvent(new CustomEvent('profiles-updated'));
   };
 
+  const handleCancelOnboarding = async () => {
+    // Sign out the user and return to login screen
+    await signOut(auth);
+    setCurrentUser(null);
+    setCurrentUserProfile(null);
+    setCurrentUserProfileId(null);
+    setAuthState('auth');
+  };
+
   return {
     currentUser,
     currentUserProfile,
@@ -157,5 +166,6 @@ export function useAuth() {
     handleSignup,
     handleSignOut,
     handleProfileSetupComplete,
+    handleCancelOnboarding,
   };
 }

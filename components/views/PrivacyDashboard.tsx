@@ -246,18 +246,42 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
 
       setShowDeleteDialog(false)
       setDeleteConfirmation("")
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error requesting account deletion:", error)
-      alert("Failed to request account deletion. Please try again.")
+
+      let errorMessage = "Failed to request account deletion. "
+
+      if (error.code === "permission-denied") {
+        errorMessage += "You don't have permission to delete this account. Please contact your administrator."
+      } else if (error.code === "not-found") {
+        errorMessage += "User account not found. Please try logging out and back in."
+      } else if (error.message?.includes("network")) {
+        errorMessage += "Network error. Please check your connection and try again."
+      } else if (error.message) {
+        errorMessage += `Error: ${error.message}`
+      } else {
+        errorMessage += "An unknown error occurred. Please contact support if this persists."
+      }
+
+      alert(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
-  if (!user || !profile) {
+  if (!user) {
     return (
       <div className="p-8 text-center">
         <p className="text-muted-foreground">Please log in to view your privacy settings.</p>
+      </div>
+    )
+  }
+
+  // Show loading message if profile is still loading
+  if (!profile) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-muted-foreground">Loading your profile...</p>
       </div>
     )
   }
