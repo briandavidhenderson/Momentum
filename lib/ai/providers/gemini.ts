@@ -28,6 +28,8 @@ import {
   IMAGE_OCR_PROMPT,
 } from '../prompts'
 
+import { logger } from '../../logger'
+
 export class GeminiProvider implements AIProvider {
   name = 'Gemini'
   capabilities: AICapability[] = ['ocr', 'vlm', 'llm']
@@ -38,7 +40,7 @@ export class GeminiProvider implements AIProvider {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
     if (!this.apiKey) {
-      console.warn('[Gemini] No API key provided')
+      logger.warn('Gemini: No API key provided')
     }
   }
 

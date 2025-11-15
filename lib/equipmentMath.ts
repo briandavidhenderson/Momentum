@@ -5,6 +5,7 @@
 
 import { EquipmentDevice, EquipmentSupply } from "./types"
 import { EQUIPMENT_CONFIG } from "./equipmentConfig"
+import { logger } from "./logger"
 
 /**
  * Calculate maintenance health percentage (0-100)
@@ -29,7 +30,7 @@ export function calculateMaintenanceHealth(
     const p = Math.max(0, 1 - elapsedDays / maintenanceDays)
     return Math.round(p * 100)
   } catch (error) {
-    console.error('Error calculating maintenance health:', error)
+    logger.error('Error calculating maintenance health', error)
     return 100 // Default to healthy if calculation fails
   }
 }

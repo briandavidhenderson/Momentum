@@ -12,6 +12,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from './firebase'
 import { InventoryItem, FundingAllocation, PersonProfile } from './types'
 import { getBudgetNotificationPriority } from './equipmentConfig'
+import { logger } from './logger'
 
 export interface NotificationPayload {
   userId: string
@@ -36,7 +37,7 @@ async function createNotification(payload: NotificationPayload) {
       read: false
     })
   } catch (error) {
-    console.error('Error creating notification:', error)
+    logger.error('Error creating notification', error)
     throw error
   }
 }
