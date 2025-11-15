@@ -97,34 +97,27 @@ type OnboardingStep =
   | "review"
   | "complete"
 
-// Feature #9: Role descriptions to help users understand each position
-const POSITION_DESCRIPTIONS: Record<PositionLevel, string> = {
-  [PositionLevel.RESEARCH_INTERN]: "Short-term role, typically for students gaining initial research experience. Limited project responsibilities.",
-  [PositionLevel.RESEARCH_ASSISTANT]: "Entry-level research role supporting ongoing projects. Can assist with experiments and data collection.",
-  [PositionLevel.RESEARCH_ASSOCIATE]: "Independent researcher contributing to projects. Can manage specific project components.",
-  [PositionLevel.LAB_TECHNICIAN]: "Maintains lab equipment and assists with experiments. Ensures smooth daily operations.",
-  [PositionLevel.SENIOR_LAB_TECHNICIAN]: "Experienced technician managing lab operations and training junior staff. May oversee equipment budgets.",
+/**
+ * Splits a full name into first and last name components.
+ * Never uses email-like strings (e.g., "alice.smith") as names.
+ */
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = fullName.trim()
 
-  [PositionLevel.UNDERGRADUATE_STUDENT]: "Undergraduate working on research projects. Learning fundamental research skills.",
-  [PositionLevel.MASTERS_STUDENT]: "Graduate student pursuing Master's degree. Conducts supervised research for thesis.",
-  [PositionLevel.PHD_STUDENT]: "Early-stage doctoral student. Developing research proposal and beginning dissertation work.",
-  [PositionLevel.PHD_CANDIDATE]: "Advanced doctoral student. Actively conducting dissertation research and preparing publications.",
+  // If empty or looks like an email local part (contains dots/underscores but no spaces), return empty
+  if (!trimmed || (!trimmed.includes(' ') && (trimmed.includes('.') || trimmed.includes('_')))) {
+    return { firstName: '', lastName: '' }
+  }
 
-  [PositionLevel.POSTDOC_RESEARCH_ASSOCIATE]: "Early postdoctoral position. Develops independent research while collaborating on projects.",
-  [PositionLevel.POSTDOC_RESEARCH_FELLOW]: "Established postdoc with independent funding. Greater autonomy in research direction.",
-  [PositionLevel.SENIOR_POSTDOC_RESEARCHER]: "Experienced postdoc, may mentor junior researchers. Often collaborates with PIs on grant proposals.",
+  const parts = trimmed.split(/\s+/)
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '' }
+  }
 
-  [PositionLevel.RESEARCH_FELLOW]: "Independent researcher, often with external funding. Can lead projects and supervise students.",
-  [PositionLevel.SENIOR_RESEARCH_FELLOW]: "Senior researcher leading projects. May have PI status on some grants.",
-  [PositionLevel.ASSISTANT_PROFESSOR]: "Early-career faculty establishing independent research program. Can be PI on grants.",
-  [PositionLevel.ASSOCIATE_PROFESSOR]: "Established faculty with independent lab. PI on multiple projects, supervises trainees.",
-  [PositionLevel.PROFESSOR]: "Senior faculty leader with extensive experience. PI on major grants, mentors junior faculty.",
-  [PositionLevel.HEAD_OF_DEPARTMENT]: "Senior leader managing department operations and strategy. Oversees faculty and resources.",
-  [PositionLevel.ADMINISTRATIVE_STAFF]: "Administrative support for lab operations, coordinating activities and managing documentation.",
-
-  [PositionLevel.VISITING_RESEARCHER]: "Temporary researcher from another institution. Collaborating on specific projects.",
-  [PositionLevel.EXTERNAL_COLLABORATOR]: "Researcher based elsewhere collaborating remotely. Limited access to lab resources.",
-  [PositionLevel.LAB_MANAGER]: "Manages day-to-day lab operations, budgets, and staff. Ensures compliance and safety.",
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  }
 }
 
 export default function OnboardingFlow({ user, onComplete, onCancel }: OnboardingFlowProps) {
@@ -144,6 +137,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [instSearchTerm, setInstSearchTerm] = useState("")
   const [labSearchTerm, setLabSearchTerm] = useState("")
   const [funderSearchTerm, setFunderSearchTerm] = useState("")
+  const [positionSearchTerm, setPositionSearchTerm] = useState("")
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showCreateInst, setShowCreateInst] = useState(false)
   const [showCreateLab, setShowCreateLab] = useState(false)
@@ -152,12 +146,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [selectedFunderType, setSelectedFunderType] = useState<"public" | "private" | "charity" | "internal" | "government" | "industry" | "eu" | "other">("government")
 
   // Form state
+  const { firstName: initialFirstName, lastName: initialLastName } = splitFullName(user.fullName)
   const [state, setState] = useState<OnboardingState>({
     selectedOrganisation: null,
     selectedInstitute: null,
     selectedLab: null,
-    firstName: user.fullName.split(" ")[0] || "",
-    lastName: user.fullName.split(" ").slice(1).join(" ") || "",
+    firstName: initialFirstName,
+    lastName: initialLastName,
     email: user.email,
     phone: "",
     officeLocation: "",
@@ -1073,6 +1068,17 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         )
 
       case "position":
+        // Filter positions based on search term
+        const filteredCategories = Object.entries(POSITION_CATEGORIES).reduce((acc, [category, positions]) => {
+          const filtered = positions.filter(pos =>
+            POSITION_DISPLAY_NAMES[pos].toLowerCase().includes(positionSearchTerm.toLowerCase())
+          );
+          if (filtered.length > 0) {
+            acc[category] = filtered;
+          }
+          return acc;
+        }, {} as Record<string, PositionLevel[]>);
+
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -1081,37 +1087,87 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <p className="text-gray-600">What is your role in the lab?</p>
             </div>
 
-            {/* Feature #9: Add informative help text */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-gray-700">
-                Select the position that best describes your current role. This helps determine default permissions
-                and visibility settings for your work.
+            {/* Search Filter */}
+            <div className="mb-4">
+              <Input
+                type="text"
+                placeholder="Search for a position..."
+                value={positionSearchTerm}
+                onChange={(e) => setPositionSearchTerm(e.target.value)}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Type to filter positions by name
               </p>
             </div>
 
-            <div className="space-y-4">
-              {Object.entries(POSITION_CATEGORIES).map(([category, positions]) => (
-                <div key={category} className="border rounded-lg p-4">
-                  <h3 className="font-semibold mb-3 text-sm text-gray-700">{category}</h3>
-                  <div className="space-y-2">
-                    {positions.map((pos) => (
-                      <button
-                        key={pos}
-                        onClick={() => setState((s) => ({ ...s, positionLevel: pos }))}
-                        className={`w-full p-3 text-left rounded-lg border transition ${
-                          state.positionLevel === pos
-                            ? "bg-blue-50 border-blue-600"
-                            : "hover:bg-gray-50 border-gray-200"
-                        }`}
-                      >
-                        {/* Feature #9: Show position name and description */}
-                        <div className="font-medium text-sm">{POSITION_DISPLAY_NAMES[pos]}</div>
-                        <div className="text-xs text-gray-600 mt-1">{POSITION_DESCRIPTIONS[pos]}</div>
-                      </button>
-                    ))}
-                  </div>
+            {/* Helper Text */}
+            {!state.positionLevel && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+                Please select your position to continue
+              </div>
+            )}
+
+            {/* Position List */}
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+              {Object.keys(filteredCategories).length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No positions match your search.</p>
+                  <Button
+                    variant="link"
+                    onClick={() => setPositionSearchTerm("")}
+                    className="mt-2"
+                  >
+                    Clear search
+                  </Button>
                 </div>
-              ))}
+              ) : (
+                Object.entries(filteredCategories).map(([category, positions]) => (
+                  <div key={category} className="border rounded-lg p-4 bg-white">
+                    <h3 className="font-semibold mb-3 text-sm text-gray-700 uppercase tracking-wide">{category}</h3>
+                    <div className="space-y-2">
+                      {positions.map((pos) => {
+                        const isSelected = state.positionLevel === pos;
+                        const displayName = POSITION_DISPLAY_NAMES[pos];
+                        const searchIndex = positionSearchTerm
+                          ? displayName.toLowerCase().indexOf(positionSearchTerm.toLowerCase())
+                          : -1;
+
+                        return (
+                          <button
+                            key={pos}
+                            onClick={() => setState((s) => ({ ...s, positionLevel: pos }))}
+                            className={`w-full p-3 text-left rounded-lg border-2 transition-all ${
+                              isSelected
+                                ? "bg-blue-600 border-blue-600 text-white shadow-lg scale-[1.02]"
+                                : "bg-white border-gray-200 hover:bg-gray-50 hover:border-blue-300"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className={`font-medium ${isSelected ? "text-white" : "text-gray-900"}`}>
+                                {searchIndex >= 0 && positionSearchTerm ? (
+                                  <>
+                                    {displayName.substring(0, searchIndex)}
+                                    <span className={isSelected ? "underline" : "bg-yellow-200 px-0.5"}>
+                                      {displayName.substring(searchIndex, searchIndex + positionSearchTerm.length)}
+                                    </span>
+                                    {displayName.substring(searchIndex + positionSearchTerm.length)}
+                                  </>
+                                ) : (
+                                  displayName
+                                )}
+                              </span>
+                              {isSelected && (
+                                <CheckCircle2 className="w-5 h-5 text-white" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )

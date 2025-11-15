@@ -3,10 +3,12 @@ import { useState, useEffect } from 'react';
 import { DayToDayTask } from '@/lib/dayToDayTypes';
 import { createDayToDayTask, subscribeToDayToDayTasks, updateDayToDayTask, deleteDayToDayTask } from '@/lib/firestoreService';
 import { useAuth } from './useAuth';
+import { useToast } from '@/lib/toast';
 
 export function useDayToDayTasks() {
   const { currentUser, currentUserProfile: profile } = useAuth();
   const [dayToDayTasks, setDayToDayTasks] = useState<DayToDayTask[]>([]);
+  const { success, error } = useToast();
 
   useEffect(() => {
     if (!profile?.labId) return;
@@ -20,25 +22,54 @@ export function useDayToDayTasks() {
 
   const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId' | 'createdBy'>) => {
     if (!currentUser || !profile?.labId) return;
-    const order = dayToDayTasks.length;
-    await createDayToDayTask({
-      ...task,
-      createdBy: currentUser.uid,
-      order,
-      labId: profile.labId,
-    });
+    try {
+      const order = dayToDayTasks.length;
+      await createDayToDayTask({
+        ...task,
+        createdBy: currentUser.uid,
+        order,
+        labId: profile.labId,
+      });
+      success(`"${task.title}" has been added to your board.`);
+    } catch (err) {
+      console.error('Error creating task:', err);
+      error("Failed to create task. Please try again.");
+    }
   };
 
   const handleUpdateDayToDayTask = async (taskId: string, updates: Partial<DayToDayTask>) => {
-    await updateDayToDayTask(taskId, updates);
+    try {
+      await updateDayToDayTask(taskId, updates);
+      success("Your changes have been saved.");
+    } catch (err) {
+      console.error('Error updating task:', err);
+      error("Failed to update task. Please try again.");
+    }
   };
 
   const handleDeleteDayToDayTask = async (taskId: string) => {
-    await deleteDayToDayTask(taskId);
+    try {
+      await deleteDayToDayTask(taskId);
+      success("The task has been removed.");
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      error("Failed to delete task. Please try again.");
+    }
   };
 
   const handleMoveDayToDayTask = async (taskId: string, newStatus: 'todo' | 'working' | 'done') => {
-    await updateDayToDayTask(taskId, { status: newStatus });
+    try {
+      await updateDayToDayTask(taskId, { status: newStatus });
+      const statusNames = {
+        'todo': 'To Do',
+        'working': 'Working On It',
+        'done': 'Done'
+      };
+      success(`Task moved to ${statusNames[newStatus]}.`);
+    } catch (err) {
+      console.error('Error moving task:', err);
+      error("Failed to move task. Please try again.");
+    }
   };
 
   return {

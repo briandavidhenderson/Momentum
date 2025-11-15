@@ -52,12 +52,12 @@ export function useAuth() {
               setAuthState('setup');
             }
           } else {
-            // Extract name from email safely
-            const emailName = firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'
+            // Use displayName if available, otherwise leave empty
+            // Never fallback to email local part as it's not a proper name
             const tempUser: User = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
-              fullName: firebaseUser.displayName || emailName,
+              fullName: firebaseUser.displayName || '',
               profileId: null,
               createdAt: Timestamp.now(),
               isAdministrator: false,
