@@ -9,6 +9,7 @@ import { Mail, Phone, MapPin, GraduationCap, Users, Building, Network } from "lu
 import { NetworkView } from "../NetworkView"
 import PositionBadge from "@/components/PositionBadge"
 import { OrcidIcon } from "@/components/OrcidBadge"
+import { logger } from "@/lib/logger"
 
 interface PeopleViewProps {
   currentUserProfile?: PersonProfile | null
