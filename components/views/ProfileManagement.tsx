@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, MasterProject } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, MasterProject, PositionLevel } from "@/lib/types"
 import { FirestoreUser } from "@/lib/firestoreService"
 import { profiles as staticProfiles } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
@@ -37,6 +37,97 @@ import {
   Plus,
   Shield
 } from "lucide-react"
+
+/**
+ * Maps a position string to a PositionLevel enum value
+ * Provides a type-safe way to convert legacy position strings to the new enum
+ */
+function mapPositionToPositionLevel(position: string): PositionLevel {
+  const positionLower = position.toLowerCase()
+
+  // Students
+  if (positionLower.includes("phd") || positionLower.includes("doctoral")) {
+    return PositionLevel.PHD_STUDENT
+  }
+  if (positionLower.includes("masters") || positionLower.includes("master's")) {
+    return PositionLevel.MASTERS_STUDENT
+  }
+  if (positionLower.includes("undergraduate")) {
+    return PositionLevel.UNDERGRADUATE_STUDENT
+  }
+
+  // Postdocs
+  if (positionLower.includes("postdoc") || positionLower.includes("post-doc")) {
+    if (positionLower.includes("senior")) {
+      return PositionLevel.SENIOR_POSTDOC_RESEARCHER
+    }
+    if (positionLower.includes("fellow")) {
+      return PositionLevel.POSTDOC_RESEARCH_FELLOW
+    }
+    return PositionLevel.POSTDOC_RESEARCH_ASSOCIATE
+  }
+
+  // Faculty
+  if (positionLower.includes("professor")) {
+    if (positionLower.includes("assistant")) {
+      return PositionLevel.ASSISTANT_PROFESSOR
+    }
+    if (positionLower.includes("associate")) {
+      return PositionLevel.ASSOCIATE_PROFESSOR
+    }
+    return PositionLevel.PROFESSOR
+  }
+  if (positionLower.includes("lecturer")) {
+    if (positionLower.includes("senior")) {
+      return PositionLevel.ASSOCIATE_PROFESSOR
+    }
+    return PositionLevel.ASSISTANT_PROFESSOR
+  }
+
+  // Research positions
+  if (positionLower.includes("research fellow")) {
+    if (positionLower.includes("senior")) {
+      return PositionLevel.SENIOR_RESEARCH_FELLOW
+    }
+    return PositionLevel.RESEARCH_FELLOW
+  }
+  if (positionLower.includes("research associate")) {
+    return PositionLevel.RESEARCH_ASSOCIATE
+  }
+  if (positionLower.includes("research assistant")) {
+    return PositionLevel.RESEARCH_ASSISTANT
+  }
+
+  // Lab staff
+  if (positionLower.includes("lab manager")) {
+    return PositionLevel.LAB_MANAGER
+  }
+  if (positionLower.includes("lab technician") || positionLower.includes("technician")) {
+    if (positionLower.includes("senior")) {
+      return PositionLevel.SENIOR_LAB_TECHNICIAN
+    }
+    return PositionLevel.LAB_TECHNICIAN
+  }
+
+  // Leadership
+  if (positionLower.includes("head") || positionLower.includes("chair")) {
+    return PositionLevel.HEAD_OF_DEPARTMENT
+  }
+
+  // Other
+  if (positionLower.includes("visiting")) {
+    return PositionLevel.VISITING_RESEARCHER
+  }
+  if (positionLower.includes("collaborator")) {
+    return PositionLevel.EXTERNAL_COLLABORATOR
+  }
+  if (positionLower.includes("admin")) {
+    return PositionLevel.ADMINISTRATIVE_STAFF
+  }
+
+  // Default fallback
+  return PositionLevel.RESEARCH_ASSISTANT
+}
 
 interface ProfileManagementProps {
   currentUser?: FirestoreUser | null
@@ -107,23 +198,23 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     window.dispatchEvent(new CustomEvent("profiles-updated"))
   }
 
-  const labs = Array.from(new Set(allProfiles.map(p => p.labName)))
-  const institutes = Array.from(new Set(allProfiles.map(p => p.instituteName)))
-  const organisations = Array.from(new Set(allProfiles.map(p => p.organisationName)))
+  const labs = Array.isArray(allProfiles) ? Array.from(new Set(allProfiles.map(p => p.labName))) : []
+  const institutes = Array.isArray(allProfiles) ? Array.from(new Set(allProfiles.map(p => p.instituteName))) : []
+  const organisations = Array.isArray(allProfiles) ? Array.from(new Set(allProfiles.map(p => p.organisationName))) : []
 
-  const filteredProfiles = allProfiles.filter(profile => {
+  const filteredProfiles = Array.isArray(allProfiles) ? allProfiles.filter(profile => {
     const matchesSearch =
-      profile.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      profile.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      profile.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      profile.position.toLowerCase().includes(searchTerm.toLowerCase())
+      profile.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      profile.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      profile.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      profile.position?.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesLab = filterLab === "all" || profile.labName === filterLab
     const matchesInstitute = filterInstitute === "all" || profile.instituteName === filterInstitute
     const matchesOrganisation = filterOrganisation === "all" || profile.organisationName === filterOrganisation
 
     return matchesSearch && matchesLab && matchesInstitute && matchesOrganisation
-  })
+  }) : []
 
   const handleCreateNew = () => {
     setFormData({
@@ -282,7 +373,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
   }
 
   const handleSave = () => {
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.organisation || !formData.institute || !formData.lab) {
+    // Validate required fields - both new and legacy fields for backward compatibility
+    const hasRequiredBasicFields = formData.firstName && formData.lastName && formData.email
+    const hasLegacyHierarchyFields = formData.organisation && formData.institute && formData.lab
+
+    if (!hasRequiredBasicFields || !hasLegacyHierarchyFields) {
       alert("Please fill in required fields: First Name, Last Name, Email, Organisation, Institute, and Lab")
       return
     }
@@ -305,10 +400,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       labName: formData.lab!,
 
       // Position (new enum-based + legacy string)
-      positionLevel: formData.position?.includes("PhD") ? "phd_student" as any :
-                     formData.position?.includes("Postdoc") ? "postdoc_research_associate" as any :
-                     formData.position?.includes("Professor") ? "professor" as any :
-                     "research_assistant" as any,
+      positionLevel: mapPositionToPositionLevel(formData.position || ""),
       positionDisplayName: formData.position || "Unknown",
       position: formData.position || "",
 
@@ -365,13 +457,19 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     if (newProfile.userId && currentUser?.uid === newProfile.userId) {
       const storedUsers = localStorage.getItem("lab-users")
       if (storedUsers) {
-        const users: FirestoreUser[] = JSON.parse(storedUsers)
-        const updatedUsers = users.map(u =>
-          u.uid === newProfile.userId
-            ? { ...u, isAdministrator: newProfile.isAdministrator }
-            : u
-        )
-        localStorage.setItem("lab-users", JSON.stringify(updatedUsers))
+        try {
+          const users: FirestoreUser[] = JSON.parse(storedUsers)
+          const updatedUsers = users.map(u =>
+            u.uid === newProfile.userId
+              ? { ...u, isAdministrator: newProfile.isAdministrator }
+              : u
+          )
+          localStorage.setItem("lab-users", JSON.stringify(updatedUsers))
+        } catch (error) {
+          console.error('Error parsing lab-users from localStorage:', error)
+          // Clear invalid data
+          localStorage.removeItem("lab-users")
+        }
       }
     }
     
@@ -421,9 +519,22 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const imported = JSON.parse(e.target?.result as string) as PersonProfile[]
+        const result = e.target?.result as string
+        if (!result) {
+          alert("Error reading file. File appears to be empty.")
+          return
+        }
+
+        const imported = JSON.parse(result) as PersonProfile[]
+
+        // Validate that imported is an array
+        if (!Array.isArray(imported)) {
+          alert("Error importing file. Expected an array of profiles.")
+          return
+        }
+
         const updatedProfiles = [...allProfiles]
-        
+
         imported.forEach(profile => {
           const index = updatedProfiles.findIndex(p => p.id === profile.id)
           if (index >= 0) {
@@ -436,8 +547,13 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
         saveProfiles(updatedProfiles)
         alert(`Imported ${imported.length} profile(s)`)
       } catch (error) {
+        console.error('Error importing profiles:', error)
         alert("Error importing file. Please ensure it's valid JSON.")
       }
+    }
+    reader.onerror = () => {
+      console.error('Error reading file:', reader.error)
+      alert("Error reading file. Please try again.")
     }
     reader.readAsText(file)
   }
