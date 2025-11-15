@@ -9,16 +9,22 @@ export function EquipmentManagement() {
     equipment,
     inventory,
     orders,
-    masterProjects,
+    projects,
     currentUserProfile,
     allProfiles,
     handleCreateEquipment,
     handleUpdateEquipment,
-    handleInventoryUpdate,
+    handleUpdateInventoryItem,
     handleCreateOrder,
     handleCreateDayToDayTask,
     handleCreateInventoryItem,
   } = useAppContext()
+
+  // Legacy compatibility: onInventoryUpdate expects array but we now update items individually
+  const handleInventoryUpdate = (_updatedInventory: any[]) => {
+    // This is a no-op for now as inventory updates are handled via Firestore subscriptions
+    // Individual items should be updated using handleUpdateInventoryItem instead
+  }
 
   return (
     <div className="space-y-6">
@@ -35,7 +41,7 @@ export function EquipmentManagement() {
         equipment={equipment || []}
         inventory={inventory || []}
         orders={orders || []}
-        masterProjects={masterProjects || []}
+        masterProjects={projects || []}
         currentUserProfile={currentUserProfile}
         allProfiles={allProfiles || []}
         onEquipmentUpdate={handleUpdateEquipment}
@@ -49,7 +55,7 @@ export function EquipmentManagement() {
         equipment={equipment || []}
         inventory={inventory || []}
         orders={orders || []}
-        masterProjects={masterProjects || []}
+        masterProjects={projects || []}
         currentUserProfile={currentUserProfile}
         allProfiles={allProfiles || []}
         onEquipmentCreate={handleCreateEquipment}

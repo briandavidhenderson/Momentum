@@ -114,6 +114,19 @@ export function useOrders() {
     await updateInventoryItem(itemId, { notes });
   };
 
+  const handleCreateInventoryItem = async (itemData: Omit<InventoryItem, 'id' | 'createdBy' | 'createdAt'>) => {
+    if (!profile) return;
+    await createInventoryItem({
+      ...itemData,
+      createdBy: profile.id,
+      labId: profile.labId,
+    });
+  };
+
+  const handleUpdateInventoryItem = async (itemId: string, updates: Partial<InventoryItem>) => {
+    await updateInventoryItem(itemId, updates);
+  };
+
   return {
     orders,
     inventory,
@@ -125,5 +138,7 @@ export function useOrders() {
     handleUpdateInventoryLevel,
     handleDeleteInventoryItem,
     handleUpdateInventoryNotes,
+    handleCreateInventoryItem,
+    handleUpdateInventoryItem,
   };
 }

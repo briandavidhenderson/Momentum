@@ -51,7 +51,8 @@ interface NetworkViewProps {
 }
 
 export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
-  const allProfiles = useProfiles(currentUserProfile?.labId || null) || []
+  const allProfilesData = useProfiles(currentUserProfile?.labId || null)
+  const allProfiles = useMemo(() => allProfilesData || [], [allProfilesData])
   const svgRef = useRef<SVGSVGElement>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [forceStrength, setForceStrength] = useState(-280)

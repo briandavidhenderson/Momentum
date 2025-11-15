@@ -28,6 +28,7 @@ import {
   Order,
   OrderStatus,
   InventoryItem,
+  InventoryLevel,
   CalendarEvent,
   AuditTrail,
   LabPoll,
@@ -1359,16 +1360,25 @@ export interface FirestoreInventoryItem {
   id: string
   productName: string
   catNum: string
+  supplier?: string
+  currentQuantity: number
+  priceExVAT: number
+  minQuantity?: number
+  burnRatePerWeek?: number
   inventoryLevel: string
   receivedDate: Timestamp
   lastOrderedDate?: Timestamp | null
   chargeToAccount?: string
+  accountId?: string
   notes?: string
   category?: string
   subcategory?: string
-  priceExVAT?: number
   createdBy: string
+  labId?: string
   createdAt: Timestamp
+  createdDate?: Timestamp
+  updatedAt?: Timestamp
+  equipmentDeviceIds?: string[]
 }
 
 export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & { createdBy: string }): Promise<string> {
@@ -1392,9 +1402,25 @@ export async function getInventory(): Promise<InventoryItem[]> {
   return querySnapshot.docs.map(doc => {
     const data = doc.data() as FirestoreInventoryItem
     return {
-      ...data,
+      id: data.id,
+      productName: data.productName,
+      catNum: data.catNum,
+      supplier: data.supplier,
+      currentQuantity: data.currentQuantity,
+      priceExVAT: data.priceExVAT,
+      minQuantity: data.minQuantity,
+      burnRatePerWeek: data.burnRatePerWeek,
+      inventoryLevel: data.inventoryLevel as InventoryLevel,
       receivedDate: data.receivedDate.toDate(),
       lastOrderedDate: data.lastOrderedDate ? data.lastOrderedDate.toDate() : undefined,
+      category: data.category,
+      subcategory: data.subcategory,
+      equipmentDeviceIds: data.equipmentDeviceIds,
+      chargeToAccount: data.chargeToAccount,
+      notes: data.notes,
+      labId: data.labId,
+      createdAt: data.createdAt ? data.createdAt.toDate() : data.createdDate ? data.createdDate.toDate() : undefined,
+      updatedAt: data.updatedAt ? data.updatedAt.toDate() : undefined,
     } as InventoryItem
   })
 }
@@ -1427,9 +1453,25 @@ export function subscribeToInventory(
     const inventory = snapshot.docs.map(doc => {
       const data = doc.data() as FirestoreInventoryItem
       return {
-        ...data,
+        id: data.id,
+        productName: data.productName,
+        catNum: data.catNum,
+        supplier: data.supplier,
+        currentQuantity: data.currentQuantity,
+        priceExVAT: data.priceExVAT,
+        minQuantity: data.minQuantity,
+        burnRatePerWeek: data.burnRatePerWeek,
+        inventoryLevel: data.inventoryLevel as InventoryLevel,
         receivedDate: data.receivedDate.toDate(),
         lastOrderedDate: data.lastOrderedDate ? data.lastOrderedDate.toDate() : undefined,
+        category: data.category,
+        subcategory: data.subcategory,
+        equipmentDeviceIds: data.equipmentDeviceIds,
+        chargeToAccount: data.chargeToAccount,
+        notes: data.notes,
+        labId: data.labId,
+        createdAt: data.createdAt ? data.createdAt.toDate() : data.createdDate ? data.createdDate.toDate() : undefined,
+        updatedAt: data.updatedAt ? data.updatedAt.toDate() : undefined,
       } as InventoryItem
     })
     callback(inventory)

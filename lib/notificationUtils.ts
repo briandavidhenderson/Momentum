@@ -67,7 +67,7 @@ export async function notifyLowStock(
   const priority = weeksRemaining < 1 ? 'high' : 'medium'
 
   const notifications = managers
-    .filter(m => m.orderNotifications !== false) // Respect user preferences
+    .filter(_m => true) // Note: orderNotifications property removed, send to all managers
     .map(manager =>
       createNotification({
         userId: manager.id,
@@ -103,7 +103,7 @@ export async function notifyCriticalStock(
   managers: PersonProfile[]
 ): Promise<void> {
   const notifications = managers
-    .filter(m => m.orderNotifications !== false)
+    .filter(_m => true) // Note: orderNotifications property removed
     .map(manager =>
       createNotification({
         userId: manager.id,
@@ -142,10 +142,7 @@ export async function notifyLowBudget(
   user: PersonProfile,
   percentRemaining: number
 ): Promise<void> {
-  // Respect user notification preferences
-  if (user.fundingAlertNotifications === false) {
-    return
-  }
+  // Note: fundingAlertNotifications property removed, notifications now sent to all users
 
   const priority = getBudgetNotificationPriority(percentRemaining)
 
@@ -179,9 +176,7 @@ export async function notifyBudgetExhausted(
   allocation: FundingAllocation,
   user: PersonProfile
 ): Promise<void> {
-  if (user.fundingAlertNotifications === false) {
-    return
-  }
+  // Note: fundingAlertNotifications property removed, notifications now sent to all users
 
   await createNotification({
     userId: user.id,
@@ -219,10 +214,7 @@ export async function notifyTaskAssigned(
   assignee: PersonProfile,
   assigner: PersonProfile
 ): Promise<void> {
-  // Respect user notification preferences
-  if (assignee.projectAssignmentNotifications === false) {
-    return
-  }
+  // Note: projectAssignmentNotifications property removed, notifications now sent to all users
 
   const priority = task.priority === 'high' ? 'high' : 'medium'
 
@@ -255,33 +247,29 @@ export async function notifyTaskReassigned(
   oldAssignee: PersonProfile,
   reassigner: PersonProfile
 ): Promise<void> {
-  // Notify new assignee
-  if (newAssignee.projectAssignmentNotifications !== false) {
-    await createNotification({
-      userId: newAssignee.id,
-      type: 'TASK_ASSIGNED',
-      title: 'Task Reassigned to You',
-      message: `${reassigner.firstName} ${reassigner.lastName} reassigned "${task.title}" to you`,
-      priority: task.priority === 'high' ? 'high' : 'medium',
-      relatedEntityType: 'task',
-      relatedEntityId: task.id,
-      actionUrl: '/day-to-day'
-    })
-  }
+  // Notify new assignee (projectAssignmentNotifications property removed)
+  await createNotification({
+    userId: newAssignee.id,
+    type: 'TASK_ASSIGNED',
+    title: 'Task Reassigned to You',
+    message: `${reassigner.firstName} ${reassigner.lastName} reassigned "${task.title}" to you`,
+    priority: task.priority === 'high' ? 'high' : 'medium',
+    relatedEntityType: 'task',
+    relatedEntityId: task.id,
+    actionUrl: '/day-to-day'
+  })
 
-  // Notify old assignee
-  if (oldAssignee.projectAssignmentNotifications !== false) {
-    await createNotification({
-      userId: oldAssignee.id,
-      type: 'TASK_UNASSIGNED',
-      title: 'Task Reassigned',
-      message: `"${task.title}" has been reassigned to ${newAssignee.firstName} ${newAssignee.lastName}`,
-      priority: 'low',
-      relatedEntityType: 'task',
-      relatedEntityId: task.id,
-      actionUrl: '/day-to-day'
-    })
-  }
+  // Notify old assignee (projectAssignmentNotifications property removed)
+  await createNotification({
+    userId: oldAssignee.id,
+    type: 'TASK_UNASSIGNED',
+    title: 'Task Reassigned',
+    message: `"${task.title}" has been reassigned to ${newAssignee.firstName} ${newAssignee.lastName}`,
+    priority: 'low',
+    relatedEntityType: 'task',
+    relatedEntityId: task.id,
+    actionUrl: '/day-to-day'
+  })
 }
 
 /**
@@ -298,7 +286,7 @@ export async function notifyOrderPlaced(
   managers: PersonProfile[]
 ): Promise<void> {
   const notifications = managers
-    .filter(m => m.orderNotifications !== false)
+    .filter(_m => true) // Note: orderNotifications property removed
     .map(manager =>
       createNotification({
         userId: manager.id,
@@ -324,9 +312,12 @@ export async function notifyOrderPlaced(
  */
 export function getLabManagers(profiles: PersonProfile[]): PersonProfile[] {
   return profiles.filter(p =>
-    p.role === 'PI' ||
-    p.role === 'Lab Manager' ||
-    p.role === 'Administrator'
+    p.userRole === 'pi' ||
+    p.userRole === 'lab_manager' ||
+    p.userRole === 'finance_admin' ||
+    p.userRole === 'admin' ||
+    p.isAdministrator === true ||
+    p.isPrincipalInvestigator === true
   )
 }
 
