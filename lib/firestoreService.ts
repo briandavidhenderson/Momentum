@@ -332,6 +332,7 @@ export async function findUserProfile(userId: string, profileId: string | null |
  * Updates the user document's profileId to match the actual profile
  */
 async function repairUserProfileSync(userId: string, profileId: string): Promise<void> {
+  const db = getFirebaseDb()
   try {
     const userRef = doc(db, "users", userId)
     await setDoc(userRef, { profileId }, { merge: true })
@@ -1631,6 +1632,7 @@ export function subscribeToEvents(
 export async function createCalendarConnection(
   connectionData: Omit<CalendarConnection, 'id' | 'createdAt'>
 ): Promise<string> {
+  const db = getFirebaseDb()
   const connectionRef = doc(collection(db, "calendarConnections"))
   const connectionId = connectionRef.id
 
@@ -1647,6 +1649,7 @@ export async function createCalendarConnection(
  * Gets calendar connections for a specific user
  */
 export async function getCalendarConnections(userId: string): Promise<CalendarConnection[]> {
+  const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarConnections"),
     where("userId", "==", userId)
@@ -1659,6 +1662,7 @@ export async function getCalendarConnections(userId: string): Promise<CalendarCo
  * Gets a single calendar connection by ID
  */
 export async function getCalendarConnection(connectionId: string): Promise<CalendarConnection | null> {
+  const db = getFirebaseDb()
   const connectionRef = doc(db, "calendarConnections", connectionId)
   const connectionSnap = await getDoc(connectionRef)
   if (!connectionSnap.exists()) return null
@@ -1672,6 +1676,7 @@ export async function updateCalendarConnection(
   connectionId: string,
   updates: Partial<CalendarConnection>
 ): Promise<void> {
+  const db = getFirebaseDb()
   const connectionRef = doc(db, "calendarConnections", connectionId)
   const updateData: any = {
     ...updates,
@@ -1684,6 +1689,7 @@ export async function updateCalendarConnection(
  * Deletes a calendar connection
  */
 export async function deleteCalendarConnection(connectionId: string): Promise<void> {
+  const db = getFirebaseDb()
   // Also delete associated sync conflicts and logs
   const batch = writeBatch(db)
 
@@ -1721,6 +1727,7 @@ export function subscribeToCalendarConnections(
   userId: string,
   callback: (connections: CalendarConnection[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarConnections"),
     where("userId", "==", userId)
@@ -1749,6 +1756,7 @@ export function subscribeToCalendarConnections(
 export async function createSyncConflict(
   conflictData: Omit<CalendarConflict, 'id'>
 ): Promise<string> {
+  const db = getFirebaseDb()
   const conflictRef = doc(collection(db, "calendarSyncConflicts"))
   const conflictId = conflictRef.id
 
@@ -1764,6 +1772,7 @@ export async function createSyncConflict(
  * Gets unresolved conflicts for a connection
  */
 export async function getUnresolvedConflicts(connectionId: string): Promise<CalendarConflict[]> {
+  const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarSyncConflicts"),
     where("connectionId", "==", connectionId),
@@ -1781,6 +1790,7 @@ export async function resolveSyncConflict(
   resolution: "keep_momentum" | "keep_external" | "merge" | "manual",
   resolvedBy: string
 ): Promise<void> {
+  const db = getFirebaseDb()
   const conflictRef = doc(db, "calendarSyncConflicts", conflictId)
   await updateDoc(conflictRef, {
     resolved: true,
@@ -1797,6 +1807,7 @@ export function subscribeToUnresolvedConflicts(
   connectionId: string,
   callback: (conflicts: CalendarConflict[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarSyncConflicts"),
     where("connectionId", "==", connectionId),
@@ -1826,6 +1837,7 @@ export function subscribeToUnresolvedConflicts(
 export async function createSyncLog(
   logData: Omit<CalendarSyncLog, 'id'>
 ): Promise<string> {
+  const db = getFirebaseDb()
   const logRef = doc(collection(db, "calendarSyncLogs"))
   const logId = logRef.id
 
@@ -1844,6 +1856,7 @@ export async function getSyncLogs(
   connectionId: string,
   limit: number = 50
 ): Promise<CalendarSyncLog[]> {
+  const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarSyncLogs"),
     where("connectionId", "==", connectionId),
@@ -1862,6 +1875,7 @@ export async function updateSyncLog(
   logId: string,
   updates: Partial<CalendarSyncLog>
 ): Promise<void> {
+  const db = getFirebaseDb()
   const logRef = doc(db, "calendarSyncLogs", logId)
   await updateDoc(logRef, updates)
 }

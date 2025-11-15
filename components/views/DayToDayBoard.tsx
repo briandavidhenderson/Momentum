@@ -553,9 +553,9 @@ export function DayToDayBoard() {
     // Handle moving to different column
     if (overData?.type === "column") {
       const newStatus = overData.status as TaskStatus
-      if (task.status !== newStatus) {
+      if (activeTask.status !== newStatus) {
         try {
-          await onMoveTask(task.id, newStatus)
+          await onMoveTask(activeTask.id, newStatus)
         } catch (error) {
           console.error('Failed to move task:', error)
           // Error is already shown by the hook, just log here
@@ -571,6 +571,7 @@ export function DayToDayBoard() {
       title: newTaskTitle,
       status: "todo",
       importance: newTaskImportance,
+      createdBy: currentUser?.uid || "",
     })
 
     setNewTaskTitle("")

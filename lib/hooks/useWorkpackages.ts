@@ -60,7 +60,7 @@ export function useWorkpackages(currentUser: PersonProfile | null) {
   useEffect(() => {
     if (!currentUser || !currentUser.id) return;
 
-    const unsubscribe = subscribeToWorkpackages(currentUser.id, (firestoreWorkpackages) => {
+    const unsubscribe = subscribeToWorkpackages(null, (firestoreWorkpackages) => {
       setWorkpackages(firestoreWorkpackages);
     });
 

@@ -89,6 +89,7 @@ export function ProjectDetailPanel({
       assigneeId: newTaskAssigneeId || undefined,
       dueDate: newTaskDueDate ? new Date(newTaskDueDate) : undefined,
       linkedProjectId: project.id,
+      createdBy: currentUser?.uid || "",
     })
 
     // Reset form
