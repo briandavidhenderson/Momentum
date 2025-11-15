@@ -29,16 +29,52 @@ export function useDayToDayTasks() {
     });
   };
 
-  const handleUpdateDayToDayTask = async (taskId: string, updates: Partial<DayToDayTask>) => {
-    await updateDayToDayTask(taskId, updates);
+  const handleUpdateDayToDayTask = async (taskId: string, updates: Partial<DayToDayTask>, optimistic: boolean = false) => {
+    if (optimistic) {
+      // Optimistic update: immediately update local state
+      const previousTasks = [...dayToDayTasks];
+      setDayToDayTasks(prev => prev.map(task =>
+        task.id === taskId ? { ...task, ...updates } : task
+      ));
+
+      // Update backend in background
+      try {
+        await updateDayToDayTask(taskId, updates);
+      } catch (error) {
+        console.error('Failed to update task, rolling back:', error);
+        // Rollback on error
+        setDayToDayTasks(previousTasks);
+      }
+    } else {
+      // Traditional update: wait for backend
+      await updateDayToDayTask(taskId, updates);
+    }
   };
 
   const handleDeleteDayToDayTask = async (taskId: string) => {
     await deleteDayToDayTask(taskId);
   };
 
-  const handleMoveDayToDayTask = async (taskId: string, newStatus: 'todo' | 'working' | 'done') => {
-    await updateDayToDayTask(taskId, { status: newStatus });
+  const handleMoveDayToDayTask = async (taskId: string, newStatus: 'todo' | 'working' | 'done', optimistic: boolean = true) => {
+    if (optimistic) {
+      // Optimistic update: immediately move task in local state
+      const previousTasks = [...dayToDayTasks];
+      setDayToDayTasks(prev => prev.map(task =>
+        task.id === taskId ? { ...task, status: newStatus } : task
+      ));
+
+      // Update backend in background
+      try {
+        await updateDayToDayTask(taskId, { status: newStatus });
+      } catch (error) {
+        console.error('Failed to move task, rolling back:', error);
+        // Rollback on error
+        setDayToDayTasks(previousTasks);
+      }
+    } else {
+      // Traditional update: wait for backend
+      await updateDayToDayTask(taskId, { status: newStatus });
+    }
   };
 
   return {

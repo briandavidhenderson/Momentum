@@ -67,8 +67,26 @@ export function useOrders() {
     await deleteOrder(orderId);
   };
 
-  const handleUpdateOrder = async (orderId: string, updates: Partial<Order>) => {
-    await updateOrder(orderId, updates);
+  const handleUpdateOrder = async (orderId: string, updates: Partial<Order>, optimistic: boolean = false) => {
+    if (optimistic) {
+      // Optimistic update: immediately update local state for snappy UI
+      const previousOrders = [...orders];
+      setOrders(prev => prev.map(order =>
+        order.id === orderId ? { ...order, ...updates } : order
+      ));
+
+      // Update backend in background
+      try {
+        await updateOrder(orderId, updates);
+      } catch (error) {
+        console.error('Failed to update order, rolling back:', error);
+        // Rollback on error
+        setOrders(previousOrders);
+      }
+    } else {
+      // Traditional update: wait for backend
+      await updateOrder(orderId, updates);
+    }
   };
 
   const handleUpdateOrderField = (orderId: string, field: keyof Order, value: any) => {

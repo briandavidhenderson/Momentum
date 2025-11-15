@@ -159,7 +159,8 @@ export function OrdersInventory() {
       }
     }
 
-    await handleUpdateOrder(orderId, updates)
+    // Use optimistic update for instant drag-drop feedback
+    await handleUpdateOrder(orderId, updates, true)
   }
 
   const handleEdit = (order: Order) => {
@@ -167,7 +168,8 @@ export function OrdersInventory() {
   }
 
   const handleSaveEdit = async (orderId: string, updates: Partial<Order>) => {
-    await handleUpdateOrder(orderId, updates)
+    // Use normal update for edit dialog (not drag-drop)
+    await handleUpdateOrder(orderId, updates, false)
     setEditingOrder(null)
   }
 
