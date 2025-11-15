@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Wallet, TrendingDown, Clock, AlertCircle } from "lucide-react"
+import { logger } from "@/lib/logger"
 
 export function PersonalLedger() {
   const { currentUser, fundingAllocations, fundingAllocationsLoading } = useAppContext()
@@ -45,7 +46,7 @@ export function PersonalLedger() {
           setTransactions(trans)
         }
       } catch (error) {
-        console.error("Error loading transactions:", error)
+        logger.error("Error loading transactions", error)
       } finally {
         setTransactionsLoading(false)
       }

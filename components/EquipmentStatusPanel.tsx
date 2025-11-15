@@ -27,6 +27,7 @@ import { enrichSupply, enrichDeviceSupplies, updateInventoryQuantity, EnrichedSu
 import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
 import { CheckStockDialog } from "@/components/dialogs/CheckStockDialog"
 import { EquipmentEditorDialog } from "@/components/dialogs/EquipmentEditorDialog"
+import { logger } from "@/lib/logger"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
@@ -125,7 +126,9 @@ export function EquipmentStatusPanel({
     // Enrich to get current quantity from inventory
     const enriched = enrichSupply(supply, inventory)
     if (!enriched) {
-      console.error(`Cannot check stock: inventory item ${supply.inventoryItemId} not found`)
+      logger.error("Cannot check stock - inventory item not found", {
+        inventoryItemId: supply.inventoryItemId,
+      })
       return
     }
 
