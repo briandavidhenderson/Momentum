@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, DollarSign } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
+import { notifyLowBudget, notifyBudgetExhausted, shouldSendLowBudgetNotification } from "@/lib/notificationUtils"
 
 interface OrderFormDialogProps {
   open: boolean
@@ -84,7 +85,7 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     return "ok"
   }, [selectedAllocation])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.productName || !formData.catNum) {
       alert('Please fill in product name and catalog number')
       return
@@ -118,6 +119,32 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     }
 
     onSave(orderData)
+
+    // PHASE 4: Trigger low budget notifications
+    if (selectedAllocation && currentUserProfile && formData.priceExVAT) {
+      try {
+        // Calculate new remaining budget after this order
+        const newRemainingBudget = (selectedAllocation.remainingBudget || 0) - formData.priceExVAT
+        const allocatedAmount = selectedAllocation.allocatedAmount || 1
+        const percentRemaining = (newRemainingBudget / allocatedAmount) * 100
+
+        // Check if budget is exhausted
+        if (newRemainingBudget <= 0) {
+          await notifyBudgetExhausted(selectedAllocation, currentUserProfile)
+        }
+        // Check if budget is low and should send notification
+        else {
+          const warningThreshold = selectedAllocation.lowBalanceWarningThreshold || 25
+          if (percentRemaining < warningThreshold && shouldSendLowBudgetNotification(selectedAllocation)) {
+            await notifyLowBudget(selectedAllocation, currentUserProfile, percentRemaining)
+          }
+        }
+      } catch (error) {
+        console.error('Error sending budget notification:', error)
+        // Don't block the UI on notification failure
+      }
+    }
+
     onClose()
 
     // Reset form
