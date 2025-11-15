@@ -101,20 +101,20 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     window.dispatchEvent(new CustomEvent("profiles-updated"))
   }
 
-  const labs = Array.from(new Set(allProfiles.map(p => p.lab)))
-  const institutes = Array.from(new Set(allProfiles.map(p => p.institute)))
-  const organisations = Array.from(new Set(allProfiles.map(p => p.organisation)))
+  const labs = Array.from(new Set(allProfiles.map(p => p.labName)))
+  const institutes = Array.from(new Set(allProfiles.map(p => p.instituteName)))
+  const organisations = Array.from(new Set(allProfiles.map(p => p.organisationName)))
 
   const filteredProfiles = allProfiles.filter(profile => {
-    const matchesSearch = 
+    const matchesSearch =
       profile.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       profile.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       profile.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       profile.position.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesLab = filterLab === "all" || profile.lab === filterLab
-    const matchesInstitute = filterInstitute === "all" || profile.institute === filterInstitute
-    const matchesOrganisation = filterOrganisation === "all" || profile.organisation === filterOrganisation
+
+    const matchesLab = filterLab === "all" || profile.labName === filterLab
+    const matchesInstitute = filterInstitute === "all" || profile.instituteName === filterInstitute
+    const matchesOrganisation = filterOrganisation === "all" || profile.organisationName === filterOrganisation
 
     return matchesSearch && matchesLab && matchesInstitute && matchesOrganisation
   })
@@ -546,7 +546,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                       {profile.firstName} {profile.lastName}
                     </h3>
                     <p className="text-sm text-muted-foreground truncate">{profile.position}</p>
-                    <p className="text-xs text-muted-foreground truncate">{profile.lab}</p>
+                    <p className="text-xs text-muted-foreground truncate">{profile.labName}</p>
                   </div>
                 </div>
                 {isStatic && (
@@ -1321,7 +1321,7 @@ function ProjectDialog({
                   <option value="">Add person...</option>
                   {allProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {profile.firstName} {profile.lastName} - {profile.lab}
+                      {profile.firstName} {profile.lastName} - {profile.labName}
                     </option>
                   ))}
                 </select>

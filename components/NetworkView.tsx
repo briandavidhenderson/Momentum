@@ -830,7 +830,7 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
         <div className="pt-3 border-t border-gray-700 text-xs text-muted-foreground">
           <div>✅ {profiles.length} people</div>
           <div>✅ {profiles.filter(p => p.reportsTo === null).length} PIs</div>
-          <div>✅ {Array.from(new Set(profiles.map(p => p.lab))).length} labs</div>
+          <div>✅ {Array.from(new Set(profiles.map(p => p.labId))).length} labs</div>
         </div>
       </div>
 

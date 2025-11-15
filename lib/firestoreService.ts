@@ -99,17 +99,17 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   if (!profileData.email || typeof profileData.email !== 'string' || profileData.email.trim() === '') {
     throw new Error("email is required")
   }
-  
-  if (!profileData.organisation || typeof profileData.organisation !== 'string' || profileData.organisation.trim() === '') {
-    throw new Error("organisation is required")
+
+  if (!profileData.organisationId || typeof profileData.organisationId !== 'string' || profileData.organisationId.trim() === '') {
+    throw new Error("organisationId is required")
   }
-  
-  if (!profileData.institute || typeof profileData.institute !== 'string' || profileData.institute.trim() === '') {
-    throw new Error("institute is required")
+
+  if (!profileData.instituteId || typeof profileData.instituteId !== 'string' || profileData.instituteId.trim() === '') {
+    throw new Error("instituteId is required")
   }
-  
-  if (!profileData.lab || typeof profileData.lab !== 'string' || profileData.lab.trim() === '') {
-    throw new Error("lab is required")
+
+  if (!profileData.labId || typeof profileData.labId !== 'string' || profileData.labId.trim() === '') {
+    throw new Error("labId is required")
   }
   
   // Validate array fields

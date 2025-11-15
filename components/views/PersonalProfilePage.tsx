@@ -310,7 +310,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                 )}
                 {allProfiles.filter(p => p.id !== currentUserProfile.id).map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.firstName} {p.lastName} - {p.lab}
+                    {p.firstName} {p.lastName} - {p.labName}
                   </option>
                 ))}
               </select>
@@ -878,7 +878,7 @@ function ProjectDialog({
                   <option value="">Add person...</option>
                   {allProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {profile.firstName} {profile.lastName} - {profile.lab}
+                      {profile.firstName} {profile.lastName} - {profile.labName}
                     </option>
                   ))}
                 </select>
