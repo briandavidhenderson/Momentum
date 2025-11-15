@@ -17,6 +17,7 @@ import {
   subscribeToFundingAccounts,
   subscribeToFundingAllocations,
 } from '../firestoreService'
+import { logger } from '../logger'
 
 export interface UseFundingResult {
   // Funding accounts (lab-wide budget accounts)
