@@ -7,6 +7,9 @@ import { Calendar, Clock, MapPin, Users, Plus, Edit2, Trash2 } from "lucide-reac
 import { CalendarEvent } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { EventDialog } from "@/components/EventDialog"
+import { personProfilesToPeople } from "@/lib/personHelpers"
+import { useProfiles } from "@/lib/useProfiles"
+import { useAuth } from "@/lib/hooks/useAuth"
 
 export function CalendarEvents() {
   const {
@@ -18,14 +21,14 @@ export function CalendarEvents() {
     people = [],  // Fix Bug #9: Get people from context for event attendees
   } = useAppContext()
 
+  const { currentUserProfile: profile } = useAuth()
+  const allProfiles = useProfiles(profile?.labId || null)
+  const people = personProfilesToPeople(allProfiles)
+
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
-  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
+  const [showEventDialog, setShowEventDialog] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
-
-  // Fix Bug #9: Add dialog state for event creation
-  const [eventDialogOpen, setEventDialogOpen] = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(undefined)
 
   const getEventTypeColor = (type: CalendarEvent['type']) => {
     switch (type) {
@@ -72,10 +75,7 @@ export function CalendarEvents() {
           </p>
         </div>
         <Button
-          onClick={() => {
-            setEditingEvent(null)
-            setIsEventDialogOpen(true)
-          }}
+          onClick={() => setShowEventDialog(true)}
           className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
         >
           <Plus className="h-4 w-4" />
@@ -270,27 +270,29 @@ export function CalendarEvents() {
         </div>
       </div>
 
+      {/* Event Creation/Edit Dialog */}
       <EventDialog
-        open={isEventDialogOpen}
+        open={showEventDialog}
         mode={editingEvent ? "edit" : "create"}
-        people={people || []}
+        people={people}
+        defaultVisibility="lab"
         onClose={() => {
-          setIsEventDialogOpen(false)
+          setShowEventDialog(false)
           setEditingEvent(null)
         }}
         onSubmit={(event) => {
           if (editingEvent) {
-            handleUpdateEvent?.(editingEvent.id, event)
+            handleUpdateEvent?.(event.id, event)
           } else {
             handleCreateEvent?.(event)
           }
-          setIsEventDialogOpen(false)
+          setShowEventDialog(false)
           setEditingEvent(null)
         }}
         initialEvent={editingEvent || undefined}
         onDelete={(eventId) => {
           handleDeleteEvent?.(eventId)
-          setIsEventDialogOpen(false)
+          setShowEventDialog(false)
           setEditingEvent(null)
         }}
       />

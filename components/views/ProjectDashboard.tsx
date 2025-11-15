@@ -7,12 +7,12 @@ import { useProfiles } from "@/lib/useProfiles";
 import { Button } from "@/components/ui/button";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
-import { ProjectDetailPanel } from "@/components/ProjectDetailPanel";
-import { MasterProject, Task, Workpackage, Project, Person } from "@/lib/types";
-import { Plus, FolderKanban, PackagePlus, Trash2 } from "lucide-react";
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
+import { MasterProject, Task, Workpackage, Project, Person, ProfileProject } from "@/lib/types";
+import { Plus, FolderKanban, PackagePlus } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
-import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
+import { updateWorkpackageWithProgress, createProfileProject } from "@/lib/firestoreService";
 import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalculate, updateWorkpackageWithTaskProgress } from "@/lib/progressCalculation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -34,8 +34,8 @@ export function ProjectDashboard() {
   const allProfiles = useProfiles(profile?.labId || null);
   const people = personProfilesToPeople(allProfiles);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
-
+  const [showProjectDialog, setShowProjectDialog] = useState(false);
+  
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
     return project.workpackageIds
@@ -43,24 +43,11 @@ export function ProjectDashboard() {
       .filter((wp): wp is Workpackage => wp !== undefined);
   }, [workpackagesMap]);
 
-  const handleDeleteProject = async () => {
-    if (!selectedProjectId) return;
-
-    const project = projects.find(p => p.id === selectedProjectId);
-    if (!project) return;
-
-    if (confirm(`Are you sure you want to delete "${project.name}"? This will also delete all associated workpackages and tasks. This action cannot be undone.`)) {
-      try {
-        await handleDeleteMasterProject(selectedProjectId);
-        setSelectedProjectId(null); // Clear selection after delete
-      } catch (error) {
-        console.error('Error deleting project:', error);
-        alert('Failed to delete project. Please try again.');
-      }
-    }
+  const handleCreateProjectClick = () => {
+    setShowProjectDialog(true);
   };
 
-  const handleCreateProject = () => {
+  const handleCreateRegularProject = () => {
     if (!profile) return;
 
     // Create a simple project with minimal defaults
@@ -95,6 +82,45 @@ export function ProjectDashboard() {
     };
 
     handleCreateMasterProject(newProject);
+    setShowProjectDialog(false);
+  };
+
+  const handleCreateMasterProjectFromDialog = async (projectData: ProfileProject & { funderId?: string }) => {
+    if (!profile || !user) return;
+
+    // Create the master project with proper data from dialog
+    const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+      name: projectData.name,
+      description: projectData.description || "",
+      labId: profile.labId,
+      labName: profile.labName,
+      instituteId: profile.instituteId,
+      instituteName: profile.instituteName,
+      organisationId: profile.organisationId,
+      organisationName: profile.organisationName,
+      grantName: projectData.grantName || "",
+      grantNumber: projectData.grantNumber || "",
+      totalBudget: projectData.budget || 0,
+      currency: "GBP",
+      startDate: projectData.startDate,
+      endDate: projectData.endDate,
+      funderId: projectData.funderId || "",
+      funderName: "", // Will be populated by the handler
+      accountIds: [],
+      principalInvestigatorIds: profile.id ? [profile.id] : [],
+      coPIIds: [],
+      teamMemberIds: profile.id ? [profile.id] : [],
+      teamRoles: profile.id ? { [profile.id]: "PI" } : {},
+      status: projectData.status as "planning" | "active" | "completed" | "on-hold" | "cancelled",
+      progress: 0,
+      workpackageIds: [],
+      visibility: projectData.visibility as "private" | "lab" | "institute" | "organisation",
+      createdBy: user.uid,
+      isExpanded: true,
+    };
+
+    await handleCreateMasterProject(newProject);
+    setShowProjectDialog(false);
   };
 
   const handleCreateMasterProjectFromDialog = async (projectData: ProfileProject & { funderId?: string }) => {
@@ -854,7 +880,7 @@ export function ProjectDashboard() {
             </>
           )}
 
-          <Button onClick={() => setIsProjectDialogOpen(true)} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+          <Button onClick={handleCreateProjectClick} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
           </Button>
@@ -989,51 +1015,10 @@ export function ProjectDashboard() {
 
       {/* Project Creation Dialog */}
       <ProjectCreationDialog
-        open={isProjectDialogOpen}
-        onClose={() => setIsProjectDialogOpen(false)}
-        onCreateRegular={handleCreateProject}
-        onCreateMaster={(projectData) => {
-          if (!profile) return;
-
-          // Ensure visibility is a valid MasterProject visibility type
-          const validVisibilities = ["private", "lab", "institute", "organisation"] as const;
-          const visibility = projectData.visibility && validVisibilities.includes(projectData.visibility as any)
-            ? projectData.visibility as "private" | "lab" | "institute" | "organisation"
-            : "lab";
-
-          const newProject: Omit<MasterProject, "id" | "createdAt"> = {
-            name: projectData.name || "New Project",
-            description: projectData.description || "",
-            labId: profile.labId,
-            labName: profile.labName,
-            instituteId: profile.instituteId,
-            instituteName: profile.instituteName,
-            organisationId: profile.organisationId,
-            organisationName: profile.organisationName,
-            grantName: projectData.name || "",
-            grantNumber: projectData.grantNumber || "",
-            totalBudget: projectData.budget || 0,
-            currency: "GBP",
-            startDate: projectData.startDate ? new Date(projectData.startDate).toISOString() : new Date().toISOString(),
-            endDate: projectData.endDate ? new Date(projectData.endDate).toISOString() : new Date().toISOString(),
-            funderId: projectData.funderId || "",
-            funderName: "",
-            accountIds: projectData.fundedBy || [],
-            principalInvestigatorIds: [],
-            coPIIds: [],
-            teamMemberIds: [],
-            teamRoles: {},
-            status: "planning",
-            progress: 0,
-            workpackageIds: [],
-            visibility: visibility,
-            createdBy: user?.uid || "",
-            isExpanded: true,
-          };
-
-          handleCreateMasterProject(newProject);
-          setIsProjectDialogOpen(false);
-        }}
+        open={showProjectDialog}
+        onClose={() => setShowProjectDialog(false)}
+        onCreateRegular={handleCreateRegularProject}
+        onCreateMaster={handleCreateMasterProjectFromDialog}
         currentUserProfileId={profile?.id || null}
         currentUserId={user?.uid || ""}
         organisationId={profile?.organisationId}
