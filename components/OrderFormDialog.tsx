@@ -1,10 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { Order, FundingAccount, FundingAllocation } from "@/lib/types"
-import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { useState, useMemo } from "react"
+import { Order } from "@/lib/types"
+import { useAppContext } from "@/lib/AppContext"
 import {
   Dialog,
   DialogContent,
@@ -27,10 +25,15 @@ interface OrderFormDialogProps {
 }
 
 export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps) {
-  const { currentUserProfile } = useAuth()
-  const [fundingAccounts, setFundingAccounts] = useState<FundingAccount[]>([])
-  const [fundingAllocations, setFundingAllocations] = useState<FundingAllocation[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    currentUserProfile,
+    fundingAccounts,
+    fundingAllocations,
+    fundingAccountsLoading,
+    fundingAllocationsLoading
+  } = useAppContext()
+
+  const loading = fundingAccountsLoading || fundingAllocationsLoading
 
   const [formData, setFormData] = useState<Partial<Order>>({
     productName: '',
@@ -42,44 +45,6 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     accountId: '',
     fundingAllocationId: '',
   })
-
-  // Load funding accounts and allocations
-  useEffect(() => {
-    if (!open || !currentUserProfile?.labId) return
-
-    const loadFundingData = async () => {
-      setLoading(true)
-      try {
-        const labId = currentUserProfile.labId
-
-        // Fix Bug #6: Correct collection name is "accounts" not "fundingAccounts"
-        const accountsSnapshot = await getDocs(
-          query(collection(db, "accounts"), where("labId", "==", labId))
-        )
-        const accounts = accountsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as FundingAccount[]
-        setFundingAccounts(accounts)
-
-        // Load funding allocations
-        const allocationsSnapshot = await getDocs(
-          query(collection(db, "fundingAllocations"), where("labId", "==", labId))
-        )
-        const allocs = allocationsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as FundingAllocation[]
-        setFundingAllocations(allocs)
-      } catch (error) {
-        console.error("Error loading funding data:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadFundingData()
-  }, [open, currentUserProfile])
 
   // Get selected account and allocation
   const selectedAccount = useMemo(
