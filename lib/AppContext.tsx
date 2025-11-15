@@ -14,8 +14,28 @@ import { useUI } from './hooks/useUI';
 import { useProjectColor } from './hooks/useProjectColor';
 import { useProfiles } from './useProfiles';
 import { personProfilesToPeople } from './personHelpers';
+import { PersonProfile, Person } from './types';
 
-const AppContext = createContext<any>(null);
+/**
+ * AppContext Type Definition
+ * Combines all hook return types for proper type safety
+ */
+type AppContextType = ReturnType<typeof useAuth> &
+  ReturnType<typeof useProjects> &
+  ReturnType<typeof useOrders> &
+  ReturnType<typeof useDayToDayTasks> &
+  ReturnType<typeof useEquipment> &
+  ReturnType<typeof usePolls> &
+  ReturnType<typeof useELN> &
+  ReturnType<typeof useCalendar> &
+  ReturnType<typeof useInterface> &
+  ReturnType<typeof useUI> &
+  Omit<ReturnType<typeof useFunding>, never> & {
+    allProfiles: PersonProfile[]
+    people: Person[]
+  }
+
+const AppContext = createContext<AppContextType | null>(null);
 
 export function AppWrapper({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
@@ -38,6 +58,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     ...auth,
     ...projectsAndWorkpackages,
     ...orders,
+    ...funding,
     ...dayToDayTasks,
     ...equipment,
     ...polls,
@@ -57,6 +78,19 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAppContext() {
-  return useContext(AppContext);
+/**
+ * Hook to access AppContext with type safety
+ * Throws error if used outside AppWrapper provider
+ */
+export function useAppContext(): AppContextType {
+  const context = useContext(AppContext);
+
+  if (!context) {
+    throw new Error(
+      'useAppContext must be used within an AppWrapper. ' +
+      'Ensure your component is wrapped with <AppWrapper>.'
+    );
+  }
+
+  return context;
 }

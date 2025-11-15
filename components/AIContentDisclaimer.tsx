@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase"
 import { collection, addDoc } from "firebase/firestore"
 import { AIGeneratedContent } from "@/lib/types"
 import { useAuth } from "@/lib/hooks/useAuth"
+import { logger } from "@/lib/logger"
 
 interface AIContentDisclaimerProps {
   entityType: "eln_report" | "experiment_summary" | "task_suggestion" | "protocol_extraction"
@@ -49,7 +50,7 @@ export function AIContentDisclaimer({
     try {
       await addDoc(collection(db, "aiGeneratedContent"), aiRecord)
     } catch (error) {
-      console.error("Error recording AI generation:", error)
+      logger.error("Error recording AI generation", error)
     }
   }
 

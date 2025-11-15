@@ -34,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { logger } from "@/lib/logger"
 
 interface CommentsSectionProps {
   entityType: Comment["entityType"]
@@ -115,7 +116,7 @@ export function CommentsSection({
 
       setNewComment("")
     } catch (error) {
-      console.error("Error posting comment:", error)
+      logger.error("Error posting comment", error)
       alert("Failed to post comment. Please try again.")
     }
   }
@@ -143,7 +144,7 @@ export function CommentsSection({
       setReplyContent("")
       setReplyingTo(null)
     } catch (error) {
-      console.error("Error posting reply:", error)
+      logger.error("Error posting reply", error)
       alert("Failed to post reply. Please try again.")
     }
   }
@@ -162,7 +163,7 @@ export function CommentsSection({
       setEditingCommentId(null)
       setEditContent("")
     } catch (error) {
-      console.error("Error editing comment:", error)
+      logger.error("Error editing comment", error)
       alert("Failed to edit comment. Please try again.")
     }
   }
@@ -178,7 +179,7 @@ export function CommentsSection({
         deletedBy: currentUser?.uid,
       })
     } catch (error) {
-      console.error("Error deleting comment:", error)
+      logger.error("Error deleting comment", error)
       alert("Failed to delete comment. Please try again.")
     }
   }

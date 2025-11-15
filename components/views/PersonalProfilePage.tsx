@@ -2,8 +2,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, User } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS } from "@/lib/types"
+import { FirestoreUser } from "@/lib/firestoreService"
 import { useProfiles } from "@/lib/useProfiles"
+import { logger } from "@/lib/logger"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,12 +31,12 @@ import { OrcidBadge } from "@/components/OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
 
 interface PersonalProfilePageProps {
-  currentUser: User | null
+  currentUser: FirestoreUser | null
   currentUserProfile: PersonProfile | null
 }
 
 export function PersonalProfilePage({ currentUser, currentUserProfile }: PersonalProfilePageProps) {
-  const allProfiles = useProfiles(currentUserProfile?.lab || null)
+  const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<Partial<PersonProfile>>({})
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)
@@ -104,7 +106,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       setIsEditing(false)
       // No need to reload - Firestore real-time updates will handle it
     } catch (error) {
-      console.error("Error saving profile:", error)
+      logger.error("Error saving profile", error)
       alert("Error saving profile. Please try again.")
     }
   }
@@ -164,7 +166,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
     }).then(() => {
       // Success - real-time listener will update the UI
     }).catch(error => {
-      console.error("Error saving project:", error)
+      logger.error("Error saving project", error)
       alert("Error saving project. Please try again.")
     })
 
@@ -310,7 +312,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                 )}
                 {allProfiles.filter(p => p.id !== currentUserProfile.id).map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.firstName} {p.lastName} - {p.lab}
+                    {p.firstName} {p.lastName} - {p.labName}
                   </option>
                 ))}
               </select>
@@ -878,7 +880,7 @@ function ProjectDialog({
                   <option value="">Add person...</option>
                   {allProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {profile.firstName} {profile.lastName} - {profile.lab}
+                      {profile.firstName} {profile.lastName} - {profile.labName}
                     </option>
                   ))}
                 </select>

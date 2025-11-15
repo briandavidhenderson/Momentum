@@ -5,6 +5,7 @@ import { Timestamp } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
 import { getUser, findUserProfile, FirestoreUser as User } from '@/lib/firestoreService';
 import { PersonProfile } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 export type AuthState = 'auth' | 'setup' | 'app';
 
@@ -73,7 +74,7 @@ export function useAuth() {
           }
         } catch (error) {
           if (!isMountedRef.current) return;
-          console.error('Error loading user data:', error);
+          logger.error('Error loading user data', error);
           setAuthState('auth');
         } finally {
           if (isMountedRef.current) {
@@ -134,7 +135,7 @@ export function useAuth() {
         setAuthState('setup');
       }
     } catch (error) {
-      console.error('Error fetching user data on login:', error);
+      logger.error('Error fetching user data on login', error);
       setAuthState('auth');
     }
   };
@@ -147,7 +148,7 @@ export function useAuth() {
     try {
       await signOut(auth);
     } catch (error) {
-      console.error('Sign out error:', error);
+      logger.error('Sign out error', error);
       alert('Error signing out. Please try again.');
     }
   };

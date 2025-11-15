@@ -11,6 +11,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { UserConsent } from "@/lib/types"
 import { PRIVACY_POLICY_VERSION } from "@/lib/constants"
+import { logger } from "@/lib/logger"
 
 /**
  * CookieConsentBanner - GDPR & ePrivacy Directive Compliance
@@ -76,7 +77,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
           setShowBanner(true)
         }
       } catch (error) {
-        console.error("Error checking consent:", error)
+        logger.error("Error checking consent", error)
         setShowBanner(true)
       } finally {
         setLoading(false)
@@ -150,7 +151,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
       onConsentChange?.(consentData)
       setShowBanner(false)
     } catch (error) {
-      console.error("Error saving consent:", error)
+      logger.error("Error saving consent", error)
       alert("Failed to save consent settings. Please try again.")
     } finally {
       setLoading(false)

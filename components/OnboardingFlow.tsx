@@ -32,6 +32,7 @@ import { Building, GraduationCap, BookOpen, Users, Briefcase, CheckCircle2, Chev
 import { FunderCreationDialog } from "./FunderCreationDialog"
 import { OrcidIcon } from "./OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
+import { logger } from "@/lib/logger"
 
 interface OnboardingFlowProps {
   user: { uid: string; email: string; fullName: string }
@@ -291,7 +292,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setOrganisations(orgs)
       return orgs
     } catch (err) {
-      console.error("Error loading organisations:", err)
+      logger.error("Error loading organisations", err)
       setError("Failed to load organisations")
       return null
     }
@@ -303,7 +304,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setInstitutes(insts)
       return insts
     } catch (err) {
-      console.error("Error loading institutes:", err)
+      logger.error("Error loading institutes", err)
       setError("Failed to load institutes")
       return null
     }
@@ -315,7 +316,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setLabs(labsList)
       return labsList
     } catch (err) {
-      console.error("Error loading labs:", err)
+      logger.error("Error loading labs", err)
       setError("Failed to load labs")
       return null
     }
@@ -327,7 +328,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setFunders(fundersList)
       return fundersList
     } catch (err) {
-      console.error("Error loading funders:", err)
+      logger.error("Error loading funders", err)
       setError("Failed to load funders")
       return null
     }
@@ -335,11 +336,14 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
   const handleCreateOrganisation = async () => {
     if (!orgSearchTerm.trim() || !selectedCountry) {
-      console.log("[OnboardingFlow] Validation failed - orgSearchTerm:", orgSearchTerm, "selectedCountry:", selectedCountry)
+      logger.debug("Organisation creation validation failed", {
+        orgSearchTerm,
+        selectedCountry,
+      })
       return
     }
 
-    console.log("[OnboardingFlow] Creating organisation with data:", {
+    logger.debug("Creating organisation", {
       name: orgSearchTerm.trim(),
       country: selectedCountry,
       type: "university",
@@ -355,13 +359,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         type: "university",
         createdBy: user.uid,
       })
-      console.log("[OnboardingFlow] Organisation created with ID:", orgId)
+      logger.info("Organisation created", { orgId })
 
       const orgs = await loadOrganisations()
-      console.log("[OnboardingFlow] Reloaded organisations, count:", orgs?.length)
+      logger.debug("Reloaded organisations", { count: orgs?.length })
       if (orgs) {
         const newOrg = orgs.find((o) => o.id === orgId)
-        console.log("[OnboardingFlow] Found new organisation:", newOrg)
+        logger.debug("Found new organisation", { organisation: newOrg })
         if (newOrg) {
           setState((s) => ({ ...s, selectedOrganisation: newOrg }))
           setShowCreateOrg(false)
@@ -370,7 +374,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         }
       }
     } catch (err) {
-      console.error("[OnboardingFlow] Error creating organisation:", err)
+      logger.error("Error creating organisation", err)
       setError(`Failed to create organisation: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
@@ -399,7 +403,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         }
       }
     } catch (err) {
-      console.error("Error creating institute:", err)
+      logger.error("Error creating institute", err)
       setError("Failed to create institute")
     } finally {
       setLoading(false)
@@ -432,7 +436,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         }
       }
     } catch (err) {
-      console.error("Error creating lab:", err)
+      logger.error("Error creating lab", err)
       // Fix Bug #7: Show specific error message instead of generic message
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
       setError(`Failed to create lab: ${errorMessage}. Please try again or contact support if the issue persists.`)
@@ -640,7 +644,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         } as PersonProfile)
       }, 1500)
     } catch (err) {
-      console.error("Error completing onboarding:", err)
+      logger.error("Error completing onboarding", err)
       setError("Failed to complete onboarding. Please try again.")
       setLoading(false)
     }
@@ -1166,7 +1170,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                         verified: true,
                       })
                     } catch (err: any) {
-                      console.error("ORCID linking error:", err)
+                      logger.error("ORCID linking error", err)
                       setError(err.message || "Failed to connect ORCID")
                     } finally {
                       setOrcidConnecting(false)

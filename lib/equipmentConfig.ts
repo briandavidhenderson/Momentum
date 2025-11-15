@@ -17,10 +17,19 @@ export const EQUIPMENT_CONFIG = {
     healthy: 100,  // Above warning = healthy
   },
 
+  // Budget thresholds (percentage of remaining budget)
+  budgetThresholds: {
+    critical: 10,  // Below 10% remaining = critical alert
+    warning: 25,   // Below 25% remaining = warning alert
+    healthy: 100,  // Above warning = healthy
+  },
+
   // Maintenance settings
   maintenance: {
     defaultIntervalDays: 90,
     defaultThreshold: 20, // Percentage
+    criticalThreshold: 25, // Below this = critical maintenance needed
+    warningThreshold: 60,  // Below this = maintenance due soon
   },
 
   // Reorder settings
@@ -87,6 +96,24 @@ export function getHealthTextColor(percent: number): string {
     case 'healthy':
       return 'text-green-600'
   }
+}
+
+/**
+ * Get budget health classification based on percentage remaining
+ */
+export function getBudgetHealthClass(percentRemaining: number): 'critical' | 'warning' | 'ok' {
+  if (percentRemaining < EQUIPMENT_CONFIG.budgetThresholds.critical) return 'critical'
+  if (percentRemaining < EQUIPMENT_CONFIG.budgetThresholds.warning) return 'warning'
+  return 'ok'
+}
+
+/**
+ * Get notification priority based on budget percentage remaining
+ */
+export function getBudgetNotificationPriority(percentRemaining: number): 'high' | 'medium' | 'low' {
+  if (percentRemaining < EQUIPMENT_CONFIG.budgetThresholds.critical) return 'high'
+  if (percentRemaining < EQUIPMENT_CONFIG.budgetThresholds.warning) return 'medium'
+  return 'low'
 }
 
 /**

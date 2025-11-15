@@ -23,6 +23,11 @@ import {
   weeksToHealthPercentage,
 } from "@/lib/equipmentMath"
 import { formatCurrency, getHealthClass, getHealthColor, getHealthTextColor, generateId, EQUIPMENT_CONFIG } from "@/lib/equipmentConfig"
+import { enrichSupply, enrichDeviceSupplies, updateInventoryQuantity, EnrichedSupply } from "@/lib/supplyUtils"
+import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
+import { CheckStockDialog } from "@/components/dialogs/CheckStockDialog"
+import { EquipmentEditorDialog } from "@/components/dialogs/EquipmentEditorDialog"
+import { logger } from "@/lib/logger"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
@@ -30,6 +35,7 @@ interface EquipmentStatusPanelProps {
   orders: Order[]
   masterProjects: MasterProject[]
   currentUserProfile: PersonProfile | null
+  allProfiles: PersonProfile[] // For notification recipients
   onEquipmentCreate: (equipment: Omit<EquipmentDevice, 'id'>) => void
   onEquipmentUpdate: (equipmentId: string, updates: Partial<EquipmentDevice>) => void
   onInventoryUpdate: (inventory: InventoryItem[]) => void
@@ -43,6 +49,7 @@ export function EquipmentStatusPanel({
   orders,
   masterProjects,
   currentUserProfile,
+  allProfiles,
   onEquipmentCreate,
   onEquipmentUpdate,
   onInventoryUpdate,
@@ -52,8 +59,7 @@ export function EquipmentStatusPanel({
   const [devices, setDevices] = useState<EquipmentDevice[]>(equipment)
   const [editingDevice, setEditingDevice] = useState<EquipmentDevice | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [checkStockItem, setCheckStockItem] = useState<{ deviceId: string; supplyId: string; currentQty: number } | null>(null)
-  const [tempStockQty, setTempStockQty] = useState<string>("")
+  const [checkStockSupply, setCheckStockSupply] = useState<EnrichedSupply | null>(null)
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -109,7 +115,7 @@ export function EquipmentStatusPanel({
     onEquipmentUpdate(deviceId, { lastMaintained: toISODateString(new Date()) })
   }
 
-  // Handle check stock - now opens modal with local state
+  // Handle check stock - opens modal with enriched supply data
   const handleCheckStock = (deviceId: string, supplyId: string) => {
     const device = devices.find(d => d.id === deviceId)
     if (!device) return
@@ -117,64 +123,51 @@ export function EquipmentStatusPanel({
     const supply = device.supplies.find(s => s.id === supplyId)
     if (!supply) return
 
-    setCheckStockItem({ deviceId, supplyId, currentQty: supply.qty })
-    setTempStockQty(supply.qty.toString())
-  }
+    // Enrich to get current quantity from inventory
+    const enriched = enrichSupply(supply, inventory)
+    if (!enriched) {
+      logger.error("Cannot check stock - inventory item not found", {
+        inventoryItemId: supply.inventoryItemId,
+      })
+      return
+    }
 
-  // Handle save stock quantity (explicit save button)
-  const handleSaveStock = () => {
-    if (!checkStockItem) return
-
-    const newQty = parseFloat(tempStockQty)
-    if (isNaN(newQty) || newQty < 0) return
-
-    const device = devices.find(d => d.id === checkStockItem.deviceId)
-    if (!device) return
-
-    const updatedSupplies = device.supplies.map(s =>
-      s.id === checkStockItem.supplyId ? { ...s, qty: newQty } : s
-    )
-
-    onEquipmentUpdate(checkStockItem.deviceId, { supplies: updatedSupplies })
-    setCheckStockItem(null)
-    setTempStockQty("")
+    setCheckStockSupply(enriched)
   }
 
   // Handle reorder - adds to "To Order" section
-  // FIXED: Now takes explicit neededQty to avoid calculation errors
-  const handleReorder = (deviceId: string, supply: EquipmentSupply, explicitNeededQty?: number) => {
-    const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+  // Updated to accept EnrichedSupply with joined inventory data
+  const handleReorder = (deviceId: string, supply: EnrichedSupply, explicitNeededQty?: number) => {
+    const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.currentQuantity, supply.minQty)
     if (neededQty <= 0) return
 
     const device = devices.find(d => d.id === deviceId)
     if (!device) return
 
-    // Create order
-    const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
+    // Create order with enriched supply data (already has name, price, catNum from inventory)
     const newOrder: Order = {
-      id: generateId('order'), // FIXED: Use crypto.randomUUID()
-      productName: supply.name,
-      catNum: inventoryItem?.catNum || '',
-      supplier: '',
+      id: generateId('order'),
+      productName: supply.name, // From enriched supply
+      catNum: supply.catNum || '',
+      supplier: supply.supplier || '',
       // Use account from inventory item, or placeholder
-      accountId: inventoryItem?.chargeToAccount || "temp_account_placeholder",
+      accountId: supply.chargeToAccountId || "temp_account_placeholder",
       accountName: "Select Account",
       funderId: "temp_funder_placeholder",
       funderName: "Select Funder",
-      masterProjectId: "temp_project_placeholder",
+      masterProjectId: supply.chargeToProjectId || "temp_project_placeholder",
       masterProjectName: "Select Project",
-      priceExVAT: supply.price,
-      currency: EQUIPMENT_CONFIG.currency.code, // FIXED: Use centralized currency
+      priceExVAT: supply.price, // From enriched supply
+      currency: EQUIPMENT_CONFIG.currency.code,
       status: 'to-order',
       orderedBy: currentUserProfile?.id || '',
-      orderedDate: undefined, // Will be set when order is actually placed
+      orderedDate: undefined,
       receivedDate: undefined,
       createdBy: currentUserProfile?.id || '',
       createdDate: new Date(),
-      category: inventoryItem?.category,
-      subcategory: inventoryItem?.subcategory,
-      // Legacy field for backward compatibility
-      chargeToAccount: inventoryItem?.chargeToAccount,
+      category: undefined,
+      subcategory: undefined,
+      chargeToAccount: supply.chargeToAccountId,
       // Add provenance for traceability
       sourceDeviceId: deviceId,
       sourceSupplyId: supply.id,
@@ -184,11 +177,11 @@ export function EquipmentStatusPanel({
     onOrderCreate(newOrder)
   }
 
-  // Handle order missing supplies
-  // FIXED: Calculate needed qty from ORIGINAL device state, not mutated
+  // Handle order missing supplies - uses enriched supply data
   const handleOrderMissing = (device: EquipmentDevice) => {
-    device.supplies.forEach(supply => {
-      const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+    const enrichedSupplies = enrichDeviceSupplies(device, inventory)
+    enrichedSupplies.forEach(supply => {
+      const neededQty = calculateNeededQuantity(supply.currentQuantity, supply.minQty)
       if (neededQty > 0) {
         // Pass explicit needed qty to avoid recalculation
         handleReorder(device.id, supply, neededQty)
@@ -234,60 +227,33 @@ export function EquipmentStatusPanel({
     setIsModalOpen(false)
   }
 
-  // Handle add supply
+  // TODO: Phase 5 - Extract this to shared AddSupplyDialog component
+  // This function still uses old EquipmentSupply structure and needs refactoring
+  // For now, it's deprecated - use inventory-first approach (create inventory item, then link)
   const handleAddSupply = (supply: EquipmentSupply) => {
     if (!editingDevice) return
 
     const updatedSupplies = [...editingDevice.supplies, supply]
     handleSaveDevice({ ...editingDevice, supplies: updatedSupplies })
 
-    // Also create/update inventory item if needed
-    const existingInventory = inventory.find(i =>
-      i.productName === supply.name &&
-      i.equipmentDeviceIds?.includes(editingDevice.id)
-    )
+    // Update inventory item to link it to this device (if not already linked)
+    // NOTE: With new structure, supply should already have inventoryItemId set from dialog
+    // The inventory item contains all the product details (name, price, quantity)
+    if (supply.inventoryItemId) {
+      const existingInventory = inventory.find(i => i.id === supply.inventoryItemId)
 
-    if (!existingInventory) {
-      const newInventoryItem: InventoryItem = {
-        id: generateId('inventory'), // FIXED: Use crypto.randomUUID()
-        productName: supply.name,
-        catNum: '',
-        inventoryLevel: supply.qty === 0 ? 'empty' :
-          supply.qty < supply.minQty ? 'low' :
-          supply.qty < supply.minQty * 2 ? 'medium' : 'full',
-        receivedDate: new Date(),
-        priceExVAT: supply.price,
-        currentQuantity: supply.qty,
-        minQuantity: supply.minQty,
-        burnRatePerWeek: supply.burnPerWeek,
-        equipmentDeviceIds: [editingDevice.id],
-        category: undefined,
-      }
-
-      onInventoryUpdate([...inventory, newInventoryItem])
-
-      // Link supply to inventory
-      const updatedSupply = { ...supply, inventoryItemId: newInventoryItem.id }
-      const updatedDevice = {
-        ...editingDevice,
-        supplies: editingDevice.supplies.map(s => s.id === supply.id ? updatedSupply : s)
-      }
-      handleSaveDevice(updatedDevice)
-    } else {
-      // Update existing inventory
-      const updatedInventory = inventory.map(item => {
-        if (item.id === existingInventory.id) {
-          return {
-            ...item,
-            equipmentDeviceIds: [...(item.equipmentDeviceIds || []), editingDevice.id],
-            currentQuantity: supply.qty,
-            minQuantity: supply.minQty,
-            burnRatePerWeek: supply.burnPerWeek,
-          }
+      if (existingInventory) {
+        // Add this device to the inventory item's device list if not already present
+        const deviceIds = existingInventory.equipmentDeviceIds || []
+        if (!deviceIds.includes(editingDevice.id)) {
+          const updatedInventory = inventory.map(i =>
+            i.id === supply.inventoryItemId
+              ? { ...i, equipmentDeviceIds: [...deviceIds, editingDevice.id] }
+              : i
+          )
+          onInventoryUpdate(updatedInventory)
         }
-        return item
-      })
-      onInventoryUpdate(updatedInventory)
+      }
     }
   }
 
@@ -483,23 +449,21 @@ export function EquipmentStatusPanel({
                     </div>
                   </div>
                   
-                  {/* Supplies List */}
+                  {/* Supplies List - Using Enriched Supply Data */}
                   <div className="flex flex-wrap gap-2">
-                    {device.supplies.map(supply => {
-                      const weeks = calculateWeeksRemaining(supply.qty, supply.burnPerWeek)
-                      const percent = weeksToHealthPercentage(weeks)
-                      const supplyClass = getHealthClass(percent)
-                      
+                    {enrichDeviceSupplies(device, inventory).map(supply => {
+                      const supplyClass = getHealthClass(supply.healthPercent)
+
                       return (
                         <div
                           key={supply.id}
                           className="relative bg-gray-50 border border-border rounded-full px-3 py-1.5 pr-20 text-xs"
                         >
                           <div className="flex items-center gap-1">
-                            {percent <= 25 && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                            {supply.healthPercent <= 25 && <AlertTriangle className="h-3 w-3 text-red-500" />}
                             <span className="font-medium">{supply.name}</span>
                             <span className="text-muted-foreground">
-                              • Qty {supply.qty}/{supply.minQty} • Burn {supply.burnPerWeek}/wk
+                              • Qty {supply.currentQuantity}/{supply.minQty} • Burn {supply.burnPerWeek}/wk
                             </span>
                           </div>
                           <div className={`absolute left-3 right-3 bottom-1 h-0.5 bg-gray-200 rounded-full overflow-hidden`}>
@@ -509,14 +473,14 @@ export function EquipmentStatusPanel({
                                 supplyClass === 'warning' ? 'bg-orange-500' :
                                 'bg-green-500'
                               }`}
-                              style={{ width: `${percent}%` }}
+                              style={{ width: `${supply.healthPercent}%` }}
                             />
                           </div>
                           <div className="absolute right-3 bottom-2 text-[10px] text-muted-foreground">
-                            {Math.round(percent)}%
+                            {Math.round(supply.healthPercent)}%
                           </div>
                           <div className="absolute right-2 top-0.5 flex gap-1">
-                            {supply.qty === 0 ? (
+                            {supply.currentQuantity === 0 ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -610,49 +574,17 @@ export function EquipmentStatusPanel({
         </div>
       </div>
 
-      {/* Check Stock Modal */}
-      <Dialog open={!!checkStockItem} onOpenChange={() => setCheckStockItem(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Check Stock</DialogTitle>
-            <DialogDescription>
-              Update the current quantity for this supply item.
-            </DialogDescription>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground mb-4">
-            Enter the current quantity for this supply:
-          </p>
-          {checkStockItem && (() => {
-            const device = devices.find(d => d.id === checkStockItem.deviceId)
-            const supply = device?.supplies.find(s => s.id === checkStockItem.supplyId)
-            if (!supply) return null
-            
-            return (
-              <div className="space-y-4">
-                <div>
-                  <Label>Current Quantity</Label>
-                  <Input
-                    type="number"
-                    value={tempStockQty}
-                    min={0}
-                    onChange={(e) => setTempStockQty(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setCheckStockItem(null)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSaveStock}>
-                    Save
-                  </Button>
-                </div>
-              </div>
-            )
-          })()}
-        </DialogContent>
-      </Dialog>
+      {/* Check Stock Modal - Using Shared Component */}
+      <CheckStockDialog
+        open={!!checkStockSupply}
+        onClose={() => setCheckStockSupply(null)}
+        supply={checkStockSupply}
+        inventory={inventory}
+        allProfiles={allProfiles}
+        onInventoryUpdate={onInventoryUpdate}
+      />
 
-      {/* Device Editor Modal */}
+      {/* Device Editor Modal - Using Shared Component */}
       <Dialog open={isModalOpen} onOpenChange={(open) => {
         if (!open) {
           setIsModalOpen(false)
@@ -660,7 +592,7 @@ export function EquipmentStatusPanel({
         }
       }}>
         {editingDevice && (
-          <EquipmentEditorModal
+          <EquipmentEditorDialog
             device={editingDevice}
             inventory={inventory}
             onClose={() => {
@@ -679,423 +611,3 @@ export function EquipmentStatusPanel({
     </div>
   )
 }
-
-// Equipment Editor Modal Component
-interface EquipmentEditorModalProps {
-  device: EquipmentDevice
-  inventory: InventoryItem[]
-  onClose: () => void
-  onSave: (device: EquipmentDevice) => void
-  onAddSupply: (supply: EquipmentSupply) => void
-}
-
-function EquipmentEditorModal({
-  device,
-  inventory,
-  onClose,
-  onSave,
-  onAddSupply,
-}: EquipmentEditorModalProps) {
-  const [formData, setFormData] = useState({
-    name: device.name,
-    make: device.make || '',
-    model: device.model || '',
-    serialNumber: device.serialNumber || '',
-    imageUrl: device.imageUrl || '',
-    type: device.type,
-    maintenanceDays: device.maintenanceDays,
-    lastMaintained: device.lastMaintained,
-    threshold: device.threshold,
-  })
-  const [supplies, setSupplies] = useState<EquipmentSupply[]>(device.supplies)
-  const [newSupply, setNewSupply] = useState({
-    name: '',
-    price: '',
-    qty: '',
-    minQty: '',
-    burnPerWeek: '',
-  })
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(device.imageUrl || null)
-
-  // Update form data when device changes
-  useEffect(() => {
-    setFormData({
-      name: device.name,
-      make: device.make || '',
-      model: device.model || '',
-      serialNumber: device.serialNumber || '',
-      imageUrl: device.imageUrl || '',
-      type: device.type,
-      maintenanceDays: device.maintenanceDays,
-      lastMaintained: device.lastMaintained,
-      threshold: device.threshold,
-    })
-    setSupplies(device.supplies)
-    setImagePreview(device.imageUrl || null)
-  }, [device])
-
-  // Handle image upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  // Convert image to base64 for storage (or you can upload to Firebase Storage)
-  const handleImageSave = async (): Promise<string | undefined> => {
-    if (imageFile) {
-      return new Promise((resolve) => {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          resolve(reader.result as string)
-        }
-        reader.readAsDataURL(imageFile)
-      })
-    }
-    return imagePreview || undefined
-  }
-
-  const handleSave = async () => {
-    // Handle image upload
-    let finalImageUrl = formData.imageUrl
-    if (imageFile) {
-      const base64Image = await handleImageSave()
-      if (base64Image) {
-        finalImageUrl = base64Image
-      }
-    }
-    
-    const updatedDevice: EquipmentDevice = {
-      ...device,
-      name: formData.name,
-      make: formData.make,
-      model: formData.model,
-      serialNumber: formData.serialNumber || '',
-      imageUrl: finalImageUrl || '',
-      type: formData.type,
-      maintenanceDays: formData.maintenanceDays,
-      lastMaintained: formData.lastMaintained,
-      threshold: formData.threshold,
-      supplies,
-      sops: device.sops || [],
-      updatedAt: new Date().toISOString(),
-    }
-    onSave(updatedDevice)
-  }
-
-  const handleAddSupplyRow = () => {
-    if (!newSupply.name.trim()) return
-    
-    const supply: EquipmentSupply = {
-      id: `supply-${Date.now()}`,
-      name: newSupply.name.trim(),
-      price: parseFloat(newSupply.price) || 0,
-      qty: parseInt(newSupply.qty) || 0,
-      minQty: parseInt(newSupply.minQty) || 0,
-      burnPerWeek: parseFloat(newSupply.burnPerWeek) || 0,
-    }
-    
-    setSupplies([...supplies, supply])
-    onAddSupply(supply)
-    setNewSupply({ name: '', price: '', qty: '', minQty: '', burnPerWeek: '' })
-  }
-
-  const handleRemoveSupply = (index: number) => {
-    setSupplies(supplies.filter((_, i) => i !== index))
-  }
-
-  return (
-    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit Device</DialogTitle>
-          <DialogDescription>
-            Update device details, maintenance schedule, and supply management.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <Label>Device Name *</Label>
-            <Input
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., PCR Thermocycler"
-            />
-          </div>
-          <div>
-            <Label>Make *</Label>
-            <Input
-              value={formData.make}
-              onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-              placeholder="e.g., Applied Biosystems"
-            />
-          </div>
-          <div>
-            <Label>Model *</Label>
-            <Input
-              value={formData.model}
-              onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-              placeholder="e.g., Veriti 96-Well"
-            />
-          </div>
-          <div>
-            <Label>Serial Number (Optional)</Label>
-            <Input
-              value={formData.serialNumber}
-              onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
-              placeholder="Device serial number"
-            />
-          </div>
-          <div>
-            <Label>Type</Label>
-            <Input
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-              placeholder="e.g., PCR Machine"
-            />
-          </div>
-          <div>
-            <Label>Device Image (Optional)</Label>
-            <Input
-              type="file"
-              accept="image/*"
-              onChange={handleImageUpload}
-              className="cursor-pointer"
-            />
-            {imagePreview && (
-              <div className="mt-2">
-                <Image src={imagePreview} alt="Preview" width={96} height={96} className="w-24 h-24 object-cover rounded border" />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setImagePreview(null)
-                    setImageFile(null)
-                    setFormData({ ...formData, imageUrl: '' })
-                  }}
-                  className="mt-1 text-xs"
-                >
-                  Remove Image
-                </Button>
-              </div>
-            )}
-          </div>
-          <div>
-            <Label>Maintenance Interval (days)</Label>
-            <Input
-              type="number"
-              min={1}
-              value={formData.maintenanceDays}
-              onChange={(e) => setFormData({ ...formData, maintenanceDays: parseInt(e.target.value) || 90 })}
-            />
-          </div>
-          <div>
-            <Label>Last Maintained</Label>
-            <Input
-              type="date"
-              value={formData.lastMaintained}
-              onChange={(e) => setFormData({ ...formData, lastMaintained: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Maintenance Threshold % (To-Do)</Label>
-            <Input
-              type="number"
-              min={1}
-              max={100}
-              value={formData.threshold}
-              onChange={(e) => setFormData({ ...formData, threshold: parseInt(e.target.value) || 20 })}
-            />
-          </div>
-        </div>
-
-        <h4 className="font-semibold mb-3">Reagents & Consumables</h4>
-        <div className="border border-border rounded-lg overflow-hidden mb-4">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="text-left p-2">Name</th>
-                <th className="text-left p-2">Price (€)</th>
-                <th className="text-left p-2">Qty</th>
-                <th className="text-left p-2">Min Qty</th>
-                <th className="text-left p-2">Burn / wk</th>
-                <th className="text-left p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {supplies.map((supply, idx) => (
-                <tr key={supply.id} className="border-t border-border">
-                  <td className="p-2">
-                    <Input
-                      value={supply.name}
-                      onChange={(e) => {
-                        const updated = [...supplies]
-                        updated[idx] = { ...updated[idx], name: e.target.value }
-                        setSupplies(updated)
-                      }}
-                    />
-                  </td>
-                  <td className="p-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={supply.price || ''}
-                      onChange={(e) => {
-                        const updated = [...supplies]
-                        const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                        updated[idx] = { ...updated[idx], price: value }
-                        setSupplies(updated)
-                      }}
-                      placeholder="0.00"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <Input
-                      type="number"
-                      value={supply.qty || ''}
-                      onChange={(e) => {
-                        const updated = [...supplies]
-                        const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0
-                        updated[idx] = { ...updated[idx], qty: value }
-                        setSupplies(updated)
-                      }}
-                      placeholder="0"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <Input
-                      type="number"
-                      value={supply.minQty || ''}
-                      onChange={(e) => {
-                        const updated = [...supplies]
-                        const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0
-                        updated[idx] = { ...updated[idx], minQty: value }
-                        setSupplies(updated)
-                      }}
-                      placeholder="0"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={supply.burnPerWeek || ''}
-                      onChange={(e) => {
-                        const updated = [...supplies]
-                        const value = e.target.value === '' ? 0 : parseFloat(e.target.value) || 0
-                        updated[idx] = { ...updated[idx], burnPerWeek: value }
-                        setSupplies(updated)
-                      }}
-                      placeholder="0.00"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <Button size="sm" variant="ghost" onClick={() => handleRemoveSupply(idx)}>
-                      Delete
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        <div className="flex gap-2 mb-4">
-          <Input
-            placeholder="Item name"
-            value={newSupply.name}
-            onChange={(e) => setNewSupply({ ...newSupply, name: e.target.value })}
-            className="flex-2"
-          />
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="Price (€)"
-            value={newSupply.price}
-            onChange={(e) => setNewSupply({ ...newSupply, price: e.target.value })}
-            className="flex-1"
-          />
-          <Input
-            type="number"
-            placeholder="Qty"
-            value={newSupply.qty}
-            onChange={(e) => setNewSupply({ ...newSupply, qty: e.target.value })}
-            className="flex-1"
-          />
-          <Input
-            type="number"
-            placeholder="Min Qty"
-            value={newSupply.minQty}
-            onChange={(e) => setNewSupply({ ...newSupply, minQty: e.target.value })}
-            className="flex-1"
-          />
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="Burn/wk"
-            value={newSupply.burnPerWeek}
-            onChange={(e) => setNewSupply({ ...newSupply, burnPerWeek: e.target.value })}
-            className="flex-1"
-          />
-          <Button onClick={handleAddSupplyRow} className="bg-brand-500 hover:bg-brand-600 text-white">
-            + Add Item
-          </Button>
-        </div>
-        
-        <h4 className="font-semibold mb-3 mt-6">Standard Operating Procedures (SOPs)</h4>
-        <div className="border border-border rounded-lg p-4 mb-4 bg-gray-50">
-          <p className="text-sm text-muted-foreground mb-3">
-            SOPs are version-controlled documents that describe how to use this device. Each SOP includes version history.
-          </p>
-          {device.sops && device.sops.length > 0 ? (
-            <div className="space-y-3">
-              {device.sops.map((sop) => (
-                <div key={sop.id} className="border border-border rounded p-3 bg-white">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <h5 className="font-semibold">{sop.title}</h5>
-                      <p className="text-xs text-muted-foreground">
-                        Version {sop.version} • Updated {new Date(sop.updatedAt || sop.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground whitespace-pre-wrap max-h-32 overflow-y-auto">
-                    {sop.content}
-                  </div>
-                  {sop.history && sop.history.length > 0 && (
-                    <details className="mt-2">
-                      <summary className="text-xs text-muted-foreground cursor-pointer">Version History ({sop.history.length})</summary>
-                      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                        {sop.history.map((version, idx) => (
-                          <div key={idx} className="border-l-2 pl-2">
-                            <strong>v{version.version}</strong> - {new Date(version.updatedAt).toLocaleDateString()}
-                            {version.changeNotes && <div className="text-xs">{version.changeNotes}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No SOPs yet. Add SOPs will be available in a future update.</p>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} className="bg-brand-500 hover:bg-brand-600 text-white">Save</Button>
-        </div>
-    </DialogContent>
-  )
-}
-

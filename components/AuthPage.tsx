@@ -9,6 +9,7 @@ import { User as UserType } from "@/lib/types"
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { createUser } from "@/lib/firestoreService"
+import { logger } from "@/lib/logger"
 
 interface AuthPageProps {
   onLogin: (uid: string) => void
@@ -114,8 +115,8 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
         // Note: Don't call onSignup yet - wait for email verification
       }
     } catch (error: any) {
-      console.error("Authentication error:", error)
-      
+      logger.error("Authentication error", error)
+
       // Handle specific Firebase errors
       if (error.code === "auth/user-not-found") {
         setError("User not found. Please sign up first.")

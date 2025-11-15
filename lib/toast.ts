@@ -5,6 +5,7 @@
  */
 
 import { SUCCESS_MESSAGES, ERROR_MESSAGES } from "./constants"
+import { logger } from "./logger"
 
 // Re-export for convenience
 export { useToast, ToastProvider } from "@/components/ui/toast"
@@ -71,7 +72,7 @@ export async function withToast<T>(
     }
     return result
   } catch (error) {
-    console.error("Operation failed:", error)
+    logger.error("Operation failed", error)
     const errorMsg = options.errorMessage || formatFirebaseError(error)
     options.toast.error(errorMsg)
     if (options.onError) {

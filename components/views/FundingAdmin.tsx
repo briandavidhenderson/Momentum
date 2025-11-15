@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, DollarSign, Users, Briefcase, TrendingDown, Plus, Download } from "lucide-react"
+import { logger } from "@/lib/logger"
 
 export function FundingAdmin() {
   const { currentUser, currentUserProfile } = useAuth()
@@ -81,7 +82,7 @@ export function FundingAdmin() {
       })) as FundingTransaction[]
       setTransactions(trans)
     } catch (error) {
-      console.error("Error loading funding data:", error)
+      logger.error("Error loading funding data", error)
     } finally {
       setLoading(false)
     }

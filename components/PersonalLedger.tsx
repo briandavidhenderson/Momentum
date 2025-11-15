@@ -1,77 +1,65 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/lib/hooks/useAuth"
+import { useAppContext } from "@/lib/AppContext"
 import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
-import { FundingAllocation, FundingTransaction } from "@/lib/types"
+import { FundingTransaction } from "@/lib/types"
 import { formatCurrency, getLowBalanceWarningLevel } from "@/lib/constants"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Wallet, TrendingDown, Clock, AlertCircle } from "lucide-react"
+import { logger } from "@/lib/logger"
 
 export function PersonalLedger() {
-  const { currentUser, currentUserProfile } = useAuth()
-  const [allocations, setAllocations] = useState<FundingAllocation[]>([])
+  const { currentUser, fundingAllocations, fundingAllocationsLoading } = useAppContext()
   const [transactions, setTransactions] = useState<FundingTransaction[]>([])
-  const [loading, setLoading] = useState(true)
+  const [transactionsLoading, setTransactionsLoading] = useState(true)
 
+  // Load transaction history when allocations change
   useEffect(() => {
-    if (!currentUser) return
-    loadPersonalFunding()
-  }, [currentUser])
-
-  const loadPersonalFunding = async () => {
-    if (!currentUser) return
-
-    setLoading(true)
-    try {
-      // Load user's allocations
-      const allocationsSnapshot = await getDocs(
-        query(
-          collection(db, "fundingAllocations"),
-          where("type", "==", "PERSON"),
-          where("personId", "==", currentUser.uid),
-          where("status", "in", ["active", "exhausted"])
-        )
-      )
-      const allocs = allocationsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as FundingAllocation[]
-      setAllocations(allocs)
-
-      // Load user's transaction history
-      const allocationIds = allocs.map((a) => a.id)
-      if (allocationIds.length > 0) {
-        // Firestore has a limit of 10 items in 'in' queries, so we'll need to handle this
-        const transactionsSnapshot = await getDocs(
-          query(
-            collection(db, "fundingTransactions"),
-            where("allocationId", "in", allocationIds.slice(0, 10)),
-            orderBy("createdAt", "desc"),
-            limit(50)
-          )
-        )
-        const trans = transactionsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as FundingTransaction[]
-        setTransactions(trans)
-      }
-    } catch (error) {
-      console.error("Error loading personal funding:", error)
-    } finally {
-      setLoading(false)
+    if (!fundingAllocations || fundingAllocations.length === 0) {
+      setTransactions([])
+      setTransactionsLoading(false)
+      return
     }
-  }
 
-  if (loading) {
+    const loadTransactions = async () => {
+      setTransactionsLoading(true)
+      try {
+        const allocationIds = fundingAllocations.map((a) => a.id)
+        if (allocationIds.length > 0) {
+          // Firestore has a limit of 10 items in 'in' queries, so we'll need to handle this
+          const transactionsSnapshot = await getDocs(
+            query(
+              collection(db, "fundingTransactions"),
+              where("allocationId", "in", allocationIds.slice(0, 10)),
+              orderBy("createdAt", "desc"),
+              limit(50)
+            )
+          )
+          const trans = transactionsSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as FundingTransaction[]
+          setTransactions(trans)
+        }
+      } catch (error) {
+        logger.error("Error loading transactions", error)
+      } finally {
+        setTransactionsLoading(false)
+      }
+    }
+
+    loadTransactions()
+  }, [fundingAllocations])
+
+  if (fundingAllocationsLoading) {
     return <div className="p-6">Loading your budget...</div>
   }
 
-  if (allocations.length === 0) {
+  if (!fundingAllocations || fundingAllocations.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -87,10 +75,10 @@ export function PersonalLedger() {
     )
   }
 
-  const totalAllocated = allocations.reduce((sum, a) => sum + (a.allocatedAmount || 0), 0)
-  const totalSpent = allocations.reduce((sum, a) => sum + a.currentSpent, 0)
-  const totalCommitted = allocations.reduce((sum, a) => sum + a.currentCommitted, 0)
-  const totalRemaining = allocations.reduce((sum, a) => sum + (a.remainingBudget || 0), 0)
+  const totalAllocated = fundingAllocations.reduce((sum, a) => sum + (a.allocatedAmount || 0), 0)
+  const totalSpent = fundingAllocations.reduce((sum, a) => sum + a.currentSpent, 0)
+  const totalCommitted = fundingAllocations.reduce((sum, a) => sum + a.currentCommitted, 0)
+  const totalRemaining = fundingAllocations.reduce((sum, a) => sum + (a.remainingBudget || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -108,7 +96,7 @@ export function PersonalLedger() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalAllocated)}</div>
-            <p className="text-xs text-muted-foreground">{allocations.length} allocations</p>
+            <p className="text-xs text-muted-foreground">{fundingAllocations.length} allocations</p>
           </CardContent>
         </Card>
 
@@ -151,7 +139,7 @@ export function PersonalLedger() {
       {/* Individual Allocations */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Funding Allocations</h3>
-        {allocations.map((allocation) => {
+        {fundingAllocations.map((allocation) => {
           const percentUsed =
             ((allocation.currentSpent + allocation.currentCommitted) / (allocation.allocatedAmount || 1)) *
             100

@@ -2,7 +2,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, User, MasterProject } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, MasterProject } from "@/lib/types"
+import { FirestoreUser } from "@/lib/firestoreService"
 import { profiles as staticProfiles } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
 import { useProjects } from "@/lib/hooks/useProjects"
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -18,12 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { 
-  UserPlus, 
-  Edit, 
-  Trash2, 
-  Save, 
-  X, 
+import {
+  UserPlus,
+  Edit,
+  Trash2,
+  Save,
+  X,
   Download,
   Upload,
   Mail,
@@ -38,12 +39,12 @@ import {
 } from "lucide-react"
 
 interface ProfileManagementProps {
-  currentUser?: User | null
+  currentUser?: FirestoreUser | null
   currentUserProfile?: PersonProfile | null
 }
 
 export function ProfileManagement({ currentUser, currentUserProfile }: ProfileManagementProps = {}) {
-  const allProfiles = useProfiles(currentUserProfile?.lab || null)
+  const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const { handleCreateMasterProject } = useProjects()
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -72,6 +73,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     notes: "",
     projects: [],
     principalInvestigatorProjects: [],
+    orcidId: "",
+    orcidUrl: "",
+    orcidVerified: false,
+    orcidSyncEnabled: false,
+    orcidLastSynced: undefined,
   })
 
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)
@@ -101,20 +107,20 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     window.dispatchEvent(new CustomEvent("profiles-updated"))
   }
 
-  const labs = Array.from(new Set(allProfiles.map(p => p.lab)))
-  const institutes = Array.from(new Set(allProfiles.map(p => p.institute)))
-  const organisations = Array.from(new Set(allProfiles.map(p => p.organisation)))
+  const labs = Array.from(new Set(allProfiles.map(p => p.labName)))
+  const institutes = Array.from(new Set(allProfiles.map(p => p.instituteName)))
+  const organisations = Array.from(new Set(allProfiles.map(p => p.organisationName)))
 
   const filteredProfiles = allProfiles.filter(profile => {
-    const matchesSearch = 
+    const matchesSearch =
       profile.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       profile.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       profile.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       profile.position.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesLab = filterLab === "all" || profile.lab === filterLab
-    const matchesInstitute = filterInstitute === "all" || profile.institute === filterInstitute
-    const matchesOrganisation = filterOrganisation === "all" || profile.organisation === filterOrganisation
+
+    const matchesLab = filterLab === "all" || profile.labName === filterLab
+    const matchesInstitute = filterInstitute === "all" || profile.instituteName === filterInstitute
+    const matchesOrganisation = filterOrganisation === "all" || profile.organisationName === filterOrganisation
 
     return matchesSearch && matchesLab && matchesInstitute && matchesOrganisation
   })
@@ -235,7 +241,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       alert("You can only edit your own profile, or you need administrator privileges to edit other profiles.")
       return
     }
-    
+
     setFormData({
       ...profile,
       fundedBy: profile.fundedBy || [],
@@ -244,6 +250,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       projects: profile.projects || [],
       principalInvestigatorProjects: profile.principalInvestigatorProjects || [],
       isAdministrator: profile.isAdministrator || false,
+      orcidId: profile.orcidId || "",
+      orcidUrl: profile.orcidUrl || "",
+      orcidVerified: profile.orcidVerified || false,
+      orcidSyncEnabled: profile.orcidSyncEnabled || false,
+      orcidLastSynced: profile.orcidLastSynced || undefined,
     })
     setSelectedProfile(profile)
     setIsEditing(true)
@@ -259,6 +270,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       projects: profile.projects || [],
       principalInvestigatorProjects: profile.principalInvestigatorProjects || [],
       isAdministrator: profile.isAdministrator || false,
+      orcidId: profile.orcidId || "",
+      orcidUrl: profile.orcidUrl || "",
+      orcidVerified: profile.orcidVerified || false,
+      orcidSyncEnabled: profile.orcidSyncEnabled || false,
+      orcidLastSynced: profile.orcidLastSynced || undefined,
     })
     setSelectedProfile(profile)
     setIsEditing(false)
@@ -322,6 +338,15 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       researchInterests: formData.researchInterests || [],
       qualifications: formData.qualifications || [],
       notes: formData.notes || "",
+
+      // ORCID integration
+      orcidId: formData.orcidId || undefined,
+      orcidUrl: formData.orcidUrl || (formData.orcidId
+        ? `https://orcid.org/${formData.orcidId.replace(/https?:\/\/(sandbox\.)?orcid\.org\//, "")}`
+        : undefined),
+      orcidVerified: formData.orcidVerified || false,
+      orcidSyncEnabled: formData.orcidSyncEnabled || false,
+      orcidLastSynced: formData.orcidLastSynced || undefined,
 
       // Account
       userId: formData.userId,
@@ -546,7 +571,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                       {profile.firstName} {profile.lastName}
                     </h3>
                     <p className="text-sm text-muted-foreground truncate">{profile.position}</p>
-                    <p className="text-xs text-muted-foreground truncate">{profile.lab}</p>
+                    <p className="text-xs text-muted-foreground truncate">{profile.labName}</p>
                   </div>
                 </div>
                 {isStatic && (
@@ -735,6 +760,93 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* ORCID / Researcher Identifiers */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <UserIcon className="h-4 w-4" />
+                Researcher Identifiers
+              </h3>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <Label htmlFor="orcidId">ORCID iD</Label>
+                  <Input
+                    id="orcidId"
+                    placeholder="0000-0000-0000-0000"
+                    value={formData.orcidId || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setFormData({
+                        ...formData,
+                        orcidId: value,
+                        orcidUrl: value
+                          ? `https://orcid.org/${value.replace(/https?:\/\/(sandbox\.)?orcid\.org\//, "")}`
+                          : ""
+                      })
+                    }}
+                    disabled={!isEditing || formData.orcidVerified}
+                  />
+                  {formData.orcidUrl && (
+                    <a
+                      href={formData.orcidUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-blue-600 underline inline-flex items-center gap-1 mt-1"
+                    >
+                      View ORCID profile
+                    </a>
+                  )}
+                  {formData.orcidLastSynced && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Last synced: {new Date(formData.orcidLastSynced).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                {isEditing && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="whitespace-nowrap"
+                    onClick={async () => {
+                      try {
+                        const { linkOrcidToCurrentUser } = await import("@/lib/auth/orcid")
+                        const result = await linkOrcidToCurrentUser()
+
+                        setFormData({
+                          ...formData,
+                          orcidId: result.orcid,
+                          orcidUrl: result.orcidUrl,
+                          orcidVerified: true,
+                          orcidLastSynced: new Date().toISOString()
+                        })
+
+                        alert("ORCID linked successfully!")
+                      } catch (error: any) {
+                        alert(`Failed to link ORCID: ${error.message}`)
+                      }
+                    }}
+                  >
+                    {formData.orcidId ? "Re-sync ORCID" : "Connect ORCID"}
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="orcidSyncEnabled"
+                  checked={formData.orcidSyncEnabled || false}
+                  onChange={(e) => setFormData({ ...formData, orcidSyncEnabled: e.target.checked })}
+                  disabled={!isEditing}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <Label htmlFor="orcidSyncEnabled" className="text-sm">
+                  Keep profile in sync with ORCID (where possible)
+                </Label>
               </div>
             </div>
 
@@ -1321,7 +1433,7 @@ function ProjectDialog({
                   <option value="">Add person...</option>
                   {allProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {profile.firstName} {profile.lastName} - {profile.lab}
+                      {profile.firstName} {profile.lastName} - {profile.labName}
                     </option>
                   ))}
                 </select>
