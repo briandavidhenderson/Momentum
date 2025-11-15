@@ -59,14 +59,16 @@ export function weeksToHealthPercentage(weeks: number): number {
 
 /**
  * Calculate supplies health for a device (worst supply determines health)
- * @param supplies - Array of supplies
+ * @param supplies - Array of enriched supplies with inventory data
  * @returns Health percentage (0-100), or 100 if no supplies
  */
-export function calculateSuppliesHealth(supplies: EquipmentSupply[]): number {
+export function calculateSuppliesHealth(supplies: Array<{ currentQuantity?: number; qty?: number; burnPerWeek: number }>): number {
   if (!supplies || supplies.length === 0) return 100
 
   const percents = supplies.map(s => {
-    const weeks = calculateWeeksRemaining(s.qty, s.burnPerWeek)
+    // Support both new (currentQuantity) and old (qty) field names for backwards compatibility
+    const quantity = s.currentQuantity ?? s.qty ?? 0
+    const weeks = calculateWeeksRemaining(quantity, s.burnPerWeek)
     return weeksToHealthPercentage(weeks)
   })
 
@@ -150,11 +152,13 @@ export function toISODateString(date: Date): string {
 
 /**
  * Calculate health percentage for a single supply
- * @param supply - Equipment supply object
+ * @param supply - Equipment supply object (supports both old and new formats)
  * @returns Health percentage (0-100)
  */
-export function supplyHealthPercent(supply: EquipmentSupply): number {
-  const weeks = calculateWeeksRemaining(supply.qty || 0, supply.burnPerWeek || 0)
+export function supplyHealthPercent(supply: { currentQuantity?: number; qty?: number; burnPerWeek?: number }): number {
+  // Support both new (currentQuantity) and old (qty) field names for backwards compatibility
+  const quantity = supply.currentQuantity ?? supply.qty ?? 0
+  const weeks = calculateWeeksRemaining(quantity, supply.burnPerWeek || 0)
   return weeksToHealthPercentage(weeks)
 }
 

@@ -93,7 +93,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     }
     
     // Users can only edit their own profile
-    return profile.id === currentUserProfile.id || profile.userId === currentUser?.id
+    return profile.id === currentUserProfile.id || profile.userId === currentUser?.uid
   }
 
   // Save profiles to localStorage
@@ -203,7 +203,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       progress: 0,
       workpackageIds: [],
       visibility: "lab",
-      createdBy: currentUser?.id || "",
+      createdBy: currentUser?.uid || "",
       isExpanded: true,
     }
     handleCreateMasterProject(newProject)
@@ -362,12 +362,12 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     saveProfiles(updatedProfiles as PersonProfile[])
     
     // Update User record if this profile is linked to a user
-    if (newProfile.userId && currentUser?.id === newProfile.userId) {
+    if (newProfile.userId && currentUser?.uid === newProfile.userId) {
       const storedUsers = localStorage.getItem("lab-users")
       if (storedUsers) {
-        const users: User[] = JSON.parse(storedUsers)
-        const updatedUsers = users.map(u => 
-          u.id === newProfile.userId 
+        const users: FirestoreUser[] = JSON.parse(storedUsers)
+        const updatedUsers = users.map(u =>
+          u.uid === newProfile.userId
             ? { ...u, isAdministrator: newProfile.isAdministrator }
             : u
         )

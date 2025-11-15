@@ -97,8 +97,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       await updateProfile(currentUserProfile.id, updatedProfileData)
 
       // Update User record if admin status changed
-      if (formData.userId && currentUser?.id === formData.userId) {
-        await updateUser(currentUser.id, {
+      if (formData.userId && currentUser?.uid === formData.userId) {
+        await updateUser(currentUser.uid, {
           isAdministrator: formData.isAdministrator || false
         })
       }

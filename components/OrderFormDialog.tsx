@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { AlertCircle, DollarSign } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
 import { notifyLowBudget, notifyBudgetExhausted, shouldSendLowBudgetNotification } from "@/lib/notificationUtils"
+import { logger } from "@/lib/logger"
 import { getBudgetHealthClass } from "@/lib/equipmentConfig"
 
 interface OrderFormDialogProps {

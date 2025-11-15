@@ -168,11 +168,11 @@ export function OrdersInventory() {
             ...result.inventoryItem,
             createdBy: currentUserProfile.id,
           })
-          logger.info(result.message)
+          if (result.message) logger.info(result.message)
         } else {
           // Update existing inventory item
           await updateInventoryItem(result.inventoryItem.id, result.inventoryItem)
-          logger.info(result.message)
+          if (result.message) logger.info(result.message)
         }
 
         // If supply was linked to a device, update the device

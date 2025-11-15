@@ -6,7 +6,7 @@ import { DeletionImpact } from '@/lib/projectDeletion';
 export function useUI() {
   const [activeDragPerson, setActiveDragPerson] = useState<Person | null>(null);
   const [activeDragOrder, setActiveDragOrder] = useState<Order | null>(null);
-  const [activeTab, setActiveTab] = useState<'orders' | 'inventory'>('orders');
+  const [activeTab, setActiveTab] = useState<string>('orders');
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
   const [mainView, setMainView] = useState<'projects' | 'people' | 'profiles' | 'myprofile' | 'daytoday' | 'eln' | 'orders' | 'equipment' | 'calendar' | 'privacy'>('myprofile');
