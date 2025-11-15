@@ -37,6 +37,7 @@ import {
   Lab,
   Funder,
   FundingAccount,
+  FundingAllocation,
   MasterProject,
 } from "./types"
 
@@ -678,11 +679,15 @@ export async function deleteFundingAccount(accountId: string): Promise<void> {
  * Subscribes to funding accounts with optional filters
  */
 export function subscribeToFundingAccounts(
-  filters: { masterProjectId?: string; funderId?: string } | null,
-  callback: (accounts: FundingAccount[]) => void
+  filters: { labId?: string; masterProjectId?: string; funderId?: string } | null,
+  callback: (accounts: FundingAccount[]) => void,
+  errorCallback?: (error: Error) => void
 ): Unsubscribe {
   let q = collection(db, "accounts")
 
+  if (filters?.labId) {
+    q = query(q as any, where("labId", "==", filters.labId)) as any
+  }
   if (filters?.masterProjectId) {
     q = query(q as any, where("masterProjectId", "==", filters.masterProjectId)) as any
   }
@@ -690,10 +695,60 @@ export function subscribeToFundingAccounts(
     q = query(q as any, where("funderId", "==", filters.funderId)) as any
   }
 
-  return onSnapshot(q, (snapshot) => {
-    const accounts = snapshot.docs.map(doc => doc.data() as FundingAccount)
-    callback(accounts)
-  })
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const accounts = snapshot.docs.map(doc => doc.data() as FundingAccount)
+      callback(accounts)
+    },
+    (error) => {
+      console.error("Error in subscribeToFundingAccounts:", error)
+      if (errorCallback) {
+        errorCallback(error as Error)
+      }
+    }
+  )
+}
+
+/**
+ * Subscribe to funding allocations with real-time updates
+ * @param filters - Filter by userId (personId)
+ * @param callback - Function to call with allocations
+ * @param errorCallback - Optional error handler
+ * @returns Unsubscribe function
+ */
+export function subscribeToFundingAllocations(
+  filters: { userId?: string } | null,
+  callback: (allocations: FundingAllocation[]) => void,
+  errorCallback?: (error: Error) => void
+): Unsubscribe {
+  let q: Query = collection(db, "fundingAllocations")
+
+  if (filters?.userId) {
+    q = query(
+      q,
+      where("type", "==", "PERSON"),
+      where("personId", "==", filters.userId),
+      where("status", "in", ["active", "exhausted"])
+    )
+  }
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const allocations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as FundingAllocation[]
+      callback(allocations)
+    },
+    (error) => {
+      console.error("Error in subscribeToFundingAllocations:", error)
+      if (errorCallback) {
+        errorCallback(error as Error)
+      }
+    }
+  )
 }
 
 // ============================================================================
