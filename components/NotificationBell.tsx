@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { logger } from "@/lib/logger"
 
 interface Notification {
   id: string
@@ -56,7 +57,7 @@ export function NotificationBell() {
     try {
       await updateDoc(doc(db, "notifications", notificationId), { read: true })
     } catch (error) {
-      console.error("Error marking notification as read:", error)
+      logger.error("Error marking notification as read", error)
     }
   }
 
@@ -65,7 +66,7 @@ export function NotificationBell() {
       const unreadNotifs = notifications.filter((n) => !n.read)
       await Promise.all(unreadNotifs.map((n) => markAsRead(n.id)))
     } catch (error) {
-      console.error("Error marking all as read:", error)
+      logger.error("Error marking all as read", error)
     }
   }
 

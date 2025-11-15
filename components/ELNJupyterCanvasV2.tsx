@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/toast"
 import { extractItemStructure } from "@/lib/ai/router"
 import { uploadELNFile } from "@/lib/storage"
 import { useAppContext } from "@/lib/AppContext"
+import { logger } from "@/lib/logger"
 
 interface ELNJupyterCanvasV2Props {
   items: ELNItem[]
@@ -146,7 +147,7 @@ export function ELNJupyterCanvasV2({
         fileInputRef.current.value = ""
       }
     } catch (error) {
-      console.error("File upload error:", error)
+      logger.error("File upload error", error)
       toast.error("Failed to upload file. Please try again.")
     } finally {
       setUploadingItem(false)
@@ -177,7 +178,7 @@ export function ELNJupyterCanvasV2({
 
       toast.success("Structure extracted!")
     } catch (error) {
-      console.error("Extraction failed:", error)
+      logger.error("Extraction failed", error)
       onUpdateItem(item.id, {
         aiExtraction: {
           status: "failed",

@@ -25,6 +25,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { useAppContext } from "@/lib/AppContext"
 import { notifyTaskAssigned, notifyTaskReassigned } from "@/lib/notificationUtils"
 import { PersonProfile } from "@/lib/types"
+import { logger } from "@/lib/logger"
 
 function DroppableColumn({
   id,
@@ -284,7 +285,7 @@ function DayToDayTaskEditDialog({
           }
         }
       } catch (error) {
-        console.error('Error sending task assignment notification:', error)
+        logger.error('Error sending task assignment notification', error)
         // Don't block the UI on notification failure
       }
     }
@@ -543,7 +544,7 @@ export function DayToDayBoard() {
         Promise.all(
           updates.map(update => onUpdateTask(update.id, { order: update.order }))
         ).catch(error => {
-          console.error('Error reordering tasks:', error)
+          logger.error('Error reordering tasks', error)
         })
       }
       return
