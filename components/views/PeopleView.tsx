@@ -17,23 +17,28 @@ interface PeopleViewProps {
 
 export default function PeopleView({ currentUserProfile }: PeopleViewProps = {}) {
   // Fixed: use labId instead of lab
-  const allProfiles = useProfiles(currentUserProfile?.labId ?? null) || []
+  const allProfilesData = useProfiles(currentUserProfile?.labId ?? null)
+  const allProfiles = useMemo(() => allProfilesData || [], [allProfilesData])
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "orgchart" | "network">("grid")
   const [orcidFilter, setOrcidFilter] = useState<"all" | "with" | "without">("all")
 
   // Filter profiles by lab if currentUserProfile is provided
   // Ensure profiles is always an array to prevent .map() errors
-  let profiles = (currentUserProfile?.labId
-    ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
-    : allProfiles) || []
+  const profiles = useMemo(() => {
+    let filtered = (currentUserProfile?.labId
+      ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
+      : allProfiles) || []
 
-  // Apply ORCID filter
-  if (orcidFilter === "with") {
-    profiles = profiles.filter(p => p.orcidVerified)
-  } else if (orcidFilter === "without") {
-    profiles = profiles.filter(p => !p.orcidVerified)
-  }
+    // Apply ORCID filter
+    if (orcidFilter === "with") {
+      filtered = filtered.filter(p => p.orcidVerified)
+    } else if (orcidFilter === "without") {
+      filtered = filtered.filter(p => !p.orcidVerified)
+    }
+
+    return filtered
+  }, [currentUserProfile?.labId, allProfiles, orcidFilter])
 
   // Debug logging (only in development)
   useEffect(() => {
