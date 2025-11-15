@@ -269,7 +269,7 @@ export function EquipmentEditorDialog({
       */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
         <p className="text-sm text-yellow-800">
-          <strong>Note:</strong> To add supplies to this device, close this dialog and use the "Add Supply" button
+          <strong>Note:</strong> To add supplies to this device, close this dialog and use the &quot;Add Supply&quot; button
           in the main equipment panel. Supplies are now linked from the inventory system.
         </p>
       </div>

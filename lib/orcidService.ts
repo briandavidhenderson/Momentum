@@ -5,6 +5,7 @@
 
 import { OrcidRecord, OrcidAffiliation, OrcidWorkSummary } from "./orcidTypes"
 import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore"
+import { logger } from "./logger"
 
 const ORCID_API_BASE = "https://pub.orcid.org/v3.0"
 const ORCID_SANDBOX_API_BASE = "https://sandbox.orcid.org/v3.0"
@@ -211,7 +212,7 @@ export async function fetchOrcidRecord(
 
     return record
   } catch (error) {
-    console.error("Error fetching ORCID record:", error)
+    logger.error("Error fetching ORCID record:", error)
     throw error
   }
 }

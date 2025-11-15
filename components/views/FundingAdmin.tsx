@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
@@ -37,12 +37,7 @@ export function FundingAdmin() {
     currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
     currentUserProfile?.userRole === UserRole.LAB_MANAGER
 
-  useEffect(() => {
-    if (!isAuthorized || !currentUserProfile?.labId) return
-    loadFundingData()
-  }, [currentUserProfile, isAuthorized])
-
-  const loadFundingData = async () => {
+  const loadFundingData = useCallback(async () => {
     setLoading(true)
     try {
       const labId = currentUserProfile?.labId
@@ -86,7 +81,12 @@ export function FundingAdmin() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentUserProfile?.labId])
+
+  useEffect(() => {
+    if (!isAuthorized || !currentUserProfile?.labId) return
+    loadFundingData()
+  }, [currentUserProfile?.labId, isAuthorized, loadFundingData])
 
   if (!isAuthorized) {
     return (
