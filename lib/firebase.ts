@@ -17,22 +17,72 @@ const firebaseConfig = {
 // Initialize Firebase (avoid multiple initializations)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
 
-// Initialize Firebase services
-export const auth = getAuth(app)
-export const db = getFirestore(app)
-export const storage = getStorage(app)
+// Lazy-initialized service instances
+let authInstance: ReturnType<typeof getAuth> | null = null
+let dbInstance: ReturnType<typeof getFirestore> | null = null
+let storageInstance: ReturnType<typeof getStorage> | null = null
+let emulatorsConnected = false
 
-// Connect to emulators in development (optional)
-if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true") {
-  try {
-    connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true })
-    connectFirestoreEmulator(db, "localhost", 8080)
-    connectStorageEmulator(storage, "localhost", 9199)
-    logger.info("Connected to Firebase emulators")
-  } catch (error) {
-    logger.debug("Emulators already connected or not available")
+// Lazy getters for Firebase services (prevents initialization during build)
+export function getFirebaseAuth() {
+  if (!authInstance) {
+    authInstance = getAuth(app)
+    connectEmulators()
+  }
+  return authInstance
+}
+
+export function getFirebaseDb() {
+  if (!dbInstance) {
+    dbInstance = getFirestore(app)
+    connectEmulators()
+  }
+  return dbInstance
+}
+
+export function getFirebaseStorage() {
+  if (!storageInstance) {
+    storageInstance = getStorage(app)
+    connectEmulators()
+  }
+  return storageInstance
+}
+
+// Connect to emulators in development (called lazily)
+function connectEmulators() {
+  if (emulatorsConnected) return
+  emulatorsConnected = true
+
+  if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true") {
+    try {
+      if (authInstance) {
+        connectAuthEmulator(authInstance, "http://localhost:9099", { disableWarnings: true })
+      }
+      if (dbInstance) {
+        connectFirestoreEmulator(dbInstance, "localhost", 8080)
+      }
+      if (storageInstance) {
+        connectStorageEmulator(storageInstance, "localhost", 9199)
+      }
+      logger.info("Connected to Firebase emulators")
+    } catch (error) {
+      logger.debug("Emulators already connected or not available")
+    }
   }
 }
+
+// Legacy exports for backward compatibility (these will initialize on first access)
+export const auth = new Proxy({} as ReturnType<typeof getAuth>, {
+  get: (_, prop) => getFirebaseAuth()[prop as keyof ReturnType<typeof getAuth>]
+})
+
+export const db = new Proxy({} as ReturnType<typeof getFirestore>, {
+  get: (_, prop) => getFirebaseDb()[prop as keyof ReturnType<typeof getFirestore>]
+})
+
+export const storage = new Proxy({} as ReturnType<typeof getStorage>, {
+  get: (_, prop) => getFirebaseStorage()[prop as keyof ReturnType<typeof getStorage>]
+})
 
 export default app
 
