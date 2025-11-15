@@ -26,11 +26,13 @@ import {
   createMasterProject,
   createFundingAccount,
   updateUser,
+  subscribeToProfiles,  // Feature #8: For supervisor selection
 } from "@/lib/firestoreService"
 import { Building, GraduationCap, BookOpen, Users, Briefcase, CheckCircle2, ChevronRight, ChevronLeft, X } from "lucide-react"
 import { FunderCreationDialog } from "./FunderCreationDialog"
 import { OrcidIcon } from "./OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
+import { logger } from "@/lib/logger"
 
 interface OnboardingFlowProps {
   user: { uid: string; email: string; fullName: string }
@@ -56,6 +58,9 @@ interface OnboardingState {
 
   // Step 6: PI Status
   isPrincipalInvestigator: boolean
+
+  // Step 6b: Supervisor Selection (for non-PIs) - Feature #8
+  supervisorId: string | null
 
   // Step 7: Create/Join Project (optional - can skip)
   createProject: boolean
@@ -85,11 +90,35 @@ type OnboardingStep =
   | "position"
   | "orcid"
   | "pi-status"
+  | "supervisor-selection"  // Feature #8: Add supervisor assignment step
   | "project-choice"
   | "project-details"
   | "account-details"
   | "review"
   | "complete"
+
+/**
+ * Splits a full name into first and last name components.
+ * Never uses email-like strings (e.g., "alice.smith") as names.
+ */
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const trimmed = fullName.trim()
+
+  // If empty or looks like an email local part (contains dots/underscores but no spaces), return empty
+  if (!trimmed || (!trimmed.includes(' ') && (trimmed.includes('.') || trimmed.includes('_')))) {
+    return { firstName: '', lastName: '' }
+  }
+
+  const parts = trimmed.split(/\s+/)
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '' }
+  }
+
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  }
+}
 
 export default function OnboardingFlow({ user, onComplete, onCancel }: OnboardingFlowProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome")
@@ -101,6 +130,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [institutes, setInstitutes] = useState<Institute[]>([])
   const [labs, setLabs] = useState<Lab[]>([])
   const [funders, setFunders] = useState<Funder[]>([])
+  const [profiles, setProfiles] = useState<PersonProfile[]>([])  // Feature #8: For supervisor selection
 
   // Search/create states
   const [orgSearchTerm, setOrgSearchTerm] = useState("")
@@ -116,17 +146,19 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [selectedFunderType, setSelectedFunderType] = useState<"public" | "private" | "charity" | "internal" | "government" | "industry" | "eu" | "other">("government")
 
   // Form state
+  const { firstName: initialFirstName, lastName: initialLastName } = splitFullName(user.fullName)
   const [state, setState] = useState<OnboardingState>({
     selectedOrganisation: null,
     selectedInstitute: null,
     selectedLab: null,
-    firstName: user.fullName.split(" ")[0] || "",
-    lastName: user.fullName.split(" ").slice(1).join(" ") || "",
+    firstName: initialFirstName,
+    lastName: initialLastName,
     email: user.email,
     phone: "",
     officeLocation: "",
     positionLevel: null,
     isPrincipalInvestigator: false,
+    supervisorId: null,  // Feature #8
     createProject: false,
     projectName: "",
     projectDescription: "",
@@ -162,8 +194,15 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       "position",
       "orcid",
       "pi-status",
-      "project-choice",
     ]
+
+    // Feature #8: Add supervisor selection for non-PIs
+    if (!state.isPrincipalInvestigator) {
+      base.push("supervisor-selection")
+    }
+
+    base.push("project-choice")
+
     if (state.createProject) {
       base.push("project-details", "account-details")
     }
@@ -199,6 +238,23 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
     }
   }, [])
 
+  // Feature #8: Load profiles when lab selected (for supervisor selection)
+  useEffect(() => {
+    if (!state.selectedLab?.id) {
+      setProfiles([])
+      return
+    }
+
+    const unsubscribe = subscribeToProfiles(
+      { labId: state.selectedLab.id },
+      (loadedProfiles) => {
+        setProfiles(loadedProfiles)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [state.selectedLab])
+
   // Load institutes when organisation selected with cleanup
   useEffect(() => {
     if (!state.selectedOrganisation) return
@@ -231,7 +287,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setOrganisations(orgs)
       return orgs
     } catch (err) {
-      console.error("Error loading organisations:", err)
+      logger.error("Error loading organisations", err)
       setError("Failed to load organisations")
       return null
     }
@@ -243,7 +299,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setInstitutes(insts)
       return insts
     } catch (err) {
-      console.error("Error loading institutes:", err)
+      logger.error("Error loading institutes", err)
       setError("Failed to load institutes")
       return null
     }
@@ -255,7 +311,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setLabs(labsList)
       return labsList
     } catch (err) {
-      console.error("Error loading labs:", err)
+      logger.error("Error loading labs", err)
       setError("Failed to load labs")
       return null
     }
@@ -267,7 +323,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setFunders(fundersList)
       return fundersList
     } catch (err) {
-      console.error("Error loading funders:", err)
+      logger.error("Error loading funders", err)
       setError("Failed to load funders")
       return null
     }
@@ -275,11 +331,14 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
   const handleCreateOrganisation = async () => {
     if (!orgSearchTerm.trim() || !selectedCountry) {
-      console.log("[OnboardingFlow] Validation failed - orgSearchTerm:", orgSearchTerm, "selectedCountry:", selectedCountry)
+      logger.debug("Organisation creation validation failed", {
+        orgSearchTerm,
+        selectedCountry,
+      })
       return
     }
 
-    console.log("[OnboardingFlow] Creating organisation with data:", {
+    logger.debug("Creating organisation", {
       name: orgSearchTerm.trim(),
       country: selectedCountry,
       type: "university",
@@ -295,13 +354,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         type: "university",
         createdBy: user.uid,
       })
-      console.log("[OnboardingFlow] Organisation created with ID:", orgId)
+      logger.info("Organisation created", { orgId })
 
       const orgs = await loadOrganisations()
-      console.log("[OnboardingFlow] Reloaded organisations, count:", orgs?.length)
+      logger.debug("Reloaded organisations", { count: orgs?.length })
       if (orgs) {
         const newOrg = orgs.find((o) => o.id === orgId)
-        console.log("[OnboardingFlow] Found new organisation:", newOrg)
+        logger.debug("Found new organisation", { organisation: newOrg })
         if (newOrg) {
           setState((s) => ({ ...s, selectedOrganisation: newOrg }))
           setShowCreateOrg(false)
@@ -310,7 +369,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         }
       }
     } catch (err) {
-      console.error("[OnboardingFlow] Error creating organisation:", err)
+      logger.error("Error creating organisation", err)
       setError(`Failed to create organisation: ${err instanceof Error ? err.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
@@ -339,7 +398,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         }
       }
     } catch (err) {
-      console.error("Error creating institute:", err)
+      logger.error("Error creating institute", err)
       setError("Failed to create institute")
     } finally {
       setLoading(false)
@@ -372,8 +431,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         }
       }
     } catch (err) {
-      console.error("Error creating lab:", err)
-      setError("Failed to create lab")
+      logger.error("Error creating lab", err)
+      // Fix Bug #7: Show specific error message instead of generic message
+      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
+      setError(`Failed to create lab: ${errorMessage}. Please try again or contact support if the issue persists.`)
     } finally {
       setLoading(false)
     }
@@ -440,8 +501,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         positionDisplayName: positionDisplay,
         position: positionDisplay, // Legacy
 
-        // Reporting
-        reportsToId: null,
+        // Reporting - Feature #8: Save supervisor assignment
+        reportsToId: state.supervisorId,
 
         // PI Status
         isPrincipalInvestigator: state.isPrincipalInvestigator,
@@ -578,7 +639,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         } as PersonProfile)
       }, 1500)
     } catch (err) {
-      console.error("Error completing onboarding:", err)
+      logger.error("Error completing onboarding", err)
       setError("Failed to complete onboarding. Please try again.")
       setLoading(false)
     }
@@ -1136,7 +1197,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                         verified: true,
                       })
                     } catch (err: any) {
-                      console.error("ORCID linking error:", err)
+                      logger.error("ORCID linking error", err)
                       setError(err.message || "Failed to connect ORCID")
                     } finally {
                       setOrcidConnecting(false)
@@ -1200,6 +1261,63 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                 <div className="font-semibold mb-2">No, I&apos;m not a PI</div>
                 <div className="text-sm text-gray-600">I work on projects led by other researchers</div>
               </button>
+            </div>
+          </div>
+        )
+
+      case "supervisor-selection":
+        // Feature #8: Supervisor assignment for non-PIs
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold">Select Your Supervisor</h2>
+              <p className="text-gray-600">
+                Who is your primary supervisor or PI?
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+              <p className="text-sm text-gray-700">
+                Your supervisor will be able to view your projects and track your progress.
+                You can update this later from your profile settings.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Label>Available Supervisors / PIs in {state.selectedLab?.name}</Label>
+              {profiles
+                .filter((p) => p.isPrincipalInvestigator && p.labId === state.selectedLab?.id)
+                .map((supervisor) => (
+                  <button
+                    key={supervisor.id}
+                    onClick={() => setState((s) => ({ ...s, supervisorId: supervisor.id }))}
+                    className={`w-full p-4 rounded-lg border-2 transition text-left ${
+                      state.supervisorId === supervisor.id
+                        ? "bg-blue-50 border-blue-600"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="font-semibold">
+                      {supervisor.firstName} {supervisor.lastName}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {supervisor.positionDisplayName || supervisor.position}
+                    </div>
+                  </button>
+                ))}
+              {profiles.filter((p) => p.isPrincipalInvestigator && p.labId === state.selectedLab?.id).length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No supervisors found in this lab yet.</p>
+                  <p className="text-sm mt-2">You can select a supervisor later from your profile.</p>
+                  <Button
+                    onClick={() => setState((s) => ({ ...s, supervisorId: null }))}
+                    variant="outline"
+                    className="mt-4"
+                  >
+                    Continue Without Supervisor
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )

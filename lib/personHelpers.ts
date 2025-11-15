@@ -18,10 +18,10 @@ export function getColorForProfile(profile: PersonProfile, index: number): strin
     "Martinez Lab": "#14b8a6",
     "Rodriguez Lab": "#8b5cf6"
   }
-  
+
   // If lab has assigned color, use variations of it
-  if (labColors[profile.lab]) {
-    const baseColor = labColors[profile.lab]
+  if (labColors[profile.labName]) {
+    const baseColor = labColors[profile.labName]
     // Create variations for different people in same lab
     const hueShift = index * 15
     return baseColor // Could enhance with actual color manipulation

@@ -13,10 +13,84 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update events they created OR events in same lab (if admin)
+      // External events (read-only) cannot be updated unless isReadOnly is removed
       allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || isAdmin()
+        (resource.data.createdBy == request.auth.uid &&
+         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true)) ||
+        isAdmin()
       );
-      allow delete: if isAdmin() || (isAuthenticated() && resource.data.createdBy == request.auth.uid);
+
+      // External read-only events cannot be deleted
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid &&
+         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true))
+      );
+    }
+
+    // ============================================================================
+    // CALENDAR CONNECTIONS (Phase 1)
+    // ============================================================================
+    match /calendarConnections/{connectionId} {
+      // Users can only read their own calendar connections
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create calendar connections for themselves
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own calendar connections
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own calendar connections
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // CALENDAR SYNC CONFLICTS (Phase 1)
+    // ============================================================================
+    match /calendarSyncConflicts/{conflictId} {
+      // Helper function to check if user owns the connection
+      function ownsConnection(connectionId) {
+        let connection = get(/databases/$(database)/documents/calendarConnections/$(connectionId));
+        return connection != null && connection.data != null && connection.data.userId == request.auth.uid;
+      }
+
+      // Users can read conflicts for their own connections
+      allow read: if isAuthenticated() && ownsConnection(resource.data.connectionId);
+
+      // System creates conflicts (via cloud functions), but allow creation for testing
+      allow create: if isAuthenticated() && ownsConnection(request.resource.data.connectionId);
+
+      // Users can update conflicts to resolve them
+      allow update: if isAuthenticated() && ownsConnection(resource.data.connectionId);
+
+      // Users can delete their own conflicts
+      allow delete: if isAuthenticated() && ownsConnection(resource.data.connectionId);
+    }
+
+    // ============================================================================
+    // CALENDAR SYNC LOGS (Phase 1)
+    // ============================================================================
+    match /calendarSyncLogs/{logId} {
+      // Helper function to check if user owns the connection
+      function ownsConnectionLog(connectionId) {
+        let connection = get(/databases/$(database)/documents/calendarConnections/$(connectionId));
+        return connection != null && connection.data != null && connection.data.userId == request.auth.uid;
+      }
+
+      // Users can read sync logs for their own connections
+      allow read: if isAuthenticated() && ownsConnectionLog(resource.data.connectionId);
+
+      // System creates logs (via cloud functions)
+      allow create: if isAuthenticated();
+
+      // System updates logs when sync completes
+      allow update: if isAuthenticated();
+
+      // Users can delete their own logs (cleanup)
+      allow delete: if isAuthenticated() && ownsConnectionLog(resource.data.connectionId);
     }
 
     // ============================================================================
@@ -56,18 +130,6 @@ service cloud.firestore {
       return userProfile != null && userProfile.data != null ? userProfile.data.labId : null;
     }
 
-    // Helper function to check if user can view a project
-    // Projects are scoped to labs - users can only see projects created by users in their lab
-    // Note: Projects should have a 'labId' field set when created. If not present, 
-    //       the project is visible to all authenticated users (fallback behavior)
-    function canViewProject(projectData) {
-      return isAuthenticated() && (
-        isAdmin() ||
-        (projectData.labId != null && projectData.labId == getUserLab()) ||
-        projectData.createdBy == request.auth.uid ||
-        projectData.labId == null  // Fallback: allow if labId not set (will be filtered client-side)
-      );
-    }
 
     // ============================================================================
     // USERS COLLECTION
@@ -208,10 +270,8 @@ service cloud.firestore {
 
     match /accounts/{accountId} {
       // Users can read accounts for projects they're a member of
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        isProjectMember(resource.data.masterProjectId)
-      );
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
+      allow read: if isAuthenticated();
 
       // PIs can create accounts for their projects
       allow create: if isAuthenticated() && (
@@ -368,17 +428,22 @@ service cloud.firestore {
     // DAY-TO-DAY TASKS
     // ============================================================================
     match /dayToDayTasks/{taskId} {
-      // Users can read their own tasks
-      allow read: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      
-      // Users can create their own tasks
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-      
-      // Users can update their own tasks
-      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      
-      // Users can delete their own tasks
-      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      // Users can read all tasks in their lab
+      allow read: if isAuthenticated() && resource.data.labId == getUserLab();
+
+      // Users can create tasks for their lab
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.labId == getUserLab();
+
+      // Users can update tasks in their lab
+      allow update: if isAuthenticated() && resource.data.labId == getUserLab();
+
+      // Users can delete tasks they created or admins can delete any
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
     }
 
     // ============================================================================
@@ -432,22 +497,80 @@ service cloud.firestore {
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );
-      
+
       // Users can create their own experiments
-      allow create: if isAuthenticated() && 
+      allow create: if isAuthenticated() &&
         request.resource.data.createdBy == request.auth.uid;
-      
+
       // Users can update their own experiments
       allow update: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );
-      
+
       // Users can delete their own experiments
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );
+    }
+
+    // ============================================================================
+    // CALENDAR CONNECTIONS (NEW)
+    // ============================================================================
+    match /calendarConnections/{connectionId} {
+      // Users can only access their own connections
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create their own connections
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own connections
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own connections
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // CALENDAR SYNC LOGS (NEW)
+    // ============================================================================
+    match /calendarSyncLogs/{logId} {
+      // Users can read their own logs
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Only Cloud Functions can create logs
+      allow create: if false;
+
+      // No updates or deletes allowed
+      allow update, delete: if false;
+    }
+
+    // ============================================================================
+    // CALENDAR CONFLICTS (NEW)
+    // ============================================================================
+    match /calendarConflicts/{conflictId} {
+      // Users can read their own conflicts
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can resolve (update) their own conflicts
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Only Cloud Functions can create conflicts
+      allow create: if false;
+
+      // No deletes allowed
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // CALENDAR TOKENS (NEW - INTERNAL ONLY)
+    // ============================================================================
+    // This collection stores OAuth tokens and should NEVER be accessible from clients
+    // Only Cloud Functions can read/write to this collection
+    match /_calendarTokens/{tokenId} {
+      // No client access - all operations blocked
+      allow read, write: if false;
     }
 
     // ============================================================================

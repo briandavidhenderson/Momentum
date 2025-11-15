@@ -9,7 +9,9 @@ import { Plus, Package, ShoppingCart, CheckCircle, Clock, Archive, AlertCircle }
 import { OrderCard } from "@/components/OrderCard"
 import { OrderEditDialog } from "@/components/OrderEditDialog"
 import { OrderFormDialog } from "@/components/OrderFormDialog"
-import { createInventoryItem, deleteOrder } from "@/lib/firestoreService"
+import { createInventoryItem, deleteOrder, updateInventoryItem, updateEquipment } from "@/lib/firestoreService"
+import { reconcileReceivedOrder, validateOrderForReconciliation } from "@/lib/orderInventoryUtils"
+import { useAppContext } from "@/lib/AppContext"
 import {
   DndContext,
   DragEndEvent,
@@ -22,6 +24,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { logger } from "@/lib/logger"
 
 // Droppable Column Component
 function DroppableColumn({
@@ -57,6 +60,9 @@ export function OrdersInventory() {
     handleUpdateInventoryLevel,
     handleDeleteInventoryItem,
   } = useOrders()
+
+  // Get equipment for reconciliation (linking new inventory to devices)
+  const { equipment } = useAppContext()
 
   const [showOrderDialog, setShowOrderDialog] = useState(false)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
@@ -135,31 +141,63 @@ export function OrdersInventory() {
     if (nowReceived && !order.receivedDate) {
       updates.receivedDate = new Date()
 
-      // Create inventory item when moved to received
+      // Reconcile order with inventory (check for existing items before creating)
       try {
-        const inventoryLevel: InventoryLevel = 'medium' // Default to medium stock level
+        // Validate order before reconciliation
+        const validation = validateOrderForReconciliation({
+          ...order,
+          ...updates
+        } as Order)
 
-        await createInventoryItem({
-          productName: order.productName,
-          catNum: order.catNum,
-          inventoryLevel,
-          receivedDate: new Date(),
-          lastOrderedDate: order.orderedDate || new Date(),
-          chargeToAccount: order.accountId,
-          category: order.category,
-          subcategory: order.subcategory,
-          priceExVAT: order.priceExVAT,
-          currentQuantity: 1,
-          minQuantity: 0,
-          notes: `Created from order received on ${new Date().toLocaleDateString()}`,
-          createdBy: currentUserProfile.id,
-        })
+        if (!validation.valid) {
+          logger.error('Order validation failed', { errors: validation.errors })
+          alert(`Cannot reconcile order: ${validation.errors.join(', ')}`)
+          return
+        }
+
+        // Reconcile with existing inventory
+        const result = reconcileReceivedOrder(
+          { ...order, ...updates } as Order,
+          inventory || [],
+          equipment || []
+        )
+
+        if (result.action === 'CREATE') {
+          // Create new inventory item
+          await createInventoryItem({
+            ...result.inventoryItem,
+            createdBy: currentUserProfile.id,
+          })
+          if (result.message) logger.info(result.message)
+        } else {
+          // Update existing inventory item
+          await updateInventoryItem(result.inventoryItem.id, result.inventoryItem)
+          if (result.message) logger.info(result.message)
+        }
+
+        // If supply was linked to a device, update the device
+        if (result.updatedDevices) {
+          for (const device of result.updatedDevices) {
+            await updateEquipment(device.id, device)
+            logger.info('Linked inventory item to device', {
+              productName: result.inventoryItem.productName,
+              deviceName: device.name,
+            })
+          }
+        }
       } catch (error) {
-        console.error('Failed to create inventory item:', error)
+        logger.error('Failed to reconcile inventory', error)
+        alert('Failed to update inventory. Please try again.')
+        return // Don't update order status if inventory reconciliation failed
       }
     }
 
-    await handleUpdateOrder(orderId, updates)
+    try {
+      await handleUpdateOrder(orderId, updates)
+    } catch (error) {
+      console.error('Failed to update order status:', error)
+      // Error is already shown by the hook
+    }
   }
 
   const handleEdit = (order: Order) => {
@@ -167,8 +205,13 @@ export function OrdersInventory() {
   }
 
   const handleSaveEdit = async (orderId: string, updates: Partial<Order>) => {
-    await handleUpdateOrder(orderId, updates)
-    setEditingOrder(null)
+    try {
+      await handleUpdateOrder(orderId, updates)
+      setEditingOrder(null)
+    } catch (error) {
+      console.error('Failed to save order edits:', error)
+      // Error is already shown by the hook, keep modal open for user to retry
+    }
   }
 
   const handleDelete = async (orderId: string) => {
@@ -179,38 +222,36 @@ export function OrdersInventory() {
 
   const activeOrder = activeId ? orders?.find(o => o.id === activeId) : null
 
-  const getColumnColor = (status: OrderStatus) => {
+  const getColumnStyles = (status: OrderStatus) => {
     switch (status) {
       case 'to-order':
-        return 'bg-yellow-50 border-yellow-300'
+        return {
+          container: 'bg-white border-gray-200',
+          header: 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white',
+          icon: <Clock className="h-5 w-5 text-white" />,
+          title: 'To Order'
+        }
       case 'ordered':
-        return 'bg-blue-50 border-blue-300'
+        return {
+          container: 'bg-white border-gray-200',
+          header: 'bg-gradient-to-r from-blue-500 to-blue-600 text-white',
+          icon: <ShoppingCart className="h-5 w-5 text-white" />,
+          title: 'Ordered'
+        }
       case 'received':
-        return 'bg-green-50 border-green-300'
+        return {
+          container: 'bg-white border-gray-200',
+          header: 'bg-gradient-to-r from-green-500 to-green-600 text-white',
+          icon: <CheckCircle className="h-5 w-5 text-white" />,
+          title: 'Received'
+        }
       default:
-        return 'bg-gray-50 border-gray-300'
-    }
-  }
-
-  const getColumnIcon = (status: OrderStatus) => {
-    switch (status) {
-      case 'to-order':
-        return <Clock className="h-5 w-5 text-yellow-600" />
-      case 'ordered':
-        return <ShoppingCart className="h-5 w-5 text-blue-600" />
-      case 'received':
-        return <CheckCircle className="h-5 w-5 text-green-600" />
-    }
-  }
-
-  const getColumnTitle = (status: OrderStatus) => {
-    switch (status) {
-      case 'to-order':
-        return 'To Order'
-      case 'ordered':
-        return 'Ordered'
-      case 'received':
-        return 'Received'
+        return {
+          container: 'bg-white border-gray-200',
+          header: 'bg-gray-500 text-white',
+          icon: <Package className="h-5 w-5 text-white" />,
+          title: 'Unknown'
+        }
     }
   }
 
@@ -274,11 +315,11 @@ export function OrdersInventory() {
       {activeTab === 'orders' && (
         <div className="space-y-4">
           {/* Stats Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-card rounded-lg p-4 border border-border">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-card rounded-lg p-5 border border-border shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-500/10 rounded">
-                  <Clock className="h-5 w-5 text-yellow-500" />
+                <div className="p-2.5 bg-yellow-500/10 rounded-lg">
+                  <Clock className="h-5 w-5 text-yellow-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -288,10 +329,10 @@ export function OrdersInventory() {
                 </div>
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4 border border-border">
+            <div className="bg-card rounded-lg p-5 border border-border shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/10 rounded">
-                  <ShoppingCart className="h-5 w-5 text-blue-500" />
+                <div className="p-2.5 bg-blue-500/10 rounded-lg">
+                  <ShoppingCart className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -301,10 +342,10 @@ export function OrdersInventory() {
                 </div>
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4 border border-border">
+            <div className="bg-card rounded-lg p-5 border border-border shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                <div className="p-2.5 bg-green-500/10 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -314,10 +355,10 @@ export function OrdersInventory() {
                 </div>
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4 border border-border">
+            <div className="bg-card rounded-lg p-5 border border-border shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-500/10 rounded">
-                  <Package className="h-5 w-5 text-purple-500" />
+                <div className="p-2.5 bg-purple-500/10 rounded-lg">
+                  <Package className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -336,54 +377,59 @@ export function OrdersInventory() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {(['to-order', 'ordered', 'received'] as OrderStatus[]).map(status => (
-                <DroppableColumn
-                  key={status}
-                  id={status}
-                  className={`rounded-lg border-2 p-4 ${getColumnColor(status)} min-h-[500px] transition-all`}
-                >
-                  <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-300">
-                    {getColumnIcon(status)}
-                    <h3 className="font-bold text-foreground text-lg">
-                      {getColumnTitle(status)}
-                    </h3>
-                    <span className="ml-auto bg-white px-2 py-1 rounded text-sm font-semibold">
-                      {status === 'to-order' && ordersByStatus.toOrder.length}
-                      {status === 'ordered' && ordersByStatus.ordered.length}
-                      {status === 'received' && ordersByStatus.received.length}
-                    </span>
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(['to-order', 'ordered', 'received'] as OrderStatus[]).map(status => {
+                const columnStyles = getColumnStyles(status)
+                const itemCount = status === 'to-order' ? ordersByStatus.toOrder.length :
+                                 status === 'ordered' ? ordersByStatus.ordered.length :
+                                 ordersByStatus.received.length
+                const items = status === 'to-order' ? ordersByStatus.toOrder :
+                             status === 'ordered' ? ordersByStatus.ordered :
+                             ordersByStatus.received
 
-                  <SortableContext
+                return (
+                  <DroppableColumn
+                    key={status}
                     id={status}
-                    items={(status === 'to-order' ? ordersByStatus.toOrder :
-                           status === 'ordered' ? ordersByStatus.ordered :
-                           ordersByStatus.received).map(o => o.id)}
-                    strategy={verticalListSortingStrategy}
+                    className={`rounded-xl border-2 overflow-hidden ${columnStyles.container} min-h-[500px] transition-all shadow-card`}
                   >
-                    <div className="space-y-3">
-                      {(status === 'to-order' ? ordersByStatus.toOrder :
-                        status === 'ordered' ? ordersByStatus.ordered :
-                        ordersByStatus.received).map(order => (
-                        <OrderCard
-                          key={order.id}
-                          order={order}
-                          onEdit={handleEdit}
-                          onDelete={handleDelete}
-                        />
-                      ))}
-                      {(status === 'to-order' ? ordersByStatus.toOrder :
-                        status === 'ordered' ? ordersByStatus.ordered :
-                        ordersByStatus.received).length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          Drag orders here
-                        </div>
-                      )}
+                    {/* Column Header with saturated color */}
+                    <div className={`flex items-center gap-3 px-4 py-3 ${columnStyles.header}`}>
+                      {columnStyles.icon}
+                      <h3 className="font-semibold text-sm uppercase tracking-wide flex-1">
+                        {columnStyles.title}
+                      </h3>
+                      <span className="bg-white/20 px-2.5 py-1 rounded-full text-sm font-bold">
+                        {itemCount}
+                      </span>
                     </div>
-                  </SortableContext>
-                </DroppableColumn>
-              ))}
+
+                    <SortableContext
+                      id={status}
+                      items={items.map(o => o.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="p-4 space-y-3">
+                        {items.map(order => (
+                          <OrderCard
+                            key={order.id}
+                            order={order}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                          />
+                        ))}
+                        {items.length === 0 && (
+                          <div className="empty-drop-zone flex flex-col items-center justify-center py-12">
+                            <Package className="h-12 w-12 mb-3 text-gray-300" />
+                            <p className="text-sm font-medium">Drop orders here</p>
+                            <p className="text-xs mt-1">Drag and drop to organize</p>
+                          </div>
+                        )}
+                      </div>
+                    </SortableContext>
+                  </DroppableColumn>
+                )
+              })}
             </div>
 
             <DragOverlay>
@@ -405,11 +451,11 @@ export function OrdersInventory() {
       {activeTab === 'inventory' && (
         <div className="space-y-4">
           {/* Inventory Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-card rounded-lg p-4 border border-red-300">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-card rounded-lg p-5 border border-red-300 shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-500/10 rounded">
-                  <AlertCircle className="h-5 w-5 text-red-500" />
+                <div className="p-2.5 bg-red-500/10 rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -419,10 +465,10 @@ export function OrdersInventory() {
                 </div>
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4 border border-orange-300">
+            <div className="bg-card rounded-lg p-5 border border-orange-300 shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-500/10 rounded">
-                  <Clock className="h-5 w-5 text-orange-500" />
+                <div className="p-2.5 bg-orange-500/10 rounded-lg">
+                  <Clock className="h-5 w-5 text-orange-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -432,10 +478,10 @@ export function OrdersInventory() {
                 </div>
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4 border border-green-300">
+            <div className="bg-card rounded-lg p-5 border border-green-300 shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
+                <div className="p-2.5 bg-green-500/10 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">
@@ -445,10 +491,10 @@ export function OrdersInventory() {
                 </div>
               </div>
             </div>
-            <div className="bg-card rounded-lg p-4 border border-border">
+            <div className="bg-card rounded-lg p-5 border border-border shadow-card hover:shadow-card-hover transition-all">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-500/10 rounded">
-                  <Archive className="h-5 w-5 text-purple-500" />
+                <div className="p-2.5 bg-purple-500/10 rounded-lg">
+                  <Archive className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground">

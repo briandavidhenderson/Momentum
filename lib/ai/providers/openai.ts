@@ -28,6 +28,8 @@ import {
   IMAGE_OCR_PROMPT,
 } from '../prompts'
 
+import { logger } from '../../logger'
+
 export class OpenAIProvider implements AIProvider {
   name = 'OpenAI'
   capabilities: AICapability[] = ['stt', 'ocr', 'vlm', 'llm']
@@ -38,7 +40,7 @@ export class OpenAIProvider implements AIProvider {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.NEXT_PUBLIC_OPENAI_API_KEY || ''
     if (!this.apiKey) {
-      console.warn('[OpenAI] No API key provided')
+      logger.warn('OpenAI: No API key provided')
     }
   }
 

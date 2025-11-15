@@ -14,6 +14,9 @@ node_modules/
 dist/
 build/
 
+# TypeScript build cache
+*.tsbuildinfo
+
 # Logs
 *.log
 # Next.js build output
@@ -28,3 +31,6 @@ firebase/functions/lib/
 .env.local
 .env
 .env.*
+
+# Code protection snapshots
+.snapshots/

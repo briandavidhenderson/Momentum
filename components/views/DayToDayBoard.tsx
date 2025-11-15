@@ -18,17 +18,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Plus, GripVertical, Trash2, Edit2, Clock } from "lucide-react"
-import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent } from "@dnd-kit/core"
+import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { useAppContext } from "@/lib/AppContext"
+import { notifyTaskAssigned, notifyTaskReassigned } from "@/lib/notificationUtils"
+import { PersonProfile } from "@/lib/types"
+import { logger } from "@/lib/logger"
 
-function DroppableColumn({ 
-  id, 
-  title, 
-  tasks, 
+function DroppableColumn({
+  id,
+  title,
+  tasks,
   children,
-  count 
-}: { 
+  count
+}: {
   id: string
   title: string
   tasks: DayToDayTask[]
@@ -39,6 +44,9 @@ function DroppableColumn({
     id: `column-${id}`,
     data: { type: "column", status: id },
   })
+
+  // Feature #2: Enable sortable items within column
+  const taskIds = tasks.map(t => t.id)
 
   return (
     <div
@@ -55,9 +63,11 @@ function DroppableColumn({
           <Badge variant="secondary">{count}</Badge>
         </div>
       </div>
-      <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-        {children}
-      </div>
+      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+        <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+          {children}
+        </div>
+      </SortableContext>
     </div>
   )
 }
@@ -65,27 +75,30 @@ function DroppableColumn({
 function DraggableTaskCard({
   task,
   people,
+  projects,
   onEdit,
   onDelete,
 }: {
   task: DayToDayTask
   people: Person[]
+  projects: any[]
   onEdit: () => void
   onDelete: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  // Feature #2: Use useSortable for both column switching and reordering
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: "task", task },
   })
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0.5 : 1,
-      }
-    : undefined
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
 
   const assignee = (people || []).find((p) => p.id === task.assigneeId)
+  const linkedProject = (projects || []).find((p: any) => p.id === task.linkedProjectId)
 
   const importanceColors = {
     low: "bg-gray-100 text-gray-700",
@@ -139,6 +152,12 @@ function DraggableTaskCard({
               {task.importance}
             </Badge>
 
+            {linkedProject && (
+              <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                📁 {linkedProject.name}
+              </Badge>
+            )}
+
             {task.dueDate && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
@@ -167,12 +186,20 @@ function DayToDayTaskEditDialog({
   onOpenChange,
   task,
   people,
+  allProfiles,
+  currentUserProfile,
+  projects,
+  workpackages,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   task: DayToDayTask | null
   people: Person[]
+  allProfiles: PersonProfile[]
+  currentUserProfile: PersonProfile | null
+  projects: any[]
+  workpackages: any[]
   onSave: (taskId: string, updates: Partial<DayToDayTask>) => void
 }) {
   const [title, setTitle] = useState("")
@@ -180,6 +207,8 @@ function DayToDayTaskEditDialog({
   const [importance, setImportance] = useState<ImportanceLevel>("medium")
   const [assigneeId, setAssigneeId] = useState<string>("")
   const [dueDate, setDueDate] = useState("")
+  const [linkedProjectId, setLinkedProjectId] = useState<string>("")
+  const [linkedTaskId, setLinkedTaskId] = useState<string>("")
 
   useEffect(() => {
     if (task) {
@@ -188,28 +217,88 @@ function DayToDayTaskEditDialog({
       setImportance(task.importance)
       setAssigneeId(task.assigneeId || "")
       setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "")
+      setLinkedProjectId(task.linkedProjectId || "")
+      setLinkedTaskId(task.linkedTaskId || "")
     } else {
       setTitle("")
       setDescription("")
       setImportance("medium")
       setAssigneeId("")
       setDueDate("")
+      setLinkedProjectId("")
+      setLinkedTaskId("")
     }
   }, [task, open])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!task || !title.trim()) return
 
-    onSave(task.id, {
+    const updates: Partial<DayToDayTask> = {
       title: title.trim(),
       description: description.trim() || undefined,
       importance,
       assigneeId: assigneeId || undefined,
       dueDate: dueDate ? new Date(dueDate) : undefined,
-    })
+      linkedProjectId: linkedProjectId || undefined,
+      linkedTaskId: linkedTaskId || undefined,
+    }
+
+    onSave(task.id, updates)
+
+    // PHASE 4: Trigger task assignment notifications
+    if (currentUserProfile && allProfiles) {
+      try {
+        const oldAssigneeId = task.assigneeId
+        const newAssigneeId = assigneeId || undefined
+
+        // Check if assignee changed
+        if (oldAssigneeId !== newAssigneeId) {
+          // Task was assigned to someone new
+          if (newAssigneeId && newAssigneeId !== currentUserProfile.id) {
+            const newAssignee = allProfiles.find(p => p.id === newAssigneeId)
+
+            if (newAssignee) {
+              // Was previously assigned to someone else (reassignment)
+              if (oldAssigneeId && oldAssigneeId !== currentUserProfile.id) {
+                const oldAssignee = allProfiles.find(p => p.id === oldAssigneeId)
+                if (oldAssignee) {
+                  await notifyTaskReassigned(
+                    { ...task, ...updates },
+                    newAssignee,
+                    oldAssignee,
+                    currentUserProfile
+                  )
+                } else {
+                  // Old assignee not found, just notify new assignee
+                  await notifyTaskAssigned({ ...task, ...updates }, newAssignee, currentUserProfile)
+                }
+              } else {
+                // First time assignment
+                await notifyTaskAssigned({ ...task, ...updates }, newAssignee, currentUserProfile)
+              }
+            }
+          }
+          // Task was unassigned from someone
+          else if (!newAssigneeId && oldAssigneeId && oldAssigneeId !== currentUserProfile.id) {
+            // Could notify old assignee that task was unassigned, but this is typically not needed
+            // as it's shown in the UI
+          }
+        }
+      } catch (error) {
+        logger.error('Error sending task assignment notification', error)
+        // Don't block the UI on notification failure
+      }
+    }
 
     onOpenChange(false)
   }
+
+  // Get tasks from selected project's workpackages
+  const availableTasks = linkedProjectId
+    ? workpackages
+        .filter((wp: any) => wp.profileProjectId === linkedProjectId)
+        .flatMap((wp: any) => wp.tasks || [])
+    : []
 
   const importanceOptions: { value: ImportanceLevel; label: string }[] = [
     { value: "low", label: "Low" },
@@ -300,6 +389,53 @@ function DayToDayTaskEditDialog({
               onChange={(e) => setDueDate(e.target.value)}
             />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="linkedProject">Linked Project</Label>
+            <select
+              id="linkedProject"
+              value={linkedProjectId}
+              onChange={(e) => {
+                setLinkedProjectId(e.target.value)
+                setLinkedTaskId("") // Reset task selection when project changes
+              }}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">None</option>
+              {(projects || []).map((project: any) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            {linkedProjectId && (
+              <p className="text-xs text-muted-foreground">
+                This task will appear in the project&apos;s activity feed
+              </p>
+            )}
+          </div>
+          {linkedProjectId && availableTasks.length > 0 && (
+            <div className="grid gap-2">
+              <Label htmlFor="linkedTask">Linked Task/Workpackage</Label>
+              <select
+                id="linkedTask"
+                value={linkedTaskId}
+                onChange={(e) => setLinkedTaskId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">None</option>
+                {availableTasks.map((task: any) => (
+                  <option key={task.id} value={task.id}>
+                    {task.name}
+                  </option>
+                ))}
+              </select>
+              {linkedTaskId && (
+                <p className="text-xs text-muted-foreground">
+                  This day-to-day task is related to a project task
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -319,6 +455,10 @@ export function DayToDayBoard() {
   const {
     dayToDayTasks,
     people,
+    allProfiles,
+    currentUserProfile,
+    projects,
+    workpackages,
     handleCreateDayToDayTask: onCreateTask,
     handleUpdateDayToDayTask: onUpdateTask,
     handleDeleteDayToDayTask: onDeleteTask,
@@ -326,6 +466,8 @@ export function DayToDayBoard() {
   } = useAppContext()
 
   const tasks = (dayToDayTasks || []) as DayToDayTask[]
+  const allProjects = (projects || [])
+  const allWorkpackages = (workpackages || [])
 
   const [activeTask, setActiveTask] = useState<DayToDayTask | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState("")
@@ -369,21 +511,55 @@ export function DayToDayBoard() {
     }
   }
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveTask(null)
 
     if (!over) return
 
-    const task = active.data.current?.task as DayToDayTask | undefined
+    const activeTask = active.data.current?.task as DayToDayTask | undefined
     const overData = over.data.current
+    const overTask = overData?.task as DayToDayTask | undefined
 
-    if (!task || !overData) return
+    if (!activeTask) return
 
-    if (overData.type === "column") {
+    // Feature #2: Handle reordering within same column
+    if (overTask && activeTask.status === overTask.status) {
+      // Reordering within same column
+      const tasksInColumn = tasks.filter(t => t.status === activeTask.status)
+      const oldIndex = tasksInColumn.findIndex(t => t.id === activeTask.id)
+      const newIndex = tasksInColumn.findIndex(t => t.id === overTask.id)
+
+      if (oldIndex !== newIndex) {
+        // Reorder tasks
+        const reorderedTasks = arrayMove(tasksInColumn, oldIndex, newIndex)
+
+        // Update order field for all affected tasks
+        const updates = reorderedTasks.map((task, index) => ({
+          id: task.id,
+          order: index,
+        }))
+
+        // Batch update tasks
+        Promise.all(
+          updates.map(update => onUpdateTask(update.id, { order: update.order }))
+        ).catch(error => {
+          logger.error('Error reordering tasks', error)
+        })
+      }
+      return
+    }
+
+    // Handle moving to different column
+    if (overData?.type === "column") {
       const newStatus = overData.status as TaskStatus
       if (task.status !== newStatus) {
-        onMoveTask(task.id, newStatus)
+        try {
+          await onMoveTask(task.id, newStatus)
+        } catch (error) {
+          console.error('Failed to move task:', error)
+          // Error is already shown by the hook, just log here
+        }
       }
     }
   }
@@ -498,6 +674,7 @@ export function DayToDayBoard() {
                 key={task.id}
                 task={task}
                 people={people}
+                projects={allProjects}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
@@ -523,6 +700,7 @@ export function DayToDayBoard() {
                 key={task.id}
                 task={task}
                 people={people}
+                projects={allProjects}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
@@ -548,6 +726,7 @@ export function DayToDayBoard() {
                 key={task.id}
                 task={task}
                 people={people}
+                projects={allProjects}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
@@ -590,6 +769,10 @@ export function DayToDayBoard() {
         }}
         task={editingTask}
         people={people}
+        allProfiles={allProfiles || []}
+        currentUserProfile={currentUserProfile}
+        projects={allProjects}
+        workpackages={allWorkpackages}
         onSave={onUpdateTask}
       />
     </div>
