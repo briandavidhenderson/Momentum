@@ -11,7 +11,7 @@ import { useELN } from './hooks/useELN';
 import { useCalendar } from './hooks/useCalendar';
 import { useInterface } from './hooks/useInterface';
 import { useUI } from './hooks/useUI';
-import { useFunding } from './hooks/useFunding';
+import { useProjectColor } from './hooks/useProjectColor';
 import { useProfiles } from './useProfiles';
 import { personProfilesToPeople } from './personHelpers';
 import { PersonProfile, Person } from './types';
@@ -48,7 +48,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
   const calendar = useCalendar();
   const interfaceState = useInterface();
   const uiState = useUI();
-  const funding = useFunding(auth.currentUserProfile?.labId, auth.currentUser?.uid);
+  const projectColorState = useProjectColor();
 
   // Fix Bug #3 & #4: Add profiles and convert to people for UI
   const allProfiles = useProfiles(auth.currentUserProfile?.labId || null);
@@ -66,6 +66,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     ...calendar,
     ...interfaceState,
     ...uiState,
+    ...projectColorState,
     allProfiles,  // Expose profiles for components that need full profile data
     people,       // Expose people for UI components (assignee dropdowns, etc.)
   };

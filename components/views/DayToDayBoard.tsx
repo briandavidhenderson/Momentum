@@ -534,15 +534,15 @@ export function DayToDayBoard() {
         // Reorder tasks
         const reorderedTasks = arrayMove(tasksInColumn, oldIndex, newIndex)
 
-        // Update order field for all affected tasks
+        // Update order field for all affected tasks (with optimistic updates for instant feedback)
         const updates = reorderedTasks.map((task, index) => ({
           id: task.id,
           order: index,
         }))
 
-        // Batch update tasks
+        // Batch update tasks with optimistic UI - no await for snappy response
         Promise.all(
-          updates.map(update => onUpdateTask(update.id, { order: update.order }))
+          updates.map(update => onUpdateTask(update.id, { order: update.order }, true))
         ).catch(error => {
           logger.error('Error reordering tasks', error)
         })
@@ -550,11 +550,12 @@ export function DayToDayBoard() {
       return
     }
 
-    // Handle moving to different column
+    // Handle moving to different column (optimistic update for instant feedback)
     if (overData?.type === "column") {
       const newStatus = overData.status as TaskStatus
       if (activeTask.status !== newStatus) {
-        onMoveTask(activeTask.id, newStatus)
+        // Use optimistic update - no await, immediate UI response
+        onMoveTask(activeTask.id, newStatus, true)
       }
     }
   }
