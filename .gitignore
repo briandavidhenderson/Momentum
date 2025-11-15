@@ -13,6 +13,7 @@ __pycache__/
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 
 # TypeScript build cache
 *.tsbuildinfo
