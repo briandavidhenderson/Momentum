@@ -27,9 +27,9 @@ if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBA
     connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true })
     connectFirestoreEmulator(db, "localhost", 8080)
     connectStorageEmulator(storage, "localhost", 9199)
-    console.log("Connected to Firebase emulators")
+    logger.info("Connected to Firebase emulators")
   } catch (error) {
-    console.log("Emulators already connected or not available")
+    logger.debug("Emulators already connected or not available")
   }
 }
 

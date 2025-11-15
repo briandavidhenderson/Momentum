@@ -78,9 +78,9 @@ export function reconcileReceivedOrder(
         message: `Updated ${existingItem.productName}: +${quantityReceived} units`
       }
     } else {
-      console.warn(
-        `Order references inventory item ${order.sourceInventoryItemId} but it was not found. Creating new item.`
-      )
+      logger.warn('Order references missing inventory item - creating new', {
+        sourceInventoryItemId: order.sourceInventoryItemId,
+      })
       // Fall through to create new item
     }
   }
@@ -301,7 +301,7 @@ export function reconcileMultipleOrders(
     const validation = validateOrderForReconciliation(order)
 
     if (!validation.valid) {
-      console.error(`Invalid order ${order.id}:`, validation.errors)
+      logger.error('Invalid order for reconciliation', { orderId: order.id, errors: validation.errors })
       errors++
       continue
     }
@@ -322,7 +322,7 @@ export function reconcileMultipleOrders(
         )
       }
     } catch (error) {
-      console.error(`Error reconciling order ${order.id}:`, error)
+      logger.error('Error reconciling order', error, { orderId: order.id })
       errors++
     }
   }

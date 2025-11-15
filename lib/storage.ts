@@ -35,7 +35,7 @@ export async function uploadFile(
       type: file.type
     }
   } catch (error) {
-    console.error('Failed to upload file:', error)
+    logger.error('Failed to upload file', error)
     throw new Error(`Failed to upload file: ${error}`)
   }
 }
@@ -48,7 +48,7 @@ export async function deleteFile(path: string): Promise<void> {
     const storageRef = ref(storage, path)
     await deleteObject(storageRef)
   } catch (error) {
-    console.error('Failed to delete file:', error)
+    logger.error('Failed to delete file', error)
     // Don't throw - file might not exist
   }
 }

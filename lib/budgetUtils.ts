@@ -51,7 +51,7 @@ export async function checkSufficientFunds(
       available
     }
   } catch (error) {
-    console.error('Error checking funds:', error)
+    logger.error('Error checking funds', error)
     return {
       sufficient: false,
       available: 0,
@@ -142,7 +142,7 @@ export async function updateAccountBudget(
       })
     })
   } catch (error) {
-    console.error('Error updating account budget:', error)
+    logger.error('Error updating account budget', error)
     throw error
   }
 }
@@ -193,7 +193,7 @@ export async function getAccountBudgetSummary(accountId: string): Promise<{
       currency: account.currency
     }
   } catch (error) {
-    console.error('Error getting budget summary:', error)
+    logger.error('Error getting budget summary', error)
     return null
   }
 }
