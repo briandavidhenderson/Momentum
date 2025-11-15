@@ -131,21 +131,12 @@ export function EquipmentEditorDialog({
     onSave(updatedDevice)
   }
 
+  // DEPRECATED: Inline supply editor removed - use inventory-first approach
+  // Supplies should be added via AddSupplyDialog which creates InventoryItem first
   const handleAddSupplyRow = () => {
-    if (!newSupply.name.trim()) return
-
-    const supply: EquipmentSupply = {
-      id: `supply-${Date.now()}`,
-      name: newSupply.name.trim(),
-      price: parseFloat(newSupply.price) || 0,
-      qty: parseInt(newSupply.qty) || 0,
-      minQty: parseInt(newSupply.minQty) || 0,
-      burnPerWeek: parseFloat(newSupply.burnPerWeek) || 0,
-    }
-
-    setSupplies([...supplies, supply])
-    onAddSupply(supply)
-    setNewSupply({ name: "", price: "", qty: "", minQty: "", burnPerWeek: "" })
+    console.warn('Inline supply editor is deprecated. Please use "Add Supply" button in main equipment panel.')
+    // This functionality has been removed in favor of inventory-first approach
+    // where supplies are created from the inventory panel, then linked to devices
   }
 
   const handleRemoveSupply = (index: number) => {
@@ -269,139 +260,17 @@ export function EquipmentEditorDialog({
       </div>
 
       <h4 className="font-semibold mb-3">Reagents & Consumables</h4>
-      <div className="border border-border rounded-lg overflow-hidden mb-4">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="text-left p-2">Name</th>
-              <th className="text-left p-2">Price (€)</th>
-              <th className="text-left p-2">Qty</th>
-              <th className="text-left p-2">Min Qty</th>
-              <th className="text-left p-2">Burn / wk</th>
-              <th className="text-left p-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {supplies.map((supply, idx) => (
-              <tr key={supply.id} className="border-t border-border">
-                <td className="p-2">
-                  <Input
-                    value={supply.name}
-                    onChange={(e) => {
-                      const updated = [...supplies]
-                      updated[idx] = { ...updated[idx], name: e.target.value }
-                      setSupplies(updated)
-                    }}
-                  />
-                </td>
-                <td className="p-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={supply.price || ""}
-                    onChange={(e) => {
-                      const updated = [...supplies]
-                      const value = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0
-                      updated[idx] = { ...updated[idx], price: value }
-                      setSupplies(updated)
-                    }}
-                    placeholder="0.00"
-                  />
-                </td>
-                <td className="p-2">
-                  <Input
-                    type="number"
-                    value={supply.qty || ""}
-                    onChange={(e) => {
-                      const updated = [...supplies]
-                      const value = e.target.value === "" ? 0 : parseInt(e.target.value) || 0
-                      updated[idx] = { ...updated[idx], qty: value }
-                      setSupplies(updated)
-                    }}
-                    placeholder="0"
-                  />
-                </td>
-                <td className="p-2">
-                  <Input
-                    type="number"
-                    value={supply.minQty || ""}
-                    onChange={(e) => {
-                      const updated = [...supplies]
-                      const value = e.target.value === "" ? 0 : parseInt(e.target.value) || 0
-                      updated[idx] = { ...updated[idx], minQty: value }
-                      setSupplies(updated)
-                    }}
-                    placeholder="0"
-                  />
-                </td>
-                <td className="p-2">
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={supply.burnPerWeek || ""}
-                    onChange={(e) => {
-                      const updated = [...supplies]
-                      const value = e.target.value === "" ? 0 : parseFloat(e.target.value) || 0
-                      updated[idx] = { ...updated[idx], burnPerWeek: value }
-                      setSupplies(updated)
-                    }}
-                    placeholder="0.00"
-                  />
-                </td>
-                <td className="p-2">
-                  <Button size="sm" variant="ghost" onClick={() => handleRemoveSupply(idx)}>
-                    Delete
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex gap-2 mb-4">
-        <Input
-          placeholder="Item name"
-          value={newSupply.name}
-          onChange={(e) => setNewSupply({ ...newSupply, name: e.target.value })}
-          className="flex-2"
-        />
-        <Input
-          type="number"
-          step="0.01"
-          placeholder="Price (€)"
-          value={newSupply.price}
-          onChange={(e) => setNewSupply({ ...newSupply, price: e.target.value })}
-          className="flex-1"
-        />
-        <Input
-          type="number"
-          placeholder="Qty"
-          value={newSupply.qty}
-          onChange={(e) => setNewSupply({ ...newSupply, qty: e.target.value })}
-          className="flex-1"
-        />
-        <Input
-          type="number"
-          placeholder="Min Qty"
-          value={newSupply.minQty}
-          onChange={(e) => setNewSupply({ ...newSupply, minQty: e.target.value })}
-          className="flex-1"
-        />
-        <Input
-          type="number"
-          step="0.01"
-          placeholder="Burn/wk"
-          value={newSupply.burnPerWeek}
-          onChange={(e) => setNewSupply({ ...newSupply, burnPerWeek: e.target.value })}
-          className="flex-1"
-        />
-        <Button
-          onClick={handleAddSupplyRow}
-          className="bg-brand-500 hover:bg-brand-600 text-white"
-        >
-          + Add Item
-        </Button>
+      {/* DEPRECATED: Inline supply editor removed
+          Use the "Add Supply" button in the main equipment panel instead.
+          Supplies are now managed through the inventory-first approach:
+          1. Create/select inventory item in Orders & Inventory tab
+          2. Link to equipment device via "Add Supply" dialog
+      */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+        <p className="text-sm text-yellow-800">
+          <strong>Note:</strong> To add supplies to this device, close this dialog and use the "Add Supply" button
+          in the main equipment panel. Supplies are now linked from the inventory system.
+        </p>
       </div>
 
       <h4 className="font-semibold mb-3 mt-6">Standard Operating Procedures (SOPs)</h4>
