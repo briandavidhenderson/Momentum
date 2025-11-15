@@ -709,6 +709,35 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // NOTIFICATIONS
+    // ============================================================================
+    // Notifications for equipment, inventory, budget, and task events
+    match /notifications/{notificationId} {
+      // Users can read only their own notifications
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userId == getUserProfileId()
+      );
+
+      // Authenticated users can create notifications
+      // (triggered by domain events like low stock, low budget, task assignment)
+      allow create: if isAuthenticated();
+
+      // Users can update their own notifications (e.g., mark as read)
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userId == getUserProfileId()
+      );
+
+      // Users can delete their own notifications, admins can delete any
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userId == getUserProfileId() ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
     // DEFAULT DENY (catch-all)
     // ============================================================================
     match /{document=**} {

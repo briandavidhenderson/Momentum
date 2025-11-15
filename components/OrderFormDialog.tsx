@@ -1,10 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { Order, FundingAccount, FundingAllocation } from "@/lib/types"
-import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { useState, useMemo } from "react"
+import { Order } from "@/lib/types"
+import { useAppContext } from "@/lib/AppContext"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +17,8 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, DollarSign } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
+import { notifyLowBudget, notifyBudgetExhausted, shouldSendLowBudgetNotification } from "@/lib/notificationUtils"
+import { getBudgetHealthClass } from "@/lib/equipmentConfig"
 
 interface OrderFormDialogProps {
   open: boolean
@@ -27,10 +27,15 @@ interface OrderFormDialogProps {
 }
 
 export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps) {
-  const { currentUserProfile } = useAuth()
-  const [fundingAccounts, setFundingAccounts] = useState<FundingAccount[]>([])
-  const [fundingAllocations, setFundingAllocations] = useState<FundingAllocation[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    currentUserProfile,
+    fundingAccounts,
+    fundingAllocations,
+    fundingAccountsLoading,
+    fundingAllocationsLoading
+  } = useAppContext()
+
+  const loading = fundingAccountsLoading || fundingAllocationsLoading
 
   const [formData, setFormData] = useState<Partial<Order>>({
     productName: '',
@@ -42,44 +47,6 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     accountId: '',
     fundingAllocationId: '',
   })
-
-  // Load funding accounts and allocations
-  useEffect(() => {
-    if (!open || !currentUserProfile?.labId) return
-
-    const loadFundingData = async () => {
-      setLoading(true)
-      try {
-        const labId = currentUserProfile.labId
-
-        // Fix Bug #6: Correct collection name is "accounts" not "fundingAccounts"
-        const accountsSnapshot = await getDocs(
-          query(collection(db, "accounts"), where("labId", "==", labId))
-        )
-        const accounts = accountsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as FundingAccount[]
-        setFundingAccounts(accounts)
-
-        // Load funding allocations
-        const allocationsSnapshot = await getDocs(
-          query(collection(db, "fundingAllocations"), where("labId", "==", labId))
-        )
-        const allocs = allocationsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as FundingAllocation[]
-        setFundingAllocations(allocs)
-      } catch (error) {
-        console.error("Error loading funding data:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadFundingData()
-  }, [open, currentUserProfile])
 
   // Get selected account and allocation
   const selectedAccount = useMemo(
@@ -114,12 +81,10 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     const allocated = selectedAllocation.allocatedAmount || 0
     if (allocated === 0) return null
     const percentRemaining = (remaining / allocated) * 100
-    if (percentRemaining < 10) return "critical"
-    if (percentRemaining < 25) return "warning"
-    return "ok"
+    return getBudgetHealthClass(percentRemaining)
   }, [selectedAllocation])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.productName || !formData.catNum) {
       alert('Please fill in product name and catalog number')
       return
@@ -153,6 +118,32 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     }
 
     onSave(orderData)
+
+    // PHASE 4: Trigger low budget notifications
+    if (selectedAllocation && currentUserProfile && formData.priceExVAT) {
+      try {
+        // Calculate new remaining budget after this order
+        const newRemainingBudget = (selectedAllocation.remainingBudget || 0) - formData.priceExVAT
+        const allocatedAmount = selectedAllocation.allocatedAmount || 1
+        const percentRemaining = (newRemainingBudget / allocatedAmount) * 100
+
+        // Check if budget is exhausted
+        if (newRemainingBudget <= 0) {
+          await notifyBudgetExhausted(selectedAllocation, currentUserProfile)
+        }
+        // Check if budget is low and should send notification
+        else {
+          const warningThreshold = selectedAllocation.lowBalanceWarningThreshold || 25
+          if (percentRemaining < warningThreshold && shouldSendLowBudgetNotification(selectedAllocation)) {
+            await notifyLowBudget(selectedAllocation, currentUserProfile, percentRemaining)
+          }
+        }
+      } catch (error) {
+        logger.error('Error sending budget notification', error)
+        // Don't block the UI on notification failure
+      }
+    }
+
     onClose()
 
     // Reset form

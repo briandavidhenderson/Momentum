@@ -4,6 +4,7 @@ import React, { Component, ErrorInfo, ReactNode } from "react"
 import { AlertCircle, RefreshCw, Home } from "lucide-react"
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
+import { logger } from "@/lib/logger"
 
 interface Props {
   children: ReactNode
@@ -40,7 +41,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo)
+    logger.error("ErrorBoundary caught an error", error, { errorInfo })
 
     this.setState({
       error,
@@ -177,7 +178,7 @@ export function FeatureErrorBoundary({
     <ErrorBoundary
       fallback={fallback}
       onError={(error) => {
-        console.error(`Error in ${featureName}:`, error)
+        logger.error(`Error in ${featureName}`, error)
       }}
     >
       {children}

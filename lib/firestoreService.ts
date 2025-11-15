@@ -19,6 +19,7 @@ import {
   Query,
 } from "firebase/firestore"
 import { db } from "./firebase"
+import { logger } from "./logger"
 import {
   PersonProfile,
   ProfileProject,
@@ -37,6 +38,7 @@ import {
   Lab,
   Funder,
   FundingAccount,
+  FundingAllocation,
   MasterProject,
 } from "./types"
 
@@ -98,17 +100,17 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   if (!profileData.email || typeof profileData.email !== 'string' || profileData.email.trim() === '') {
     throw new Error("email is required")
   }
-  
-  if (!profileData.organisation || typeof profileData.organisation !== 'string' || profileData.organisation.trim() === '') {
-    throw new Error("organisation is required")
+
+  if (!profileData.organisationId || typeof profileData.organisationId !== 'string' || profileData.organisationId.trim() === '') {
+    throw new Error("organisationId is required")
   }
-  
-  if (!profileData.institute || typeof profileData.institute !== 'string' || profileData.institute.trim() === '') {
-    throw new Error("institute is required")
+
+  if (!profileData.instituteId || typeof profileData.instituteId !== 'string' || profileData.instituteId.trim() === '') {
+    throw new Error("instituteId is required")
   }
-  
-  if (!profileData.lab || typeof profileData.lab !== 'string' || profileData.lab.trim() === '') {
-    throw new Error("lab is required")
+
+  if (!profileData.labId || typeof profileData.labId !== 'string' || profileData.labId.trim() === '') {
+    throw new Error("labId is required")
   }
   
   // Validate array fields
@@ -127,26 +129,25 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   try {
     const profileRef = doc(collection(db, "personProfiles"))
     const profileId = profileRef.id
-    
-    console.log("Creating profile document with ID:", profileId)
-    console.log("Profile data:", profileData)
-    
+
+    logger.debug("Creating profile document", { profileId, profileData })
+
     await setDoc(profileRef, {
       ...profileData,
       id: profileId,
       userId,
       createdAt: serverTimestamp(),
     })
-    
-    console.log("Profile document created successfully")
-    
+
+    logger.info("Profile document created successfully", { profileId })
+
     // Update user document with profileId (use setDoc with merge to ensure user doc exists)
     const userRef = doc(db, "users", userId)
-    console.log("Updating user document:", userId)
-    
+    logger.debug("Updating user document", { userId })
+
     await setDoc(userRef, { profileId }, { merge: true })
 
-    console.log("User document updated successfully")
+    logger.info("User document updated successfully", { userId, profileId })
 
     // Note: Lab membership is now tracked via PersonProfile.labId
     // No need to update lab.members array (removed in new Lab interface)
@@ -154,9 +155,10 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
 
     return profileId
   } catch (error: any) {
-    console.error("Error in createProfile:", error)
-    console.error("Error code:", error?.code)
-    console.error("Error message:", error?.message)
+    logger.error("Error in createProfile", error, {
+      code: error?.code,
+      message: error?.message
+    })
     throw error
   }
 }
@@ -194,25 +196,25 @@ async function retryWithBackoff<T>(
 
 export async function getProfile(profileId: string): Promise<PersonProfile | null> {
   if (!profileId) {
-    console.warn("getProfile called with undefined or empty profileId")
+    logger.warn("getProfile called with undefined or empty profileId")
     return null
   }
-  
+
   try {
     return await retryWithBackoff(async () => {
       const profileRef = doc(db, "personProfiles", profileId)
       const profileSnap = await getDoc(profileRef)
       if (!profileSnap.exists()) {
-        console.log("Profile document does not exist:", profileId)
+        logger.debug("Profile document does not exist", { profileId })
         return null
       }
       return profileSnap.data() as PersonProfile
     })
   } catch (error: any) {
-    console.error("Error fetching profile by profileId:", error)
+    logger.error("Error fetching profile by profileId", error, { profileId })
     // Log the specific error code to help debug permission issues
     if (error?.code === 'permission-denied') {
-      console.warn("Permission denied when fetching profile - this should not happen for own profile")
+      logger.warn("Permission denied when fetching profile - this should not happen for own profile", { profileId })
     }
     return null
   }
@@ -220,10 +222,10 @@ export async function getProfile(profileId: string): Promise<PersonProfile | nul
 
 export async function getProfileByUserId(userId: string): Promise<PersonProfile | null> {
   if (!userId) {
-    console.warn("getProfileByUserId called with undefined or empty userId")
+    logger.warn("getProfileByUserId called with undefined or empty userId")
     return null
   }
-  
+
   try {
     return await retryWithBackoff(async () => {
       const q = query(collection(db, "personProfiles"), where("userId", "==", userId))
@@ -232,11 +234,11 @@ export async function getProfileByUserId(userId: string): Promise<PersonProfile 
       return querySnapshot.docs[0].data() as PersonProfile
     })
   } catch (error: any) {
-    console.error("Error fetching profile by userId:", error)
+    logger.error("Error fetching profile by userId", error, { userId })
     // If permission denied, it might be because user doesn't have a lab yet
     // but they should still be able to read their own profile (handled by Firestore rules)
     if (error?.code === 'permission-denied') {
-      console.warn("Permission denied when fetching profile by userId - this should not happen for own profile")
+      logger.warn("Permission denied when fetching profile by userId - this should not happen for own profile", { userId })
     }
     return null
   }
@@ -266,40 +268,47 @@ export async function findUserProfile(userId: string, profileId: string | null |
     try {
       profile = await getProfile(profileId)
       if (profile) {
-        console.log("✓ Found profile by profileId:", profile.id)
+        logger.debug("Found profile by profileId", { profileId: profile.id })
         // Verify the profile's userId matches - repair if mismatch
         if (profile.userId !== userId) {
-          console.warn(`Profile userId mismatch: profile.userId=${profile.userId}, expected=${userId}. Repairing...`)
+          logger.warn("Profile userId mismatch - repairing", {
+            profileUserId: profile.userId,
+            expectedUserId: userId
+          })
           await repairUserProfileSync(userId, profile.id)
         }
         return profile
       } else {
-        console.log("✗ Profile not found by profileId:", profileId)
+        logger.debug("Profile not found by profileId", { profileId })
       }
     } catch (error) {
-      console.error("Error fetching profile by profileId:", error)
+      logger.error("Error fetching profile by profileId", error, { profileId })
     }
   } else {
-    console.log("No profileId in user document, trying userId lookup")
+    logger.debug("No profileId in user document, trying userId lookup", { userId })
   }
-  
+
   // If not found by profileId, try by userId
   if (!profile) {
     try {
       profile = await getProfileByUserId(userId)
       if (profile) {
-        console.log("✓ Found profile by userId:", profile.id)
+        logger.debug("Found profile by userId", { profileId: profile.id })
         // Repair: Update user document with profileId if it's missing or incorrect
         if (!profileId || profileId !== profile.id) {
-          console.log(`Repairing user/profile sync: user.profileId=${profileId}, actual=${profile.id}`)
+          logger.info("Repairing user/profile sync", {
+            userId,
+            oldProfileId: profileId,
+            newProfileId: profile.id
+          })
           await repairUserProfileSync(userId, profile.id)
         }
         return profile
       } else {
-        console.log("✗ Profile not found by userId:", userId)
+        logger.debug("Profile not found by userId", { userId })
       }
     } catch (error) {
-      console.error("Error fetching profile by userId:", error)
+      logger.error("Error fetching profile by userId", error, { userId })
     }
   }
   
@@ -314,9 +323,9 @@ async function repairUserProfileSync(userId: string, profileId: string): Promise
   try {
     const userRef = doc(db, "users", userId)
     await setDoc(userRef, { profileId }, { merge: true })
-    console.log(`✓ Repaired user/profile sync: user ${userId} -> profile ${profileId}`)
+    logger.info("Repaired user/profile sync", { userId, profileId })
   } catch (error) {
-    console.error("Error repairing user/profile sync:", error)
+    logger.error("Error repairing user/profile sync", error, { userId, profileId })
     // Don't throw - this is a repair operation, not critical path
   }
 }
@@ -349,23 +358,28 @@ export function subscribeToProfiles(
           const data = doc.data()
           // Validate required fields
           if (!data.firstName || !data.lastName) {
-            console.warn(`Profile ${doc.id} is missing firstName or lastName:`, data)
+            logger.warn("Profile is missing required fields", {
+              profileId: doc.id,
+              hasFirstName: !!data.firstName,
+              hasLastName: !!data.lastName
+            })
           }
           return data as PersonProfile
         })
-        console.log(`subscribeToProfiles: Loaded ${profiles.length} profiles`)
+        logger.debug("subscribeToProfiles: Loaded profiles", { count: profiles.length })
         callback(profiles)
       },
       (error) => {
-        console.error("Error in subscribeToProfiles:", error)
-        console.error("Error code:", error?.code)
-        console.error("Error message:", error?.message)
+        logger.error("Error in subscribeToProfiles", error, {
+          code: error?.code,
+          message: error?.message
+        })
         // Don't throw - just log the error and return empty array
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up profiles subscription:", error)
+    logger.error("Error setting up profiles subscription", error)
     // Return a no-op unsubscribe function that calls callback with empty array
     callback([])
     return () => {}
@@ -384,10 +398,10 @@ export function subscribeToProfiles(
  * @returns The ID of the newly created organisation
  */
 export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'createdAt'>): Promise<string> {
-  console.log('[firestoreService] createOrganisation called with:', orgData)
   const orgRef = doc(collection(db, "organisations"))
   const orgId = orgRef.id
-  console.log('[firestoreService] Generated orgId:', orgId)
+
+  logger.debug("Creating organisation", { orgId, name: orgData.name })
 
   const docData = {
     ...orgData,
@@ -396,13 +410,12 @@ export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'cre
     memberCount: 0,
     instituteCount: 0,
   }
-  console.log('[firestoreService] About to save document:', docData)
 
   try {
     await setDoc(orgRef, docData)
-    console.log('[firestoreService] Organisation saved successfully')
+    logger.info("Organisation created successfully", { orgId, name: orgData.name })
   } catch (error) {
-    console.error('[firestoreService] Error saving organisation:', error)
+    logger.error("Error creating organisation", error, { orgId })
     throw error
   }
 
@@ -678,11 +691,15 @@ export async function deleteFundingAccount(accountId: string): Promise<void> {
  * Subscribes to funding accounts with optional filters
  */
 export function subscribeToFundingAccounts(
-  filters: { masterProjectId?: string; funderId?: string } | null,
-  callback: (accounts: FundingAccount[]) => void
+  filters: { labId?: string; masterProjectId?: string; funderId?: string } | null,
+  callback: (accounts: FundingAccount[]) => void,
+  errorCallback?: (error: Error) => void
 ): Unsubscribe {
   let q = collection(db, "accounts")
 
+  if (filters?.labId) {
+    q = query(q as any, where("labId", "==", filters.labId)) as any
+  }
   if (filters?.masterProjectId) {
     q = query(q as any, where("masterProjectId", "==", filters.masterProjectId)) as any
   }
@@ -690,10 +707,60 @@ export function subscribeToFundingAccounts(
     q = query(q as any, where("funderId", "==", filters.funderId)) as any
   }
 
-  return onSnapshot(q, (snapshot) => {
-    const accounts = snapshot.docs.map(doc => doc.data() as FundingAccount)
-    callback(accounts)
-  })
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const accounts = snapshot.docs.map(doc => doc.data() as FundingAccount)
+      callback(accounts)
+    },
+    (error) => {
+      logger.error("Error in subscribeToFundingAccounts", error)
+      if (errorCallback) {
+        errorCallback(error as Error)
+      }
+    }
+  )
+}
+
+/**
+ * Subscribe to funding allocations with real-time updates
+ * @param filters - Filter by userId (personId)
+ * @param callback - Function to call with allocations
+ * @param errorCallback - Optional error handler
+ * @returns Unsubscribe function
+ */
+export function subscribeToFundingAllocations(
+  filters: { userId?: string } | null,
+  callback: (allocations: FundingAllocation[]) => void,
+  errorCallback?: (error: Error) => void
+): Unsubscribe {
+  let q: Query = collection(db, "fundingAllocations")
+
+  if (filters?.userId) {
+    q = query(
+      q,
+      where("type", "==", "PERSON"),
+      where("personId", "==", filters.userId),
+      where("status", "in", ["active", "exhausted"])
+    )
+  }
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const allocations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as FundingAllocation[]
+      callback(allocations)
+    },
+    (error) => {
+      logger.error("Error in subscribeToFundingAllocations", error)
+      if (errorCallback) {
+        errorCallback(error as Error)
+      }
+    }
+  )
 }
 
 // ============================================================================
@@ -915,11 +982,11 @@ export function subscribeToProjects(
   callback: (projects: Project[]) => void
 ): Unsubscribe {
   if (!filters?.userId) {
-    console.warn("subscribeToProjects called with undefined or empty userId")
+    logger.warn("subscribeToProjects called with undefined or empty userId")
     // Return a no-op unsubscribe function
     return () => {}
   }
-  
+
   try {
     let q: Query = collection(db, "projects")
 
@@ -941,13 +1008,13 @@ export function subscribeToProjects(
         callback(projects)
       },
       (error) => {
-        console.error("Error in subscribeToProjects:", error)
+        logger.error("Error in subscribeToProjects", error)
         // Don't throw - just log the error and return empty array
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up projects subscription:", error)
+    logger.error("Error setting up projects subscription", error)
     // Return a no-op unsubscribe function
     return () => {}
   }
@@ -1526,20 +1593,20 @@ export async function deleteUserCascade(userId: string): Promise<void> {
     // Get user document
     const userRef = doc(db, "users", userId)
     const userSnap = await getDoc(userRef)
-    
+
     if (!userSnap.exists()) {
-      console.warn(`User ${userId} not found. Nothing to delete.`)
+      logger.warn("User not found - nothing to delete", { userId })
       return
     }
-    
+
     const userData = userSnap.data() as FirestoreUser
     const profileId = userData.profileId
-    
+
     // Get profile if it exists
     if (profileId) {
       const profileRef = doc(db, "personProfiles", profileId)
       const profileSnap = await getDoc(profileRef)
-      
+
       if (profileSnap.exists()) {
         // Note: Lab membership is now tracked via PersonProfile.labId
         // No need to update lab.members array (removed in new Lab interface)
@@ -1548,40 +1615,40 @@ export async function deleteUserCascade(userId: string): Promise<void> {
         batch.delete(profileRef)
       }
     }
-    
+
     // Delete user
     batch.delete(userRef)
-    
+
     // Commit the batch - this is atomic, so either all succeed or all fail
     await batch.commit()
-    
+
     // Verify deletions succeeded (batch commit is atomic, but verify for logging)
     try {
       const verifyUserSnap = await getDoc(userRef)
       const verifyProfileSnap = profileId ? await getDoc(doc(db, "personProfiles", profileId)) : null
-      
+
       if (verifyUserSnap.exists()) {
-        console.warn(`Warning: User ${userId} still exists after batch commit`)
+        logger.warn("User still exists after batch commit", { userId })
         throw new Error(`Failed to delete user ${userId}`)
       }
-      
+
       if (profileId && verifyProfileSnap?.exists()) {
-        console.warn(`Warning: Profile ${profileId} still exists after batch commit`)
+        logger.warn("Profile still exists after batch commit", { profileId })
         throw new Error(`Failed to delete profile ${profileId}`)
       }
-      
-      console.log(`Successfully deleted user ${userId} and associated profile`)
+
+      logger.info("Successfully deleted user and associated profile", { userId, profileId })
     } catch (verifyError: any) {
       // If verification fails, log error but don't throw (batch already committed)
       if (verifyError?.message?.includes('Failed to delete')) {
-        console.error("Deletion verification failed:", verifyError)
+        logger.error("Deletion verification failed", verifyError)
         throw verifyError
       }
       // Other verification errors (permission, network) are non-fatal
-      console.warn("Deletion verification incomplete (non-fatal):", verifyError)
+      logger.warn("Deletion verification incomplete (non-fatal)", { error: verifyError })
     }
   } catch (error) {
-    console.error("Error in deleteUserCascade:", error)
+    logger.error("Error in deleteUserCascade", error, { userId })
     throw error
   }
 }
@@ -1604,7 +1671,7 @@ export async function deleteProfileCascade(profileId: string): Promise<void> {
     const profileSnap = await getDoc(profileRef)
 
     if (!profileSnap.exists()) {
-      console.warn(`Profile ${profileId} not found. Nothing to delete.`)
+      logger.warn("Profile not found - nothing to delete", { profileId })
       return
     }
 
@@ -1616,47 +1683,47 @@ export async function deleteProfileCascade(profileId: string): Promise<void> {
 
     // Delete profile
     batch.delete(profileRef)
-    
+
     // Get and delete user if it exists
     if (userId) {
       const userRef = doc(db, "users", userId)
       const userSnap = await getDoc(userRef)
-      
+
       if (userSnap.exists()) {
         batch.delete(userRef)
       }
     }
-    
+
     // Commit the batch - this is atomic, so either all succeed or all fail
     await batch.commit()
-    
+
     // Verify deletions succeeded
     try {
       const verifyProfileSnap = await getDoc(profileRef)
       const verifyUserSnap = userId ? await getDoc(doc(db, "users", userId)) : null
-      
+
       if (verifyProfileSnap.exists()) {
-        console.warn(`Warning: Profile ${profileId} still exists after batch commit`)
+        logger.warn("Profile still exists after batch commit", { profileId })
         throw new Error(`Failed to delete profile ${profileId}`)
       }
-      
+
       if (userId && verifyUserSnap?.exists()) {
-        console.warn(`Warning: User ${userId} still exists after batch commit`)
+        logger.warn("User still exists after batch commit", { userId })
         throw new Error(`Failed to delete user ${userId}`)
       }
-      
-      console.log(`Successfully deleted profile ${profileId} and associated user`)
+
+      logger.info("Successfully deleted profile and associated user", { profileId, userId })
     } catch (verifyError: any) {
       // If verification fails, log error but don't throw (batch already committed)
       if (verifyError?.message?.includes('Failed to delete')) {
-        console.error("Deletion verification failed:", verifyError)
+        logger.error("Deletion verification failed", verifyError)
         throw verifyError
       }
       // Other verification errors (permission, network) are non-fatal
-      console.warn("Deletion verification incomplete (non-fatal):", verifyError)
+      logger.warn("Deletion verification incomplete (non-fatal)", { error: verifyError })
     }
   } catch (error) {
-    console.error("Error in deleteProfileCascade:", error)
+    logger.error("Error in deleteProfileCascade", error, { profileId })
     throw error
   }
 }
@@ -1791,13 +1858,13 @@ export function subscribeToDayToDayTasks(
         callback(tasks)
       },
       (error) => {
-        console.error("Error in subscribeToDayToDayTasks:", error)
+        logger.error("Error in subscribeToDayToDayTasks", error)
         // Don't throw - just log the error and return empty array
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up day-to-day tasks subscription:", error)
+    logger.error("Error setting up day-to-day tasks subscription", error)
     // Return a no-op unsubscribe function
     return () => {}
   }
@@ -1834,7 +1901,7 @@ export function subscribeToLabPolls(
   callback: (polls: LabPoll[]) => void
 ): Unsubscribe {
   if (!filters?.labId) {
-    console.warn("subscribeToLabPolls called with undefined or empty labId")
+    logger.warn("subscribeToLabPolls called with undefined or empty labId")
     callback([])
     return () => {}
   }
@@ -1858,12 +1925,12 @@ export function subscribeToLabPolls(
         callback(polls)
       },
       (error) => {
-        console.error("Error in subscribeToLabPolls:", error)
+        logger.error("Error in subscribeToLabPolls", error)
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up lab polls subscription:", error)
+    logger.error("Error setting up lab polls subscription", error)
     return () => {}
   }
 }
@@ -1898,19 +1965,19 @@ export async function deleteEquipment(equipmentId: string): Promise<void> {
 
 export function subscribeToEquipment(labId: string | null, callback: (equipment: EquipmentDevice[]) => void): Unsubscribe {
   if (!labId) {
-    console.warn("subscribeToEquipment called with undefined or empty labId")
+    logger.warn("subscribeToEquipment called with undefined or empty labId")
     callback([])
     return () => {}
   }
-  
+
   try {
     const q = query(
       collection(db, "equipment"),
       where("labId", "==", labId),
       orderBy("name", "asc")
     )
-    
-    return onSnapshot(q, 
+
+    return onSnapshot(q,
       (snapshot) => {
         const equipment = snapshot.docs.map(doc => {
           const data = doc.data()
@@ -1923,12 +1990,12 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
         callback(equipment)
       },
       (error) => {
-        console.error("Error in subscribeToEquipment:", error)
+        logger.error("Error in subscribeToEquipment", error)
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up equipment subscription:", error)
+    logger.error("Error setting up equipment subscription", error)
     return () => {}
   }
 }
@@ -2021,12 +2088,12 @@ export function subscribeToELNExperiments(
         callback(experiments)
       },
       (error) => {
-        console.error("Error in subscribeToELNExperiments:", error)
+        logger.error("Error in subscribeToELNExperiments", error)
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up ELN experiments subscription:", error)
+    logger.error("Error setting up ELN experiments subscription", error)
     return () => {}
   }
 }

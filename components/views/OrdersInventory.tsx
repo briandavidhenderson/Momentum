@@ -9,7 +9,9 @@ import { Plus, Package, ShoppingCart, CheckCircle, Clock, Archive, AlertCircle }
 import { OrderCard } from "@/components/OrderCard"
 import { OrderEditDialog } from "@/components/OrderEditDialog"
 import { OrderFormDialog } from "@/components/OrderFormDialog"
-import { createInventoryItem, deleteOrder } from "@/lib/firestoreService"
+import { createInventoryItem, deleteOrder, updateInventoryItem, updateEquipment } from "@/lib/firestoreService"
+import { reconcileReceivedOrder, validateOrderForReconciliation } from "@/lib/orderInventoryUtils"
+import { useAppContext } from "@/lib/AppContext"
 import {
   DndContext,
   DragEndEvent,
@@ -22,6 +24,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { logger } from "@/lib/logger"
 
 // Droppable Column Component
 function DroppableColumn({
@@ -57,6 +60,9 @@ export function OrdersInventory() {
     handleUpdateInventoryLevel,
     handleDeleteInventoryItem,
   } = useOrders()
+
+  // Get equipment for reconciliation (linking new inventory to devices)
+  const { equipment } = useAppContext()
 
   const [showOrderDialog, setShowOrderDialog] = useState(false)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
@@ -135,27 +141,54 @@ export function OrdersInventory() {
     if (nowReceived && !order.receivedDate) {
       updates.receivedDate = new Date()
 
-      // Create inventory item when moved to received
+      // Reconcile order with inventory (check for existing items before creating)
       try {
-        const inventoryLevel: InventoryLevel = 'medium' // Default to medium stock level
+        // Validate order before reconciliation
+        const validation = validateOrderForReconciliation({
+          ...order,
+          ...updates
+        } as Order)
 
-        await createInventoryItem({
-          productName: order.productName,
-          catNum: order.catNum,
-          inventoryLevel,
-          receivedDate: new Date(),
-          lastOrderedDate: order.orderedDate || new Date(),
-          chargeToAccount: order.accountId,
-          category: order.category,
-          subcategory: order.subcategory,
-          priceExVAT: order.priceExVAT,
-          currentQuantity: 1,
-          minQuantity: 0,
-          notes: `Created from order received on ${new Date().toLocaleDateString()}`,
-          createdBy: currentUserProfile.id,
-        })
+        if (!validation.valid) {
+          logger.error('Order validation failed', { errors: validation.errors })
+          alert(`Cannot reconcile order: ${validation.errors.join(', ')}`)
+          return
+        }
+
+        // Reconcile with existing inventory
+        const result = reconcileReceivedOrder(
+          { ...order, ...updates } as Order,
+          inventory || [],
+          equipment || []
+        )
+
+        if (result.action === 'CREATE') {
+          // Create new inventory item
+          await createInventoryItem({
+            ...result.inventoryItem,
+            createdBy: currentUserProfile.id,
+          })
+          logger.info(result.message)
+        } else {
+          // Update existing inventory item
+          await updateInventoryItem(result.inventoryItem.id, result.inventoryItem)
+          logger.info(result.message)
+        }
+
+        // If supply was linked to a device, update the device
+        if (result.updatedDevices) {
+          for (const device of result.updatedDevices) {
+            await updateEquipment(device.id, device)
+            logger.info('Linked inventory item to device', {
+              productName: result.inventoryItem.productName,
+              deviceName: device.name,
+            })
+          }
+        }
       } catch (error) {
-        console.error('Failed to create inventory item:', error)
+        logger.error('Failed to reconcile inventory', error)
+        alert('Failed to update inventory. Please try again.')
+        return // Don't update order status if inventory reconciliation failed
       }
     }
 

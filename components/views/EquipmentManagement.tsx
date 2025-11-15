@@ -11,6 +11,7 @@ export function EquipmentManagement() {
     orders,
     masterProjects,
     currentUserProfile,
+    allProfiles,
     handleCreateEquipment,
     handleUpdateEquipment,
     handleInventoryUpdate,
@@ -36,7 +37,9 @@ export function EquipmentManagement() {
         orders={orders || []}
         masterProjects={masterProjects || []}
         currentUserProfile={currentUserProfile}
+        allProfiles={allProfiles || []}
         onEquipmentUpdate={handleUpdateEquipment}
+        onInventoryUpdate={handleInventoryUpdate}
         onOrderCreate={handleCreateOrder}
         onInventoryCreate={handleCreateInventoryItem || (() => {})}
       />
@@ -48,6 +51,7 @@ export function EquipmentManagement() {
         orders={orders || []}
         masterProjects={masterProjects || []}
         currentUserProfile={currentUserProfile}
+        allProfiles={allProfiles || []}
         onEquipmentCreate={handleCreateEquipment}
         onEquipmentUpdate={handleUpdateEquipment}
         onInventoryUpdate={handleInventoryUpdate}

@@ -33,27 +33,5 @@ export function useProfiles(labId: string | null) {
     }
   }, [labId]);
 
-  const handleUpdateProfile = async (profileId: string, updates: Partial<PersonProfile>) => {
-    // This function is not implemented in the original file,
-    // but it's part of the new_code, so I'll add it.
-    // In a real scenario, this would involve updating the profile in Firestore.
-    console.log(`Updating profile with ID: ${profileId} with updates:`, updates);
-    // Example: await updateProfileInFirestore(profileId, updates);
-  };
-
   return allProfiles
 }
-
-/**
- * Get profiles for server components or initial render
- * Returns empty array since we load from Firestore client-side
- */
-export function getAllProfiles(): PersonProfile[] {
-  if (typeof window === "undefined") {
-    return []
-  }
-
-  // For client-side, use the useProfiles hook instead
-  return []
-}
-

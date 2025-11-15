@@ -9,7 +9,7 @@ export function useUI() {
   const [activeTab, setActiveTab] = useState<'orders' | 'inventory'>('orders');
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
-  const [mainView, setMainView] = useState<'projects' | 'people' | 'profiles' | 'myprofile' | 'daytoday' | 'eln' | 'orders' | 'equipment' | 'calendar'>('myprofile');
+  const [mainView, setMainView] = useState<'projects' | 'people' | 'profiles' | 'myprofile' | 'daytoday' | 'eln' | 'orders' | 'equipment' | 'calendar' | 'privacy'>('myprofile');
   const [taskDetailPanelOpen, setTaskDetailPanelOpen] = useState(false);
   const [taskDetailPanelTask, setTaskDetailPanelTask] = useState<Task | null>(null);
   const [taskDetailPanelWorkpackageId, setTaskDetailPanelWorkpackageId] = useState<string | null>(null);

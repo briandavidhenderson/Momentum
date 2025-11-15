@@ -17,6 +17,7 @@ import {
   getWorkpackages,
 } from '@/lib/firestoreService';
 import { useAuth } from './useAuth';
+import { logger } from '@/lib/logger';
 
 export function useProjects() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -43,7 +44,7 @@ export function useProjects() {
                 allWps.push(wp);
               });
             } catch (error) {
-              console.error(`Error loading workpackages for project ${project.id}:`, error);
+              logger.error('Error loading workpackages for project', error, { projectId: project.id });
             }
           }
           setWorkpackagesMap(map);

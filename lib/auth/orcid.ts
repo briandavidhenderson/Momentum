@@ -6,6 +6,7 @@
 
 import { getAuth, signInWithCustomToken, unlink } from "firebase/auth"
 import { getFunctions, httpsCallable } from "firebase/functions"
+import { logger } from "@/lib/logger"
 
 /**
  * Configuration for ORCID OAuth2
@@ -114,7 +115,7 @@ export function normalizeOrcid(x: string): string {
   // Validate format (should be 0000-0000-0000-000X where X is checksum)
   const orcidPattern = /^\d{4}-\d{4}-\d{4}-\d{3}[0-9X]$/
   if (!orcidPattern.test(normalized)) {
-    console.warn("Invalid ORCID format:", x)
+    logger.warn("Invalid ORCID format", { orcidInput: x })
     return ""
   }
 
@@ -152,7 +153,7 @@ export async function signInWithOrcid() {
       tokens: { idToken: null, accessToken: null }
     }
   } catch (error: any) {
-    console.error("ORCID sign-in error:", error)
+    logger.error("ORCID sign-in error", error)
     throw new Error(error.message || "Failed to sign in with ORCID")
   }
 }
@@ -189,7 +190,7 @@ export async function linkOrcidToCurrentUser() {
       tokens: { idToken: null, accessToken: null }
     }
   } catch (error: any) {
-    console.error("ORCID linking error:", error)
+    logger.error("ORCID linking error", error)
 
     // Handle specific errors
     if (error.message?.includes("already linked")) {
@@ -238,7 +239,7 @@ export async function unlinkOrcidFromCurrentUser() {
 
     return true
   } catch (error: any) {
-    console.error("ORCID unlinking error:", error)
+    logger.error("ORCID unlinking error", error)
     throw new Error(error.message || "Failed to unlink ORCID")
   }
 }

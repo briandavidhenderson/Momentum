@@ -4,6 +4,7 @@ import React, { useState } from "react"
 import { X } from "lucide-react"
 import type { Funder } from "@/lib/types"
 import { createFunder } from "@/lib/firestoreService"
+import { logger } from "@/lib/logger"
 
 interface FunderCreationDialogProps {
   isOpen: boolean
@@ -105,7 +106,7 @@ export function FunderCreationDialog({
       onFunderCreated(funderId)
       onClose()
     } catch (error) {
-      console.error("Error creating funder:", error)
+      logger.error("Error creating funder", error)
       setErrors({ submit: "Failed to create funder. Please try again." })
     } finally {
       setIsSubmitting(false)

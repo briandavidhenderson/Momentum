@@ -3,6 +3,7 @@ import { useAuth } from './useAuth';
 import { useState, useEffect } from 'react';
 import { ELNExperiment } from '@/lib/types';
 import { subscribeToELNExperiments, createELNExperiment, updateELNExperiment, deleteELNExperiment } from '@/lib/firestoreService';
+import { logger } from '@/lib/logger';
 
 export function useELN() {
   const { currentUser, currentUserProfile: profile } = useAuth();
@@ -14,9 +15,9 @@ export function useELN() {
       return;
     }
 
-    console.log('[useELN] Subscribing to experiments for labId:', profile.labId);
+    logger.debug('Subscribing to ELN experiments', { labId: profile.labId });
     const unsubscribe = subscribeToELNExperiments({ labId: profile.labId }, (experiments) => {
-      console.log('[useELN] Received experiments:', experiments.length);
+      logger.debug('Received ELN experiments', { count: experiments.length });
       setElnExperiments(experiments);
     });
 
@@ -25,17 +26,17 @@ export function useELN() {
 
   const handleCreateExperiment = async (experimentData: Omit<ELNExperiment, 'id' | 'createdAt' | 'labId' | 'createdBy'>) => {
     if (!currentUser || !profile?.labId) {
-      console.error('[useELN] Cannot create experiment - missing user or labId');
+      logger.error('Cannot create experiment - missing user or labId');
       throw new Error('User or lab information not available');
     }
-    console.log('[useELN] Creating experiment:', experimentData.title);
+    logger.debug('Creating ELN experiment', { title: experimentData.title });
     const experimentId = await createELNExperiment({
       ...experimentData,
       createdBy: currentUser.uid,
       labId: profile.labId,
       createdAt: new Date().toISOString(),
     });
-    console.log('[useELN] Experiment created with ID:', experimentId);
+    logger.info('ELN experiment created', { experimentId });
     return experimentId;
   };
 

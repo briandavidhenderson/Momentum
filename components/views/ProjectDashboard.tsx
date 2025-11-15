@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
 import { ProfileProject } from "@/lib/types";
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
+import { logger } from "@/lib/logger";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -146,7 +147,7 @@ export function ProjectDashboard() {
     try {
       await handleCreateMasterProject(newProject);
     } catch (error) {
-      console.error("Error creating master project:", error);
+      logger.error("Error creating master project", error);
       alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   };
@@ -216,7 +217,7 @@ export function ProjectDashboard() {
         }
       }
     } catch (error) {
-      console.error("Error updating task dates:", error);
+      logger.error("Error updating task dates", error);
       alert("Failed to update task dates. Please try again.");
     }
   }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
@@ -283,7 +284,7 @@ export function ProjectDashboard() {
         }
       }
     } catch (error) {
-      console.error("Error toggling expand/collapse:", error);
+      logger.error("Error toggling expand/collapse", error);
       alert("Failed to toggle expand/collapse. Please try again.");
     }
   }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
@@ -420,7 +421,7 @@ export function ProjectDashboard() {
           break;
       }
     } catch (error) {
-      console.error("Error handling context action:", error);
+      logger.error("Error handling context action", error);
       alert("Failed to perform action. Please try again.");
     }
   }, [projects, handleUpdateWorkpackage, findTaskContext, selectedTask, workpackagesMap, getProjectWorkpackages]);
@@ -489,7 +490,7 @@ export function ProjectDashboard() {
         }
       }
     } catch (error) {
-      console.error("Error assigning person:", error);
+      logger.error("Error assigning person", error);
       alert("Failed to assign person. Please try again.");
     }
   }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
@@ -535,7 +536,7 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error toggling todo:", error);
+      logger.error("Error toggling todo", error);
       alert("Failed to toggle todo. Please try again.");
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
@@ -581,7 +582,7 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error adding todo:", error);
+      logger.error("Error adding todo", error);
       alert("Failed to add todo. Please try again.");
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
@@ -627,7 +628,7 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error deleting todo:", error);
+      logger.error("Error deleting todo", error);
       alert("Failed to delete todo. Please try again.");
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
@@ -674,7 +675,7 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error adding subtask:", error);
+      logger.error("Error adding subtask", error);
       alert("Failed to add subtask. Please try again.");
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
@@ -727,7 +728,7 @@ export function ProjectDashboard() {
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       });
     } catch (error) {
-      console.error("Error creating workpackage:", error);
+      logger.error("Error creating workpackage", error);
       alert("Failed to create workpackage. Please try again.");
     }
   };

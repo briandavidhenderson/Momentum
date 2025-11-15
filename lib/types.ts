@@ -935,35 +935,67 @@ export interface Order {
   labId?: string // Added labId to fix build error
 }
 
+/**
+ * InventoryItem - SINGLE SOURCE OF TRUTH for all supply quantities and pricing
+ * All equipment devices link to inventory items for current stock levels.
+ * Updated as part of Equipment & Inventory System Integration (Phase 1)
+ */
 export interface InventoryItem {
   id: string
   productName: string
   catNum: string
+  supplier?: string // Supplier name
+
+  // SINGLE SOURCE OF TRUTH - Master quantity and pricing
+  currentQuantity: number // Master quantity shared across ALL devices using this item
+  priceExVAT: number // Master price for this item
+
+  // Reorder parameters
+  minQuantity?: number // Global minimum threshold
+  burnRatePerWeek?: number // Calculated total consumption across all devices
+
+  // Stock level indicator
   inventoryLevel: InventoryLevel
+
+  // Dates
   receivedDate: Date
   lastOrderedDate?: Date
-  chargeToAccount?: string // FundingAccount ID
-  notes?: string
+
+  // Categorization
   category?: string // Category ID
   subcategory?: string // Subcategory name
-  priceExVAT?: number
-  equipmentDeviceIds?: string[] // Array of equipment device IDs this item is assigned to
-  burnRatePerWeek?: number // Consumption rate per week
-  currentQuantity?: number // Current stock quantity
-  minQuantity?: number // Minimum quantity threshold for reordering
+
+  // Relationships
+  equipmentDeviceIds?: string[] // Devices using this supply
+  chargeToAccount?: string // Default funding account ID
+
+  // Metadata
+  notes?: string
+  labId?: string // Lab this inventory item belongs to
+  createdAt?: Date
+  updatedAt?: Date
 }
 
-// Equipment Management Types
+/**
+ * EquipmentSupply - Device-specific supply settings (NOT a data duplicate)
+ * Links to InventoryItem for actual quantity/price data.
+ * Stores only device-specific consumption settings.
+ * Updated as part of Equipment & Inventory System Integration (Phase 1)
+ *
+ * MIGRATION NOTE: Old fields (name, price, qty) removed.
+ * Use enrichSupply() utility to join with InventoryItem data for display.
+ */
 export interface EquipmentSupply {
   id: string
-  name: string
-  price: number
-  qty: number // Current quantity
-  minQty: number // Minimum quantity for reordering
-  burnPerWeek: number // Consumption rate per week
-  inventoryItemId?: string // Link to inventory item if it exists
-  chargeToAccountId?: string // Which account pays for this device's consumption
-  chargeToProjectId?: string // Which master project this belongs to
+  inventoryItemId: string // REQUIRED link to InventoryItem (single source of truth)
+
+  // Device-specific consumption settings
+  minQty: number // When THIS device needs reorder (device-specific threshold)
+  burnPerWeek: number // How fast THIS device consumes this supply
+
+  // Optional overrides for funding
+  chargeToAccountId?: string // Override default funding account
+  chargeToProjectId?: string // Link to specific master project
 }
 
 export interface EquipmentSOP {

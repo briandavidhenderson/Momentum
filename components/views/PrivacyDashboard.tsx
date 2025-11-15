@@ -45,6 +45,7 @@ import type {
   AccountDeletionRequest,
   SpecialCategoryDataMarker,
 } from "@/lib/types"
+import { logger } from "@/lib/logger"
 
 /**
  * PrivacyDashboard - Comprehensive GDPR User Rights Dashboard
@@ -138,7 +139,7 @@ export function PrivacyDashboard() {
         })) as SpecialCategoryDataMarker[]
         setSpecialCategoryMarkers(markers)
       } catch (error) {
-        console.error("Error loading privacy data:", error)
+        logger.error("Error loading privacy data", error)
       }
     }
 
@@ -160,7 +161,7 @@ export function PrivacyDashboard() {
       await setDoc(doc(db, "privacySettings", user.uid), updatedSettings)
       setPrivacySettings(updatedSettings)
     } catch (error) {
-      console.error("Error updating privacy settings:", error)
+      logger.error("Error updating privacy settings", error)
       alert("Failed to update privacy settings. Please try again.")
     } finally {
       setLoading(false)
@@ -207,7 +208,7 @@ export function PrivacyDashboard() {
       })) as DataExportRequest[]
       setDataExportRequests(exports)
     } catch (error) {
-      console.error("Error requesting data export:", error)
+      logger.error("Error requesting data export", error)
       alert("Failed to request data export. Please try again.")
     } finally {
       setLoading(false)
@@ -247,7 +248,7 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
       setShowDeleteDialog(false)
       setDeleteConfirmation("")
     } catch (error) {
-      console.error("Error requesting account deletion:", error)
+      logger.error("Error requesting account deletion", error)
       alert("Failed to request account deletion. Please try again.")
     } finally {
       setLoading(false)
