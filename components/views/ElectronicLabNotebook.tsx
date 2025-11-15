@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/toast"
 import { ELNJupyterCanvasV2 } from "@/components/ELNJupyterCanvasV2"
 import { ELNReportGenerator } from "@/components/ELNReportGenerator"
 import { deleteELNFile } from "@/lib/storage"
+import { logger } from "@/lib/logger"
 
 export function ElectronicLabNotebook() {
   const {
@@ -35,9 +36,11 @@ export function ElectronicLabNotebook() {
 
   // Debug: Log profile and experiments on mount
   useEffect(() => {
-    console.log('[ELN Component] Current user profile:', currentUserProfile);
-    console.log('[ELN Component] Has labId:', currentUserProfile?.labId);
-    console.log('[ELN Component] Experiments count:', experiments?.length || 0);
+    logger.debug('ELN Component initialized', {
+      hasProfile: !!currentUserProfile,
+      labId: currentUserProfile?.labId,
+      experimentsCount: experiments?.length || 0,
+    });
   }, [currentUserProfile, experiments])
 
   // Initialize with first experiment if available
@@ -76,7 +79,7 @@ export function ElectronicLabNotebook() {
       setNewExperimentDescription("")
       toast.success("Experiment created successfully!")
     } catch (error) {
-      console.error("Error creating experiment:", error)
+      logger.error("Error creating experiment", error)
       toast.error("Failed to create experiment. Please try again.")
     }
   }
@@ -130,7 +133,7 @@ export function ElectronicLabNotebook() {
       try {
         await deleteELNFile(itemToDelete.storagePath)
       } catch (error) {
-        console.error("Error deleting file from storage:", error)
+        logger.error("Error deleting file from storage", error)
         // Continue with Firestore deletion even if storage deletion fails
       }
     }
@@ -199,7 +202,7 @@ export function ElectronicLabNotebook() {
           setSelectedExperiment(imported)
           toast.success("Experiment imported successfully!")
         } catch (error) {
-          console.error("Error importing experiment:", error)
+          logger.error("Error importing experiment", error)
           toast.error("Failed to import experiment. Please check the file format.")
         }
       }
@@ -422,7 +425,7 @@ export function ElectronicLabNotebook() {
                       setDeleteConfirmId(null)
                       toast.success("Experiment deleted successfully")
                     } catch (error) {
-                      console.error("Error deleting experiment:", error)
+                      logger.error("Error deleting experiment", error)
                       toast.error("Failed to delete experiment. Please try again.")
                     }
                   }
