@@ -6,6 +6,7 @@
 import { db } from './firebase'
 import { doc, getDoc, updateDoc, runTransaction } from 'firebase/firestore'
 import { FundingAccount, Order } from './types'
+import { logger } from './logger'
 
 /**
  * Calculate available balance for an account

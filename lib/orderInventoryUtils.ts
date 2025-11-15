@@ -10,6 +10,7 @@
 
 import { Order, InventoryItem, EquipmentDevice } from './types'
 import { generateId } from './equipmentConfig'
+import { logger } from './logger'
 
 /**
  * Result of reconciling a received order with inventory
