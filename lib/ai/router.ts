@@ -20,6 +20,7 @@ import type {
   ProtocolOptions,
   EntityOptions,
 } from './types'
+import { logger } from '@/lib/logger'
 
 import { OpenAIProvider } from './providers/openai'
 import { GeminiProvider } from './providers/gemini'
