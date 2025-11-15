@@ -37,6 +37,7 @@ export function NotificationBell() {
   useEffect(() => {
     if (!currentUser) return
 
+    const db = getFirebaseDb()
     const q = query(
       collection(db, "notifications"),
       where("userId", "==", currentUser.uid),

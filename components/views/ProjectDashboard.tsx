@@ -34,8 +34,9 @@ export function ProjectDashboard() {
   const allProfiles = useProfiles(profile?.labId || null);
   const people = personProfilesToPeople(allProfiles);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
-  
+
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
     return project.workpackageIds
@@ -190,6 +191,15 @@ export function ProjectDashboard() {
     } catch (error) {
       logger.error("Error creating master project", error);
       alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  };
+
+  const handleDeleteProject = () => {
+    if (!selectedProjectForDetail) return;
+
+    if (confirm(`Are you sure you want to delete the project "${selectedProjectForDetail.name}"? This action cannot be undone.`)) {
+      handleDeleteMasterProject(selectedProjectForDetail.id);
+      setSelectedProjectForDetail(null);
     }
   };
 

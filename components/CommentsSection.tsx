@@ -60,6 +60,7 @@ export function CommentsSection({
   useEffect(() => {
     if (!entityId) return
 
+    const db = getFirebaseDb()
     const q = query(
       collection(db, "comments"),
       where("entityType", "==", entityType),

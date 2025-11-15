@@ -40,6 +40,7 @@ export function FundingAdmin() {
   const loadFundingData = useCallback(async () => {
     setLoading(true)
     try {
+      const db = getFirebaseDb()
       const labId = currentUserProfile?.labId
 
       // Load funding accounts
