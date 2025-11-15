@@ -233,55 +233,24 @@ export function EquipmentStatusPanel({
     const updatedSupplies = [...editingDevice.supplies, supply]
     handleSaveDevice({ ...editingDevice, supplies: updatedSupplies })
 
-    // Also create/update inventory item if needed
-    // NOTE: This logic assumes old structure with supply.name, supply.qty, supply.price
-    // Will be refactored in Phase 5 when modal is extracted
-    const existingInventory = inventory.find(i =>
-      i.productName === supply.name &&
-      i.equipmentDeviceIds?.includes(editingDevice.id)
-    )
+    // Update inventory item to link it to this device (if not already linked)
+    // NOTE: With new structure, supply should already have inventoryItemId set from dialog
+    // The inventory item contains all the product details (name, price, quantity)
+    if (supply.inventoryItemId) {
+      const existingInventory = inventory.find(i => i.id === supply.inventoryItemId)
 
-    if (!existingInventory) {
-      const newInventoryItem: InventoryItem = {
-        id: generateId('inventory'), // FIXED: Use crypto.randomUUID()
-        productName: supply.name,
-        catNum: '',
-        inventoryLevel: supply.qty === 0 ? 'empty' :
-          supply.qty < supply.minQty ? 'low' :
-          supply.qty < supply.minQty * 2 ? 'medium' : 'full',
-        receivedDate: new Date(),
-        priceExVAT: supply.price,
-        currentQuantity: supply.qty,
-        minQuantity: supply.minQty,
-        burnRatePerWeek: supply.burnPerWeek,
-        equipmentDeviceIds: [editingDevice.id],
-        category: undefined,
-      }
-
-      onInventoryUpdate([...inventory, newInventoryItem])
-
-      // Link supply to inventory
-      const updatedSupply = { ...supply, inventoryItemId: newInventoryItem.id }
-      const updatedDevice = {
-        ...editingDevice,
-        supplies: editingDevice.supplies.map(s => s.id === supply.id ? updatedSupply : s)
-      }
-      handleSaveDevice(updatedDevice)
-    } else {
-      // Update existing inventory
-      const updatedInventory = inventory.map(item => {
-        if (item.id === existingInventory.id) {
-          return {
-            ...item,
-            equipmentDeviceIds: [...(item.equipmentDeviceIds || []), editingDevice.id],
-            currentQuantity: supply.qty,
-            minQuantity: supply.minQty,
-            burnRatePerWeek: supply.burnPerWeek,
-          }
+      if (existingInventory) {
+        // Add this device to the inventory item's device list if not already present
+        const deviceIds = existingInventory.equipmentDeviceIds || []
+        if (!deviceIds.includes(editingDevice.id)) {
+          const updatedInventory = inventory.map(i =>
+            i.id === supply.inventoryItemId
+              ? { ...i, equipmentDeviceIds: [...deviceIds, editingDevice.id] }
+              : i
+          )
+          onInventoryUpdate(updatedInventory)
         }
-        return item
-      })
-      onInventoryUpdate(updatedInventory)
+      }
     }
   }
 

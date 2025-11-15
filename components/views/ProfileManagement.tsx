@@ -2,7 +2,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, User, MasterProject } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, MasterProject } from "@/lib/types"
+import { FirestoreUser } from "@/lib/firestoreService"
 import { profiles as staticProfiles } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
 import { useProjects } from "@/lib/hooks/useProjects"
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { 
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -18,12 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { 
-  UserPlus, 
-  Edit, 
-  Trash2, 
-  Save, 
-  X, 
+import {
+  UserPlus,
+  Edit,
+  Trash2,
+  Save,
+  X,
   Download,
   Upload,
   Mail,
@@ -38,12 +39,12 @@ import {
 } from "lucide-react"
 
 interface ProfileManagementProps {
-  currentUser?: User | null
+  currentUser?: FirestoreUser | null
   currentUserProfile?: PersonProfile | null
 }
 
 export function ProfileManagement({ currentUser, currentUserProfile }: ProfileManagementProps = {}) {
-  const allProfiles = useProfiles(currentUserProfile?.lab || null)
+  const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const { handleCreateMasterProject } = useProjects()
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)

@@ -2,7 +2,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, User } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS } from "@/lib/types"
+import { FirestoreUser } from "@/lib/firestoreService"
 import { useProfiles } from "@/lib/useProfiles"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,12 +30,12 @@ import { OrcidBadge } from "@/components/OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
 
 interface PersonalProfilePageProps {
-  currentUser: User | null
+  currentUser: FirestoreUser | null
   currentUserProfile: PersonProfile | null
 }
 
 export function PersonalProfilePage({ currentUser, currentUserProfile }: PersonalProfilePageProps) {
-  const allProfiles = useProfiles(currentUserProfile?.lab || null)
+  const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<Partial<PersonProfile>>({})
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)

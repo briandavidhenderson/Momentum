@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { InventoryItem, PersonProfile } from "@/lib/types"
-import { EnrichedSupply } from "@/lib/equipmentUtils"
+import { EnrichedSupply } from "@/lib/supplyUtils"
 import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
 
 interface CheckStockDialogProps {
@@ -62,15 +62,18 @@ export function CheckStockDialog({
     }
 
     const updatedInventory = [...inventory]
+    const minQty = updatedInventory[itemIndex].minQuantity || 0
     const updatedItem = {
       ...updatedInventory[itemIndex],
       currentQuantity: newQty,
       inventoryLevel:
         newQty === 0
           ? ("empty" as const)
-          : newQty <= (updatedInventory[itemIndex].reorderThreshold || 0)
+          : newQty <= minQty
             ? ("low" as const)
-            : ("ok" as const),
+            : newQty <= minQty * 2
+              ? ("medium" as const)
+              : ("full" as const),
     }
     updatedInventory[itemIndex] = updatedItem
 
@@ -117,7 +120,7 @@ export function CheckStockDialog({
             <>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Product</Label>
-                <div className="text-sm text-muted-foreground">{supply.productName}</div>
+                <div className="text-sm text-muted-foreground">{supply.name}</div>
               </div>
 
               <div className="space-y-2">

@@ -60,14 +60,14 @@ export function AddSupplyDialog({
       return
     }
 
-    // Create the supply link
+    // Create the supply link (device-specific settings only)
+    // Note: name, price, qty come from the linked InventoryItem (not stored in supply)
     const supply: EquipmentSupply = {
       id: `supply-${Date.now()}`,
-      name: selectedItem.productName,
       inventoryItemId: selectedInventoryId,
       minQty: parseFloat(minQty) || selectedItem.minQuantity || 0,
       burnPerWeek: parseFloat(burnPerWeek) || 0,
-      accountOverride: accountOverride.trim() || undefined,
+      chargeToProjectId: accountOverride.trim() || undefined,
     }
 
     try {
