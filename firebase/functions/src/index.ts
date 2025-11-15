@@ -452,12 +452,12 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
     })
 
     // Store ORCID data in Firestore profile
-    await admin.firestore().collection("profiles").doc(context.auth.uid).update({
+    await admin.firestore().collection("profiles").doc(context.auth.uid).set({
       orcidId,
       orcidUrl: `${config.baseUrl}/${orcidId}`,
       orcidVerified: true,
       orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
-    })
+    }, { merge: true })
 
     // Store full ORCID record in separate collection
     if (orcidRecord) {
@@ -535,9 +535,9 @@ export const orcidSyncRecord = functions.https.onCall(async (data, context) => {
     }
 
     // Update profile with new sync time
-    await admin.firestore().collection("profiles").doc(context.auth.uid).update({
+    await admin.firestore().collection("profiles").doc(context.auth.uid).set({
       orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
-    })
+    }, { merge: true })
 
     // Save updated ORCID record
     await admin.firestore().collection("orcidRecords").doc(orcidId).set({

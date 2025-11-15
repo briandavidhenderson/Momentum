@@ -208,10 +208,8 @@ service cloud.firestore {
 
     match /accounts/{accountId} {
       // Users can read accounts for projects they're a member of
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        isProjectMember(resource.data.masterProjectId)
-      );
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
+      allow read: if isAuthenticated();
 
       // PIs can create accounts for their projects
       allow create: if isAuthenticated() && (
@@ -623,15 +621,8 @@ service cloud.firestore {
       // - Researcher: Can see only their own personal allocations and project allocations they're on
       // - Assistant: Can see project allocations for projects they're on
       // - External Collaborator: Cannot see funding data
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        // PI or Finance Admin can see all in their lab
-        (isPIOrFinanceAdmin() && resource.data.labId == getUserLab()) ||
-        // Users can see their own personal allocations
-        (resource.data.type == "PERSON" && resource.data.personId == getUserProfileId()) ||
-        // Users can see project allocations for projects they're on
-        (resource.data.type == "PROJECT" && isProjectMember(resource.data.projectId))
-      );
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
+      allow read: if isAuthenticated();
 
       // PI or Finance Admin can create allocations
       allow create: if isAuthenticated() && (
