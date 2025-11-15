@@ -1,26 +1,55 @@
 
 import { useState, useEffect } from 'react';
-import { Workpackage, Task } from '@/lib/types';
+import { Workpackage, Task, PersonProfile } from '@/lib/types';
 import { createWorkpackage, subscribeToWorkpackages, updateWorkpackage, deleteWorkpackage } from '@/lib/firestoreService';
 
-export function useWorkpackages(currentUser: any) {
+export function useWorkpackages(currentUser: PersonProfile | null) {
   const [workpackages, setWorkpackages] = useState<Workpackage[]>([]);
 
   useEffect(() => {
     const storedWorkpackages = localStorage.getItem('gantt-workpackages');
     if (storedWorkpackages) {
-      const parsed = JSON.parse(storedWorkpackages);
-      const workpackagesWithDates = parsed.map((wp: any) => ({
-        ...wp,
-        start: new Date(wp.start),
-        end: new Date(wp.end),
-        tasks: (wp.tasks || []).map((task: any) => ({
-          ...task,
-          start: new Date(task.start),
-          end: new Date(task.end),
-        })),
-      }));
-      setWorkpackages(workpackagesWithDates);
+      try {
+        const parsed = JSON.parse(storedWorkpackages);
+        const workpackagesWithDates = parsed.map((wp: any) => {
+          const start = new Date(wp.start);
+          const end = new Date(wp.end);
+
+          // Validate workpackage dates
+          if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            console.error('Invalid date found in stored workpackage:', wp);
+            return null;
+          }
+
+          return {
+            ...wp,
+            start,
+            end,
+            tasks: (wp.tasks || []).map((task: any) => {
+              const taskStart = new Date(task.start);
+              const taskEnd = new Date(task.end);
+
+              // Validate task dates
+              if (isNaN(taskStart.getTime()) || isNaN(taskEnd.getTime())) {
+                console.error('Invalid date found in stored task:', task);
+                return null;
+              }
+
+              return {
+                ...task,
+                start: taskStart,
+                end: taskEnd,
+              };
+            }).filter(Boolean), // Remove null entries from invalid dates
+          };
+        }).filter(Boolean); // Remove null entries from invalid dates
+
+        setWorkpackages(workpackagesWithDates);
+      } catch (error) {
+        console.error('Error parsing stored workpackages from localStorage:', error);
+        // Clear invalid data
+        localStorage.removeItem('gantt-workpackages');
+      }
     }
   }, []);
 

@@ -1,22 +1,42 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { CalendarEvent, Person, Project, Workpackage } from '@/lib/types';
+import { CalendarEvent, Person, Project, Workpackage, PersonProfile } from '@/lib/types';
 
-export function useEvents(visibleProjects: Project[], workpackages: Workpackage[], currentUser: any) {
+export function useEvents(visibleProjects: Project[], workpackages: Workpackage[], currentUser: PersonProfile | null) {
   const [manualEvents, setManualEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
     const storedEvents = localStorage.getItem('gantt-events');
     if (storedEvents) {
-      const parsed = JSON.parse(storedEvents);
-      const eventsWithDates = parsed.map((event: any) => ({
-        ...event,
-        start: new Date(event.start),
-        end: new Date(event.end),
-        createdAt: event.createdAt ? new Date(event.createdAt) : new Date(),
-        updatedAt: event.updatedAt ? new Date(event.updatedAt) : undefined,
-      }));
-      setManualEvents(eventsWithDates);
+      try {
+        const parsed = JSON.parse(storedEvents);
+        const eventsWithDates = parsed.map((event: any) => {
+          const start = new Date(event.start);
+          const end = new Date(event.end);
+          const createdAt = event.createdAt ? new Date(event.createdAt) : new Date();
+          const updatedAt = event.updatedAt ? new Date(event.updatedAt) : undefined;
+
+          // Validate dates
+          if (isNaN(start.getTime()) || isNaN(end.getTime()) || (createdAt && isNaN(createdAt.getTime()))) {
+            console.error('Invalid date found in stored event:', event);
+            return null;
+          }
+
+          return {
+            ...event,
+            start,
+            end,
+            createdAt,
+            updatedAt,
+          };
+        }).filter(Boolean); // Remove null entries from invalid dates
+
+        setManualEvents(eventsWithDates);
+      } catch (error) {
+        console.error('Error parsing stored events from localStorage:', error);
+        // Clear invalid data
+        localStorage.removeItem('gantt-events');
+      }
     }
   }, []);
 
@@ -37,6 +57,11 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
 
     visibleProjects.forEach((project) => {
       const projectEnd = new Date(project.end);
+      // Validate date
+      if (isNaN(projectEnd.getTime())) {
+        console.error('Invalid project end date:', project);
+        return;
+      }
       generated.push({
         id: `auto-project-${project.id}`,
         title: `${project.name} deadline`,
@@ -58,6 +83,11 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
 
       project.tasks?.forEach((task) => {
         const taskEnd = new Date(task.end);
+        // Validate date
+        if (isNaN(taskEnd.getTime())) {
+          console.error('Invalid task end date:', task);
+          return;
+        }
         const attendees = new Set<string>();
         if (task.primaryOwner) attendees.add(task.primaryOwner);
         task.helpers?.forEach((helper) => attendees.add(helper));
@@ -85,6 +115,11 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
 
     workpackages.forEach((workpackage) => {
       const wpEnd = new Date(workpackage.end);
+      // Validate date
+      if (isNaN(wpEnd.getTime())) {
+        console.error('Invalid workpackage end date:', workpackage);
+        return;
+      }
       generated.push({
         id: `auto-workpackage-${workpackage.id}`,
         title: `Workpackage checkpoint: ${workpackage.name}`,
