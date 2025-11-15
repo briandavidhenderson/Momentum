@@ -2,8 +2,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, User } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS } from "@/lib/types"
+import { FirestoreUser } from "@/lib/firestoreService"
 import { useProfiles } from "@/lib/useProfiles"
+import { logger } from "@/lib/logger"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,12 +31,12 @@ import { OrcidBadge } from "@/components/OrcidBadge"
 import { linkOrcidToCurrentUser } from "@/lib/auth/orcid"
 
 interface PersonalProfilePageProps {
-  currentUser: User | null
+  currentUser: FirestoreUser | null
   currentUserProfile: PersonProfile | null
 }
 
 export function PersonalProfilePage({ currentUser, currentUserProfile }: PersonalProfilePageProps) {
-  const allProfiles = useProfiles(currentUserProfile?.lab || null)
+  const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<Partial<PersonProfile>>({})
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)
@@ -75,7 +77,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         organisation: formData.organisation!,
         institute: formData.institute!,
         lab: formData.lab!,
-        reportsTo: formData.reportsTo || null,
+        reportsToId: formData.reportsToId || null, // Fix Bug #8: Use reportsToId instead of deprecated reportsTo
         fundedBy: formData.fundedBy || [],
         startDate: formData.startDate || new Date().toISOString().split("T")[0],
         phone: formData.phone || "",
@@ -87,6 +89,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         principalInvestigatorProjects: formData.principalInvestigatorProjects || [],
         profileComplete: formData.profileComplete !== undefined ? formData.profileComplete : true,
         isAdministrator: formData.isAdministrator || false,
+        isPrincipalInvestigator: formData.isPrincipalInvestigator || false, // Fix Bug #8: Preserve PI status
         ...additionalData,
       }
 
@@ -94,8 +97,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       await updateProfile(currentUserProfile.id, updatedProfileData)
 
       // Update User record if admin status changed
-      if (formData.userId && currentUser?.id === formData.userId) {
-        await updateUser(currentUser.id, {
+      if (formData.userId && currentUser?.uid === formData.userId) {
+        await updateUser(currentUser.uid, {
           isAdministrator: formData.isAdministrator || false
         })
       }
@@ -103,7 +106,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       setIsEditing(false)
       // No need to reload - Firestore real-time updates will handle it
     } catch (error) {
-      console.error("Error saving profile:", error)
+      logger.error("Error saving profile", error)
       alert("Error saving profile. Please try again.")
     }
   }
@@ -163,7 +166,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
     }).then(() => {
       // Success - real-time listener will update the UI
     }).catch(error => {
-      console.error("Error saving project:", error)
+      logger.error("Error saving project", error)
       alert("Error saving project. Please try again.")
     })
 
@@ -296,15 +299,20 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               <Label htmlFor="reportsTo">Reports To</Label>
               <select
                 id="reportsTo"
-                value={formData.reportsTo || ""}
-                onChange={(e) => setFormData({ ...formData, reportsTo: e.target.value || null })}
+                value={formData.reportsToId || ""}
+                onChange={(e) => setFormData({ ...formData, reportsToId: e.target.value || null })}
                 disabled={!isEditing}
                 className="w-full px-3 py-2 rounded-md border border-border bg-background"
               >
-                <option value="">None (I&apos;m a PI)</option>
+                {/* Fix Bug #8: Show correct option based on PI status */}
+                {formData.isPrincipalInvestigator ? (
+                  <option value="">None (I&apos;m a PI)</option>
+                ) : (
+                  <option value="">Not set - Please select supervisor</option>
+                )}
                 {allProfiles.filter(p => p.id !== currentUserProfile.id).map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.firstName} {p.lastName} - {p.lab}
+                    {p.firstName} {p.lastName} - {p.labName}
                   </option>
                 ))}
               </select>
@@ -872,7 +880,7 @@ function ProjectDialog({
                   <option value="">Add person...</option>
                   {allProfiles.map((profile) => (
                     <option key={profile.id} value={profile.id}>
-                      {profile.firstName} {profile.lastName} - {profile.lab}
+                      {profile.firstName} {profile.lastName} - {profile.labName}
                     </option>
                   ))}
                 </select>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useMemo } from "react"
 import * as d3 from "d3"
 import { useProfiles } from "@/lib/useProfiles"
 import { FUNDING_ACCOUNTS, PersonProfile, PositionLevel } from "@/lib/types"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { getPositionCategory } from "@/components/PositionBadge"
+import { logger } from "@/lib/logger"
 
 interface NetworkNode extends d3.SimulationNodeDatum {
   id: string
@@ -50,7 +51,8 @@ interface NetworkViewProps {
 }
 
 export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
-  const allProfiles = useProfiles(currentUserProfile?.labId || null) || []
+  const allProfilesData = useProfiles(currentUserProfile?.labId || null)
+  const allProfiles = useMemo(() => allProfilesData || [], [allProfilesData])
   const svgRef = useRef<SVGSVGElement>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [forceStrength, setForceStrength] = useState(-280)
@@ -63,9 +65,9 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
 
   // Filter profiles by lab if currentUserProfile is provided
   // Ensure profiles is always an array
-  const profiles = (currentUserProfile?.labId
+  const profiles = useMemo(() => (currentUserProfile?.labId
     ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
-    : allProfiles) || []
+    : allProfiles) || [], [currentUserProfile?.labId, allProfiles])
 
   useEffect(() => {
     if (!svgRef.current) return
@@ -73,18 +75,17 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
     // Clear previous visualization
     d3.select(svgRef.current).selectAll("*").remove()
 
-    console.log("=== NetworkView Debug ===")
-    console.log("Total profiles loaded:", profiles.length)
-    if (profiles.length > 0) {
-      console.log("Sample profile structure:", profiles[0])
-    }
+    logger.debug("NetworkView rendering", {
+      totalProfiles: profiles.length,
+      sampleProfile: profiles.length > 0 ? profiles[0] : null,
+    })
 
     // Filter out profiles with missing required fields (only require name now)
     const validProfiles = profiles.filter(p => {
       const isValid = p && p.firstName && p.lastName
 
       if (!isValid && p) {
-        console.warn("Invalid profile (missing name):", {
+        logger.warn("Invalid profile - missing name", {
           id: p.id,
           email: p.email,
           hasFirstName: !!p.firstName,
@@ -94,7 +95,7 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
 
       // Warn about missing organizational fields but don't filter out
       if (isValid && (!p.organisationName || !p.instituteName || !p.labName)) {
-        console.info("Profile with incomplete org data (will show with defaults):", {
+        logger.info("Profile with incomplete org data", {
           id: p.id,
           name: `${p.firstName} ${p.lastName}`,
           hasOrganisation: !!p.organisationName,
@@ -106,12 +107,13 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
       return isValid
     })
 
-    console.log("Valid profiles after filtering:", validProfiles.length)
+    logger.debug("Valid profiles after filtering", {
+      validCount: validProfiles.length,
+    })
 
     // Early return if no valid profiles
     if (validProfiles.length === 0) {
-      console.error("❌ No valid profiles found for network visualization!")
-      console.error("Profiles need at minimum: firstName, lastName")
+      logger.error("No valid profiles found for network visualization - need at minimum: firstName, lastName")
 
       // Show helpful error message in SVG
       const svg = d3.select(svgRef.current)
@@ -686,8 +688,7 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
         simulation.stop()
       }
     } catch (error) {
-      console.error("❌ Error rendering NetworkView:", error)
-      console.error("Error details:", {
+      logger.error("Error rendering NetworkView", error, {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined
       })
@@ -830,7 +831,7 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
         <div className="pt-3 border-t border-gray-700 text-xs text-muted-foreground">
           <div>✅ {profiles.length} people</div>
           <div>✅ {profiles.filter(p => p.reportsTo === null).length} PIs</div>
-          <div>✅ {Array.from(new Set(profiles.map(p => p.lab))).length} labs</div>
+          <div>✅ {Array.from(new Set(profiles.map(p => p.labId))).length} labs</div>
         </div>
       </div>
 

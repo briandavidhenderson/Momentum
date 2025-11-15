@@ -335,6 +335,13 @@ export interface User {
   isAdministrator?: boolean // Administrator can edit all profiles
   lastLoginAt?: string
   oauthProviders?: Array<"google" | "microsoft"> // For calendar integrations
+
+  // GDPR & RBAC (NEW)
+  userRole?: UserRole                  // Enhanced role-based access control
+  consentId?: string                   // Link to UserConsent record
+  privacySettingsId?: string           // Link to PrivacySettings record
+  dataRegion?: "eu" | "us" | "other"   // Data residency for Schrems II compliance
+  gdprCompliant?: boolean              // Whether user has completed GDPR consent flow
 }
 
 export type ProjectVisibility =
@@ -502,6 +509,7 @@ export interface PersonProfile {
   orcidUrl?: string                   // Full URL "https://orcid.org/0000-0000-0000-0000"
   orcidVerified?: boolean             // True once ORCID is linked via OAuth
   orcidLastSynced?: string            // ISO date of last sync with ORCID record
+  orcidSyncEnabled?: boolean          // Whether to keep profile in sync with ORCID
   orcidClaims?: {                     // Snapshot from OIDC/userinfo (non-sensitive)
     name?: string
     email?: string | null             // May be null if user hides email
@@ -512,6 +520,13 @@ export interface PersonProfile {
   profileComplete?: boolean // Whether user has completed profile setup
   onboardingComplete?: boolean // ✅ NEW: Whether user completed new onboarding flow
   isAdministrator?: boolean // Administrator can edit all profiles
+
+  // GDPR & Privacy (NEW)
+  userRole?: UserRole                  // Role for RBAC and funding access
+  consentGiven?: boolean               // GDPR consent status
+  privacySettingsId?: string           // Link to PrivacySettings
+  dataExportRequestIds?: string[]      // Historical data export requests
+  lastConsentUpdate?: string           // When user last updated consent
 
   // Metadata
   createdAt?: string
@@ -875,6 +890,8 @@ export interface Order {
   // Linking (UPDATED: Account is now REQUIRED)
   accountId: string               // ✅ REQUIRED: Link to funding account
   accountName: string             // Cached
+  fundingAllocationId?: string    // Optional: Specific allocation within the account
+  allocationName?: string         // Cached
   funderId: string                // ✅ Cached from account
   funderName: string              // Cached
   masterProjectId: string         // ✅ Cached from account
@@ -895,6 +912,7 @@ export interface Order {
   orderedDate?: Date
   receivedDate?: Date
   expectedDeliveryDate?: Date
+  quantity?: number               // Number of units ordered (defaults to 1)
 
   // Financial
   priceExVAT: number
@@ -919,35 +937,67 @@ export interface Order {
   labId?: string // Added labId to fix build error
 }
 
+/**
+ * InventoryItem - SINGLE SOURCE OF TRUTH for all supply quantities and pricing
+ * All equipment devices link to inventory items for current stock levels.
+ * Updated as part of Equipment & Inventory System Integration (Phase 1)
+ */
 export interface InventoryItem {
   id: string
   productName: string
   catNum: string
+  supplier?: string // Supplier name
+
+  // SINGLE SOURCE OF TRUTH - Master quantity and pricing
+  currentQuantity: number // Master quantity shared across ALL devices using this item
+  priceExVAT: number // Master price for this item
+
+  // Reorder parameters
+  minQuantity?: number // Global minimum threshold
+  burnRatePerWeek?: number // Calculated total consumption across all devices
+
+  // Stock level indicator
   inventoryLevel: InventoryLevel
+
+  // Dates
   receivedDate: Date
   lastOrderedDate?: Date
-  chargeToAccount?: string // FundingAccount ID
-  notes?: string
+
+  // Categorization
   category?: string // Category ID
   subcategory?: string // Subcategory name
-  priceExVAT?: number
-  equipmentDeviceIds?: string[] // Array of equipment device IDs this item is assigned to
-  burnRatePerWeek?: number // Consumption rate per week
-  currentQuantity?: number // Current stock quantity
-  minQuantity?: number // Minimum quantity threshold for reordering
+
+  // Relationships
+  equipmentDeviceIds?: string[] // Devices using this supply
+  chargeToAccount?: string // Default funding account ID
+
+  // Metadata
+  notes?: string
+  labId?: string // Lab this inventory item belongs to
+  createdAt?: Date
+  updatedAt?: Date
 }
 
-// Equipment Management Types
+/**
+ * EquipmentSupply - Device-specific supply settings (NOT a data duplicate)
+ * Links to InventoryItem for actual quantity/price data.
+ * Stores only device-specific consumption settings.
+ * Updated as part of Equipment & Inventory System Integration (Phase 1)
+ *
+ * MIGRATION NOTE: Old fields (name, price, qty) removed.
+ * Use enrichSupply() utility to join with InventoryItem data for display.
+ */
 export interface EquipmentSupply {
   id: string
-  name: string
-  price: number
-  qty: number // Current quantity
-  minQty: number // Minimum quantity for reordering
-  burnPerWeek: number // Consumption rate per week
-  inventoryItemId?: string // Link to inventory item if it exists
-  chargeToAccountId?: string // Which account pays for this device's consumption
-  chargeToProjectId?: string // Which master project this belongs to
+  inventoryItemId: string // REQUIRED link to InventoryItem (single source of truth)
+
+  // Device-specific consumption settings
+  minQty: number // When THIS device needs reorder (device-specific threshold)
+  burnPerWeek: number // How fast THIS device consumes this supply
+
+  // Optional overrides for funding
+  chargeToAccountId?: string // Override default funding account
+  chargeToProjectId?: string // Link to specific master project
 }
 
 export interface EquipmentSOP {
@@ -1106,6 +1156,12 @@ export interface ELNItem {
   createdAt: string
   updatedAt?: string
   createdBy?: string
+
+  // AI-Generated Content Tracking (NEW - EU AI Act)
+  isAIGenerated?: boolean              // Whether content was AI-generated
+  aiContentId?: string                 // Link to AIGeneratedContent record
+  aiDisclaimerShown?: boolean          // Whether AI disclaimer was shown
+  aiContentEdited?: boolean            // Whether user edited AI content
 }
 
 export interface ELNPage {
@@ -1178,6 +1234,13 @@ export interface ELNExperiment {
   status?: "draft" | "in-progress" | "completed" | "archived"
   createdAt: string // ISO date string
   updatedAt?: string // ISO date string
+
+  // GDPR Special Category Data (NEW)
+  containsSpecialCategoryData?: boolean  // GDPR Article 9 marker
+  specialCategoryDataTypes?: Array<"health" | "genetic" | "biometric" | "patient_derived" | "clinical" | "other">
+  specialCategoryDataAcknowledged?: boolean // User acknowledged legal basis
+  specialCategoryDataAcknowledgedBy?: string // User ID who acknowledged
+  specialCategoryDataAcknowledgedAt?: string // When acknowledged
 }
 
 // New: Calendar events for meetings, submissions, custom milestones
@@ -1255,14 +1318,451 @@ export interface CalendarEvent {
 }
 
 // New: Audit trail entries for compliance and change history
+// UPDATED: Extended for GDPR compliance with more entity types
 export interface AuditTrail {
   id: string
-  entityType: "project" | "workpackage" | "task" | "deliverable" | "event"
+  entityType:
+    | "project"
+    | "workpackage"
+    | "task"
+    | "deliverable"
+    | "event"
+    | "order"
+    | "funding_account"
+    | "funding_allocation"
+    | "funding_transaction"
+    | "person_profile"
+    | "lab"
+    | "user"
+    | "eln_experiment"
+    | "data_export"
+    | "account_deletion"
+    | "consent_change"
+    | "privacy_settings"
   entityId: string
-  change: "create" | "update" | "delete"
+  change: "create" | "update" | "delete" | "export" | "access" | "login" | "logout"
   before?: any
   after?: any
   authorId: string // User ID
+  ipAddress?: string // IP address for security auditing
+  userAgent?: string // Browser/device info
+  metadata?: Record<string, any> // Additional context-specific data
   createdAt: Date
 }
 
+// ============================================================================
+// GDPR COMPLIANCE & DATA PROTECTION TYPES
+// ============================================================================
+
+/**
+ * UserRole - Enhanced RBAC for data protection and funding control
+ * Roles determine access to sensitive data and funding information
+ */
+export enum UserRole {
+  PI = "pi",                              // Principal Investigator - full lab oversight
+  RESEARCHER = "researcher",               // Standard researcher - standard access
+  ASSISTANT = "assistant",                 // Lab Assistant - limited orders/inventory
+  EXTERNAL_COLLABORATOR = "external_collaborator", // External - restricted read-only
+  FINANCE_ADMIN = "finance_admin",         // Finance Admin - funding oversight (PI/Lab Owner)
+  LAB_MANAGER = "lab_manager",             // Lab Manager - operational management
+  ADMIN = "admin"                          // System Administrator - full system access
+}
+
+/**
+ * Display names for user roles
+ */
+export const USER_ROLE_DISPLAY_NAMES: Record<UserRole, string> = {
+  [UserRole.PI]: "Principal Investigator",
+  [UserRole.RESEARCHER]: "Researcher",
+  [UserRole.ASSISTANT]: "Lab Assistant",
+  [UserRole.EXTERNAL_COLLABORATOR]: "External Collaborator",
+  [UserRole.FINANCE_ADMIN]: "Finance Administrator",
+  [UserRole.LAB_MANAGER]: "Lab Manager",
+  [UserRole.ADMIN]: "System Administrator"
+}
+
+/**
+ * UserConsent - GDPR consent tracking for cookies and data processing
+ * Implements ePrivacy Directive requirements
+ */
+export interface UserConsent {
+  id: string
+  userId: string
+  labId?: string
+
+  // Consent types
+  functionalCookies: boolean    // Required for app to function
+  analyticsCookies: boolean     // Firebase Analytics, performance monitoring
+
+  // GDPR lawful basis documentation
+  dataProcessingConsent: boolean // General data processing consent
+  specialCategoryDataAcknowledged: boolean // User acknowledged special category data usage in ELN
+
+  // Metadata
+  consentGivenAt: string        // ISO date when consent was given
+  consentUpdatedAt?: string     // ISO date of last update
+  ipAddress?: string            // IP where consent was given (for audit)
+  userAgent?: string            // Browser/device info
+  consentVersion: string        // Version of privacy policy accepted (e.g., "1.0", "2.0")
+}
+
+/**
+ * PrivacySettings - User privacy preferences and data control
+ * Implements GDPR Article 18 (Right to Restrict Processing)
+ */
+export interface PrivacySettings {
+  id: string
+  userId: string
+
+  // Analytics & Tracking
+  analyticsEnabled: boolean            // Firebase Analytics opt-in
+  performanceMonitoringEnabled: boolean // Performance tracking opt-in
+
+  // Profile Visibility
+  profileVisibleInDirectory: boolean   // Show in lab directory
+  emailVisibleToLabMembers: boolean    // Show email to lab members
+  phoneVisibleToLabMembers: boolean    // Show phone to lab members
+  officeLocationVisible: boolean       // Show office location
+
+  // Notifications
+  emailNotificationsEnabled: boolean   // Email notifications opt-in
+  projectAssignmentNotifications: boolean
+  orderNotifications: boolean
+  fundingAlertNotifications: boolean
+
+  // Auto-assignment
+  autoAssignToProjects: boolean        // Auto-assign to new projects
+
+  // Metadata
+  createdAt: string
+  updatedAt?: string
+}
+
+/**
+ * DataExportRequest - GDPR Article 15 (Right of Access) & Article 20 (Data Portability)
+ * Tracks user requests to export their personal data
+ */
+export interface DataExportRequest {
+  id: string
+  userId: string
+  userEmail: string
+
+  // Request details
+  requestedAt: string            // ISO date
+  status: "pending" | "processing" | "completed" | "failed"
+
+  // Export data
+  exportFormat: "json" | "csv" | "zip" // ZIP includes JSON + uploaded files
+  downloadUrl?: string           // Temporary signed URL for download
+  downloadExpiresAt?: string     // When download link expires
+
+  // Data included
+  includesProfile: boolean
+  includesProjects: boolean
+  includesTasks: boolean
+  includesOrders: boolean
+  includesELNData: boolean
+  includesUploadedFiles: boolean
+  includesAuditLogs: boolean
+
+  // Processing info
+  processedAt?: string
+  errorMessage?: string
+  fileSizeBytes?: number
+
+  // Audit
+  ipAddress?: string
+  userAgent?: string
+}
+
+/**
+ * AccountDeletionRequest - GDPR Article 17 (Right to Erasure)
+ * Tracks user requests to delete their account and personal data
+ * NOTE: Deletion is complete and non-reversible per specification
+ */
+export interface AccountDeletionRequest {
+  id: string
+  userId: string
+  userEmail: string
+  userName: string
+
+  // Request details
+  requestedAt: string
+  status: "pending" | "processing" | "completed" | "failed"
+
+  // Deletion options
+  deleteAllData: boolean              // Complete deletion vs anonymization
+  reason?: string                      // Optional reason for deletion
+
+  // Processing info
+  processedAt?: string
+  deletedBy?: string                   // Admin who approved deletion
+  errorMessage?: string
+
+  // Retention for legal compliance
+  retainForCompliance: boolean         // Keep minimal audit trail for legal requirements
+  retentionExpiresAt?: string          // When audit trail should be deleted
+
+  // Audit
+  ipAddress?: string
+  userAgent?: string
+}
+
+/**
+ * LawfulBasis - GDPR Article 6 lawful basis for processing
+ */
+export type LawfulBasis =
+  | "consent"           // Article 6.1.a - User gave explicit consent
+  | "contract"          // Article 6.1.b - Processing necessary for contract
+  | "legal_obligation"  // Article 6.1.c - Required by law
+  | "vital_interests"   // Article 6.1.d - Protect vital interests
+  | "public_task"       // Article 6.1.e - Public interest task
+  | "legitimate_interest" // Article 6.1.f - Legitimate interest
+
+/**
+ * DataRetentionPolicy - Defines how long different data types are retained
+ */
+export interface DataRetentionPolicy {
+  id: string
+  dataType: string                  // e.g., "audit_logs", "deleted_users", "experiments"
+  retentionPeriodDays: number       // How many days to retain
+  autoDeleteEnabled: boolean        // Whether auto-deletion is enabled
+  lawfulBasis: LawfulBasis          // Legal basis for retention period
+  notes?: string                    // Explanation for retention period
+  createdAt: string
+  updatedAt?: string
+}
+
+// ============================================================================
+// ENHANCED FUNDING SYSTEM TYPES
+// ============================================================================
+
+/**
+ * FundingAllocationType - What the allocation is for
+ */
+export type FundingAllocationType = "PERSON" | "PROJECT"
+
+/**
+ * FundingAllocation - Allocation of funding to a person or project
+ * A portion of a FundingAccount assigned to enable spending
+ */
+export interface FundingAllocation {
+  id: string
+
+  // Source funding
+  fundingAccountId: string
+  fundingAccountName: string      // Cached
+  labId: string                   // Lab this allocation belongs to
+
+  // Allocation target
+  type: FundingAllocationType
+  personId?: string               // PersonProfile ID if type = PERSON
+  personName?: string             // Cached
+  projectId?: string              // MasterProject ID if type = PROJECT
+  projectName?: string            // Cached
+
+  // Financial limits
+  allocatedAmount?: number        // Hard limit (optional - can be unlimited)
+  softLimit?: number              // Warning threshold
+  currentSpent: number            // Calculated from transactions
+  currentCommitted: number        // Calculated from pending transactions
+  remainingBudget?: number        // Calculated: allocatedAmount - currentSpent - currentCommitted
+
+  // Currency
+  currency: string                // e.g., "EUR", "GBP", "USD"
+
+  // Status
+  status: "active" | "exhausted" | "suspended" | "archived"
+
+  // Notifications
+  lowBalanceWarningThreshold?: number  // Percentage (e.g., 80 = warn at 80% spent)
+  lastLowBalanceWarningAt?: string     // When last warning was sent
+
+  // Metadata
+  notes?: string
+  createdAt: string
+  createdBy: string              // User ID who created this allocation
+  updatedAt?: string
+  updatedBy?: string
+}
+
+/**
+ * FundingTransactionType - Type of transaction
+ */
+export type FundingTransactionType =
+  | "ORDER_COMMIT"       // Order placed (pending)
+  | "ORDER_RECEIVED"     // Order received (final)
+  | "ORDER_CANCELLED"    // Order cancelled (reversal)
+  | "ADJUSTMENT"         // Manual adjustment (correction, refund, etc.)
+  | "REFUND"             // Refund from supplier
+  | "TRANSFER"           // Transfer between allocations
+  | "ALLOCATION_CREATED" // Initial allocation
+  | "ALLOCATION_ADJUSTED" // Allocation amount changed
+
+/**
+ * FundingTransactionStatus - Transaction lifecycle status
+ */
+export type FundingTransactionStatus =
+  | "PENDING"   // Committed but not final (e.g., order placed but not received)
+  | "FINAL"     // Final transaction (e.g., order received, adjustment completed)
+  | "CANCELLED" // Transaction cancelled/reversed
+
+/**
+ * FundingTransaction - Ledger entry for all funding movements
+ * Tracks spending, commitments, adjustments, and refunds
+ */
+export interface FundingTransaction {
+  id: string
+
+  // Source funding
+  fundingAccountId: string
+  fundingAccountName: string      // Cached
+  allocationId?: string           // Optional: specific allocation this draws from
+  allocationName?: string         // Cached
+  labId: string
+
+  // Linked entity (what triggered this transaction)
+  orderId?: string                // Order ID if this is an order transaction
+  orderNumber?: string            // Cached order reference
+  entityType?: "order" | "adjustment" | "transfer" | "allocation"
+  entityId?: string               // Generic entity ID for non-order transactions
+
+  // Financial
+  amount: number                  // Transaction amount (positive = spent, negative = refund)
+  currency: string
+
+  // Transaction details
+  type: FundingTransactionType
+  status: FundingTransactionStatus
+  description: string             // Human-readable description
+
+  // Lifecycle tracking
+  createdAt: string               // When transaction was created
+  createdBy: string               // User ID who created transaction
+  finalizedAt?: string            // When status changed to FINAL
+  cancelledAt?: string            // When transaction was cancelled
+
+  // Metadata
+  invoiceNumber?: string          // Invoice reference
+  poNumber?: string               // Purchase order number
+  supplierName?: string           // Cached supplier name for orders
+  notes?: string
+  metadata?: Record<string, any>  // Additional context-specific data
+}
+
+// ============================================================================
+// AI & SPECIAL CATEGORY DATA TYPES (EU AI Act & GDPR Article 9)
+// ============================================================================
+
+/**
+ * AIGeneratedContent - Tracks AI-generated content for compliance
+ * Implements EU AI Act transparency requirements
+ */
+export interface AIGeneratedContent {
+  id: string
+
+  // Source
+  entityType: "eln_report" | "experiment_summary" | "task_suggestion" | "protocol_extraction"
+  entityId: string                // ID of the entity (e.g., ELNReport ID)
+
+  // AI details
+  modelName: string               // e.g., "gpt-4", "claude-3"
+  modelVersion?: string
+  promptHash: string              // SHA-256 hash of prompt (for audit without storing full prompt)
+  generatedAt: string
+  generatedBy: string             // User ID who triggered generation
+
+  // Content
+  generatedText?: string          // The AI-generated content
+  confidence?: number             // Confidence score if available (0-1)
+
+  // User interaction
+  userEdited: boolean             // Whether user edited the AI content
+  userApproved: boolean           // Whether user explicitly approved it
+  userFeedback?: "helpful" | "not_helpful" | "inaccurate"
+
+  // Compliance
+  disclaimerShown: boolean        // Whether AI disclaimer was shown to user
+  userOverrideAllowed: boolean    // Whether user can edit/override
+
+  // Metadata
+  metadata?: Record<string, any>
+  createdAt: string
+}
+
+/**
+ * SpecialCategoryDataMarker - GDPR Article 9 special category data tracking
+ * Tracks when ELN experiments contain special category data
+ * (health data, genetic data, biometric data, etc.)
+ */
+export interface SpecialCategoryDataMarker {
+  id: string
+  entityType: "eln_experiment" | "eln_item" | "order" | "project"
+  entityId: string
+
+  // Special category type
+  dataCategory:
+    | "health"          // Health/medical data
+    | "genetic"         // Genetic data
+    | "biometric"       // Biometric data
+    | "patient_derived" // Patient-derived samples
+    | "clinical"        // Clinical trial data
+    | "other"
+
+  // Legal basis
+  lawfulBasis: LawfulBasis        // GDPR Article 6 basis
+  specialCategoryBasis?: string   // Article 9.2 exception (e.g., "explicit_consent", "scientific_research")
+
+  // User acknowledgment
+  acknowledgedBy: string          // User ID who acknowledged
+  acknowledgedAt: string
+  legalBasisConfirmed: boolean    // User confirmed they have legal basis
+
+  // DPIA (Data Protection Impact Assessment)
+  dpiaRequired: boolean
+  dpiaReference?: string          // Reference to DPIA document
+
+  // Metadata
+  notes?: string
+  createdAt: string
+}
+
+/**
+ * Comment - User comments on projects, workpackages, tasks, orders, etc.
+ * Supports threaded conversations and @mentions
+ */
+export interface Comment {
+  id: string
+
+  // Entity being commented on
+  entityType: "project" | "workpackage" | "task" | "order" | "eln_experiment" | "equipment"
+  entityId: string
+
+  // Comment content
+  content: string              // The comment text (supports markdown)
+  mentions?: string[]          // Array of PersonProfile IDs mentioned (e.g., @username)
+
+  // Threading
+  parentCommentId?: string     // For threaded replies
+  threadDepth: number          // 0 for top-level, 1+ for replies
+
+  // Author
+  authorId: string             // PersonProfile ID
+  authorName: string           // Cached for display
+
+  // Metadata
+  createdAt: string
+  updatedAt?: string
+  editedAt?: string            // When comment was last edited
+  isEdited: boolean            // Flag to show "edited" indicator
+
+  // Reactions (optional future enhancement)
+  reactions?: {
+    [emoji: string]: string[]  // emoji -> array of PersonProfile IDs who reacted
+  }
+
+  // Moderation
+  isDeleted: boolean           // Soft delete
+  deletedAt?: string
+  deletedBy?: string           // User who deleted it
+}

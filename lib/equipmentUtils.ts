@@ -12,6 +12,8 @@ import {
   PersonProfile
 } from "./types"
 import { DayToDayTask } from "./dayToDayTypes"
+import { calculateMaintenanceHealth } from "./equipmentMath"
+import { EQUIPMENT_CONFIG } from "./equipmentConfig"
 
 /**
  * Calculate reorder suggestions based on inventory levels and burn rates
@@ -151,18 +153,8 @@ export function calculateReorderSuggestions(
 }
 
 /**
- * Calculate maintenance health for equipment (0-100%)
- */
-export function calculateMaintenanceHealth(device: EquipmentDevice): number {
-  const today = new Date()
-  const lastMaintained = new Date(device.lastMaintained)
-  const elapsedDays = Math.floor((today.getTime() - lastMaintained.getTime()) / (1000 * 60 * 60 * 24))
-  const healthPercent = Math.max(0, 1 - elapsedDays / device.maintenanceDays)
-  return Math.round(healthPercent * 100)
-}
-
-/**
  * Generate equipment-related tasks for the day-to-day board
+ * Note: Uses calculateMaintenanceHealth from equipmentMath for consistency
  */
 export function generateEquipmentTasks(
   equipment: EquipmentDevice[],
@@ -175,7 +167,7 @@ export function generateEquipmentTasks(
 
   // Maintenance tasks
   equipment.forEach(device => {
-    const health = calculateMaintenanceHealth(device)
+    const health = calculateMaintenanceHealth(device.lastMaintained, device.maintenanceDays)
 
     // Only create task if health is below threshold and no existing task
     if (health <= device.threshold) {
@@ -192,7 +184,11 @@ export function generateEquipmentTasks(
           title: `Perform maintenance on ${device.name}`,
           description: `Maintenance health at ${health}%. Last maintained: ${lastMaintained.toLocaleDateString()}. Due: ${dueDate.toLocaleDateString()}`,
           status: 'todo',
-          importance: health < 25 ? 'critical' : health < 60 ? 'high' : 'medium',
+          importance: health < EQUIPMENT_CONFIG.maintenance.criticalThreshold
+            ? 'critical'
+            : health < EQUIPMENT_CONFIG.maintenance.warningThreshold
+              ? 'high'
+              : 'medium',
           assigneeId: currentUser.id,
           dueDate,
           createdAt: now,
@@ -256,23 +252,4 @@ export function recordMaintenanceCompletion(device: EquipmentDevice): EquipmentD
     lastMaintained: new Date().toISOString().slice(0, 10),
     updatedAt: new Date().toISOString()
   }
-}
-
-/**
- * Calculate supplies health for equipment (0-100%) - based on worst supply
- */
-export function calculateSuppliesHealth(device: EquipmentDevice): number {
-  if (!device.supplies || device.supplies.length === 0) return 100
-
-  const weeksToPercent = (weeks: number): number => {
-    const p = Math.min(100, (weeks / 4) * 100)
-    return Math.max(0, p)
-  }
-
-  const percents = device.supplies.map(s => {
-    const weeks = s.burnPerWeek > 0 ? s.qty / s.burnPerWeek : 99
-    return weeksToPercent(weeks)
-  })
-
-  return Math.min(...percents)
 }

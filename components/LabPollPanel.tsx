@@ -35,9 +35,9 @@ export function LabPollPanel({
 
   // Filter polls by lab
   const labPolls = useMemo(() => {
-    if (!currentUserProfile?.lab) return []
-    return polls.filter(poll => poll.labId === currentUserProfile.lab)
-  }, [polls, currentUserProfile?.lab])
+    if (!currentUserProfile?.labId) return []
+    return polls.filter(poll => poll.labId === currentUserProfile.labId)
+  }, [polls, currentUserProfile?.labId])
 
   // Get user's response for a poll
   const getUserResponse = (poll: LabPoll): string[] => {
@@ -74,7 +74,7 @@ export function LabPollPanel({
         id: `option-${idx}`,
         text: option.trim(),
       })),
-      labId: currentUserProfile?.lab || '',
+      labId: currentUserProfile?.labId || '',
       createdBy: currentUserProfile?.id || '',
       createdAt: new Date().toISOString(),
       responses: [],

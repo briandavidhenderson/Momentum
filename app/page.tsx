@@ -4,7 +4,7 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench } from "lucide-react"
+import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield } from "lucide-react"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
@@ -15,6 +15,8 @@ import { ProfileManagement } from "@/components/views/ProfileManagement"
 import { OrdersInventory } from "@/components/views/OrdersInventory"
 import { EquipmentManagement } from "@/components/views/EquipmentManagement"
 import { CalendarEvents } from "@/components/views/CalendarEvents"
+import { CookieConsentBanner } from "@/components/CookieConsentBanner"
+import { PrivacyDashboard } from "@/components/views/PrivacyDashboard"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -192,6 +194,15 @@ export default function Home() {
               <Edit className="h-4 w-4 mr-2" />
               My Profile
             </Button>
+            <Button
+              onClick={() => setMainView('privacy')}
+              variant={mainView === 'privacy' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'privacy' ? 'bg-brand-500 text-white' : ''}
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Privacy
+            </Button>
             {(currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
               <Button
                 onClick={() => setMainView('profiles')}
@@ -206,20 +217,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Main Content Area */}
-        <div className="bg-white rounded-xl shadow-card p-6">
-          {/* Render selected view */}
-          {mainView === 'projects' && <ProjectDashboard />}
-          {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
-          {mainView === 'daytoday' && <DayToDayBoard />}
-          {mainView === 'eln' && <ElectronicLabNotebook />}
-          {mainView === 'orders' && <OrdersInventory />}
-          {mainView === 'equipment' && <EquipmentManagement />}
-          {mainView === 'calendar' && <CalendarEvents />}
-          {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
-          {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
-        </div>
+        {/* Render selected view */}
+        {mainView === 'projects' && <ProjectDashboard />}
+        {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
+        {mainView === 'daytoday' && <DayToDayBoard />}
+        {mainView === 'eln' && <ElectronicLabNotebook />}
+        {mainView === 'orders' && <OrdersInventory />}
+        {mainView === 'equipment' && <EquipmentManagement />}
+        {mainView === 'calendar' && <CalendarEvents />}
+        {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+        {mainView === 'privacy' && <PrivacyDashboard />}
+        {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
       </div>
+
+      {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}
+      <CookieConsentBanner />
     </main>
   )
 }

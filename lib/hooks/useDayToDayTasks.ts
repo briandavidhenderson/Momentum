@@ -20,7 +20,7 @@ export function useDayToDayTasks() {
     return () => unsubscribe();
   }, [profile]);
 
-  const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId'>) => {
+  const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId' | 'createdBy'>) => {
     if (!currentUser || !profile?.labId) return;
     try {
       const order = dayToDayTasks.length;

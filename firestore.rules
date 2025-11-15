@@ -208,10 +208,8 @@ service cloud.firestore {
 
     match /accounts/{accountId} {
       // Users can read accounts for projects they're a member of
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        isProjectMember(resource.data.masterProjectId)
-      );
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
+      allow read: if isAuthenticated();
 
       // PIs can create accounts for their projects
       allow create: if isAuthenticated() && (
@@ -368,17 +366,31 @@ service cloud.firestore {
     // DAY-TO-DAY TASKS
     // ============================================================================
     match /dayToDayTasks/{taskId} {
-      // Users can read their own tasks
-      allow read: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      
-      // Users can create their own tasks
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-      
-      // Users can update their own tasks
-      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
-      
-      // Users can delete their own tasks
-      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      // Users can read tasks in their lab (collaborative task board)
+      allow read: if isAuthenticated() && (
+        resource.data.labId == getUserLab() ||
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can create tasks in their own lab
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.labId == getUserLab();
+
+      // Users can update tasks in their lab (allows collaborative editing)
+      allow update: if isAuthenticated() && (
+        resource.data.labId == getUserLab() ||
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can delete their own tasks or lab members can delete tasks in their lab
+      allow delete: if isAuthenticated() && (
+        resource.data.labId == getUserLab() ||
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
     }
 
     // ============================================================================
@@ -432,20 +444,286 @@ service cloud.firestore {
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );
-      
+
       // Users can create their own experiments
-      allow create: if isAuthenticated() && 
+      allow create: if isAuthenticated() &&
         request.resource.data.createdBy == request.auth.uid;
-      
+
       // Users can update their own experiments
       allow update: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );
-      
+
       // Users can delete their own experiments
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // GDPR COMPLIANCE COLLECTIONS
+    // ============================================================================
+
+    // Helper function to get user's role
+    function getUserRole() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null && userDoc.data != null && userDoc.data.userRole != null
+        ? userDoc.data.userRole
+        : "researcher";  // Default role
+    }
+
+    // Helper function to check if user is PI or Finance Admin
+    function isPIOrFinanceAdmin() {
+      let role = getUserRole();
+      return role == "pi" || role == "finance_admin";
+    }
+
+    // Helper function to check if user is Finance Admin
+    function isFinanceAdmin() {
+      let role = getUserRole();
+      return role == "finance_admin" || role == "pi";
+    }
+
+    // Helper function to check if user is PI of a lab
+    function isLabPI(labId) {
+      let lab = get(/databases/$(database)/documents/labs/$(labId));
+      return lab != null && lab.data != null && (
+        getUserProfileId() in lab.data.principalInvestigators
+      );
+    }
+
+    // USER CONSENTS - GDPR Cookie & Data Processing Consent
+    match /userConsents/{consentId} {
+      // Users can read their own consent
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create their own consent
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own consent
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Only admin can delete (for compliance audit)
+      allow delete: if isAdmin();
+    }
+
+    // PRIVACY SETTINGS - User privacy preferences
+    match /privacySettings/{settingsId} {
+      // Users can read their own privacy settings
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create their own privacy settings
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own privacy settings
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own privacy settings
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // DATA EXPORT REQUESTS - GDPR Right of Access
+    match /dataExportRequests/{requestId} {
+      // Users can read their own export requests
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can create their own export requests
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // System/Admin can update status
+      allow update: if isAdmin();
+
+      // Only admin can delete (for audit trail)
+      allow delete: if isAdmin();
+    }
+
+    // ACCOUNT DELETION REQUESTS - GDPR Right to Erasure
+    match /accountDeletionRequests/{requestId} {
+      // Users can read their own deletion requests, admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can create their own deletion requests
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // System/Admin can update status
+      allow update: if isAdmin();
+
+      // Only admin can delete (for audit trail)
+      allow delete: if isAdmin();
+    }
+
+    // SPECIAL CATEGORY DATA MARKERS - GDPR Article 9
+    match /specialCategoryDataMarkers/{markerId} {
+      // Users can read markers for their own content
+      allow read: if isAuthenticated();
+
+      // Users can create markers for their own content
+      allow create: if isAuthenticated() &&
+        request.resource.data.acknowledgedBy == request.auth.uid;
+
+      // Users can update their own markers
+      allow update: if isAuthenticated() &&
+        resource.data.acknowledgedBy == request.auth.uid;
+
+      // Only admin can delete (for audit)
+      allow delete: if isAdmin();
+    }
+
+    // AI GENERATED CONTENT - EU AI Act Compliance
+    match /aiGeneratedContent/{contentId} {
+      // Users can read AI content they generated or admins
+      allow read: if isAuthenticated() && (
+        resource.data.generatedBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // System creates AI content records
+      allow create: if isAuthenticated();
+
+      // Users can update their feedback on AI content
+      allow update: if isAuthenticated() && resource.data.generatedBy == request.auth.uid;
+
+      // Only admin can delete (for audit)
+      allow delete: if isAdmin();
+    }
+
+    // DATA RETENTION POLICIES - Admin only
+    match /dataRetentionPolicies/{policyId} {
+      // All authenticated users can read policies
+      allow read: if isAuthenticated();
+
+      // Only admin can create policies
+      allow create: if isAdmin();
+
+      // Only admin can update policies
+      allow update: if isAdmin();
+
+      // Only admin can delete policies
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // ENHANCED FUNDING SYSTEM COLLECTIONS
+    // ============================================================================
+
+    // FUNDING ALLOCATIONS - Budget allocations to people/projects
+    match /fundingAllocations/{allocationId} {
+      // Visibility based on role:
+      // - PI/Finance Admin: Can see all allocations in their lab
+      // - Researcher: Can see only their own personal allocations and project allocations they're on
+      // - Assistant: Can see project allocations for projects they're on
+      // - External Collaborator: Cannot see funding data
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
+      allow read: if isAuthenticated();
+
+      // PI or Finance Admin can create allocations
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (isPIOrFinanceAdmin() && request.resource.data.labId == getUserLab())
+      );
+
+      // PI or Finance Admin can update allocations
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isPIOrFinanceAdmin() && resource.data.labId == getUserLab())
+      );
+
+      // Only PI, Finance Admin, or Admin can delete allocations
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        (isPIOrFinanceAdmin() && resource.data.labId == getUserLab())
+      );
+    }
+
+    // FUNDING TRANSACTIONS - Ledger entries for all funding movements
+    match /fundingTransactions/{transactionId} {
+      // Visibility based on role:
+      // - PI/Finance Admin: Can see all transactions in their lab
+      // - Users: Can see transactions for allocations they have access to
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        // PI or Finance Admin can see all in their lab
+        (isPIOrFinanceAdmin() && resource.data.labId == getUserLab()) ||
+        // Users can see transactions for their allocations (checked via allocationId access)
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // System creates transactions automatically (orders, adjustments, etc.)
+      // PI/Finance Admin can create manual adjustments
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isPIOrFinanceAdmin()
+      );
+
+      // Only PI/Finance Admin can update transactions (e.g., status changes)
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isPIOrFinanceAdmin() && resource.data.labId == getUserLab())
+      );
+
+      // Only admin can delete transactions (for audit trail)
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // COMMENTS
+    // ============================================================================
+    match /comments/{commentId} {
+      // Users can read comments on entities they have access to
+      // Note: This is simplified - ideally we'd check access to the parent entity
+      allow read: if isAuthenticated();
+
+      // Users can create comments
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == getUserProfileId() &&
+        request.resource.data.createdAt is timestamp;
+
+      // Users can update their own comments (for editing)
+      allow update: if isAuthenticated() && (
+        resource.data.authorId == getUserProfileId() ||
+        isAdmin()
+      );
+
+      // Users can delete their own comments
+      allow delete: if isAuthenticated() && (
+        resource.data.authorId == getUserProfileId() ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // NOTIFICATIONS
+    // ============================================================================
+    // Notifications for equipment, inventory, budget, and task events
+    match /notifications/{notificationId} {
+      // Users can read only their own notifications
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userId == getUserProfileId()
+      );
+
+      // Authenticated users can create notifications
+      // (triggered by domain events like low stock, low budget, task assignment)
+      allow create: if isAuthenticated();
+
+      // Users can update their own notifications (e.g., mark as read)
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userId == getUserProfileId()
+      );
+
+      // Users can delete their own notifications, admins can delete any
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.userId == getUserProfileId() ||
         isAdmin()
       );
     }

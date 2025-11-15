@@ -17,6 +17,10 @@ import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalcula
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
+import { ProfileProject } from "@/lib/types";
+import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
+import { logger } from "@/lib/logger";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -41,9 +45,10 @@ export function ProjectDashboard() {
       .filter((wp): wp is Workpackage => wp !== undefined);
   }, [workpackagesMap]);
 
-  const handleCreateProject = () => {
-    if (!profile) return;
+  const handleCreateRegularProject = () => {
+    if (!profile || !user) return;
 
+    // Create a simple project with minimal defaults
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
       name: `New Project ${projects.length + 1}`,
       description: "",
@@ -56,25 +61,95 @@ export function ProjectDashboard() {
       grantName: "",
       grantNumber: "",
       totalBudget: 0,
-      currency: "GBP",
+      currency: "EUR",
       startDate: new Date().toISOString(),
-      endDate: new Date().toISOString(),
+      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       funderId: "",
       funderName: "",
       accountIds: [],
-      principalInvestigatorIds: [],
+      principalInvestigatorIds: profile.id ? [profile.id] : [],
       coPIIds: [],
-      teamMemberIds: [],
-      teamRoles: {},
+      teamMemberIds: profile.id ? [profile.id] : [],
+      teamRoles: profile.id ? { [profile.id]: "PI" } : {},
       status: "planning",
       progress: 0,
       workpackageIds: [],
       visibility: "lab",
-      createdBy: user?.uid || "",
+      createdBy: user.uid,
       isExpanded: true,
     };
 
     handleCreateMasterProject(newProject);
+  };
+
+  const handleCreateMasterProjectFromDialog = async (projectData: ProfileProject & { funderId?: string }) => {
+    if (!profile || !user) return;
+
+    // Fix Bug #1: Validate project name before creation
+    if (!projectData.name || !projectData.name.trim()) {
+      alert("Project name is required. Please enter a project name.");
+      return;
+    }
+
+    // Map ProjectVisibility to MasterProject visibility
+    const mapVisibility = (vis: typeof projectData.visibility): "private" | "lab" | "institute" | "organisation" => {
+      switch (vis) {
+        case "private":
+        case "postdocs":
+        case "pi-researchers":
+        case "custom":
+          return "private";
+        case "lab":
+          return "lab";
+        case "institute":
+          return "institute";
+        case "organisation":
+          return "organisation";
+        default:
+          return "lab";
+      }
+    };
+
+    // Convert ProfileProject to MasterProject format
+    const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+      name: projectData.name.trim(), // Fix Bug #1: Ensure name is trimmed
+      description: projectData.description || "",
+      labId: profile.labId,
+      labName: profile.labName,
+      instituteId: profile.instituteId,
+      instituteName: profile.instituteName,
+      organisationId: profile.organisationId,
+      organisationName: profile.organisationName,
+      grantName: projectData.grantName || "",
+      grantNumber: projectData.grantNumber || "",
+      totalBudget: projectData.budget || 0,
+      currency: "EUR",
+      startDate: projectData.startDate,
+      endDate: projectData.endDate,
+      funderId: projectData.funderId || "",
+      funderName: "", // Will be populated by backend or fetched separately
+      accountIds: projectData.fundedBy || [],
+      principalInvestigatorIds: projectData.principalInvestigatorId ? [projectData.principalInvestigatorId] : (profile.id ? [profile.id] : []),
+      coPIIds: [],
+      teamMemberIds: projectData.principalInvestigatorId ? [projectData.principalInvestigatorId] : (profile.id ? [profile.id] : []),
+      teamRoles: projectData.principalInvestigatorId ? { [projectData.principalInvestigatorId]: "PI" } : (profile.id ? { [profile.id]: "PI" } : {}),
+      status: projectData.status,
+      progress: 0,
+      workpackageIds: [],
+      visibility: mapVisibility(projectData.visibility),
+      visibleTo: projectData.visibleTo,
+      tags: projectData.tags,
+      notes: projectData.notes,
+      createdBy: user.uid,
+      isExpanded: true,
+    };
+
+    try {
+      await handleCreateMasterProject(newProject);
+    } catch (error) {
+      logger.error("Error creating master project", error);
+      alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   };
 
   const handleDateChange = useCallback(async (ganttTask: GanttTask) => {
@@ -142,7 +217,7 @@ export function ProjectDashboard() {
         }
       }
     } catch (error) {
-      console.error("Error updating task dates:", error);
+      logger.error("Error updating task dates", error);
       alert("Failed to update task dates. Please try again.");
     }
   }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
@@ -209,10 +284,10 @@ export function ProjectDashboard() {
         }
       }
     } catch (error) {
-      console.error("Error toggling expand/collapse:", error);
+      logger.error("Error toggling expand/collapse", error);
       alert("Failed to toggle expand/collapse. Please try again.");
     }
-  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
+  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, getProjectWorkpackages]);
 
   // Helper to find the parent project and workpackage for a task
   const findTaskContext = useCallback((taskId: string): { project: MasterProject; workpackage: Workpackage; task: Task } | null => {
@@ -234,6 +309,15 @@ export function ProjectDashboard() {
     try {
       switch (action.action) {
         case "open-details":
+          // Check if it's a project
+          if (action.targetType === "project") {
+            const project = projects.find(p => p.id === action.targetId);
+            if (project) {
+              setSelectedProjectForDetail(project);
+              return;
+            }
+          }
+
           // Find and open the task details
           for (const project of projects) {
             for (const wp of getProjectWorkpackages(project)) {
@@ -344,7 +428,7 @@ export function ProjectDashboard() {
           break;
       }
     } catch (error) {
-      console.error("Error handling context action:", error);
+      logger.error("Error handling context action", error);
       alert("Failed to perform action. Please try again.");
     }
   }, [projects, handleUpdateWorkpackage, findTaskContext, selectedTask, workpackagesMap, getProjectWorkpackages]);
@@ -413,7 +497,7 @@ export function ProjectDashboard() {
         }
       }
     } catch (error) {
-      console.error("Error assigning person:", error);
+      logger.error("Error assigning person", error);
       alert("Failed to assign person. Please try again.");
     }
   }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
@@ -459,7 +543,7 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error toggling todo:", error);
+      logger.error("Error toggling todo", error);
       alert("Failed to toggle todo. Please try again.");
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
@@ -505,7 +589,7 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error adding todo:", error);
+      logger.error("Error adding todo", error);
       alert("Failed to add todo. Please try again.");
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
@@ -551,7 +635,7 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error deleting todo:", error);
+      logger.error("Error deleting todo", error);
       alert("Failed to delete todo. Please try again.");
     }
   }, [selectedTask, findTaskContext, getProjectWorkpackages]);
@@ -598,10 +682,10 @@ export function ProjectDashboard() {
         setSelectedTask(updatedTask);
       }
     } catch (error) {
-      console.error("Error adding subtask:", error);
+      logger.error("Error adding subtask", error);
       alert("Failed to add subtask. Please try again.");
     }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
+  }, [selectedTask, findTaskContext]);
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);
@@ -651,10 +735,57 @@ export function ProjectDashboard() {
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       });
     } catch (error) {
-      console.error("Error creating workpackage:", error);
+      logger.error("Error creating workpackage", error);
       alert("Failed to create workpackage. Please try again.");
     }
   };
+
+  // If a project is selected for detail view, show the detail page
+  if (selectedProjectForDetail) {
+    const projectWorkpackages = getProjectWorkpackages(selectedProjectForDetail)
+    const projectTeamMembers = allProfiles.filter(p =>
+      selectedProjectForDetail.teamMemberIds?.includes(p.id)
+    )
+
+    return (
+      <ProjectDetailPage
+        project={selectedProjectForDetail}
+        workpackages={projectWorkpackages}
+        teamMembers={projectTeamMembers}
+        fundingAccounts={[]} // TODO: Add funding accounts fetch
+        onBack={() => setSelectedProjectForDetail(null)}
+        onEdit={() => {
+          // TODO: Open project edit dialog
+          alert("Edit functionality coming soon")
+        }}
+        onCreateWorkpackage={async (workpackageData) => {
+          // Create workpackage and link it to the project
+          const workpackageId = await createWorkpackage({
+            ...workpackageData,
+            profileProjectId: selectedProjectForDetail.id,
+            createdBy: user?.uid || "",
+          } as any)
+
+          if (workpackageId) {
+            await handleUpdateMasterProject(selectedProjectForDetail.id, {
+              workpackageIds: [...(selectedProjectForDetail.workpackageIds || []), workpackageId],
+            })
+          }
+        }}
+        onUpdateWorkpackage={async (workpackageId, updates) => {
+          await handleUpdateWorkpackage(workpackageId, updates)
+        }}
+        onDeleteWorkpackage={async (workpackageId) => {
+          // Remove from project's workpackageIds
+          await handleUpdateMasterProject(selectedProjectForDetail.id, {
+            workpackageIds: (selectedProjectForDetail.workpackageIds || []).filter(id => id !== workpackageId),
+          })
+          // Note: The actual workpackage document deletion should be handled by the backend or here
+          // For now, we just remove the reference
+        }}
+      />
+    )
+  }
 
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col gap-4 overflow-hidden">
@@ -709,7 +840,7 @@ export function ProjectDashboard() {
             </>
           )}
 
-          <Button onClick={handleCreateProject} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+          <Button onClick={() => setProjectDialogOpen(true)} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
           </Button>

@@ -1,9 +1,16 @@
 # Momentum Multi-Calendar Integration Plan
 
+## ⚠️ STATUS: FUTURE ROADMAP - NOT YET IMPLEMENTED
+
+> **This is a detailed specification for Google/Microsoft Calendar integration.**
+>
+> - 📋 **Status:** Planning Phase - Not Yet Started
+> - 📅 **Expected Timeline:** Q2 2025 (7 weeks estimated)
+> - 🎯 **Priority:** Medium-High
+> - 💼 **Business Value:** High - Streamlines researcher scheduling
+
 **Version:** 1.0
 **Date:** 2025-01-13
-**Status:** Planning Phase
-**Estimated Timeline:** 7 weeks
 
 ---
 

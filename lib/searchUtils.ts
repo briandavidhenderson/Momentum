@@ -235,11 +235,11 @@ export function filterTasks(tasks: Task[], filters: TaskFilters): Task[] {
 
 export interface PeopleFilters {
   query?: string
-  organisation?: string
-  institute?: string
-  lab?: string
+  organisationId?: string
+  instituteId?: string
+  labId?: string
   position?: string
-  reportsTo?: string
+  reportsToId?: string
 }
 
 /**
@@ -274,18 +274,18 @@ export function filterPeople(
   }
 
   // Organisation filter
-  if (filters.organisation) {
-    filtered = filtered.filter((p) => p.organisation === filters.organisation)
+  if (filters.organisationId) {
+    filtered = filtered.filter((p) => p.organisationId === filters.organisationId)
   }
 
   // Institute filter
-  if (filters.institute) {
-    filtered = filtered.filter((p) => p.institute === filters.institute)
+  if (filters.instituteId) {
+    filtered = filtered.filter((p) => p.instituteId === filters.instituteId)
   }
 
   // Lab filter
-  if (filters.lab) {
-    filtered = filtered.filter((p) => p.lab === filters.lab)
+  if (filters.labId) {
+    filtered = filtered.filter((p) => p.labId === filters.labId)
   }
 
   // Position filter
@@ -294,8 +294,8 @@ export function filterPeople(
   }
 
   // Reports to filter
-  if (filters.reportsTo) {
-    filtered = filtered.filter((p) => p.reportsTo === filters.reportsTo)
+  if (filters.reportsToId) {
+    filtered = filtered.filter((p) => p.reportsToId === filters.reportsToId)
   }
 
   return filtered
