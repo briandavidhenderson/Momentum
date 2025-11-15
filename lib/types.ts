@@ -509,6 +509,7 @@ export interface PersonProfile {
   orcidUrl?: string                   // Full URL "https://orcid.org/0000-0000-0000-0000"
   orcidVerified?: boolean             // True once ORCID is linked via OAuth
   orcidLastSynced?: string            // ISO date of last sync with ORCID record
+  orcidSyncEnabled?: boolean          // Whether to keep profile in sync with ORCID
   orcidClaims?: {                     // Snapshot from OIDC/userinfo (non-sensitive)
     name?: string
     email?: string | null             // May be null if user hides email
