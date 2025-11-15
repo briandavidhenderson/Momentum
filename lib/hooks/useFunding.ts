@@ -80,7 +80,7 @@ export function useFunding(
           setFundingAccountsLoading(false)
         },
         (error) => {
-          console.error('Error subscribing to funding accounts:', error)
+          logger.error('Error subscribing to funding accounts', error)
           setFundingAccountsError(error as Error)
           setFundingAccountsLoading(false)
         }
@@ -88,7 +88,7 @@ export function useFunding(
 
       return unsubscribe
     } catch (error) {
-      console.error('Error setting up funding accounts subscription:', error)
+      logger.error('Error setting up funding accounts subscription', error)
       setFundingAccountsError(error as Error)
       setFundingAccountsLoading(false)
       return undefined
@@ -114,7 +114,7 @@ export function useFunding(
           setFundingAllocationsLoading(false)
         },
         (error) => {
-          console.error('Error subscribing to funding allocations:', error)
+          logger.error('Error subscribing to funding allocations', error)
           setFundingAllocationsError(error as Error)
           setFundingAllocationsLoading(false)
         }
@@ -122,7 +122,7 @@ export function useFunding(
 
       return unsubscribe
     } catch (error) {
-      console.error('Error setting up funding allocations subscription:', error)
+      logger.error('Error setting up funding allocations subscription', error)
       setFundingAllocationsError(error as Error)
       setFundingAllocationsLoading(false)
       return undefined
