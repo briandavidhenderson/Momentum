@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label"
 import { InventoryItem, PersonProfile } from "@/lib/types"
 import { EnrichedSupply } from "@/lib/supplyUtils"
 import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
+import { logger } from "@/lib/logger"
 
-interface CheckStockDialogProps {
+interface CheckStockDialogProps{
   open: boolean
   onClose: () => void
   supply: EnrichedSupply | null
