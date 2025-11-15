@@ -42,11 +42,19 @@ export function useAuth() {
             const profile = await findUserProfile(userData.uid, userData.profileId);
             if (!isMountedRef.current) return;
 
-            if (profile) {
+            // Check both profile existence AND onboardingComplete flag
+            if (profile && profile.onboardingComplete) {
               setCurrentUserProfile(profile);
               setCurrentUserProfileId(profile.id);
               setAuthState('app');
+            } else if (profile && !profile.onboardingComplete) {
+              // Profile exists but onboarding not complete - restart onboarding
+              console.warn('Profile exists but onboarding incomplete - restarting onboarding');
+              setCurrentUserProfile(null);
+              setCurrentUserProfileId(null);
+              setAuthState('setup');
             } else {
+              // No profile - start onboarding
               setAuthState('setup');
             }
           } else {
@@ -105,11 +113,20 @@ export function useAuth() {
         setCurrentUser(user);
 
         const profile = await findUserProfile(userData.uid, userData.profileId);
-        if (profile) {
+
+        // Check both profile existence AND onboardingComplete flag
+        if (profile && profile.onboardingComplete) {
           setCurrentUserProfile(profile);
           setCurrentUserProfileId(profile.id);
           setAuthState('app');
+        } else if (profile && !profile.onboardingComplete) {
+          // Profile exists but onboarding not complete - restart onboarding
+          console.warn('Profile exists but onboarding incomplete - restarting onboarding');
+          setCurrentUserProfile(null);
+          setCurrentUserProfileId(null);
+          setAuthState('setup');
         } else {
+          // No profile - start onboarding
           setAuthState('setup');
         }
       } else {

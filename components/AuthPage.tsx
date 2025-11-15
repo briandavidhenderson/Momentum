@@ -22,6 +22,41 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [verificationSent, setVerificationSent] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
+  const [resendingVerification, setResendingVerification] = useState(false)
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return
+
+    setResendingVerification(true)
+    setError("")
+
+    try {
+      // Sign in temporarily to get the user object
+      const userCredential = await signInWithEmailAndPassword(auth, unverifiedEmail, password)
+      const user = userCredential.user
+
+      // Send verification email
+      await sendEmailVerification(user)
+
+      // Sign out immediately
+      await auth.signOut()
+
+      setVerificationSent(true)
+      setUnverifiedEmail(null)
+      setError("")
+    } catch (error: any) {
+      console.error("Error resending verification:", error)
+
+      if (error.code === "auth/wrong-password") {
+        setError("Incorrect password. Please try again.")
+      } else {
+        setError(`Failed to resend verification email: ${error.message}`)
+      }
+    } finally {
+      setResendingVerification(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,9 +85,9 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
 
         // Check if email is verified
         if (!user.emailVerified) {
+          setUnverifiedEmail(email)
           setError(
-            "Please verify your email before signing in. Check your inbox for the verification link. " +
-            "If you didn't receive it, try signing up again to resend the verification email."
+            "Please verify your email before signing in. Check your inbox for the verification link."
           )
           return
         }
@@ -112,8 +147,20 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
-              {error}
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm space-y-2">
+              <p>{error}</p>
+              {unverifiedEmail && (
+                <Button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendingVerification}
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 border-red-300 text-red-700 hover:bg-red-100"
+                >
+                  {resendingVerification ? "Sending..." : "Resend Verification Email"}
+                </Button>
+              )}
             </div>
           )}
 
