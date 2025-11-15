@@ -73,6 +73,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     notes: "",
     projects: [],
     principalInvestigatorProjects: [],
+    orcidId: "",
+    orcidUrl: "",
+    orcidVerified: false,
+    orcidSyncEnabled: false,
+    orcidLastSynced: undefined,
   })
 
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)
@@ -236,7 +241,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       alert("You can only edit your own profile, or you need administrator privileges to edit other profiles.")
       return
     }
-    
+
     setFormData({
       ...profile,
       fundedBy: profile.fundedBy || [],
@@ -245,6 +250,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       projects: profile.projects || [],
       principalInvestigatorProjects: profile.principalInvestigatorProjects || [],
       isAdministrator: profile.isAdministrator || false,
+      orcidId: profile.orcidId || "",
+      orcidUrl: profile.orcidUrl || "",
+      orcidVerified: profile.orcidVerified || false,
+      orcidSyncEnabled: profile.orcidSyncEnabled || false,
+      orcidLastSynced: profile.orcidLastSynced || undefined,
     })
     setSelectedProfile(profile)
     setIsEditing(true)
@@ -260,6 +270,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       projects: profile.projects || [],
       principalInvestigatorProjects: profile.principalInvestigatorProjects || [],
       isAdministrator: profile.isAdministrator || false,
+      orcidId: profile.orcidId || "",
+      orcidUrl: profile.orcidUrl || "",
+      orcidVerified: profile.orcidVerified || false,
+      orcidSyncEnabled: profile.orcidSyncEnabled || false,
+      orcidLastSynced: profile.orcidLastSynced || undefined,
     })
     setSelectedProfile(profile)
     setIsEditing(false)
@@ -323,6 +338,15 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       researchInterests: formData.researchInterests || [],
       qualifications: formData.qualifications || [],
       notes: formData.notes || "",
+
+      // ORCID integration
+      orcidId: formData.orcidId || undefined,
+      orcidUrl: formData.orcidUrl || (formData.orcidId
+        ? `https://orcid.org/${formData.orcidId.replace(/https?:\/\/(sandbox\.)?orcid\.org\//, "")}`
+        : undefined),
+      orcidVerified: formData.orcidVerified || false,
+      orcidSyncEnabled: formData.orcidSyncEnabled || false,
+      orcidLastSynced: formData.orcidLastSynced || undefined,
 
       // Account
       userId: formData.userId,
@@ -736,6 +760,93 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* ORCID / Researcher Identifiers */}
+            <div className="space-y-4">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <UserIcon className="h-4 w-4" />
+                Researcher Identifiers
+              </h3>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <Label htmlFor="orcidId">ORCID iD</Label>
+                  <Input
+                    id="orcidId"
+                    placeholder="0000-0000-0000-0000"
+                    value={formData.orcidId || ""}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setFormData({
+                        ...formData,
+                        orcidId: value,
+                        orcidUrl: value
+                          ? `https://orcid.org/${value.replace(/https?:\/\/(sandbox\.)?orcid\.org\//, "")}`
+                          : ""
+                      })
+                    }}
+                    disabled={!isEditing || formData.orcidVerified}
+                  />
+                  {formData.orcidUrl && (
+                    <a
+                      href={formData.orcidUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-blue-600 underline inline-flex items-center gap-1 mt-1"
+                    >
+                      View ORCID profile
+                    </a>
+                  )}
+                  {formData.orcidLastSynced && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Last synced: {new Date(formData.orcidLastSynced).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                {isEditing && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="whitespace-nowrap"
+                    onClick={async () => {
+                      try {
+                        const { linkOrcidToCurrentUser } = await import("@/lib/auth/orcid")
+                        const result = await linkOrcidToCurrentUser()
+
+                        setFormData({
+                          ...formData,
+                          orcidId: result.orcid,
+                          orcidUrl: result.orcidUrl,
+                          orcidVerified: true,
+                          orcidLastSynced: new Date().toISOString()
+                        })
+
+                        alert("ORCID linked successfully!")
+                      } catch (error: any) {
+                        alert(`Failed to link ORCID: ${error.message}`)
+                      }
+                    }}
+                  >
+                    {formData.orcidId ? "Re-sync ORCID" : "Connect ORCID"}
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="orcidSyncEnabled"
+                  checked={formData.orcidSyncEnabled || false}
+                  onChange={(e) => setFormData({ ...formData, orcidSyncEnabled: e.target.checked })}
+                  disabled={!isEditing}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <Label htmlFor="orcidSyncEnabled" className="text-sm">
+                  Keep profile in sync with ORCID (where possible)
+                </Label>
               </div>
             </div>
 
