@@ -912,6 +912,7 @@ export interface Order {
   orderedDate?: Date
   receivedDate?: Date
   expectedDeliveryDate?: Date
+  quantity?: number               // Number of units ordered (defaults to 1)
 
   // Financial
   priceExVAT: number
