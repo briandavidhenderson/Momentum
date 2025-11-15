@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { EquipmentDevice, InventoryItem, Order, PersonProfile, MasterProject, EquipmentSupply } from "@/lib/types"
 import { calculateMaintenanceHealth, supplyHealthForDevice, supplyHealthPercent, getHealthColor, getHealthClass, formatCurrency } from "@/lib/equipmentMath"
 import { EQUIPMENT_CONFIG } from "@/lib/equipmentConfig"
+import { enrichSupply, enrichDeviceSupplies, EnrichedSupply } from "@/lib/supplyUtils"
 import { Network, Wrench, ShoppingCart, AlertCircle, ZoomIn, ZoomOut, Crosshair, Package, Plus } from "lucide-react"
 
 // Simple Switch component
@@ -148,15 +149,15 @@ export function EquipmentNetworkPanel({
 
       // Add supply nodes if enabled
       if (showSupplies && dev.supplies?.length) {
-        dev.supplies.forEach(s => {
-          const pct = supplyHealthPercent(s)
+        const enrichedSupplies = enrichDeviceSupplies(dev, inventory)
+        enrichedSupplies.forEach(s => {
           const supplyNode: GraphNode = {
             id: `sup:${dev.id}:${s.id}`,
-            name: s.name,
+            name: s.name, // From enriched supply (joined with inventory)
             type: "supply",
             labId,
             deviceId: dev.id,
-            color: getHealthColor(pct),
+            color: getHealthColor(s.healthPercent),
             payload: { device: dev, supply: s },
           }
           N.push(supplyNode)
@@ -174,7 +175,7 @@ export function EquipmentNetworkPanel({
         supplies: N.filter(n => n.type === "supply").length,
       }
     }
-  }, [equipment, labs, showSupplies])
+  }, [equipment, labs, showSupplies, inventory])
 
   // D3 visualization
   useEffect(() => {
@@ -344,8 +345,8 @@ export function EquipmentNetworkPanel({
     toast.success("Maintenance recorded")
   }
 
-  const handleReorder = (dev: EquipmentDevice, s: EquipmentSupply) => {
-    // Find most recent prior order
+  const handleReorder = (dev: EquipmentDevice, s: EnrichedSupply) => {
+    // Find most recent prior order using enriched supply data
     const priorOrders = orders.filter(o =>
       (o.sourceSupplyId === s.id) ||
       (o.sourceInventoryItemId === s.inventoryItemId) ||
@@ -355,17 +356,17 @@ export function EquipmentNetworkPanel({
     const prior = priorOrders[0]
 
     const newOrder: Omit<Order, "id"> = {
-      productName: s.name,
-      catNum: prior?.catNum ?? "",
-      supplier: prior?.supplier ?? "",
-      accountId: prior?.accountId ?? "",
-      accountName: prior?.accountName ?? "Select Account",
-      funderId: prior?.funderId ?? "",
-      funderName: prior?.funderName ?? "Select Funder",
-      masterProjectId: prior?.masterProjectId ?? "",
-      masterProjectName: prior?.masterProjectName ?? "Select Project",
-      priceExVAT: s.price ?? prior?.priceExVAT ?? 0,
-      currency: prior?.currency ?? EQUIPMENT_CONFIG.currency.code,
+      productName: s.name, // From enriched supply (joined with inventory)
+      catNum: s.catNum || prior?.catNum || "",
+      supplier: s.supplier || prior?.supplier || "",
+      accountId: prior?.accountId || "",
+      accountName: prior?.accountName || "Select Account",
+      funderId: prior?.funderId || "",
+      funderName: prior?.funderName || "Select Funder",
+      masterProjectId: prior?.masterProjectId || "",
+      masterProjectName: prior?.masterProjectName || "Select Project",
+      priceExVAT: s.price, // From enriched supply (joined with inventory)
+      currency: prior?.currency || EQUIPMENT_CONFIG.currency.code,
       status: "to-order",
       orderedBy: currentUserProfile?.id || "",
       createdBy: currentUserProfile?.id || "",
@@ -399,38 +400,32 @@ export function EquipmentNetworkPanel({
     const device = equipment.find(d => d.id === addingSupply)
     if (!device) return
 
-    let finalName = newSupplyForm.name
-    let finalInventoryItemId: string | undefined = newSupplyForm.inventoryItemId
-
-    // If inventory item selected, use its details
-    if (newSupplyForm.inventoryItemId) {
-      const invItem = inventory.find(i => i.id === newSupplyForm.inventoryItemId)
-      if (invItem) {
-        finalName = invItem.productName
-        finalInventoryItemId = invItem.id
-      }
-    }
-
-    if (!finalName.trim()) {
-      toast.error("Please enter a supply name or select from inventory")
+    // inventoryItemId is now REQUIRED - must select from existing inventory
+    if (!newSupplyForm.inventoryItemId) {
+      toast.error("Please select an inventory item or create a new reagent first")
       return
     }
 
+    const invItem = inventory.find(i => i.id === newSupplyForm.inventoryItemId)
+    if (!invItem) {
+      toast.error("Selected inventory item not found")
+      return
+    }
+
+    // Create supply with only device-specific settings (no name/qty/price duplication)
     const newSupply: EquipmentSupply = {
       id: `sup_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      name: finalName,
-      qty: parseFloat(newSupplyForm.qty) || 0,
+      inventoryItemId: invItem.id, // REQUIRED link to inventory
       minQty: parseFloat(newSupplyForm.minQty) || 1,
       burnPerWeek: parseFloat(newSupplyForm.burnPerWeek) || 0.5,
-      price: parseFloat(newSupplyForm.price) || 0,
-      inventoryItemId: finalInventoryItemId,
+      // chargeToAccountId and chargeToProjectId can be added later if needed
     }
 
     const updatedSupplies = [...(device.supplies || []), newSupply]
     onEquipmentUpdate(device.id, { supplies: updatedSupplies })
 
     setAddingSupply(null)
-    toast.success(`Added ${finalName} to ${device.name}`)
+    toast.success(`Added ${invItem.productName} to ${device.name}`)
   }
 
   const handleCreateReagent = () => {
@@ -439,19 +434,20 @@ export function EquipmentNetworkPanel({
       return
     }
 
-    // Create inventory item with 0 stock
+    // Create inventory item with 0 stock (required fields: currentQuantity, priceExVAT)
     const newInventoryItem: Omit<InventoryItem, "id"> = {
       productName: newSupplyForm.name,
       catNum: "",
-      inventoryLevel: "empty",
-      currentQuantity: 0,
+      supplier: "",
+      currentQuantity: 0, // REQUIRED: Start with 0 stock
+      priceExVAT: parseFloat(newSupplyForm.price) || 0, // REQUIRED: Price from form
       minQuantity: parseInt(newSupplyForm.minQty) || 1,
+      inventoryLevel: "empty",
       receivedDate: new Date(),
       lastOrderedDate: undefined,
       chargeToAccount: "",
       category: "Reagent",
       subcategory: "Lab Supply",
-      priceExVAT: parseFloat(newSupplyForm.price) || 0,
       notes: "Created from Equipment Network",
     }
 
@@ -633,18 +629,17 @@ export function EquipmentNetworkPanel({
                         </Button>
                       </div>
                       <div className="space-y-2">
-                        {(dev.supplies || []).map(s => {
-                          const pct = supplyHealthPercent(s)
-                          const cls = getHealthClass(pct)
+                        {enrichDeviceSupplies(dev, inventory).map(s => {
+                          const cls = getHealthClass(s.healthPercent)
                           return (
                             <div key={s.id} className="rounded border border-border bg-muted/30 p-2 text-xs">
                               <div className="flex items-center justify-between mb-1">
                                 <div className="flex items-center gap-1">
-                                  {pct <= 25 && <AlertCircle className="h-3 w-3 text-red-500" />}
+                                  {s.healthPercent <= 25 && <AlertCircle className="h-3 w-3 text-red-500" />}
                                   <span className="font-medium">{s.name}</span>
                                 </div>
                                 <div className="flex gap-1">
-                                  {s.qty === 0 ? (
+                                  {s.currentQuantity === 0 ? (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -660,8 +655,8 @@ export function EquipmentNetworkPanel({
                                       variant="outline"
                                       className="h-6 px-2"
                                       onClick={() => {
-                                        setCheckStock({ deviceId: dev.id, supplyId: s.id, qty: s.qty || 0 })
-                                        setTempQty(String(s.qty || 0))
+                                        setCheckStock({ deviceId: dev.id, supplyId: s.id, qty: s.currentQuantity })
+                                        setTempQty(String(s.currentQuantity))
                                       }}
                                     >
                                       Check
@@ -670,12 +665,12 @@ export function EquipmentNetworkPanel({
                                 </div>
                               </div>
                               <div className="text-[11px] text-muted-foreground">
-                                Qty: {s.qty}/{s.minQty} • Burn: {s.burnPerWeek}/wk
+                                Qty: {s.currentQuantity}/{s.minQty} • Burn: {s.burnPerWeek}/wk
                               </div>
                               <div className="h-1 w-full rounded bg-muted mt-1">
                                 <div
                                   className={`h-full rounded ${cls === 'critical' ? 'bg-red-500' : cls === 'warning' ? 'bg-orange-500' : 'bg-green-500'}`}
-                                  style={{ width: `${pct}%` }}
+                                  style={{ width: `${s.healthPercent}%` }}
                                 />
                               </div>
                             </div>
@@ -689,9 +684,8 @@ export function EquipmentNetworkPanel({
 
               {selected.type === "supply" && (() => {
                 const dev: EquipmentDevice = selected.payload.device
-                const s: EquipmentSupply = selected.payload.supply
-                const pct = supplyHealthPercent(s)
-                const cls = getHealthClass(pct)
+                const s: EnrichedSupply = selected.payload.supply // Already enriched in graph nodes
+                const cls = getHealthClass(s.healthPercent)
 
                 return (
                   <div className="space-y-4">
@@ -706,12 +700,12 @@ export function EquipmentNetworkPanel({
                     <div className="h-2 w-full rounded-full bg-muted">
                       <div
                         className={`h-full rounded-full ${cls === 'critical' ? 'bg-red-500' : cls === 'warning' ? 'bg-orange-500' : 'bg-green-500'}`}
-                        style={{ width: `${pct}%` }}
+                        style={{ width: `${s.healthPercent}%` }}
                       />
                     </div>
 
                     <div className="text-sm text-muted-foreground">
-                      Qty: {s.qty}/{s.minQty} • Burn: {s.burnPerWeek}/wk • Price: {formatCurrency(s.price || 0)}
+                      Qty: {s.currentQuantity}/{s.minQty} • Burn: {s.burnPerWeek}/wk • Price: {formatCurrency(s.price)}
                     </div>
 
                     <div className="flex gap-2">
@@ -727,8 +721,8 @@ export function EquipmentNetworkPanel({
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          setCheckStock({ deviceId: dev.id, supplyId: s.id, qty: s.qty || 0 })
-                          setTempQty(String(s.qty || 0))
+                          setCheckStock({ deviceId: dev.id, supplyId: s.id, qty: s.currentQuantity })
+                          setTempQty(String(s.currentQuantity))
                         }}
                       >
                         Update Stock
