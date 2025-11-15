@@ -37,7 +37,9 @@ export function EquipmentManagement() {
         orders={orders || []}
         masterProjects={masterProjects || []}
         currentUserProfile={currentUserProfile}
+        allProfiles={allProfiles || []}
         onEquipmentUpdate={handleUpdateEquipment}
+        onInventoryUpdate={handleInventoryUpdate}
         onOrderCreate={handleCreateOrder}
         onInventoryCreate={handleCreateInventoryItem || (() => {})}
       />

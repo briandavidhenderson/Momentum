@@ -11,6 +11,8 @@ import { EquipmentDevice, InventoryItem, Order, PersonProfile, MasterProject, Eq
 import { calculateMaintenanceHealth, supplyHealthForDevice, supplyHealthPercent, getHealthColor, getHealthClass, formatCurrency } from "@/lib/equipmentMath"
 import { EQUIPMENT_CONFIG } from "@/lib/equipmentConfig"
 import { enrichSupply, enrichDeviceSupplies, EnrichedSupply } from "@/lib/supplyUtils"
+import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
+import { CheckStockDialog } from "@/components/dialogs/CheckStockDialog"
 import { Network, Wrench, ShoppingCart, AlertCircle, ZoomIn, ZoomOut, Crosshair, Package, Plus } from "lucide-react"
 
 // Simple Switch component
@@ -59,7 +61,9 @@ interface EquipmentNetworkPanelProps {
   orders: Order[]
   masterProjects: MasterProject[]
   currentUserProfile: PersonProfile | null
+  allProfiles: PersonProfile[] // For notification recipients
   onEquipmentUpdate: (equipmentId: string, updates: Partial<EquipmentDevice>) => void
+  onInventoryUpdate: (inventory: InventoryItem[]) => void
   onOrderCreate: (order: Omit<Order, "id">) => void
   onInventoryCreate: (item: Omit<InventoryItem, "id">) => void
 }
@@ -70,7 +74,9 @@ export function EquipmentNetworkPanel({
   orders = [],
   masterProjects = [],
   currentUserProfile,
+  allProfiles,
   onEquipmentUpdate,
+  onInventoryUpdate,
   onOrderCreate,
   onInventoryCreate,
 }: EquipmentNetworkPanelProps) {
@@ -96,8 +102,7 @@ export function EquipmentNetworkPanel({
   const [edgeLayers, setEdgeLayers] = useState({ hosts: true, uses: true })
 
   const [selected, setSelected] = useState<GraphNode | null>(null)
-  const [checkStock, setCheckStock] = useState<{ deviceId: string; supplyId: string; qty: number } | null>(null)
-  const [tempQty, setTempQty] = useState("")
+  const [checkStockSupply, setCheckStockSupply] = useState<EnrichedSupply | null>(null)
 
   const [addingSupply, setAddingSupply] = useState<string | null>(null) // deviceId when adding supply
   const [newSupplyForm, setNewSupplyForm] = useState({
@@ -455,24 +460,6 @@ export function EquipmentNetworkPanel({
     toast.success(`Created reagent: ${newSupplyForm.name}. Add to order from Orders tab.`)
   }
 
-  const handleUpdateStock = () => {
-    if (!checkStock) return
-
-    const device = equipment.find(d => d.id === checkStock.deviceId)
-    if (!device) return
-
-    const newQty = parseFloat(tempQty)
-    if (isNaN(newQty)) return
-
-    const updatedSupplies = (device.supplies || []).map(s =>
-      s.id === checkStock.supplyId ? { ...s, qty: newQty } : s
-    )
-
-    onEquipmentUpdate(device.id, { supplies: updatedSupplies })
-    setCheckStock(null)
-    toast.success("Stock updated")
-  }
-
   return (
     <div className="card-monday p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -654,10 +641,7 @@ export function EquipmentNetworkPanel({
                                       size="sm"
                                       variant="outline"
                                       className="h-6 px-2"
-                                      onClick={() => {
-                                        setCheckStock({ deviceId: dev.id, supplyId: s.id, qty: s.currentQuantity })
-                                        setTempQty(String(s.currentQuantity))
-                                      }}
+                                      onClick={() => setCheckStockSupply(s)}
                                     >
                                       Check
                                     </Button>
@@ -720,10 +704,7 @@ export function EquipmentNetworkPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          setCheckStock({ deviceId: dev.id, supplyId: s.id, qty: s.currentQuantity })
-                          setTempQty(String(s.currentQuantity))
-                        }}
+                        onClick={() => setCheckStockSupply(s)}
                       >
                         Update Stock
                       </Button>
@@ -742,36 +723,15 @@ export function EquipmentNetworkPanel({
         </div>
       </div>
 
-      {/* Check Stock Dialog */}
-      <Dialog open={!!checkStock} onOpenChange={() => setCheckStock(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Stock</DialogTitle>
-            <DialogDescription>Enter the current quantity for this supply</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="qty">Current Quantity</Label>
-              <Input
-                id="qty"
-                type="number"
-                min={0}
-                value={tempQty}
-                onChange={(e) => setTempQty(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCheckStock(null)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateStock}>
-                Save
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Check Stock Dialog - Using Shared Component */}
+      <CheckStockDialog
+        open={!!checkStockSupply}
+        onClose={() => setCheckStockSupply(null)}
+        supply={checkStockSupply}
+        inventory={inventory}
+        allProfiles={allProfiles}
+        onInventoryUpdate={onInventoryUpdate}
+      />
 
       {/* Add Supply Dialog */}
       <Dialog open={!!addingSupply} onOpenChange={() => setAddingSupply(null)}>
