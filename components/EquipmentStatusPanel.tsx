@@ -23,6 +23,7 @@ import {
   weeksToHealthPercentage,
 } from "@/lib/equipmentMath"
 import { formatCurrency, getHealthClass, getHealthColor, getHealthTextColor, generateId, EQUIPMENT_CONFIG } from "@/lib/equipmentConfig"
+import { enrichSupply, enrichDeviceSupplies, updateInventoryQuantity, EnrichedSupply } from "@/lib/supplyUtils"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
@@ -109,7 +110,7 @@ export function EquipmentStatusPanel({
     onEquipmentUpdate(deviceId, { lastMaintained: toISODateString(new Date()) })
   }
 
-  // Handle check stock - now opens modal with local state
+  // Handle check stock - opens modal with enriched supply data
   const handleCheckStock = (deviceId: string, supplyId: string) => {
     const device = devices.find(d => d.id === deviceId)
     if (!device) return
@@ -117,11 +118,18 @@ export function EquipmentStatusPanel({
     const supply = device.supplies.find(s => s.id === supplyId)
     if (!supply) return
 
-    setCheckStockItem({ deviceId, supplyId, currentQty: supply.qty })
-    setTempStockQty(supply.qty.toString())
+    // Enrich to get current quantity from inventory
+    const enriched = enrichSupply(supply, inventory)
+    if (!enriched) {
+      console.error(`Cannot check stock: inventory item ${supply.inventoryItemId} not found`)
+      return
+    }
+
+    setCheckStockItem({ deviceId, supplyId, currentQty: enriched.currentQuantity })
+    setTempStockQty(enriched.currentQuantity.toString())
   }
 
-  // Handle save stock quantity (explicit save button)
+  // Handle save stock quantity - CRITICAL: Updates inventory, not device supplies
   const handleSaveStock = () => {
     if (!checkStockItem) return
 
@@ -131,50 +139,59 @@ export function EquipmentStatusPanel({
     const device = devices.find(d => d.id === checkStockItem.deviceId)
     if (!device) return
 
-    const updatedSupplies = device.supplies.map(s =>
-      s.id === checkStockItem.supplyId ? { ...s, qty: newQty } : s
-    )
+    const supply = device.supplies.find(s => s.id === checkStockItem.supplyId)
+    if (!supply) return
 
-    onEquipmentUpdate(checkStockItem.deviceId, { supplies: updatedSupplies })
+    // Update inventory item (single source of truth) instead of device supply
+    const updatedItem = updateInventoryQuantity(supply.inventoryItemId, newQty, inventory)
+    if (!updatedItem) {
+      console.error(`Cannot update stock: inventory item ${supply.inventoryItemId} not found`)
+      return
+    }
+
+    // Update the inventory array with the new item
+    const updatedInventory = inventory.map(item =>
+      item.id === updatedItem.id ? updatedItem : item
+    )
+    onInventoryUpdate(updatedInventory)
+
     setCheckStockItem(null)
     setTempStockQty("")
   }
 
   // Handle reorder - adds to "To Order" section
-  // FIXED: Now takes explicit neededQty to avoid calculation errors
-  const handleReorder = (deviceId: string, supply: EquipmentSupply, explicitNeededQty?: number) => {
-    const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+  // Updated to accept EnrichedSupply with joined inventory data
+  const handleReorder = (deviceId: string, supply: EnrichedSupply, explicitNeededQty?: number) => {
+    const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.currentQuantity, supply.minQty)
     if (neededQty <= 0) return
 
     const device = devices.find(d => d.id === deviceId)
     if (!device) return
 
-    // Create order
-    const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
+    // Create order with enriched supply data (already has name, price, catNum from inventory)
     const newOrder: Order = {
-      id: generateId('order'), // FIXED: Use crypto.randomUUID()
-      productName: supply.name,
-      catNum: inventoryItem?.catNum || '',
-      supplier: '',
+      id: generateId('order'),
+      productName: supply.name, // From enriched supply
+      catNum: supply.catNum || '',
+      supplier: supply.supplier || '',
       // Use account from inventory item, or placeholder
-      accountId: inventoryItem?.chargeToAccount || "temp_account_placeholder",
+      accountId: supply.chargeToAccountId || "temp_account_placeholder",
       accountName: "Select Account",
       funderId: "temp_funder_placeholder",
       funderName: "Select Funder",
-      masterProjectId: "temp_project_placeholder",
+      masterProjectId: supply.chargeToProjectId || "temp_project_placeholder",
       masterProjectName: "Select Project",
-      priceExVAT: supply.price,
-      currency: EQUIPMENT_CONFIG.currency.code, // FIXED: Use centralized currency
+      priceExVAT: supply.price, // From enriched supply
+      currency: EQUIPMENT_CONFIG.currency.code,
       status: 'to-order',
       orderedBy: currentUserProfile?.id || '',
-      orderedDate: undefined, // Will be set when order is actually placed
+      orderedDate: undefined,
       receivedDate: undefined,
       createdBy: currentUserProfile?.id || '',
       createdDate: new Date(),
-      category: inventoryItem?.category,
-      subcategory: inventoryItem?.subcategory,
-      // Legacy field for backward compatibility
-      chargeToAccount: inventoryItem?.chargeToAccount,
+      category: undefined,
+      subcategory: undefined,
+      chargeToAccount: supply.chargeToAccountId,
       // Add provenance for traceability
       sourceDeviceId: deviceId,
       sourceSupplyId: supply.id,
@@ -184,11 +201,11 @@ export function EquipmentStatusPanel({
     onOrderCreate(newOrder)
   }
 
-  // Handle order missing supplies
-  // FIXED: Calculate needed qty from ORIGINAL device state, not mutated
+  // Handle order missing supplies - uses enriched supply data
   const handleOrderMissing = (device: EquipmentDevice) => {
-    device.supplies.forEach(supply => {
-      const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+    const enrichedSupplies = enrichDeviceSupplies(device, inventory)
+    enrichedSupplies.forEach(supply => {
+      const neededQty = calculateNeededQuantity(supply.currentQuantity, supply.minQty)
       if (neededQty > 0) {
         // Pass explicit needed qty to avoid recalculation
         handleReorder(device.id, supply, neededQty)
@@ -234,7 +251,9 @@ export function EquipmentStatusPanel({
     setIsModalOpen(false)
   }
 
-  // Handle add supply
+  // TODO: Phase 5 - Extract this to shared AddSupplyDialog component
+  // This function still uses old EquipmentSupply structure and needs refactoring
+  // For now, it's deprecated - use inventory-first approach (create inventory item, then link)
   const handleAddSupply = (supply: EquipmentSupply) => {
     if (!editingDevice) return
 
@@ -242,6 +261,8 @@ export function EquipmentStatusPanel({
     handleSaveDevice({ ...editingDevice, supplies: updatedSupplies })
 
     // Also create/update inventory item if needed
+    // NOTE: This logic assumes old structure with supply.name, supply.qty, supply.price
+    // Will be refactored in Phase 5 when modal is extracted
     const existingInventory = inventory.find(i =>
       i.productName === supply.name &&
       i.equipmentDeviceIds?.includes(editingDevice.id)
@@ -483,23 +504,21 @@ export function EquipmentStatusPanel({
                     </div>
                   </div>
                   
-                  {/* Supplies List */}
+                  {/* Supplies List - Using Enriched Supply Data */}
                   <div className="flex flex-wrap gap-2">
-                    {device.supplies.map(supply => {
-                      const weeks = calculateWeeksRemaining(supply.qty, supply.burnPerWeek)
-                      const percent = weeksToHealthPercentage(weeks)
-                      const supplyClass = getHealthClass(percent)
-                      
+                    {enrichDeviceSupplies(device, inventory).map(supply => {
+                      const supplyClass = getHealthClass(supply.healthPercent)
+
                       return (
                         <div
                           key={supply.id}
                           className="relative bg-gray-50 border border-border rounded-full px-3 py-1.5 pr-20 text-xs"
                         >
                           <div className="flex items-center gap-1">
-                            {percent <= 25 && <AlertTriangle className="h-3 w-3 text-red-500" />}
+                            {supply.healthPercent <= 25 && <AlertTriangle className="h-3 w-3 text-red-500" />}
                             <span className="font-medium">{supply.name}</span>
                             <span className="text-muted-foreground">
-                              • Qty {supply.qty}/{supply.minQty} • Burn {supply.burnPerWeek}/wk
+                              • Qty {supply.currentQuantity}/{supply.minQty} • Burn {supply.burnPerWeek}/wk
                             </span>
                           </div>
                           <div className={`absolute left-3 right-3 bottom-1 h-0.5 bg-gray-200 rounded-full overflow-hidden`}>
@@ -509,14 +528,14 @@ export function EquipmentStatusPanel({
                                 supplyClass === 'warning' ? 'bg-orange-500' :
                                 'bg-green-500'
                               }`}
-                              style={{ width: `${percent}%` }}
+                              style={{ width: `${supply.healthPercent}%` }}
                             />
                           </div>
                           <div className="absolute right-3 bottom-2 text-[10px] text-muted-foreground">
-                            {Math.round(percent)}%
+                            {Math.round(supply.healthPercent)}%
                           </div>
                           <div className="absolute right-2 top-0.5 flex gap-1">
-                            {supply.qty === 0 ? (
+                            {supply.currentQuantity === 0 ? (
                               <Button
                                 size="sm"
                                 variant="ghost"
