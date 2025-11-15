@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FileText, Sparkles, Loader2, Download, Calendar } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { generateExperimentReport } from "@/lib/ai/router"
+import { logger } from "@/lib/logger"
 
 interface ELNReportGeneratorProps {
   experimentTitle: string
@@ -76,7 +77,7 @@ export function ELNReportGenerator({
       setShowGenerateDialog(false)
       toast.success("Report generated successfully!")
     } catch (error) {
-      console.error("Report generation failed:", error)
+      logger.error("Report generation failed", error)
       toast.error("Failed to generate report. Please try again.")
     } finally {
       setIsGenerating(false)

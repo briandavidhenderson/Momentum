@@ -3,6 +3,63 @@ import * as functions from "firebase-functions"
 
 admin.initializeApp()
 
+// Import GDPR functions
+import { processDataExportRequest, processAccountDeletion } from "./gdpr"
+import { enforceDataRetention } from "./retention"
+import {
+  logAuditEvent,
+  logUserLogin,
+  logUserDeletion,
+  logConsentChanges,
+  logPrivacySettingsChanges,
+  logDataExportRequests,
+  logAccountDeletionRequests,
+  logSpecialCategoryData,
+} from "./audit"
+import {
+  onOrderStatusChange,
+  createDefaultAllocation,
+} from "./funding"
+import {
+  checkFundingAlertNotifications,
+  notifyLargeOrder,
+  notifyAllocationCreated,
+  notifyTransactionFinalized,
+} from "./notifications"
+
+// Export GDPR functions
+export {
+  processDataExportRequest,
+  processAccountDeletion,
+  enforceDataRetention,
+}
+
+// Export Audit functions
+export {
+  logAuditEvent,
+  logUserLogin,
+  logUserDeletion,
+  logConsentChanges,
+  logPrivacySettingsChanges,
+  logDataExportRequests,
+  logAccountDeletionRequests,
+  logSpecialCategoryData,
+}
+
+// Export Funding functions
+export {
+  onOrderStatusChange,
+  createDefaultAllocation,
+}
+
+// Export Notification functions
+export {
+  checkFundingAlertNotifications,
+  notifyLargeOrder,
+  notifyAllocationCreated,
+  notifyTransactionFinalized,
+}
+
 /**
  * ORCID OAuth Configuration
  * These should be set via Firebase Functions config:
@@ -340,6 +397,139 @@ export const orcidAuthCallback = functions.https.onCall(async (data, context) =>
     throw new functions.https.HttpsError("internal", "Internal server error")
   }
 })
+
+/**
+ * Fetch and parse full ORCID record from the ORCID API
+ */
+async function fetchOrcidRecord(orcidId: string, accessToken: string, config: OrcidConfig) {
+  const apiBase = config.useSandbox
+    ? "https://sandbox.orcid.org/v3.0"
+    : "https://pub.orcid.org/v3.0"
+
+  try {
+    const response = await fetch(`${apiBase}/${orcidId}/record`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      console.error(`Failed to fetch ORCID record: ${response.status}`)
+      return null
+    }
+
+    const json = await response.json()
+
+    // Parse personal information
+    const person = json.person || {}
+    const name = person.name || {}
+    const givenNames = name["given-names"]?.value || ""
+    const familyName = name["family-name"]?.value || ""
+    const creditName = name["credit-name"]?.value || undefined
+    const biography = person.biography?.content || undefined
+
+    // Parse keywords
+    const keywords =
+      person.keywords?.keyword?.map((k: any) => k.content).filter(Boolean) || []
+
+    // Parse researcher URLs
+    const researcherUrls =
+      person["researcher-urls"]?.["researcher-url"]?.map((url: any) => ({
+        name: url["url-name"] || "Website",
+        url: url.url?.value || "",
+      })) || []
+
+    // Parse activities
+    const activities = json["activities-summary"] || {}
+
+    // Parse employments
+    const employments = (activities.employments?.["employment-group"] || [])
+      .map((item: any) => {
+        const summary = item["employment-summary"]
+        if (!summary) return null
+
+        const org = summary.organization
+        return {
+          type: "employment",
+          organisation: org?.name || "Unknown",
+          roleTitle: summary["role-title"] || undefined,
+          departmentName: summary["department-name"] || undefined,
+          city: org?.address?.city || undefined,
+          country: org?.address?.country || undefined,
+          startDate: summary["start-date"],
+          endDate: summary["end-date"] || null,
+        }
+      })
+      .filter(Boolean)
+
+    // Parse educations
+    const educations = (activities.educations?.["education-group"] || [])
+      .map((item: any) => {
+        const summary = item["education-summary"]
+        if (!summary) return null
+
+        const org = summary.organization
+        return {
+          type: "education",
+          organisation: org?.name || "Unknown",
+          roleTitle: summary["role-title"] || undefined,
+          departmentName: summary["department-name"] || undefined,
+          city: org?.address?.city || undefined,
+          country: org?.address?.country || undefined,
+          startDate: summary["start-date"],
+          endDate: summary["end-date"] || null,
+        }
+      })
+      .filter(Boolean)
+
+    // Parse works (publications)
+    const works = (activities.works?.group || [])
+      .map((group: any) => {
+        const workSummary = group["work-summary"]?.[0]
+        if (!workSummary) return null
+
+        const title = workSummary.title?.title?.value || "Untitled"
+        const publicationDate = workSummary["publication-date"]
+
+        // Extract DOI
+        const externalIds = workSummary["external-ids"]?.["external-id"] || []
+        const doiId = externalIds.find((id: any) => id["external-id-type"] === "doi")
+        const doi = doiId?.["external-id-value"]
+
+        return {
+          putCode: workSummary["put-code"]?.toString() || "",
+          title,
+          journal: workSummary["journal-title"]?.value || undefined,
+          year: publicationDate?.year?.value
+            ? parseInt(publicationDate.year.value)
+            : undefined,
+          type: workSummary.type || undefined,
+          doi,
+        }
+      })
+      .filter(Boolean)
+
+    // Build the ORCID record
+    return {
+      orcidId,
+      givenNames,
+      familyName,
+      creditName,
+      biography,
+      keywords,
+      researcherUrls,
+      employments,
+      educations,
+      works,
+      raw: json,
+      lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }
+  } catch (error) {
+    console.error("Error fetching ORCID record:", error)
+    return null
+  }
+}
 
 /**
  * Link ORCID to existing Firebase user

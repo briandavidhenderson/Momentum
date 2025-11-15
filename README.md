@@ -198,14 +198,20 @@ firebase deploy --only firestore
 
 ## Documentation
 
-- **[CODE_PROTECTION.md](CODE_PROTECTION.md)** - Code protection and snapshot system guide
-- **[SESSION_FINAL_SUMMARY.md](SESSION_FINAL_SUMMARY.md)** - Latest session achievements and status
-- **[NEXT_SESSION_TODO.md](NEXT_SESSION_TODO.md)** - Prioritized development tasks
-- **[QUICK_START_NEXT_SESSION.md](QUICK_START_NEXT_SESSION.md)** - Quick reference for developers
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Feature reference guide
-- **[PROJECT_CLEANUP_PLAN.md](PROJECT_CLEANUP_PLAN.md)** - Maintenance and refactoring strategy
+### Current Status & Guides
+- **[PROGRESS_SUMMARY.md](PROGRESS_SUMMARY.md)** - Complete status of implemented features (100% done)
+- **[CODEBASE_AUDIT_RECOMMENDATIONS.md](CODEBASE_AUDIT_RECOMMENDATIONS.md)** - Comprehensive audit findings and action plan
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Code patterns and feature reference guide
 - **[SETUP_FIREBASE_ENV.md](SETUP_FIREBASE_ENV.md)** - Firebase configuration guide
-- **[docs/archive/](docs/archive/)** - Historical documentation
+
+### Planning & Roadmap
+- **[momentum_action_plan.md](momentum_action_plan.md)** - Original 26-item action plan (Phases 1-2 complete)
+- **[INTEGRATION_PLAN.md](INTEGRATION_PLAN.md)** - Equipment & Inventory refactoring (✅ Complete)
+- **[CALENDAR_INTEGRATION_PLAN.md](CALENDAR_INTEGRATION_PLAN.md)** - Future: Calendar sync roadmap
+- **[GDPR_FUNDING_IMPLEMENTATION_PLAN.md](GDPR_FUNDING_IMPLEMENTATION_PLAN.md)** - GDPR compliance (Phase 1/4 done)
+
+### Migration & Scripts
+- **[scripts/MIGRATION_README.md](scripts/MIGRATION_README.md)** - Data migration guide for equipment system
 
 ## Current Status
 

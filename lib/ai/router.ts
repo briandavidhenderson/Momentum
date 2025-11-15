@@ -20,6 +20,7 @@ import type {
   ProtocolOptions,
   EntityOptions,
 } from './types'
+import { logger } from '@/lib/logger'
 
 import { OpenAIProvider } from './providers/openai'
 import { GeminiProvider } from './providers/gemini'
@@ -512,7 +513,7 @@ export async function extractItemStructure(
           cost: entities.cost || 0
         }
       } catch (error) {
-        console.error('Error parsing data file:', error)
+        logger.error('Error parsing data file', error)
         return {
           data: {
             text: 'Failed to parse data file',
@@ -629,8 +630,9 @@ Each should be a string containing well-formatted markdown text.`
         cost: response.cost
       }
     } catch (parseError) {
-      console.error('Failed to parse report JSON:', parseError)
-      console.log('Raw response:', response.data.substring(0, 500))
+      logger.error('Failed to parse report JSON', parseError, {
+        rawResponsePreview: response.data.substring(0, 500)
+      })
 
       // If JSON parsing fails, try to split by markdown headers
       const sections = response.data.split(/#{1,2}\s+(?:BACKGROUND|Background|PROTOCOLS|Protocols|RESULTS|Results|CONCLUSION|Conclusion)/gi)

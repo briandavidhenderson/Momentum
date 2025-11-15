@@ -15,12 +15,17 @@ export function CalendarEvents() {
     handleCreateEvent,
     handleUpdateEvent,
     handleDeleteEvent,
+    people = [],  // Fix Bug #9: Get people from context for event attendees
   } = useAppContext()
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+
+  // Fix Bug #9: Add dialog state for event creation
+  const [eventDialogOpen, setEventDialogOpen] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(undefined)
 
   const getEventTypeColor = (type: CalendarEvent['type']) => {
     switch (type) {

@@ -2,9 +2,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
-import { auth } from '@/lib/firebase';
+import { getFirebaseAuth } from '@/lib/firebase';
 import { getUser, findUserProfile, FirestoreUser as User } from '@/lib/firestoreService';
 import { PersonProfile } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 export type AuthState = 'auth' | 'setup' | 'app';
 
@@ -18,6 +19,7 @@ export function useAuth() {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    const auth = getFirebaseAuth();
     setMounted(true);
     isMountedRef.current = true;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -50,12 +52,12 @@ export function useAuth() {
               setAuthState('setup');
             }
           } else {
-            // Extract name from email safely
-            const emailName = firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'
+            // Use displayName if available, otherwise leave empty
+            // Never fallback to email local part as it's not a proper name
             const tempUser: User = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
-              fullName: firebaseUser.displayName || emailName,
+              fullName: firebaseUser.displayName || '',
               profileId: null,
               createdAt: Timestamp.now(),
               isAdministrator: false,
@@ -65,7 +67,7 @@ export function useAuth() {
           }
         } catch (error) {
           if (!isMountedRef.current) return;
-          console.error('Error loading user data:', error);
+          logger.error('Error loading user data', error);
           setAuthState('auth');
         } finally {
           if (isMountedRef.current) {
@@ -117,7 +119,7 @@ export function useAuth() {
         setAuthState('setup');
       }
     } catch (error) {
-      console.error('Error fetching user data on login:', error);
+      logger.error('Error fetching user data on login', error);
       setAuthState('auth');
     }
   };
@@ -127,10 +129,11 @@ export function useAuth() {
   };
 
   const handleSignOut = async () => {
+    const auth = getFirebaseAuth();
     try {
       await signOut(auth);
     } catch (error) {
-      console.error('Sign out error:', error);
+      logger.error('Sign out error', error);
       alert('Error signing out. Please try again.');
     }
   };

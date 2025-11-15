@@ -251,6 +251,7 @@ export const COLLECTIONS = {
   USERS: "users",
   PERSON_PROFILES: "personProfiles",
   PROJECTS: "projects",
+  MASTER_PROJECTS: "masterProjects",
   WORKPACKAGES: "workpackages",
   TASKS: "tasks",
   SUBTASKS: "subtasks",
@@ -261,12 +262,26 @@ export const COLLECTIONS = {
   INSTITUTES: "institutes",
   LABS: "labs",
   FUNDERS: "funders",
+  ACCOUNTS: "accounts",
   ORDERS: "orders",
   INVENTORY: "inventory",
   EQUIPMENT: "equipment",
   LAB_POLLS: "labPolls",
   ELN_EXPERIMENTS: "elnExperiments",
   DAY_TO_DAY_TASKS: "dayToDayTasks",
+
+  // GDPR Compliance Collections
+  USER_CONSENTS: "userConsents",
+  PRIVACY_SETTINGS: "privacySettings",
+  DATA_EXPORT_REQUESTS: "dataExportRequests",
+  ACCOUNT_DELETION_REQUESTS: "accountDeletionRequests",
+  SPECIAL_CATEGORY_DATA_MARKERS: "specialCategoryDataMarkers",
+  AI_GENERATED_CONTENT: "aiGeneratedContent",
+  DATA_RETENTION_POLICIES: "dataRetentionPolicies",
+
+  // Enhanced Funding System Collections
+  FUNDING_ALLOCATIONS: "fundingAllocations",
+  FUNDING_TRANSACTIONS: "fundingTransactions",
 } as const
 
 export type CollectionType = typeof COLLECTIONS[keyof typeof COLLECTIONS]
@@ -356,3 +371,204 @@ export const SUCCESS_MESSAGES = {
   ORDER_CREATED: "Order created successfully",
   CHANGES_SAVED: "Changes saved successfully",
 } as const
+
+// ============================================================================
+// CURRENCY & FINANCIAL CONSTANTS (GDPR Compliance & Funding System)
+// ============================================================================
+
+/**
+ * Default currency for the application
+ * As per specification: EUR should be default across the whole application
+ */
+export const DEFAULT_CURRENCY = "EUR" as const
+
+/**
+ * Supported currencies
+ */
+export const SUPPORTED_CURRENCIES = ["EUR", "GBP", "USD", "CHF"] as const
+
+export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number]
+
+/**
+ * Currency display names
+ */
+export const CURRENCY_NAMES: Record<SupportedCurrency, string> = {
+  EUR: "Euro (€)",
+  GBP: "British Pound (£)",
+  USD: "US Dollar ($)",
+  CHF: "Swiss Franc (CHF)",
+}
+
+/**
+ * Currency symbols
+ */
+export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
+  EUR: "€",
+  GBP: "£",
+  USD: "$",
+  CHF: "CHF",
+}
+
+// ============================================================================
+// GDPR & DATA PROTECTION CONSTANTS
+// ============================================================================
+
+/**
+ * Current privacy policy version
+ * Increment when privacy policy is updated - users will need to re-consent
+ */
+export const PRIVACY_POLICY_VERSION = "1.0" as const
+
+/**
+ * Data retention periods in days
+ * As per GDPR and research standards
+ */
+export const DATA_RETENTION_PERIODS = {
+  AUDIT_LOGS: 365,              // 12 months for GDPR compliance
+  DELETED_USER_AUDIT: 365,       // 12 months minimal audit trail after deletion
+  EXPERIMENT_LOGS: 2555,         // 7 years for research standards
+  PROJECT_METADATA: 730,         // 24 months
+  CONSENT_RECORDS: 2555,         // 7 years to demonstrate compliance
+  DATA_EXPORT_DOWNLOADS: 7,      // Download links expire after 7 days
+  ACCOUNT_DELETION_REQUESTS: 2555, // 7 years for legal compliance
+} as const
+
+/**
+ * GDPR Article references for documentation
+ */
+export const GDPR_ARTICLES = {
+  LAWFUL_BASIS: "Article 6",
+  SPECIAL_CATEGORY_DATA: "Article 9",
+  RIGHT_OF_ACCESS: "Article 15",
+  RIGHT_TO_RECTIFICATION: "Article 16",
+  RIGHT_TO_ERASURE: "Article 17",
+  RIGHT_TO_RESTRICTION: "Article 18",
+  RIGHT_TO_DATA_PORTABILITY: "Article 20",
+  RIGHT_TO_OBJECT: "Article 21",
+  SECURITY_OF_PROCESSING: "Article 32",
+} as const
+
+/**
+ * Data residency regions
+ * All data must be stored in EU regions for Schrems II compliance
+ */
+export const DATA_REGIONS = {
+  EU_IRELAND: "europe-west1",
+  EU_BELGIUM: "europe-west1",
+  EU_FINLAND: "europe-north1",
+} as const
+
+/**
+ * Default data region
+ */
+export const DEFAULT_DATA_REGION = DATA_REGIONS.EU_IRELAND
+
+// ============================================================================
+// FUNDING SYSTEM CONSTANTS
+// ============================================================================
+
+/**
+ * Low balance warning thresholds (percentages)
+ */
+export const FUNDING_WARNING_THRESHOLDS = {
+  CRITICAL: 90, // 90% spent
+  HIGH: 80,     // 80% spent
+  MEDIUM: 70,   // 70% spent
+  LOW: 50,      // 50% spent
+} as const
+
+/**
+ * Budget forecast periods (days)
+ */
+export const BUDGET_FORECAST_PERIODS = {
+  SHORT_TERM: 30,   // 1 month
+  MEDIUM_TERM: 90,  // 3 months
+  LONG_TERM: 180,   // 6 months
+} as const
+
+/**
+ * Minimum allocation amount (in base currency)
+ */
+export const MIN_ALLOCATION_AMOUNT = 0.01
+
+/**
+ * Maximum transaction description length
+ */
+export const MAX_TRANSACTION_DESCRIPTION_LENGTH = 500
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get currency symbol for a given currency code
+ */
+export function getCurrencySymbol(currency: string): string {
+  return CURRENCY_SYMBOLS[currency as SupportedCurrency] || currency
+}
+
+/**
+ * Get currency display name
+ */
+export function getCurrencyName(currency: string): string {
+  return CURRENCY_NAMES[currency as SupportedCurrency] || currency
+}
+
+/**
+ * Format amount with currency
+ */
+export function formatCurrency(amount: number, currency: string = DEFAULT_CURRENCY): string {
+  const symbol = getCurrencySymbol(currency)
+  return `${symbol}${amount.toFixed(2)}`
+}
+
+/**
+ * Check if a currency is supported
+ */
+export function isSupportedCurrency(currency: string): currency is SupportedCurrency {
+  return SUPPORTED_CURRENCIES.includes(currency as SupportedCurrency)
+}
+
+/**
+ * Get retention period for a data type
+ */
+export function getRetentionPeriod(dataType: keyof typeof DATA_RETENTION_PERIODS): number {
+  return DATA_RETENTION_PERIODS[dataType]
+}
+
+/**
+ * Calculate expiry date based on retention period
+ */
+export function calculateExpiryDate(
+  createdAt: Date | string,
+  retentionPeriodDays: number
+): Date {
+  const created = typeof createdAt === "string" ? new Date(createdAt) : createdAt
+  const expiry = new Date(created)
+  expiry.setDate(expiry.getDate() + retentionPeriodDays)
+  return expiry
+}
+
+/**
+ * Check if data should be deleted based on retention policy
+ */
+export function shouldDeleteData(
+  createdAt: Date | string,
+  retentionPeriodDays: number
+): boolean {
+  const expiryDate = calculateExpiryDate(createdAt, retentionPeriodDays)
+  return new Date() > expiryDate
+}
+
+/**
+ * Get low balance warning level
+ */
+export function getLowBalanceWarningLevel(
+  percentageSpent: number
+): "critical" | "high" | "medium" | "low" | "normal" {
+  if (percentageSpent >= FUNDING_WARNING_THRESHOLDS.CRITICAL) return "critical"
+  if (percentageSpent >= FUNDING_WARNING_THRESHOLDS.HIGH) return "high"
+  if (percentageSpent >= FUNDING_WARNING_THRESHOLDS.MEDIUM) return "medium"
+  if (percentageSpent >= FUNDING_WARNING_THRESHOLDS.LOW) return "low"
+  return "normal"
+}

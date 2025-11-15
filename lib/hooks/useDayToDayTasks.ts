@@ -3,10 +3,12 @@ import { useState, useEffect } from 'react';
 import { DayToDayTask } from '@/lib/dayToDayTypes';
 import { createDayToDayTask, subscribeToDayToDayTasks, updateDayToDayTask, deleteDayToDayTask } from '@/lib/firestoreService';
 import { useAuth } from './useAuth';
+import { useToast } from '@/lib/toast';
 
 export function useDayToDayTasks() {
   const { currentUser, currentUserProfile: profile } = useAuth();
   const [dayToDayTasks, setDayToDayTasks] = useState<DayToDayTask[]>([]);
+  const { success, error } = useToast();
 
   useEffect(() => {
     // Get labId with fallback to legacy lab field
@@ -49,11 +51,23 @@ export function useDayToDayTasks() {
   };
 
   const handleUpdateDayToDayTask = async (taskId: string, updates: Partial<DayToDayTask>) => {
-    await updateDayToDayTask(taskId, updates);
+    try {
+      await updateDayToDayTask(taskId, updates);
+      success("Your changes have been saved.");
+    } catch (err) {
+      console.error('Error updating task:', err);
+      error("Failed to update task. Please try again.");
+    }
   };
 
   const handleDeleteDayToDayTask = async (taskId: string) => {
-    await deleteDayToDayTask(taskId);
+    try {
+      await deleteDayToDayTask(taskId);
+      success("The task has been removed.");
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      error("Failed to delete task. Please try again.");
+    }
   };
 
   const handleMoveDayToDayTask = async (taskId: string, newStatus: 'todo' | 'working' | 'done') => {

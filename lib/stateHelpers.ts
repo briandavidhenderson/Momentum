@@ -2,6 +2,8 @@
  * State management helper utilities to reduce code duplication
  */
 
+import { logger } from './logger';
+
 /**
  * Creates a generic updater function for a specific field
  * @example
@@ -77,7 +79,7 @@ export function createLocalStorageSync<T>(key: string) {
         const stored = localStorage.getItem(key)
         return stored ? JSON.parse(stored) : []
       } catch (error) {
-        console.error(`Error loading ${key} from localStorage:`, error)
+        logger.error('Error loading from localStorage', error, { key })
         return []
       }
     },
@@ -88,7 +90,7 @@ export function createLocalStorageSync<T>(key: string) {
           localStorage.setItem(key, JSON.stringify(data))
         }
       } catch (error) {
-        console.error(`Error saving ${key} to localStorage:`, error)
+        logger.error('Error saving to localStorage', error, { key })
       }
     },
     clear: () => {
@@ -96,7 +98,7 @@ export function createLocalStorageSync<T>(key: string) {
       try {
         localStorage.removeItem(key)
       } catch (error) {
-        console.error(`Error clearing ${key} from localStorage:`, error)
+        logger.error('Error clearing from localStorage', error, { key })
       }
     },
   }

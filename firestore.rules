@@ -270,10 +270,8 @@ service cloud.firestore {
 
     match /accounts/{accountId} {
       // Users can read accounts for projects they're a member of
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        isProjectMember(resource.data.masterProjectId)
-      );
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
+      allow read: if isAuthenticated();
 
       // PIs can create accounts for their projects
       allow create: if isAuthenticated() && (

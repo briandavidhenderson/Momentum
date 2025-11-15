@@ -4,7 +4,7 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench } from "lucide-react"
+import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield } from "lucide-react"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
@@ -15,6 +15,8 @@ import { ProfileManagement } from "@/components/views/ProfileManagement"
 import { OrdersInventory } from "@/components/views/OrdersInventory"
 import { EquipmentManagement } from "@/components/views/EquipmentManagement"
 import { CalendarEvents } from "@/components/views/CalendarEvents"
+import { CookieConsentBanner } from "@/components/CookieConsentBanner"
+import { PrivacyDashboard } from "@/components/views/PrivacyDashboard"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -81,11 +83,11 @@ export default function Home() {
 
   // Main application
   return (
-    <main className="min-h-screen bg-background p-4 pb-8">
-      <div className="max-w-[2000px] mx-auto space-y-4">
+    <main className="min-h-screen bg-gray-50 p-4 pb-8">
+      <div className="max-w-[2000px] mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between">
+        <div className="bg-white rounded-xl shadow-navigation p-6">
+          <div className="flex items-start justify-between mb-4">
             <div>
               <h1 className="h1 text-foreground mb-2">
                 Momentum Lab Management
@@ -120,7 +122,7 @@ export default function Home() {
           </div>
 
           {/* Main Navigation Tabs */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               onClick={() => setMainView('projects')}
               variant={mainView === 'projects' ? 'default' : 'outline'}
@@ -192,6 +194,15 @@ export default function Home() {
               <Edit className="h-4 w-4 mr-2" />
               My Profile
             </Button>
+            <Button
+              onClick={() => setMainView('privacy')}
+              variant={mainView === 'privacy' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'privacy' ? 'bg-brand-500 text-white' : ''}
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Privacy
+            </Button>
             {(currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
               <Button
                 onClick={() => setMainView('profiles')}
@@ -215,8 +226,12 @@ export default function Home() {
         {mainView === 'equipment' && <EquipmentManagement />}
         {mainView === 'calendar' && <CalendarEvents />}
         {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+        {mainView === 'privacy' && <PrivacyDashboard />}
         {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
       </div>
+
+      {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}
+      <CookieConsentBanner />
     </main>
   )
 }

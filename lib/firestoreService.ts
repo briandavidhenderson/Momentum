@@ -18,14 +18,17 @@ import {
   runTransaction,
   Query,
 } from "firebase/firestore"
-import { db } from "./firebase"
+import { getFirebaseDb } from "./firebase"
+import { logger } from "./logger"
 import {
   PersonProfile,
   ProfileProject,
   Project,
   Workpackage,
   Order,
+  OrderStatus,
   InventoryItem,
+  InventoryLevel,
   CalendarEvent,
   AuditTrail,
   LabPoll,
@@ -36,6 +39,7 @@ import {
   Lab,
   Funder,
   FundingAccount,
+  FundingAllocation,
   MasterProject,
   CalendarConnection,
   CalendarSyncLog,
@@ -56,6 +60,7 @@ export interface FirestoreUser {
 }
 
 export async function createUser(uid: string, email: string, fullName: string): Promise<void> {
+  const db = getFirebaseDb()
   const userRef = doc(db, "users", uid)
   await setDoc(userRef, {
     uid,
@@ -68,6 +73,7 @@ export async function createUser(uid: string, email: string, fullName: string): 
 }
 
 export async function getUser(uid: string): Promise<FirestoreUser | null> {
+  const db = getFirebaseDb()
   const userRef = doc(db, "users", uid)
   const userSnap = await getDoc(userRef)
   if (!userSnap.exists()) return null
@@ -75,6 +81,7 @@ export async function getUser(uid: string): Promise<FirestoreUser | null> {
 }
 
 export async function updateUser(uid: string, updates: Partial<FirestoreUser>): Promise<void> {
+  const db = getFirebaseDb()
   const userRef = doc(db, "users", uid)
   await updateDoc(userRef, updates)
 }
@@ -84,6 +91,7 @@ export async function updateUser(uid: string, updates: Partial<FirestoreUser>): 
 // ============================================================================
 
 export async function createProfile(userId: string, profileData: Omit<PersonProfile, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   // Validate required fields
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     throw new Error("userId is required and must be a non-empty string")
@@ -100,17 +108,17 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   if (!profileData.email || typeof profileData.email !== 'string' || profileData.email.trim() === '') {
     throw new Error("email is required")
   }
-  
-  if (!profileData.organisation || typeof profileData.organisation !== 'string' || profileData.organisation.trim() === '') {
-    throw new Error("organisation is required")
+
+  if (!profileData.organisationId || typeof profileData.organisationId !== 'string' || profileData.organisationId.trim() === '') {
+    throw new Error("organisationId is required")
   }
-  
-  if (!profileData.institute || typeof profileData.institute !== 'string' || profileData.institute.trim() === '') {
-    throw new Error("institute is required")
+
+  if (!profileData.instituteId || typeof profileData.instituteId !== 'string' || profileData.instituteId.trim() === '') {
+    throw new Error("instituteId is required")
   }
-  
-  if (!profileData.lab || typeof profileData.lab !== 'string' || profileData.lab.trim() === '') {
-    throw new Error("lab is required")
+
+  if (!profileData.labId || typeof profileData.labId !== 'string' || profileData.labId.trim() === '') {
+    throw new Error("labId is required")
   }
   
   // Validate array fields
@@ -129,26 +137,25 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   try {
     const profileRef = doc(collection(db, "personProfiles"))
     const profileId = profileRef.id
-    
-    console.log("Creating profile document with ID:", profileId)
-    console.log("Profile data:", profileData)
-    
+
+    logger.debug("Creating profile document", { profileId, profileData })
+
     await setDoc(profileRef, {
       ...profileData,
       id: profileId,
       userId,
       createdAt: serverTimestamp(),
     })
-    
-    console.log("Profile document created successfully")
-    
+
+    logger.info("Profile document created successfully", { profileId })
+
     // Update user document with profileId (use setDoc with merge to ensure user doc exists)
     const userRef = doc(db, "users", userId)
-    console.log("Updating user document:", userId)
-    
+    logger.debug("Updating user document", { userId })
+
     await setDoc(userRef, { profileId }, { merge: true })
 
-    console.log("User document updated successfully")
+    logger.info("User document updated successfully", { userId, profileId })
 
     // Note: Lab membership is now tracked via PersonProfile.labId
     // No need to update lab.members array (removed in new Lab interface)
@@ -156,9 +163,10 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
 
     return profileId
   } catch (error: any) {
-    console.error("Error in createProfile:", error)
-    console.error("Error code:", error?.code)
-    console.error("Error message:", error?.message)
+    logger.error("Error in createProfile", error, {
+      code: error?.code,
+      message: error?.message
+    })
     throw error
   }
 }
@@ -195,37 +203,39 @@ async function retryWithBackoff<T>(
 }
 
 export async function getProfile(profileId: string): Promise<PersonProfile | null> {
+  const db = getFirebaseDb()
   if (!profileId) {
-    console.warn("getProfile called with undefined or empty profileId")
+    logger.warn("getProfile called with undefined or empty profileId")
     return null
   }
-  
+
   try {
     return await retryWithBackoff(async () => {
       const profileRef = doc(db, "personProfiles", profileId)
       const profileSnap = await getDoc(profileRef)
       if (!profileSnap.exists()) {
-        console.log("Profile document does not exist:", profileId)
+        logger.debug("Profile document does not exist", { profileId })
         return null
       }
       return profileSnap.data() as PersonProfile
     })
   } catch (error: any) {
-    console.error("Error fetching profile by profileId:", error)
+    logger.error("Error fetching profile by profileId", error, { profileId })
     // Log the specific error code to help debug permission issues
     if (error?.code === 'permission-denied') {
-      console.warn("Permission denied when fetching profile - this should not happen for own profile")
+      logger.warn("Permission denied when fetching profile - this should not happen for own profile", { profileId })
     }
     return null
   }
 }
 
 export async function getProfileByUserId(userId: string): Promise<PersonProfile | null> {
+  const db = getFirebaseDb()
   if (!userId) {
-    console.warn("getProfileByUserId called with undefined or empty userId")
+    logger.warn("getProfileByUserId called with undefined or empty userId")
     return null
   }
-  
+
   try {
     return await retryWithBackoff(async () => {
       const q = query(collection(db, "personProfiles"), where("userId", "==", userId))
@@ -234,17 +244,18 @@ export async function getProfileByUserId(userId: string): Promise<PersonProfile 
       return querySnapshot.docs[0].data() as PersonProfile
     })
   } catch (error: any) {
-    console.error("Error fetching profile by userId:", error)
+    logger.error("Error fetching profile by userId", error, { userId })
     // If permission denied, it might be because user doesn't have a lab yet
     // but they should still be able to read their own profile (handled by Firestore rules)
     if (error?.code === 'permission-denied') {
-      console.warn("Permission denied when fetching profile by userId - this should not happen for own profile")
+      logger.warn("Permission denied when fetching profile by userId - this should not happen for own profile", { userId })
     }
     return null
   }
 }
 
 export async function getAllProfiles(): Promise<PersonProfile[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "personProfiles"))
   return querySnapshot.docs.map(doc => doc.data() as PersonProfile)
 }
@@ -256,6 +267,7 @@ export async function getAllProfiles(): Promise<PersonProfile[]> {
  * Returns null if no profile is found
  */
 export async function findUserProfile(userId: string, profileId: string | null | undefined): Promise<PersonProfile | null> {
+  const db = getFirebaseDb()
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     // Silently return null if no userId (user not logged in yet)
     return null
@@ -268,40 +280,47 @@ export async function findUserProfile(userId: string, profileId: string | null |
     try {
       profile = await getProfile(profileId)
       if (profile) {
-        console.log("✓ Found profile by profileId:", profile.id)
+        logger.debug("Found profile by profileId", { profileId: profile.id })
         // Verify the profile's userId matches - repair if mismatch
         if (profile.userId !== userId) {
-          console.warn(`Profile userId mismatch: profile.userId=${profile.userId}, expected=${userId}. Repairing...`)
+          logger.warn("Profile userId mismatch - repairing", {
+            profileUserId: profile.userId,
+            expectedUserId: userId
+          })
           await repairUserProfileSync(userId, profile.id)
         }
         return profile
       } else {
-        console.log("✗ Profile not found by profileId:", profileId)
+        logger.debug("Profile not found by profileId", { profileId })
       }
     } catch (error) {
-      console.error("Error fetching profile by profileId:", error)
+      logger.error("Error fetching profile by profileId", error, { profileId })
     }
   } else {
-    console.log("No profileId in user document, trying userId lookup")
+    logger.debug("No profileId in user document, trying userId lookup", { userId })
   }
-  
+
   // If not found by profileId, try by userId
   if (!profile) {
     try {
       profile = await getProfileByUserId(userId)
       if (profile) {
-        console.log("✓ Found profile by userId:", profile.id)
+        logger.debug("Found profile by userId", { profileId: profile.id })
         // Repair: Update user document with profileId if it's missing or incorrect
         if (!profileId || profileId !== profile.id) {
-          console.log(`Repairing user/profile sync: user.profileId=${profileId}, actual=${profile.id}`)
+          logger.info("Repairing user/profile sync", {
+            userId,
+            oldProfileId: profileId,
+            newProfileId: profile.id
+          })
           await repairUserProfileSync(userId, profile.id)
         }
         return profile
       } else {
-        console.log("✗ Profile not found by userId:", userId)
+        logger.debug("Profile not found by userId", { userId })
       }
     } catch (error) {
-      console.error("Error fetching profile by userId:", error)
+      logger.error("Error fetching profile by userId", error, { userId })
     }
   }
   
@@ -316,14 +335,15 @@ async function repairUserProfileSync(userId: string, profileId: string): Promise
   try {
     const userRef = doc(db, "users", userId)
     await setDoc(userRef, { profileId }, { merge: true })
-    console.log(`✓ Repaired user/profile sync: user ${userId} -> profile ${profileId}`)
+    logger.info("Repaired user/profile sync", { userId, profileId })
   } catch (error) {
-    console.error("Error repairing user/profile sync:", error)
+    logger.error("Error repairing user/profile sync", error, { userId, profileId })
     // Don't throw - this is a repair operation, not critical path
   }
 }
 
 export async function updateProfile(profileId: string, updates: Partial<PersonProfile>): Promise<void> {
+  const db = getFirebaseDb()
   const profileRef = doc(db, "personProfiles", profileId)
 
   // Note: Lab membership is now tracked via PersonProfile.labId
@@ -335,7 +355,8 @@ export async function updateProfile(profileId: string, updates: Partial<PersonPr
 }
 
 export function subscribeToProfiles(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (profiles: PersonProfile[]) => void
 ): Unsubscribe {
   try {
@@ -351,23 +372,28 @@ export function subscribeToProfiles(
           const data = doc.data()
           // Validate required fields
           if (!data.firstName || !data.lastName) {
-            console.warn(`Profile ${doc.id} is missing firstName or lastName:`, data)
+            logger.warn("Profile is missing required fields", {
+              profileId: doc.id,
+              hasFirstName: !!data.firstName,
+              hasLastName: !!data.lastName
+            })
           }
           return data as PersonProfile
         })
-        console.log(`subscribeToProfiles: Loaded ${profiles.length} profiles`)
+        logger.debug("subscribeToProfiles: Loaded profiles", { count: profiles.length })
         callback(profiles)
       },
       (error) => {
-        console.error("Error in subscribeToProfiles:", error)
-        console.error("Error code:", error?.code)
-        console.error("Error message:", error?.message)
+        logger.error("Error in subscribeToProfiles", error, {
+          code: error?.code,
+          message: error?.message
+        })
         // Don't throw - just log the error and return empty array
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up profiles subscription:", error)
+    logger.error("Error setting up profiles subscription", error)
     // Return a no-op unsubscribe function that calls callback with empty array
     callback([])
     return () => {}
@@ -386,10 +412,11 @@ export function subscribeToProfiles(
  * @returns The ID of the newly created organisation
  */
 export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'createdAt'>): Promise<string> {
-  console.log('[firestoreService] createOrganisation called with:', orgData)
+  const db = getFirebaseDb()
   const orgRef = doc(collection(db, "organisations"))
   const orgId = orgRef.id
-  console.log('[firestoreService] Generated orgId:', orgId)
+
+  logger.debug("Creating organisation", { orgId, name: orgData.name })
 
   const docData = {
     ...orgData,
@@ -398,13 +425,12 @@ export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'cre
     memberCount: 0,
     instituteCount: 0,
   }
-  console.log('[firestoreService] About to save document:', docData)
 
   try {
     await setDoc(orgRef, docData)
-    console.log('[firestoreService] Organisation saved successfully')
+    logger.info("Organisation created successfully", { orgId, name: orgData.name })
   } catch (error) {
-    console.error('[firestoreService] Error saving organisation:', error)
+    logger.error("Error creating organisation", error, { orgId })
     throw error
   }
 
@@ -412,11 +438,13 @@ export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'cre
 }
 
 export async function getOrganisations(): Promise<Organisation[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "organisations"))
   return querySnapshot.docs.map(doc => doc.data() as Organisation)
 }
 
 export function subscribeToOrganisations(callback: (orgs: Organisation[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   return onSnapshot(collection(db, "organisations"), (snapshot) => {
     const orgs = snapshot.docs.map(doc => doc.data() as Organisation)
     callback(orgs)
@@ -428,6 +456,7 @@ export function subscribeToOrganisations(callback: (orgs: Organisation[]) => voi
  * @returns The ID of the newly created institute
  */
 export async function createInstitute(instituteData: Omit<Institute, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const instituteRef = doc(collection(db, "institutes"))
   const instituteId = instituteRef.id
 
@@ -453,6 +482,7 @@ export async function createInstitute(instituteData: Omit<Institute, 'id' | 'cre
 }
 
 export async function getInstitutes(orgId?: string): Promise<Institute[]> {
+  const db = getFirebaseDb()
   let q
   if (orgId) {
     q = query(collection(db, "institutes"), where("organisationId", "==", orgId))
@@ -464,6 +494,7 @@ export async function getInstitutes(orgId?: string): Promise<Institute[]> {
 }
 
 export function subscribeToInstitutes(orgId: string | null, callback: (institutes: Institute[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   const q = orgId 
     ? query(collection(db, "institutes"), where("organisationId", "==", orgId))
     : collection(db, "institutes")
@@ -479,6 +510,7 @@ export function subscribeToInstitutes(orgId: string | null, callback: (institute
  * @returns The ID of the newly created lab
  */
 export async function createLab(labData: Omit<Lab, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const labRef = doc(collection(db, "labs"))
   const labId = labRef.id
 
@@ -504,6 +536,7 @@ export async function createLab(labData: Omit<Lab, 'id' | 'createdAt'>): Promise
 }
 
 export async function getLabs(instituteId?: string): Promise<Lab[]> {
+  const db = getFirebaseDb()
   let q
   if (instituteId) {
     q = query(collection(db, "labs"), where("instituteId", "==", instituteId))
@@ -515,6 +548,7 @@ export async function getLabs(instituteId?: string): Promise<Lab[]> {
 }
 
 export function subscribeToLabs(instituteId: string | null, callback: (labs: Lab[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   const q = instituteId
     ? query(collection(db, "labs"), where("instituteId", "==", instituteId))
     : collection(db, "labs")
@@ -540,6 +574,7 @@ export function subscribeToLabs(instituteId: string | null, callback: (labs: Lab
  * Handles Date to Timestamp conversion for Firestore
  */
 export async function createFunder(funderData: Omit<Funder, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const funderRef = doc(collection(db, "funders"))
   const funderId = funderRef.id
 
@@ -573,6 +608,7 @@ export async function createFunder(funderData: Omit<Funder, 'id' | 'createdAt'>)
  * P0-1: Get all funders, optionally filtered by organisation
  */
 export async function getFunders(orgId?: string): Promise<Funder[]> {
+  const db = getFirebaseDb()
   const fundersRef = collection(db, "funders")
 
   let q = query(fundersRef)
@@ -596,6 +632,7 @@ export async function getFunders(orgId?: string): Promise<Funder[]> {
  * P0-1: Subscribe to funders with real-time updates
  */
 export function subscribeToFunders(callback: (funders: Funder[]) => void, orgId?: string): Unsubscribe {
+  const db = getFirebaseDb()
   const fundersRef = collection(db, "funders")
 
   let q = query(fundersRef)
@@ -625,6 +662,7 @@ export function subscribeToFunders(callback: (funders: Funder[]) => void, orgId?
  * @returns The ID of the newly created account
  */
 export async function createFundingAccount(accountData: Omit<FundingAccount, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const accountRef = doc(collection(db, "accounts"))
   const accountId = accountRef.id
 
@@ -644,6 +682,7 @@ export async function createFundingAccount(accountData: Omit<FundingAccount, 'id
  * Gets all funding accounts, optionally filtered by project or funder
  */
 export async function getFundingAccounts(filters?: {
+  const db = getFirebaseDb()
   masterProjectId?: string
   funderId?: string
 }): Promise<FundingAccount[]> {
@@ -664,6 +703,7 @@ export async function getFundingAccounts(filters?: {
  * Updates a funding account
  */
 export async function updateFundingAccount(accountId: string, updates: Partial<FundingAccount>): Promise<void> {
+  const db = getFirebaseDb()
   const accountRef = doc(db, "accounts", accountId)
   const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
   await updateDoc(accountRef, updateData)
@@ -673,6 +713,7 @@ export async function updateFundingAccount(accountId: string, updates: Partial<F
  * Deletes a funding account
  */
 export async function deleteFundingAccount(accountId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "accounts", accountId))
 }
 
@@ -680,11 +721,16 @@ export async function deleteFundingAccount(accountId: string): Promise<void> {
  * Subscribes to funding accounts with optional filters
  */
 export function subscribeToFundingAccounts(
-  filters: { masterProjectId?: string; funderId?: string } | null,
-  callback: (accounts: FundingAccount[]) => void
+  filters: {
+  const db = getFirebaseDb() labId?: string; masterProjectId?: string; funderId?: string } | null,
+  callback: (accounts: FundingAccount[]) => void,
+  errorCallback?: (error: Error) => void
 ): Unsubscribe {
   let q = collection(db, "accounts")
 
+  if (filters?.labId) {
+    q = query(q as any, where("labId", "==", filters.labId)) as any
+  }
   if (filters?.masterProjectId) {
     q = query(q as any, where("masterProjectId", "==", filters.masterProjectId)) as any
   }
@@ -692,10 +738,61 @@ export function subscribeToFundingAccounts(
     q = query(q as any, where("funderId", "==", filters.funderId)) as any
   }
 
-  return onSnapshot(q, (snapshot) => {
-    const accounts = snapshot.docs.map(doc => doc.data() as FundingAccount)
-    callback(accounts)
-  })
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const accounts = snapshot.docs.map(doc => doc.data() as FundingAccount)
+      callback(accounts)
+    },
+    (error) => {
+      logger.error("Error in subscribeToFundingAccounts", error)
+      if (errorCallback) {
+        errorCallback(error as Error)
+      }
+    }
+  )
+}
+
+/**
+ * Subscribe to funding allocations with real-time updates
+ * @param filters - Filter by userId (personId)
+ * @param callback - Function to call with allocations
+ * @param errorCallback - Optional error handler
+ * @returns Unsubscribe function
+ */
+export function subscribeToFundingAllocations(
+  filters: {
+  const db = getFirebaseDb() userId?: string } | null,
+  callback: (allocations: FundingAllocation[]) => void,
+  errorCallback?: (error: Error) => void
+): Unsubscribe {
+  let q: Query = collection(db, "fundingAllocations")
+
+  if (filters?.userId) {
+    q = query(
+      q,
+      where("type", "==", "PERSON"),
+      where("personId", "==", filters.userId),
+      where("status", "in", ["active", "exhausted"])
+    )
+  }
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const allocations = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as FundingAllocation[]
+      callback(allocations)
+    },
+    (error) => {
+      logger.error("Error in subscribeToFundingAllocations", error)
+      if (errorCallback) {
+        errorCallback(error as Error)
+      }
+    }
+  )
 }
 
 // ============================================================================
@@ -707,19 +804,29 @@ export function subscribeToFundingAccounts(
  * @returns The ID of the newly created master project
  */
 export async function createMasterProject(projectData: Omit<MasterProject, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
+  // Fix Bug #1: Validate that required fields are present
+  if (!projectData.name || !projectData.name.trim()) {
+    throw new Error("Project name is required")
+  }
+
   const projectRef = doc(collection(db, "masterProjects"))
   const projectId = projectRef.id
 
-  await setDoc(projectRef, {
+  // Fix Bug #1: Ensure name is explicitly included and not empty
+  const projectToSave = {
     ...projectData,
+    name: projectData.name.trim(), // Ensure name is trimmed and explicit
     id: projectId,
     createdAt: serverTimestamp(),
     spentAmount: 0,
     committedAmount: 0,
     remainingBudget: projectData.totalBudget || 0,
     progress: 0,
-    workpackageIds: [],
-  })
+    workpackageIds: projectData.workpackageIds || [],
+  }
+
+  await setDoc(projectRef, projectToSave)
 
   // Update lab's active project count
   const labRef = doc(db, "labs", projectData.labId)
@@ -738,6 +845,7 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
  * Gets all master projects, optionally filtered by lab, funder, or person
  */
 export async function getMasterProjects(filters?: {
+  const db = getFirebaseDb()
   labId?: string
   funderId?: string
   personId?: string  // Returns projects where person is a team member
@@ -763,6 +871,7 @@ export async function getMasterProjects(filters?: {
  * Updates a master project
  */
 export async function updateMasterProject(projectId: string, updates: Partial<MasterProject>): Promise<void> {
+  const db = getFirebaseDb()
   const projectRef = doc(db, "masterProjects", projectId)
   const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
   await updateDoc(projectRef, updateData)
@@ -772,6 +881,7 @@ export async function updateMasterProject(projectId: string, updates: Partial<Ma
  * Deletes a master project and all associated data (accounts, workpackages, etc.)
  */
 export async function deleteMasterProject(projectId: string): Promise<void> {
+  const db = getFirebaseDb()
   const batch = writeBatch(db)
 
   // Delete the project
@@ -800,7 +910,8 @@ export async function deleteMasterProject(projectId: string): Promise<void> {
  * Subscribes to master projects with optional filters
  */
 export function subscribeToMasterProjects(
-  filters: { labId?: string; funderId?: string; personId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; funderId?: string; personId?: string } | null,
   callback: (projects: MasterProject[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "masterProjects")
@@ -846,7 +957,8 @@ export interface FirestoreProject {
   createdAt: Timestamp
 }
 
-export async function createProject(projectData: Omit<Project, 'id'> & { createdBy: string; labId?: string }): Promise<string> {
+export async function createProject(projectData: Omit<Project, 'id'> & {
+  const db = getFirebaseDb() createdBy: string; labId?: string }): Promise<string> {
   const projectRef = doc(collection(db, "projects"))
   const projectId = projectRef.id
   
@@ -870,6 +982,7 @@ export async function createProject(projectData: Omit<Project, 'id'> & { created
 }
 
 export async function getProjects(userId: string): Promise<Project[]> {
+  const db = getFirebaseDb()
   // Get user's profile to determine visible projects
   const profile = await getProfileByUserId(userId)
   if (!profile) return []
@@ -889,6 +1002,7 @@ export async function getProjects(userId: string): Promise<Project[]> {
 }
 
 export async function updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
+  const db = getFirebaseDb()
   const projectRef = doc(db, "projects", projectId)
   const updateData: any = { ...updates }
   
@@ -900,19 +1014,21 @@ export async function updateProject(projectId: string, updates: Partial<Project>
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "projects", projectId))
 }
 
 export function subscribeToProjects(
-  filters: { labId?: string; userId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; userId?: string } | null,
   callback: (projects: Project[]) => void
 ): Unsubscribe {
   if (!filters?.userId) {
-    console.warn("subscribeToProjects called with undefined or empty userId")
+    logger.warn("subscribeToProjects called with undefined or empty userId")
     // Return a no-op unsubscribe function
     return () => {}
   }
-  
+
   try {
     let q: Query = collection(db, "projects")
 
@@ -934,13 +1050,13 @@ export function subscribeToProjects(
         callback(projects)
       },
       (error) => {
-        console.error("Error in subscribeToProjects:", error)
+        logger.error("Error in subscribeToProjects", error)
         // Don't throw - just log the error and return empty array
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up projects subscription:", error)
+    logger.error("Error setting up projects subscription", error)
     // Return a no-op unsubscribe function
     return () => {}
   }
@@ -964,27 +1080,37 @@ export interface FirestoreWorkpackage {
   createdAt: Timestamp
 }
 
-export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'> & { createdBy: string }): Promise<string> {
+export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'> & {
+  const db = getFirebaseDb() createdBy: string }): Promise<string> {
   const wpRef = doc(collection(db, "workpackages"))
   const wpId = wpRef.id
-  
+
+  // Fix Bug #2: Handle tasks array properly (could be empty for new workpackages)
+  const tasksWithTimestamps = (workpackageData.tasks || []).map(task => ({
+    ...task,
+    start: task.start instanceof Date ? Timestamp.fromDate(task.start) : task.start,
+    end: task.end instanceof Date ? Timestamp.fromDate(task.end) : task.end,
+    subtasks: (task.subtasks || []).map(st => ({
+      ...st,
+      start: st.start instanceof Date ? Timestamp.fromDate(st.start) : st.start,
+      end: st.end instanceof Date ? Timestamp.fromDate(st.end) : st.end,
+    })),
+  }))
+
   await setDoc(wpRef, {
     ...workpackageData,
     id: wpId,
-    start: Timestamp.fromDate(workpackageData.start),
-    end: Timestamp.fromDate(workpackageData.end),
-    tasks: workpackageData.tasks.map(task => ({
-      ...task,
-      start: Timestamp.fromDate(task.start),
-      end: Timestamp.fromDate(task.end),
-    })),
+    start: workpackageData.start instanceof Date ? Timestamp.fromDate(workpackageData.start) : workpackageData.start,
+    end: workpackageData.end instanceof Date ? Timestamp.fromDate(workpackageData.end) : workpackageData.end,
+    tasks: tasksWithTimestamps,
     createdAt: serverTimestamp(),
   })
-  
+
   return wpId
 }
 
 export async function getWorkpackages(profileProjectId: string): Promise<Workpackage[]> {
+  const db = getFirebaseDb()
   const q = query(collection(db, "workpackages"), where("profileProjectId", "==", profileProjectId))
   const querySnapshot = await getDocs(q)
   
@@ -1004,6 +1130,7 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
 }
 
 export async function updateWorkpackage(wpId: string, updates: Partial<Workpackage>): Promise<void> {
+  const db = getFirebaseDb()
   const wpRef = doc(db, "workpackages", wpId)
   const updateData: any = { ...updates }
   
@@ -1021,11 +1148,13 @@ export async function updateWorkpackage(wpId: string, updates: Partial<Workpacka
 }
 
 export async function deleteWorkpackage(wpId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "workpackages", wpId))
 }
 
 export function subscribeToWorkpackages(
-  filters: { profileProjectId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() profileProjectId?: string } | null,
   callback: (wps: Workpackage[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "workpackages")
@@ -1061,6 +1190,7 @@ export function subscribeToWorkpackages(
  * This updates the entire workpackage including nested tasks, subtasks, and todos
  */
 export async function updateWorkpackageWithProgress(wpId: string, workpackage: Workpackage): Promise<void> {
+  const db = getFirebaseDb()
   const wpRef = doc(db, "workpackages", wpId)
 
   // Convert dates to Timestamps
@@ -1088,6 +1218,7 @@ export async function updateWorkpackageWithProgress(wpId: string, workpackage: W
  * For legacy projects without workpackages (tasks directly in project)
  */
 export async function updateProjectWithProgress(projectId: string, project: Project): Promise<void> {
+  const db = getFirebaseDb()
   const projectRef = doc(db, "projects", projectId)
 
   // Convert dates to Timestamps
@@ -1146,15 +1277,28 @@ export interface FirestoreOrder {
   createdBy: string
   createdDate: Timestamp
   chargeToAccount?: string
+  accountId?: string
   category?: string
   subcategory?: string
   priceExVAT?: number
 }
 
-export async function createOrder(orderData: Omit<Order, 'id'> & { createdBy: string }): Promise<string> {
+export async function createOrder(orderData: Omit<Order, 'id'> & {
+  const db = getFirebaseDb() createdBy: string }): Promise<string> {
   const orderRef = doc(collection(db, "orders"))
   const orderId = orderRef.id
-  
+
+  // Feature #7: Update budget tracking when creating order
+  if (orderData.accountId && orderData.priceExVAT) {
+    const { updateAccountBudget } = await import('./budgetUtils')
+    await updateAccountBudget(
+      orderData.accountId,
+      orderData.priceExVAT,
+      null, // old status (creating new order)
+      orderData.status // new status
+    )
+  }
+
   await setDoc(orderRef, {
     ...orderData,
     id: orderId,
@@ -1163,11 +1307,12 @@ export async function createOrder(orderData: Omit<Order, 'id'> & { createdBy: st
     createdDate: Timestamp.fromDate(orderData.createdDate),
     createdAt: serverTimestamp(),
   })
-  
+
   return orderId
 }
 
 export async function getOrders(): Promise<Order[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "orders"))
   
   return querySnapshot.docs.map(doc => {
@@ -1182,22 +1327,62 @@ export async function getOrders(): Promise<Order[]> {
 }
 
 export async function updateOrder(orderId: string, updates: Partial<Order>): Promise<void> {
+  const db = getFirebaseDb()
   const orderRef = doc(db, "orders", orderId)
   const updateData: any = { ...updates }
-  
+
+  // Feature #7: Update budget tracking when order status changes
+  if (updates.status) {
+    const orderDoc = await getDoc(orderRef)
+    if (orderDoc.exists()) {
+      const currentOrder = orderDoc.data() as FirestoreOrder
+      const oldStatus = currentOrder.status
+      const newStatus = updates.status
+
+      if (oldStatus !== newStatus && currentOrder.accountId && currentOrder.priceExVAT) {
+        const { updateAccountBudget } = await import('./budgetUtils')
+        await updateAccountBudget(
+          currentOrder.accountId,
+          currentOrder.priceExVAT,
+          oldStatus as OrderStatus | null,
+          newStatus as OrderStatus | null
+        )
+      }
+    }
+  }
+
   if (updates.orderedDate) updateData.orderedDate = Timestamp.fromDate(updates.orderedDate)
   if (updates.receivedDate) updateData.receivedDate = Timestamp.fromDate(updates.receivedDate)
   if (updates.createdDate) updateData.createdDate = Timestamp.fromDate(updates.createdDate)
-  
+
   await updateDoc(orderRef, updateData)
 }
 
 export async function deleteOrder(orderId: string): Promise<void> {
-  await deleteDoc(doc(db, "orders", orderId))
+  const db = getFirebaseDb()
+  // Feature #7: Update budget tracking when deleting order
+  const orderRef = doc(db, "orders", orderId)
+  const orderDoc = await getDoc(orderRef)
+
+  if (orderDoc.exists()) {
+    const order = orderDoc.data() as FirestoreOrder
+    if (order.accountId && order.priceExVAT) {
+      const { updateAccountBudget } = await import('./budgetUtils')
+      await updateAccountBudget(
+        order.accountId,
+        order.priceExVAT,
+        order.status as OrderStatus | null,
+        null // deleting order
+      )
+    }
+  }
+
+  await deleteDoc(orderRef)
 }
 
 export function subscribeToOrders(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (orders: Order[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "orders")
@@ -1228,19 +1413,29 @@ export interface FirestoreInventoryItem {
   id: string
   productName: string
   catNum: string
+  supplier?: string
+  currentQuantity: number
+  priceExVAT: number
+  minQuantity?: number
+  burnRatePerWeek?: number
   inventoryLevel: string
   receivedDate: Timestamp
   lastOrderedDate?: Timestamp | null
   chargeToAccount?: string
+  accountId?: string
   notes?: string
   category?: string
   subcategory?: string
-  priceExVAT?: number
   createdBy: string
+  labId?: string
   createdAt: Timestamp
+  createdDate?: Timestamp
+  updatedAt?: Timestamp
+  equipmentDeviceIds?: string[]
 }
 
-export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & { createdBy: string }): Promise<string> {
+export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & {
+  const db = getFirebaseDb() createdBy: string }): Promise<string> {
   const itemRef = doc(collection(db, "inventory"))
   const itemId = itemRef.id
   
@@ -1256,19 +1451,37 @@ export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & 
 }
 
 export async function getInventory(): Promise<InventoryItem[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "inventory"))
   
   return querySnapshot.docs.map(doc => {
     const data = doc.data() as FirestoreInventoryItem
     return {
-      ...data,
+      id: data.id,
+      productName: data.productName,
+      catNum: data.catNum,
+      supplier: data.supplier,
+      currentQuantity: data.currentQuantity,
+      priceExVAT: data.priceExVAT,
+      minQuantity: data.minQuantity,
+      burnRatePerWeek: data.burnRatePerWeek,
+      inventoryLevel: data.inventoryLevel as InventoryLevel,
       receivedDate: data.receivedDate.toDate(),
       lastOrderedDate: data.lastOrderedDate ? data.lastOrderedDate.toDate() : undefined,
+      category: data.category,
+      subcategory: data.subcategory,
+      equipmentDeviceIds: data.equipmentDeviceIds,
+      chargeToAccount: data.chargeToAccount,
+      notes: data.notes,
+      labId: data.labId,
+      createdAt: data.createdAt ? data.createdAt.toDate() : data.createdDate ? data.createdDate.toDate() : undefined,
+      updatedAt: data.updatedAt ? data.updatedAt.toDate() : undefined,
     } as InventoryItem
   })
 }
 
 export async function updateInventoryItem(itemId: string, updates: Partial<InventoryItem>): Promise<void> {
+  const db = getFirebaseDb()
   const itemRef = doc(db, "inventory", itemId)
   const updateData: any = { ...updates }
   
@@ -1279,11 +1492,13 @@ export async function updateInventoryItem(itemId: string, updates: Partial<Inven
 }
 
 export async function deleteInventoryItem(itemId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "inventory", itemId))
 }
 
 export function subscribeToInventory(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (inventory: InventoryItem[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "inventory")
@@ -1296,9 +1511,25 @@ export function subscribeToInventory(
     const inventory = snapshot.docs.map(doc => {
       const data = doc.data() as FirestoreInventoryItem
       return {
-        ...data,
+        id: data.id,
+        productName: data.productName,
+        catNum: data.catNum,
+        supplier: data.supplier,
+        currentQuantity: data.currentQuantity,
+        priceExVAT: data.priceExVAT,
+        minQuantity: data.minQuantity,
+        burnRatePerWeek: data.burnRatePerWeek,
+        inventoryLevel: data.inventoryLevel as InventoryLevel,
         receivedDate: data.receivedDate.toDate(),
         lastOrderedDate: data.lastOrderedDate ? data.lastOrderedDate.toDate() : undefined,
+        category: data.category,
+        subcategory: data.subcategory,
+        equipmentDeviceIds: data.equipmentDeviceIds,
+        chargeToAccount: data.chargeToAccount,
+        notes: data.notes,
+        labId: data.labId,
+        createdAt: data.createdAt ? data.createdAt.toDate() : data.createdDate ? data.createdDate.toDate() : undefined,
+        updatedAt: data.updatedAt ? data.updatedAt.toDate() : undefined,
       } as InventoryItem
     })
     callback(inventory)
@@ -1323,6 +1554,7 @@ export interface FirestoreCalendarEvent {
 }
 
 export async function createEvent(eventData: Omit<CalendarEvent, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const eventRef = doc(collection(db, "events"))
   const eventId = eventRef.id
   await setDoc(eventRef, {
@@ -1336,6 +1568,7 @@ export async function createEvent(eventData: Omit<CalendarEvent, 'id'>): Promise
 }
 
 export async function updateEvent(eventId: string, updates: Partial<CalendarEvent>): Promise<void> {
+  const db = getFirebaseDb()
   const ref = doc(db, "events", eventId)
   const updateData: any = { ...updates }
   if (updates.start) updateData.start = Timestamp.fromDate(updates.start)
@@ -1344,10 +1577,12 @@ export async function updateEvent(eventId: string, updates: Partial<CalendarEven
 }
 
 export async function deleteEvent(eventId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "events", eventId))
 }
 
 export async function getEvents(): Promise<CalendarEvent[]> {
+  const db = getFirebaseDb()
   const snap = await getDocs(collection(db, "events"))
   return snap.docs.map(d => {
     const data = d.data() as FirestoreCalendarEvent
@@ -1361,7 +1596,8 @@ export async function getEvents(): Promise<CalendarEvent[]> {
 }
 
 export function subscribeToEvents(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (events: CalendarEvent[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "events")
@@ -1646,6 +1882,7 @@ export interface FirestoreAuditTrail {
 }
 
 export async function appendAuditTrail(entry: Omit<AuditTrail, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const ref = doc(collection(db, "auditTrails"))
   const id = ref.id
   await setDoc(ref, {
@@ -1657,6 +1894,7 @@ export async function appendAuditTrail(entry: Omit<AuditTrail, 'id' | 'createdAt
 }
 
 export async function getAuditTrails(entityType: AuditTrail['entityType'], entityId: string, limitCount = 20): Promise<AuditTrail[]> {
+  const db = getFirebaseDb()
   // simple fetch; could add where/orderBy
   const snap = await getDocs(collection(db, "auditTrails"))
   return snap.docs
@@ -1671,7 +1909,8 @@ export async function getAuditTrails(entityType: AuditTrail['entityType'], entit
 }
 
 export function subscribeToAuditTrails(
-  filters: { entityType: string; entityId: string } | null,
+  filters: {
+  const db = getFirebaseDb() entityType: string; entityId: string } | null,
   callback: (entries: AuditTrail[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "auditTrails")
@@ -1702,26 +1941,27 @@ export function subscribeToAuditTrails(
  * Also removes user from lab's members array if applicable
  */
 export async function deleteUserCascade(userId: string): Promise<void> {
+  const db = getFirebaseDb()
   const batch = writeBatch(db)
   
   try {
     // Get user document
     const userRef = doc(db, "users", userId)
     const userSnap = await getDoc(userRef)
-    
+
     if (!userSnap.exists()) {
-      console.warn(`User ${userId} not found. Nothing to delete.`)
+      logger.warn("User not found - nothing to delete", { userId })
       return
     }
-    
+
     const userData = userSnap.data() as FirestoreUser
     const profileId = userData.profileId
-    
+
     // Get profile if it exists
     if (profileId) {
       const profileRef = doc(db, "personProfiles", profileId)
       const profileSnap = await getDoc(profileRef)
-      
+
       if (profileSnap.exists()) {
         // Note: Lab membership is now tracked via PersonProfile.labId
         // No need to update lab.members array (removed in new Lab interface)
@@ -1730,40 +1970,40 @@ export async function deleteUserCascade(userId: string): Promise<void> {
         batch.delete(profileRef)
       }
     }
-    
+
     // Delete user
     batch.delete(userRef)
-    
+
     // Commit the batch - this is atomic, so either all succeed or all fail
     await batch.commit()
-    
+
     // Verify deletions succeeded (batch commit is atomic, but verify for logging)
     try {
       const verifyUserSnap = await getDoc(userRef)
       const verifyProfileSnap = profileId ? await getDoc(doc(db, "personProfiles", profileId)) : null
-      
+
       if (verifyUserSnap.exists()) {
-        console.warn(`Warning: User ${userId} still exists after batch commit`)
+        logger.warn("User still exists after batch commit", { userId })
         throw new Error(`Failed to delete user ${userId}`)
       }
-      
+
       if (profileId && verifyProfileSnap?.exists()) {
-        console.warn(`Warning: Profile ${profileId} still exists after batch commit`)
+        logger.warn("Profile still exists after batch commit", { profileId })
         throw new Error(`Failed to delete profile ${profileId}`)
       }
-      
-      console.log(`Successfully deleted user ${userId} and associated profile`)
+
+      logger.info("Successfully deleted user and associated profile", { userId, profileId })
     } catch (verifyError: any) {
       // If verification fails, log error but don't throw (batch already committed)
       if (verifyError?.message?.includes('Failed to delete')) {
-        console.error("Deletion verification failed:", verifyError)
+        logger.error("Deletion verification failed", verifyError)
         throw verifyError
       }
       // Other verification errors (permission, network) are non-fatal
-      console.warn("Deletion verification incomplete (non-fatal):", verifyError)
+      logger.warn("Deletion verification incomplete (non-fatal)", { error: verifyError })
     }
   } catch (error) {
-    console.error("Error in deleteUserCascade:", error)
+    logger.error("Error in deleteUserCascade", error, { userId })
     throw error
   }
 }
@@ -1773,6 +2013,7 @@ export async function deleteUserCascade(userId: string): Promise<void> {
  * Ensures consistency: no user without a profile, no profile without a user
  */
 export async function deleteProfileCascade(profileId: string): Promise<void> {
+  const db = getFirebaseDb()
   // Validate input
   if (!profileId || typeof profileId !== 'string' || profileId.trim() === '') {
     throw new Error("profileId is required and must be a non-empty string")
@@ -1786,7 +2027,7 @@ export async function deleteProfileCascade(profileId: string): Promise<void> {
     const profileSnap = await getDoc(profileRef)
 
     if (!profileSnap.exists()) {
-      console.warn(`Profile ${profileId} not found. Nothing to delete.`)
+      logger.warn("Profile not found - nothing to delete", { profileId })
       return
     }
 
@@ -1798,47 +2039,47 @@ export async function deleteProfileCascade(profileId: string): Promise<void> {
 
     // Delete profile
     batch.delete(profileRef)
-    
+
     // Get and delete user if it exists
     if (userId) {
       const userRef = doc(db, "users", userId)
       const userSnap = await getDoc(userRef)
-      
+
       if (userSnap.exists()) {
         batch.delete(userRef)
       }
     }
-    
+
     // Commit the batch - this is atomic, so either all succeed or all fail
     await batch.commit()
-    
+
     // Verify deletions succeeded
     try {
       const verifyProfileSnap = await getDoc(profileRef)
       const verifyUserSnap = userId ? await getDoc(doc(db, "users", userId)) : null
-      
+
       if (verifyProfileSnap.exists()) {
-        console.warn(`Warning: Profile ${profileId} still exists after batch commit`)
+        logger.warn("Profile still exists after batch commit", { profileId })
         throw new Error(`Failed to delete profile ${profileId}`)
       }
-      
+
       if (userId && verifyUserSnap?.exists()) {
-        console.warn(`Warning: User ${userId} still exists after batch commit`)
+        logger.warn("User still exists after batch commit", { userId })
         throw new Error(`Failed to delete user ${userId}`)
       }
-      
-      console.log(`Successfully deleted profile ${profileId} and associated user`)
+
+      logger.info("Successfully deleted profile and associated user", { profileId, userId })
     } catch (verifyError: any) {
       // If verification fails, log error but don't throw (batch already committed)
       if (verifyError?.message?.includes('Failed to delete')) {
-        console.error("Deletion verification failed:", verifyError)
+        logger.error("Deletion verification failed", verifyError)
         throw verifyError
       }
       // Other verification errors (permission, network) are non-fatal
-      console.warn("Deletion verification incomplete (non-fatal):", verifyError)
+      logger.warn("Deletion verification incomplete (non-fatal)", { error: verifyError })
     }
   } catch (error) {
-    console.error("Error in deleteProfileCascade:", error)
+    logger.error("Error in deleteProfileCascade", error, { profileId })
     throw error
   }
 }
@@ -1848,6 +2089,7 @@ export async function deleteProfileCascade(profileId: string): Promise<void> {
  * Uses batched writes for atomicity
  */
 export async function deleteProfileProjectCascade(projectId: string): Promise<void> {
+  const db = getFirebaseDb()
   const batch = writeBatch(db)
 
   // Delete the project
@@ -1874,6 +2116,7 @@ export async function deleteProfileProjectCascade(projectId: string): Promise<vo
  * This is used by the cascading delete function
  */
 export async function deleteWorkpackageCascade(workpackageId: string): Promise<void> {
+  const db = getFirebaseDb()
   const workpackageRef = doc(db, "workpackages", workpackageId)
   await deleteDoc(workpackageRef)
 }
@@ -1885,6 +2128,7 @@ export async function batchDelete(
   collection: string,
   ids: string[]
 ): Promise<void> {
+  const db = getFirebaseDb()
   if (ids.length === 0) return
 
   const batch = writeBatch(db)
@@ -1917,6 +2161,7 @@ export interface FirestoreDayToDayTask {
 }
 
 export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const taskRef = doc(collection(db, "dayToDayTasks"))
   const taskId = taskRef.id
   
@@ -1932,6 +2177,7 @@ export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<str
 }
 
 export async function updateDayToDayTask(taskId: string, updates: Partial<any>): Promise<void> {
+  const db = getFirebaseDb()
   const taskRef = doc(db, "dayToDayTasks", taskId)
   const updateData: any = { ...updates, updatedAt: serverTimestamp() }
   
@@ -1943,11 +2189,13 @@ export async function updateDayToDayTask(taskId: string, updates: Partial<any>):
 }
 
 export async function deleteDayToDayTask(taskId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "dayToDayTasks", taskId))
 }
 
 export function subscribeToDayToDayTasks(
-  filters: { labId?: string; userId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; userId?: string } | null,
   callback: (tasks: any[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "dayToDayTasks")
@@ -1973,13 +2221,13 @@ export function subscribeToDayToDayTasks(
         callback(tasks)
       },
       (error) => {
-        console.error("Error in subscribeToDayToDayTasks:", error)
+        logger.error("Error in subscribeToDayToDayTasks", error)
         // Don't throw - just log the error and return empty array
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up day-to-day tasks subscription:", error)
+    logger.error("Error setting up day-to-day tasks subscription", error)
     // Return a no-op unsubscribe function
     return () => {}
   }
@@ -1990,6 +2238,7 @@ export function subscribeToDayToDayTasks(
 // ============================================================================
 
 export async function createLabPoll(pollData: Omit<LabPoll, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const pollRef = doc(collection(db, "labPolls"))
   const pollId = pollRef.id
   
@@ -2003,20 +2252,23 @@ export async function createLabPoll(pollData: Omit<LabPoll, 'id'>): Promise<stri
 }
 
 export async function updateLabPoll(pollId: string, updates: Partial<LabPoll>): Promise<void> {
+  const db = getFirebaseDb()
   const pollRef = doc(db, "labPolls", pollId)
   await updateDoc(pollRef, updates)
 }
 
 export async function deleteLabPoll(pollId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "labPolls", pollId))
 }
 
 export function subscribeToLabPolls(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (polls: LabPoll[]) => void
 ): Unsubscribe {
   if (!filters?.labId) {
-    console.warn("subscribeToLabPolls called with undefined or empty labId")
+    logger.warn("subscribeToLabPolls called with undefined or empty labId")
     callback([])
     return () => {}
   }
@@ -2040,12 +2292,12 @@ export function subscribeToLabPolls(
         callback(polls)
       },
       (error) => {
-        console.error("Error in subscribeToLabPolls:", error)
+        logger.error("Error in subscribeToLabPolls", error)
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up lab polls subscription:", error)
+    logger.error("Error setting up lab polls subscription", error)
     return () => {}
   }
 }
@@ -2055,6 +2307,7 @@ export function subscribeToLabPolls(
 // ============================================================================
 
 export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const equipmentRef = doc(collection(db, "equipment"))
   const equipmentId = equipmentRef.id
   
@@ -2069,30 +2322,33 @@ export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>
 }
 
 export async function updateEquipment(equipmentId: string, updates: Partial<EquipmentDevice>): Promise<void> {
+  const db = getFirebaseDb()
   const equipmentRef = doc(db, "equipment", equipmentId)
   const updateData: any = { ...updates, updatedAt: serverTimestamp() }
   await updateDoc(equipmentRef, updateData)
 }
 
 export async function deleteEquipment(equipmentId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "equipment", equipmentId))
 }
 
 export function subscribeToEquipment(labId: string | null, callback: (equipment: EquipmentDevice[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   if (!labId) {
-    console.warn("subscribeToEquipment called with undefined or empty labId")
+    logger.warn("subscribeToEquipment called with undefined or empty labId")
     callback([])
     return () => {}
   }
-  
+
   try {
     const q = query(
       collection(db, "equipment"),
       where("labId", "==", labId),
       orderBy("name", "asc")
     )
-    
-    return onSnapshot(q, 
+
+    return onSnapshot(q,
       (snapshot) => {
         const equipment = snapshot.docs.map(doc => {
           const data = doc.data()
@@ -2105,12 +2361,12 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
         callback(equipment)
       },
       (error) => {
-        console.error("Error in subscribeToEquipment:", error)
+        logger.error("Error in subscribeToEquipment", error)
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up equipment subscription:", error)
+    logger.error("Error setting up equipment subscription", error)
     return () => {}
   }
 }
@@ -2120,6 +2376,7 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
 // ============================================================================
 
 export async function createELNExperiment(experimentData: Omit<ELNExperiment, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const experimentRef = doc(collection(db, "elnExperiments"))
   const experimentId = experimentRef.id
 
@@ -2142,6 +2399,7 @@ export async function createELNExperiment(experimentData: Omit<ELNExperiment, 'i
 }
 
 export async function updateELNExperiment(experimentId: string, updates: Partial<ELNExperiment>): Promise<void> {
+  const db = getFirebaseDb()
   const experimentRef = doc(db, "elnExperiments", experimentId)
 
   // Deep clean function to remove undefined values and handle nested objects
@@ -2174,11 +2432,13 @@ export async function updateELNExperiment(experimentId: string, updates: Partial
 }
 
 export async function deleteELNExperiment(experimentId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "elnExperiments", experimentId))
 }
 
 export function subscribeToELNExperiments(
-  filters: { labId?: string; userId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; userId?: string } | null,
   callback: (experiments: ELNExperiment[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "elnExperiments")
@@ -2203,12 +2463,12 @@ export function subscribeToELNExperiments(
         callback(experiments)
       },
       (error) => {
-        console.error("Error in subscribeToELNExperiments:", error)
+        logger.error("Error in subscribeToELNExperiments", error)
         callback([])
       }
     )
   } catch (error) {
-    console.error("Error setting up ELN experiments subscription:", error)
+    logger.error("Error setting up ELN experiments subscription", error)
     return () => {}
   }
 }
