@@ -12,12 +12,11 @@ import { MasterProject, Task, Workpackage, Project, Person, ProfileProject } fro
 import { Plus, FolderKanban, PackagePlus } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
-import { updateWorkpackageWithProgress, createProfileProject } from "@/lib/firestoreService";
+import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
 import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalculate, updateWorkpackageWithTaskProgress } from "@/lib/progressCalculation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
