@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
 import {
   FundingAccount,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order } from "@/lib/types"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 import { logger } from "@/lib/logger"
 import { Button } from "@/components/ui/button"
@@ -65,6 +65,7 @@ export function ProjectDetailPage({
   // Fetch project orders
   useEffect(() => {
     const fetchProjectOrders = async () => {
+    const db = getFirebaseDb()
       setLoadingOrders(true)
       try {
         const ordersQuery = query(

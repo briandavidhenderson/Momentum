@@ -9,7 +9,7 @@
  */
 
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from './firebase'
+import { getFirebaseDb } from './firebase'
 import { InventoryItem, FundingAllocation, PersonProfile } from './types'
 import { getBudgetNotificationPriority } from './equipmentConfig'
 import { logger } from './logger'
@@ -30,6 +30,7 @@ export interface NotificationPayload {
  * Creates a notification document in Firestore
  */
 async function createNotification(payload: NotificationPayload) {
+  const db = getFirebaseDb()
   try {
     await addDoc(collection(db, 'notifications'), {
       ...payload,

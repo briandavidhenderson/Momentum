@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/dialog"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { doc, getDoc, setDoc, addDoc, collection, query, where, orderBy, getDocs } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import type {
   UserConsent,
   PrivacySettings,
@@ -79,6 +79,7 @@ export function PrivacyDashboard() {
     if (!user) return
 
     async function loadData() {
+    const db = getFirebaseDb()
       if (!user) return
 
       try {
@@ -148,6 +149,7 @@ export function PrivacyDashboard() {
 
   // Update privacy settings
   const updatePrivacySettings = async (updates: Partial<PrivacySettings>) => {
+    const db = getFirebaseDb()
     if (!user || !privacySettings) return
 
     setLoading(true)
@@ -170,6 +172,7 @@ export function PrivacyDashboard() {
 
   // Request data export
   const requestDataExport = async (format: "json" | "csv" | "zip") => {
+    const db = getFirebaseDb()
     if (!user) return
 
     setLoading(true)
@@ -217,6 +220,7 @@ export function PrivacyDashboard() {
 
   // Request account deletion
   const requestAccountDeletion = async (reason?: string) => {
+    const db = getFirebaseDb()
     if (!user) return
     if (deleteConfirmation !== "DELETE MY ACCOUNT") {
       alert('Please type "DELETE MY ACCOUNT" to confirm.')

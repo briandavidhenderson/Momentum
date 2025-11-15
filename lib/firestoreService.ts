@@ -18,7 +18,7 @@ import {
   runTransaction,
   Query,
 } from "firebase/firestore"
-import { db } from "./firebase"
+import { getFirebaseDb } from "./firebase"
 import { logger } from "./logger"
 import {
   PersonProfile,
@@ -57,6 +57,7 @@ export interface FirestoreUser {
 }
 
 export async function createUser(uid: string, email: string, fullName: string): Promise<void> {
+  const db = getFirebaseDb()
   const userRef = doc(db, "users", uid)
   await setDoc(userRef, {
     uid,
@@ -69,6 +70,7 @@ export async function createUser(uid: string, email: string, fullName: string): 
 }
 
 export async function getUser(uid: string): Promise<FirestoreUser | null> {
+  const db = getFirebaseDb()
   const userRef = doc(db, "users", uid)
   const userSnap = await getDoc(userRef)
   if (!userSnap.exists()) return null
@@ -76,6 +78,7 @@ export async function getUser(uid: string): Promise<FirestoreUser | null> {
 }
 
 export async function updateUser(uid: string, updates: Partial<FirestoreUser>): Promise<void> {
+  const db = getFirebaseDb()
   const userRef = doc(db, "users", uid)
   await updateDoc(userRef, updates)
 }
@@ -85,6 +88,7 @@ export async function updateUser(uid: string, updates: Partial<FirestoreUser>): 
 // ============================================================================
 
 export async function createProfile(userId: string, profileData: Omit<PersonProfile, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   // Validate required fields
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     throw new Error("userId is required and must be a non-empty string")
@@ -196,6 +200,7 @@ async function retryWithBackoff<T>(
 }
 
 export async function getProfile(profileId: string): Promise<PersonProfile | null> {
+  const db = getFirebaseDb()
   if (!profileId) {
     logger.warn("getProfile called with undefined or empty profileId")
     return null
@@ -222,6 +227,7 @@ export async function getProfile(profileId: string): Promise<PersonProfile | nul
 }
 
 export async function getProfileByUserId(userId: string): Promise<PersonProfile | null> {
+  const db = getFirebaseDb()
   if (!userId) {
     logger.warn("getProfileByUserId called with undefined or empty userId")
     return null
@@ -246,6 +252,7 @@ export async function getProfileByUserId(userId: string): Promise<PersonProfile 
 }
 
 export async function getAllProfiles(): Promise<PersonProfile[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "personProfiles"))
   return querySnapshot.docs.map(doc => doc.data() as PersonProfile)
 }
@@ -257,6 +264,7 @@ export async function getAllProfiles(): Promise<PersonProfile[]> {
  * Returns null if no profile is found
  */
 export async function findUserProfile(userId: string, profileId: string | null | undefined): Promise<PersonProfile | null> {
+  const db = getFirebaseDb()
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     // Silently return null if no userId (user not logged in yet)
     return null
@@ -332,6 +340,7 @@ async function repairUserProfileSync(userId: string, profileId: string): Promise
 }
 
 export async function updateProfile(profileId: string, updates: Partial<PersonProfile>): Promise<void> {
+  const db = getFirebaseDb()
   const profileRef = doc(db, "personProfiles", profileId)
 
   // Note: Lab membership is now tracked via PersonProfile.labId
@@ -343,7 +352,8 @@ export async function updateProfile(profileId: string, updates: Partial<PersonPr
 }
 
 export function subscribeToProfiles(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (profiles: PersonProfile[]) => void
 ): Unsubscribe {
   try {
@@ -399,6 +409,7 @@ export function subscribeToProfiles(
  * @returns The ID of the newly created organisation
  */
 export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const orgRef = doc(collection(db, "organisations"))
   const orgId = orgRef.id
 
@@ -424,11 +435,13 @@ export async function createOrganisation(orgData: Omit<Organisation, 'id' | 'cre
 }
 
 export async function getOrganisations(): Promise<Organisation[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "organisations"))
   return querySnapshot.docs.map(doc => doc.data() as Organisation)
 }
 
 export function subscribeToOrganisations(callback: (orgs: Organisation[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   return onSnapshot(collection(db, "organisations"), (snapshot) => {
     const orgs = snapshot.docs.map(doc => doc.data() as Organisation)
     callback(orgs)
@@ -440,6 +453,7 @@ export function subscribeToOrganisations(callback: (orgs: Organisation[]) => voi
  * @returns The ID of the newly created institute
  */
 export async function createInstitute(instituteData: Omit<Institute, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const instituteRef = doc(collection(db, "institutes"))
   const instituteId = instituteRef.id
 
@@ -465,6 +479,7 @@ export async function createInstitute(instituteData: Omit<Institute, 'id' | 'cre
 }
 
 export async function getInstitutes(orgId?: string): Promise<Institute[]> {
+  const db = getFirebaseDb()
   let q
   if (orgId) {
     q = query(collection(db, "institutes"), where("organisationId", "==", orgId))
@@ -476,6 +491,7 @@ export async function getInstitutes(orgId?: string): Promise<Institute[]> {
 }
 
 export function subscribeToInstitutes(orgId: string | null, callback: (institutes: Institute[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   const q = orgId 
     ? query(collection(db, "institutes"), where("organisationId", "==", orgId))
     : collection(db, "institutes")
@@ -491,6 +507,7 @@ export function subscribeToInstitutes(orgId: string | null, callback: (institute
  * @returns The ID of the newly created lab
  */
 export async function createLab(labData: Omit<Lab, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const labRef = doc(collection(db, "labs"))
   const labId = labRef.id
 
@@ -516,6 +533,7 @@ export async function createLab(labData: Omit<Lab, 'id' | 'createdAt'>): Promise
 }
 
 export async function getLabs(instituteId?: string): Promise<Lab[]> {
+  const db = getFirebaseDb()
   let q
   if (instituteId) {
     q = query(collection(db, "labs"), where("instituteId", "==", instituteId))
@@ -527,6 +545,7 @@ export async function getLabs(instituteId?: string): Promise<Lab[]> {
 }
 
 export function subscribeToLabs(instituteId: string | null, callback: (labs: Lab[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   const q = instituteId
     ? query(collection(db, "labs"), where("instituteId", "==", instituteId))
     : collection(db, "labs")
@@ -552,6 +571,7 @@ export function subscribeToLabs(instituteId: string | null, callback: (labs: Lab
  * Handles Date to Timestamp conversion for Firestore
  */
 export async function createFunder(funderData: Omit<Funder, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const funderRef = doc(collection(db, "funders"))
   const funderId = funderRef.id
 
@@ -585,6 +605,7 @@ export async function createFunder(funderData: Omit<Funder, 'id' | 'createdAt'>)
  * P0-1: Get all funders, optionally filtered by organisation
  */
 export async function getFunders(orgId?: string): Promise<Funder[]> {
+  const db = getFirebaseDb()
   const fundersRef = collection(db, "funders")
 
   let q = query(fundersRef)
@@ -608,6 +629,7 @@ export async function getFunders(orgId?: string): Promise<Funder[]> {
  * P0-1: Subscribe to funders with real-time updates
  */
 export function subscribeToFunders(callback: (funders: Funder[]) => void, orgId?: string): Unsubscribe {
+  const db = getFirebaseDb()
   const fundersRef = collection(db, "funders")
 
   let q = query(fundersRef)
@@ -637,6 +659,7 @@ export function subscribeToFunders(callback: (funders: Funder[]) => void, orgId?
  * @returns The ID of the newly created account
  */
 export async function createFundingAccount(accountData: Omit<FundingAccount, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const accountRef = doc(collection(db, "accounts"))
   const accountId = accountRef.id
 
@@ -656,6 +679,7 @@ export async function createFundingAccount(accountData: Omit<FundingAccount, 'id
  * Gets all funding accounts, optionally filtered by project or funder
  */
 export async function getFundingAccounts(filters?: {
+  const db = getFirebaseDb()
   masterProjectId?: string
   funderId?: string
 }): Promise<FundingAccount[]> {
@@ -676,6 +700,7 @@ export async function getFundingAccounts(filters?: {
  * Updates a funding account
  */
 export async function updateFundingAccount(accountId: string, updates: Partial<FundingAccount>): Promise<void> {
+  const db = getFirebaseDb()
   const accountRef = doc(db, "accounts", accountId)
   const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
   await updateDoc(accountRef, updateData)
@@ -685,6 +710,7 @@ export async function updateFundingAccount(accountId: string, updates: Partial<F
  * Deletes a funding account
  */
 export async function deleteFundingAccount(accountId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "accounts", accountId))
 }
 
@@ -692,7 +718,8 @@ export async function deleteFundingAccount(accountId: string): Promise<void> {
  * Subscribes to funding accounts with optional filters
  */
 export function subscribeToFundingAccounts(
-  filters: { labId?: string; masterProjectId?: string; funderId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; masterProjectId?: string; funderId?: string } | null,
   callback: (accounts: FundingAccount[]) => void,
   errorCallback?: (error: Error) => void
 ): Unsubscribe {
@@ -731,7 +758,8 @@ export function subscribeToFundingAccounts(
  * @returns Unsubscribe function
  */
 export function subscribeToFundingAllocations(
-  filters: { userId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() userId?: string } | null,
   callback: (allocations: FundingAllocation[]) => void,
   errorCallback?: (error: Error) => void
 ): Unsubscribe {
@@ -773,6 +801,7 @@ export function subscribeToFundingAllocations(
  * @returns The ID of the newly created master project
  */
 export async function createMasterProject(projectData: Omit<MasterProject, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   // Fix Bug #1: Validate that required fields are present
   if (!projectData.name || !projectData.name.trim()) {
     throw new Error("Project name is required")
@@ -813,6 +842,7 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
  * Gets all master projects, optionally filtered by lab, funder, or person
  */
 export async function getMasterProjects(filters?: {
+  const db = getFirebaseDb()
   labId?: string
   funderId?: string
   personId?: string  // Returns projects where person is a team member
@@ -838,6 +868,7 @@ export async function getMasterProjects(filters?: {
  * Updates a master project
  */
 export async function updateMasterProject(projectId: string, updates: Partial<MasterProject>): Promise<void> {
+  const db = getFirebaseDb()
   const projectRef = doc(db, "masterProjects", projectId)
   const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
   await updateDoc(projectRef, updateData)
@@ -847,6 +878,7 @@ export async function updateMasterProject(projectId: string, updates: Partial<Ma
  * Deletes a master project and all associated data (accounts, workpackages, etc.)
  */
 export async function deleteMasterProject(projectId: string): Promise<void> {
+  const db = getFirebaseDb()
   const batch = writeBatch(db)
 
   // Delete the project
@@ -875,7 +907,8 @@ export async function deleteMasterProject(projectId: string): Promise<void> {
  * Subscribes to master projects with optional filters
  */
 export function subscribeToMasterProjects(
-  filters: { labId?: string; funderId?: string; personId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; funderId?: string; personId?: string } | null,
   callback: (projects: MasterProject[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "masterProjects")
@@ -921,7 +954,8 @@ export interface FirestoreProject {
   createdAt: Timestamp
 }
 
-export async function createProject(projectData: Omit<Project, 'id'> & { createdBy: string; labId?: string }): Promise<string> {
+export async function createProject(projectData: Omit<Project, 'id'> & {
+  const db = getFirebaseDb() createdBy: string; labId?: string }): Promise<string> {
   const projectRef = doc(collection(db, "projects"))
   const projectId = projectRef.id
   
@@ -945,6 +979,7 @@ export async function createProject(projectData: Omit<Project, 'id'> & { created
 }
 
 export async function getProjects(userId: string): Promise<Project[]> {
+  const db = getFirebaseDb()
   // Get user's profile to determine visible projects
   const profile = await getProfileByUserId(userId)
   if (!profile) return []
@@ -964,6 +999,7 @@ export async function getProjects(userId: string): Promise<Project[]> {
 }
 
 export async function updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
+  const db = getFirebaseDb()
   const projectRef = doc(db, "projects", projectId)
   const updateData: any = { ...updates }
   
@@ -975,11 +1011,13 @@ export async function updateProject(projectId: string, updates: Partial<Project>
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "projects", projectId))
 }
 
 export function subscribeToProjects(
-  filters: { labId?: string; userId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; userId?: string } | null,
   callback: (projects: Project[]) => void
 ): Unsubscribe {
   if (!filters?.userId) {
@@ -1039,7 +1077,8 @@ export interface FirestoreWorkpackage {
   createdAt: Timestamp
 }
 
-export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'> & { createdBy: string }): Promise<string> {
+export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'> & {
+  const db = getFirebaseDb() createdBy: string }): Promise<string> {
   const wpRef = doc(collection(db, "workpackages"))
   const wpId = wpRef.id
 
@@ -1068,6 +1107,7 @@ export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'>
 }
 
 export async function getWorkpackages(profileProjectId: string): Promise<Workpackage[]> {
+  const db = getFirebaseDb()
   const q = query(collection(db, "workpackages"), where("profileProjectId", "==", profileProjectId))
   const querySnapshot = await getDocs(q)
   
@@ -1087,6 +1127,7 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
 }
 
 export async function updateWorkpackage(wpId: string, updates: Partial<Workpackage>): Promise<void> {
+  const db = getFirebaseDb()
   const wpRef = doc(db, "workpackages", wpId)
   const updateData: any = { ...updates }
   
@@ -1104,11 +1145,13 @@ export async function updateWorkpackage(wpId: string, updates: Partial<Workpacka
 }
 
 export async function deleteWorkpackage(wpId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "workpackages", wpId))
 }
 
 export function subscribeToWorkpackages(
-  filters: { profileProjectId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() profileProjectId?: string } | null,
   callback: (wps: Workpackage[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "workpackages")
@@ -1144,6 +1187,7 @@ export function subscribeToWorkpackages(
  * This updates the entire workpackage including nested tasks, subtasks, and todos
  */
 export async function updateWorkpackageWithProgress(wpId: string, workpackage: Workpackage): Promise<void> {
+  const db = getFirebaseDb()
   const wpRef = doc(db, "workpackages", wpId)
 
   // Convert dates to Timestamps
@@ -1171,6 +1215,7 @@ export async function updateWorkpackageWithProgress(wpId: string, workpackage: W
  * For legacy projects without workpackages (tasks directly in project)
  */
 export async function updateProjectWithProgress(projectId: string, project: Project): Promise<void> {
+  const db = getFirebaseDb()
   const projectRef = doc(db, "projects", projectId)
 
   // Convert dates to Timestamps
@@ -1235,7 +1280,8 @@ export interface FirestoreOrder {
   priceExVAT?: number
 }
 
-export async function createOrder(orderData: Omit<Order, 'id'> & { createdBy: string }): Promise<string> {
+export async function createOrder(orderData: Omit<Order, 'id'> & {
+  const db = getFirebaseDb() createdBy: string }): Promise<string> {
   const orderRef = doc(collection(db, "orders"))
   const orderId = orderRef.id
 
@@ -1263,6 +1309,7 @@ export async function createOrder(orderData: Omit<Order, 'id'> & { createdBy: st
 }
 
 export async function getOrders(): Promise<Order[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "orders"))
   
   return querySnapshot.docs.map(doc => {
@@ -1277,6 +1324,7 @@ export async function getOrders(): Promise<Order[]> {
 }
 
 export async function updateOrder(orderId: string, updates: Partial<Order>): Promise<void> {
+  const db = getFirebaseDb()
   const orderRef = doc(db, "orders", orderId)
   const updateData: any = { ...updates }
 
@@ -1308,6 +1356,7 @@ export async function updateOrder(orderId: string, updates: Partial<Order>): Pro
 }
 
 export async function deleteOrder(orderId: string): Promise<void> {
+  const db = getFirebaseDb()
   // Feature #7: Update budget tracking when deleting order
   const orderRef = doc(db, "orders", orderId)
   const orderDoc = await getDoc(orderRef)
@@ -1329,7 +1378,8 @@ export async function deleteOrder(orderId: string): Promise<void> {
 }
 
 export function subscribeToOrders(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (orders: Order[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "orders")
@@ -1381,7 +1431,8 @@ export interface FirestoreInventoryItem {
   equipmentDeviceIds?: string[]
 }
 
-export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & { createdBy: string }): Promise<string> {
+export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & {
+  const db = getFirebaseDb() createdBy: string }): Promise<string> {
   const itemRef = doc(collection(db, "inventory"))
   const itemId = itemRef.id
   
@@ -1397,6 +1448,7 @@ export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & 
 }
 
 export async function getInventory(): Promise<InventoryItem[]> {
+  const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "inventory"))
   
   return querySnapshot.docs.map(doc => {
@@ -1426,6 +1478,7 @@ export async function getInventory(): Promise<InventoryItem[]> {
 }
 
 export async function updateInventoryItem(itemId: string, updates: Partial<InventoryItem>): Promise<void> {
+  const db = getFirebaseDb()
   const itemRef = doc(db, "inventory", itemId)
   const updateData: any = { ...updates }
   
@@ -1436,11 +1489,13 @@ export async function updateInventoryItem(itemId: string, updates: Partial<Inven
 }
 
 export async function deleteInventoryItem(itemId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "inventory", itemId))
 }
 
 export function subscribeToInventory(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (inventory: InventoryItem[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "inventory")
@@ -1496,6 +1551,7 @@ export interface FirestoreCalendarEvent {
 }
 
 export async function createEvent(eventData: Omit<CalendarEvent, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const eventRef = doc(collection(db, "events"))
   const eventId = eventRef.id
   await setDoc(eventRef, {
@@ -1509,6 +1565,7 @@ export async function createEvent(eventData: Omit<CalendarEvent, 'id'>): Promise
 }
 
 export async function updateEvent(eventId: string, updates: Partial<CalendarEvent>): Promise<void> {
+  const db = getFirebaseDb()
   const ref = doc(db, "events", eventId)
   const updateData: any = { ...updates }
   if (updates.start) updateData.start = Timestamp.fromDate(updates.start)
@@ -1517,10 +1574,12 @@ export async function updateEvent(eventId: string, updates: Partial<CalendarEven
 }
 
 export async function deleteEvent(eventId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "events", eventId))
 }
 
 export async function getEvents(): Promise<CalendarEvent[]> {
+  const db = getFirebaseDb()
   const snap = await getDocs(collection(db, "events"))
   return snap.docs.map(d => {
     const data = d.data() as FirestoreCalendarEvent
@@ -1534,7 +1593,8 @@ export async function getEvents(): Promise<CalendarEvent[]> {
 }
 
 export function subscribeToEvents(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (events: CalendarEvent[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "events")
@@ -1573,6 +1633,7 @@ export interface FirestoreAuditTrail {
 }
 
 export async function appendAuditTrail(entry: Omit<AuditTrail, 'id' | 'createdAt'>): Promise<string> {
+  const db = getFirebaseDb()
   const ref = doc(collection(db, "auditTrails"))
   const id = ref.id
   await setDoc(ref, {
@@ -1584,6 +1645,7 @@ export async function appendAuditTrail(entry: Omit<AuditTrail, 'id' | 'createdAt
 }
 
 export async function getAuditTrails(entityType: AuditTrail['entityType'], entityId: string, limitCount = 20): Promise<AuditTrail[]> {
+  const db = getFirebaseDb()
   // simple fetch; could add where/orderBy
   const snap = await getDocs(collection(db, "auditTrails"))
   return snap.docs
@@ -1598,7 +1660,8 @@ export async function getAuditTrails(entityType: AuditTrail['entityType'], entit
 }
 
 export function subscribeToAuditTrails(
-  filters: { entityType: string; entityId: string } | null,
+  filters: {
+  const db = getFirebaseDb() entityType: string; entityId: string } | null,
   callback: (entries: AuditTrail[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "auditTrails")
@@ -1629,6 +1692,7 @@ export function subscribeToAuditTrails(
  * Also removes user from lab's members array if applicable
  */
 export async function deleteUserCascade(userId: string): Promise<void> {
+  const db = getFirebaseDb()
   const batch = writeBatch(db)
   
   try {
@@ -1700,6 +1764,7 @@ export async function deleteUserCascade(userId: string): Promise<void> {
  * Ensures consistency: no user without a profile, no profile without a user
  */
 export async function deleteProfileCascade(profileId: string): Promise<void> {
+  const db = getFirebaseDb()
   // Validate input
   if (!profileId || typeof profileId !== 'string' || profileId.trim() === '') {
     throw new Error("profileId is required and must be a non-empty string")
@@ -1775,6 +1840,7 @@ export async function deleteProfileCascade(profileId: string): Promise<void> {
  * Uses batched writes for atomicity
  */
 export async function deleteProfileProjectCascade(projectId: string): Promise<void> {
+  const db = getFirebaseDb()
   const batch = writeBatch(db)
 
   // Delete the project
@@ -1801,6 +1867,7 @@ export async function deleteProfileProjectCascade(projectId: string): Promise<vo
  * This is used by the cascading delete function
  */
 export async function deleteWorkpackageCascade(workpackageId: string): Promise<void> {
+  const db = getFirebaseDb()
   const workpackageRef = doc(db, "workpackages", workpackageId)
   await deleteDoc(workpackageRef)
 }
@@ -1812,6 +1879,7 @@ export async function batchDelete(
   collection: string,
   ids: string[]
 ): Promise<void> {
+  const db = getFirebaseDb()
   if (ids.length === 0) return
 
   const batch = writeBatch(db)
@@ -1844,6 +1912,7 @@ export interface FirestoreDayToDayTask {
 }
 
 export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const taskRef = doc(collection(db, "dayToDayTasks"))
   const taskId = taskRef.id
   
@@ -1859,6 +1928,7 @@ export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<str
 }
 
 export async function updateDayToDayTask(taskId: string, updates: Partial<any>): Promise<void> {
+  const db = getFirebaseDb()
   const taskRef = doc(db, "dayToDayTasks", taskId)
   const updateData: any = { ...updates, updatedAt: serverTimestamp() }
   
@@ -1870,11 +1940,13 @@ export async function updateDayToDayTask(taskId: string, updates: Partial<any>):
 }
 
 export async function deleteDayToDayTask(taskId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "dayToDayTasks", taskId))
 }
 
 export function subscribeToDayToDayTasks(
-  filters: { labId?: string; userId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; userId?: string } | null,
   callback: (tasks: any[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "dayToDayTasks")
@@ -1917,6 +1989,7 @@ export function subscribeToDayToDayTasks(
 // ============================================================================
 
 export async function createLabPoll(pollData: Omit<LabPoll, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const pollRef = doc(collection(db, "labPolls"))
   const pollId = pollRef.id
   
@@ -1930,16 +2003,19 @@ export async function createLabPoll(pollData: Omit<LabPoll, 'id'>): Promise<stri
 }
 
 export async function updateLabPoll(pollId: string, updates: Partial<LabPoll>): Promise<void> {
+  const db = getFirebaseDb()
   const pollRef = doc(db, "labPolls", pollId)
   await updateDoc(pollRef, updates)
 }
 
 export async function deleteLabPoll(pollId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "labPolls", pollId))
 }
 
 export function subscribeToLabPolls(
-  filters: { labId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string } | null,
   callback: (polls: LabPoll[]) => void
 ): Unsubscribe {
   if (!filters?.labId) {
@@ -1982,6 +2058,7 @@ export function subscribeToLabPolls(
 // ============================================================================
 
 export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const equipmentRef = doc(collection(db, "equipment"))
   const equipmentId = equipmentRef.id
   
@@ -1996,16 +2073,19 @@ export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>
 }
 
 export async function updateEquipment(equipmentId: string, updates: Partial<EquipmentDevice>): Promise<void> {
+  const db = getFirebaseDb()
   const equipmentRef = doc(db, "equipment", equipmentId)
   const updateData: any = { ...updates, updatedAt: serverTimestamp() }
   await updateDoc(equipmentRef, updateData)
 }
 
 export async function deleteEquipment(equipmentId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "equipment", equipmentId))
 }
 
 export function subscribeToEquipment(labId: string | null, callback: (equipment: EquipmentDevice[]) => void): Unsubscribe {
+  const db = getFirebaseDb()
   if (!labId) {
     logger.warn("subscribeToEquipment called with undefined or empty labId")
     callback([])
@@ -2047,6 +2127,7 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
 // ============================================================================
 
 export async function createELNExperiment(experimentData: Omit<ELNExperiment, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
   const experimentRef = doc(collection(db, "elnExperiments"))
   const experimentId = experimentRef.id
 
@@ -2069,6 +2150,7 @@ export async function createELNExperiment(experimentData: Omit<ELNExperiment, 'i
 }
 
 export async function updateELNExperiment(experimentId: string, updates: Partial<ELNExperiment>): Promise<void> {
+  const db = getFirebaseDb()
   const experimentRef = doc(db, "elnExperiments", experimentId)
 
   // Deep clean function to remove undefined values and handle nested objects
@@ -2101,11 +2183,13 @@ export async function updateELNExperiment(experimentId: string, updates: Partial
 }
 
 export async function deleteELNExperiment(experimentId: string): Promise<void> {
+  const db = getFirebaseDb()
   await deleteDoc(doc(db, "elnExperiments", experimentId))
 }
 
 export function subscribeToELNExperiments(
-  filters: { labId?: string; userId?: string } | null,
+  filters: {
+  const db = getFirebaseDb() labId?: string; userId?: string } | null,
   callback: (experiments: ELNExperiment[]) => void
 ): Unsubscribe {
   let q: Query = collection(db, "elnExperiments")

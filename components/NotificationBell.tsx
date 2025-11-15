@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, orderBy, limit, onSnapshot, updateDoc, doc } from "firebase/firestore"
 import { Bell, Check } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -54,6 +54,7 @@ export function NotificationBell() {
   }, [currentUser])
 
   const markAsRead = async (notificationId: string) => {
+    const db = getFirebaseDb()
     try {
       await updateDoc(doc(db, "notifications", notificationId), { read: true })
     } catch (error) {
@@ -62,6 +63,7 @@ export function NotificationBell() {
   }
 
   const markAllAsRead = async () => {
+    const db = getFirebaseDb()
     try {
       const unreadNotifs = notifications.filter((n) => !n.read)
       await Promise.all(unreadNotifs.map((n) => markAsRead(n.id)))

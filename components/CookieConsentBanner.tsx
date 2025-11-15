@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import type { UserConsent } from "@/lib/types"
 import { PRIVACY_POLICY_VERSION } from "@/lib/constants"
 import { logger } from "@/lib/logger"
@@ -47,6 +47,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
   // Check if user has already given consent
   useEffect(() => {
     async function checkConsent() {
+      const db = getFirebaseDb()
       if (!user) {
         setLoading(false)
         return
@@ -108,6 +109,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
   }
 
   const saveConsent = async (consent: Partial<UserConsent>) => {
+    const db = getFirebaseDb()
     if (!user) return
 
     setLoading(true)

@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
-import { auth } from '@/lib/firebase';
+import { getFirebaseAuth } from '@/lib/firebase';
 import { getUser, findUserProfile, FirestoreUser as User } from '@/lib/firestoreService';
 import { PersonProfile } from '@/lib/types';
 import { logger } from '@/lib/logger';
@@ -19,6 +19,7 @@ export function useAuth() {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    const auth = getFirebaseAuth();
     setMounted(true);
     isMountedRef.current = true;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -128,6 +129,7 @@ export function useAuth() {
   };
 
   const handleSignOut = async () => {
+    const auth = getFirebaseAuth();
     try {
       await signOut(auth);
     } catch (error) {
