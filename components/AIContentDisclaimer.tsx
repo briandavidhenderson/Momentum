@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Sparkles, Check, Info } from "lucide-react"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import { collection, addDoc } from "firebase/firestore"
 import { AIGeneratedContent } from "@/lib/types"
 import { useAuth } from "@/lib/hooks/useAuth"
@@ -32,6 +32,7 @@ export function AIContentDisclaimer({
   const [edited, setEdited] = useState(false)
 
   const recordAIGeneration = async (approved: boolean) => {
+    const db = getFirebaseDb()
     const now = new Date().toISOString()
     const aiRecord: Omit<AIGeneratedContent, "id"> = {
       entityType,
@@ -55,6 +56,7 @@ export function AIContentDisclaimer({
   }
 
   const handleAccept = async () => {
+    const db = getFirebaseDb()
     setAccepted(true)
     await recordAIGeneration(true)
     onAccept?.()

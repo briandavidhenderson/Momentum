@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { User, Lock, Mail, LogIn, UserPlus } from "lucide-react"
 import { User as UserType } from "@/lib/types"
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { getFirebaseAuth } from "@/lib/firebase"
 import { createUser } from "@/lib/firestoreService"
 import { logger } from "@/lib/logger"
 
@@ -25,6 +25,7 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
   const [verificationSent, setVerificationSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
+    const auth = getFirebaseAuth()
     e.preventDefault()
     setError("")
 

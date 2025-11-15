@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAppContext } from "@/lib/AppContext"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
 import { FundingTransaction } from "@/lib/types"
 import { formatCurrency, getLowBalanceWarningLevel } from "@/lib/constants"
@@ -26,6 +26,7 @@ export function PersonalLedger() {
     }
 
     const loadTransactions = async () => {
+    const db = getFirebaseDb()
       setTransactionsLoading(true)
       try {
         const allocationIds = fundingAllocations.map((a) => a.id)

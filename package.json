@@ -38,7 +38,7 @@
     "clsx": "^2.1.0",
     "d3": "^7.9.0",
     "date-fns": "^3.6.0",
-    "firebase": "^10.11.0",
+    "firebase": "^12.6.0",
     "firebase-admin": "^12.4.0",
     "gantt-task-react": "^0.3.9",
     "lucide-react": "^0.400.0",

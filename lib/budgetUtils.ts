@@ -3,7 +3,7 @@
  * Feature #7: Budget tracking and validation utilities
  */
 
-import { db } from './firebase'
+import { getFirebaseDb } from './firebase'
 import { doc, getDoc, updateDoc, runTransaction } from 'firebase/firestore'
 import { FundingAccount, Order } from './types'
 import { logger } from './logger'
@@ -25,6 +25,7 @@ export async function checkSufficientFunds(
   accountId: string,
   orderAmount: number
 ): Promise<{ sufficient: boolean; available: number; message?: string }> {
+  const db = getFirebaseDb()
   try {
     const accountDoc = await getDoc(doc(db, 'accounts', accountId))
 
@@ -75,6 +76,7 @@ export async function updateAccountBudget(
   oldStatus: Order['status'] | null,
   newStatus: Order['status'] | null
 ): Promise<void> {
+  const db = getFirebaseDb()
   try {
     await runTransaction(db, async (transaction) => {
       const accountRef = doc(db, 'accounts', accountId)
@@ -177,6 +179,7 @@ export async function getAccountBudgetSummary(accountId: string): Promise<{
   available: number
   currency: string
 } | null> {
+  const db = getFirebaseDb()
   try {
     const accountDoc = await getDoc(doc(db, 'accounts', accountId))
 

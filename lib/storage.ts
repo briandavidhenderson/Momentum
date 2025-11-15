@@ -4,7 +4,7 @@
  */
 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
-import { storage } from './firebase'
+import { getFirebaseStorage } from './firebase'
 import { logger } from './logger'
 
 /**
@@ -20,6 +20,7 @@ export async function uploadFile(
   size: number
   type: string
 }> {
+  const storage = getFirebaseStorage()
   const storageRef = ref(storage, path)
 
   try {
@@ -45,6 +46,7 @@ export async function uploadFile(
  * Delete a file from Firebase Storage
  */
 export async function deleteFile(path: string): Promise<void> {
+  const storage = getFirebaseStorage()
   try {
     const storageRef = ref(storage, path)
     await deleteObject(storageRef)

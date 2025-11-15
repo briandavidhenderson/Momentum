@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { Comment } from "@/lib/types"
 import { useAuth } from "@/lib/hooks/useAuth"
-import { db } from "@/lib/firebase"
+import { getFirebaseDb } from "@/lib/firebase"
 import {
   collection,
   query,
@@ -99,6 +99,7 @@ export function CommentsSection({
   }, [comments])
 
   const handlePostComment = async () => {
+    const db = getFirebaseDb()
     if (!newComment.trim() || !currentUser || !currentUserProfile) return
 
     try {
@@ -122,6 +123,7 @@ export function CommentsSection({
   }
 
   const handlePostReply = async (parentCommentId: string) => {
+    const db = getFirebaseDb()
     if (!replyContent.trim() || !currentUser || !currentUserProfile) return
 
     const parentComment = comments.find((c) => c.id === parentCommentId)
@@ -150,6 +152,7 @@ export function CommentsSection({
   }
 
   const handleEditComment = async (commentId: string) => {
+    const db = getFirebaseDb()
     if (!editContent.trim()) return
 
     try {
@@ -169,6 +172,7 @@ export function CommentsSection({
   }
 
   const handleDeleteComment = async (commentId: string) => {
+    const db = getFirebaseDb()
     if (!confirm("Are you sure you want to delete this comment?")) return
 
     try {
