@@ -105,7 +105,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       setIsEditing(false)
       // No need to reload - Firestore real-time updates will handle it
     } catch (error) {
-      console.error("Error saving profile:", error)
+      logger.error("Error saving profile", error)
       alert("Error saving profile. Please try again.")
     }
   }
@@ -165,7 +165,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
     }).then(() => {
       // Success - real-time listener will update the UI
     }).catch(error => {
-      console.error("Error saving project:", error)
+      logger.error("Error saving project", error)
       alert("Error saving project. Please try again.")
     })
 

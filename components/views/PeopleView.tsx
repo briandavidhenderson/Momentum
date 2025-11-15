@@ -37,7 +37,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
   // Debug logging (only in development)
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') {
-      console.log("PeopleView: Profile loading status", {
+      logger.debug("PeopleView: Profile loading status", {
         allProfilesCount: allProfiles?.length || 0,
         filteredProfilesCount: profiles.length,
         currentUserProfile: currentUserProfile ? {

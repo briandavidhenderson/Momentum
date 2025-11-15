@@ -82,7 +82,7 @@ export function ProjectDetailPage({
         })) as Order[]
         setOrders(ordersData)
       } catch (error) {
-        console.error("Error fetching project orders:", error)
+        logger.error("Error fetching project orders", error)
       } finally {
         setLoadingOrders(false)
       }

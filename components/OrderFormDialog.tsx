@@ -139,7 +139,7 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
           }
         }
       } catch (error) {
-        console.error('Error sending budget notification:', error)
+        logger.error('Error sending budget notification', error)
         // Don't block the UI on notification failure
       }
     }
