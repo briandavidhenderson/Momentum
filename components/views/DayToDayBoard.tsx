@@ -23,6 +23,8 @@ import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { useAppContext } from "@/lib/AppContext"
+import { notifyTaskAssigned, notifyTaskReassigned } from "@/lib/notificationUtils"
+import { PersonProfile } from "@/lib/types"
 
 function DroppableColumn({
   id,
@@ -183,6 +185,8 @@ function DayToDayTaskEditDialog({
   onOpenChange,
   task,
   people,
+  allProfiles,
+  currentUserProfile,
   projects,
   workpackages,
   onSave,
@@ -191,6 +195,8 @@ function DayToDayTaskEditDialog({
   onOpenChange: (open: boolean) => void
   task: DayToDayTask | null
   people: Person[]
+  allProfiles: PersonProfile[]
+  currentUserProfile: PersonProfile | null
   projects: any[]
   workpackages: any[]
   onSave: (taskId: string, updates: Partial<DayToDayTask>) => void
@@ -223,10 +229,10 @@ function DayToDayTaskEditDialog({
     }
   }, [task, open])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!task || !title.trim()) return
 
-    onSave(task.id, {
+    const updates: Partial<DayToDayTask> = {
       title: title.trim(),
       description: description.trim() || undefined,
       importance,
@@ -234,7 +240,54 @@ function DayToDayTaskEditDialog({
       dueDate: dueDate ? new Date(dueDate) : undefined,
       linkedProjectId: linkedProjectId || undefined,
       linkedTaskId: linkedTaskId || undefined,
-    })
+    }
+
+    onSave(task.id, updates)
+
+    // PHASE 4: Trigger task assignment notifications
+    if (currentUserProfile && allProfiles) {
+      try {
+        const oldAssigneeId = task.assigneeId
+        const newAssigneeId = assigneeId || undefined
+
+        // Check if assignee changed
+        if (oldAssigneeId !== newAssigneeId) {
+          // Task was assigned to someone new
+          if (newAssigneeId && newAssigneeId !== currentUserProfile.id) {
+            const newAssignee = allProfiles.find(p => p.id === newAssigneeId)
+
+            if (newAssignee) {
+              // Was previously assigned to someone else (reassignment)
+              if (oldAssigneeId && oldAssigneeId !== currentUserProfile.id) {
+                const oldAssignee = allProfiles.find(p => p.id === oldAssigneeId)
+                if (oldAssignee) {
+                  await notifyTaskReassigned(
+                    { ...task, ...updates },
+                    newAssignee,
+                    oldAssignee,
+                    currentUserProfile
+                  )
+                } else {
+                  // Old assignee not found, just notify new assignee
+                  await notifyTaskAssigned({ ...task, ...updates }, newAssignee, currentUserProfile)
+                }
+              } else {
+                // First time assignment
+                await notifyTaskAssigned({ ...task, ...updates }, newAssignee, currentUserProfile)
+              }
+            }
+          }
+          // Task was unassigned from someone
+          else if (!newAssigneeId && oldAssigneeId && oldAssigneeId !== currentUserProfile.id) {
+            // Could notify old assignee that task was unassigned, but this is typically not needed
+            // as it's shown in the UI
+          }
+        }
+      } catch (error) {
+        console.error('Error sending task assignment notification:', error)
+        // Don't block the UI on notification failure
+      }
+    }
 
     onOpenChange(false)
   }
@@ -401,6 +454,8 @@ export function DayToDayBoard() {
   const {
     dayToDayTasks,
     people,
+    allProfiles,
+    currentUserProfile,
     projects,
     workpackages,
     handleCreateDayToDayTask: onCreateTask,
@@ -708,6 +763,8 @@ export function DayToDayBoard() {
         }}
         task={editingTask}
         people={people}
+        allProfiles={allProfiles || []}
+        currentUserProfile={currentUserProfile}
         projects={allProjects}
         workpackages={allWorkpackages}
         onSave={onUpdateTask}
