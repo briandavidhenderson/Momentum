@@ -3,13 +3,7 @@
 import { Order } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Package, Edit, Trash2, Calendar, DollarSign, User, MoreVertical } from "lucide-react"
+import { Package, Edit, Trash2, Calendar, DollarSign, User, GripVertical } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -59,13 +53,19 @@ export function OrderCard({ order, onEdit, onDelete }: OrderCardProps) {
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      className="order-card cursor-grab active:cursor-grabbing"
+      className="bg-white rounded-lg border-2 border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow"
     >
       {/* Header with Title and Menu */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-foreground text-base mb-1.5 truncate">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded flex-shrink-0"
+          >
+            <GripVertical className="h-5 w-5 text-gray-400" />
+          </div>
+          <Package className="h-5 w-5 text-gray-500 flex-shrink-0" />
+          <h3 className="font-semibold text-foreground text-sm truncate">
             {order.productName}
           </h3>
           <span className={getStatusPillClass(order.status)}>

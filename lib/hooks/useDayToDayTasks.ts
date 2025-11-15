@@ -11,29 +11,42 @@ export function useDayToDayTasks() {
   const { success, error } = useToast();
 
   useEffect(() => {
-    if (!profile?.labId) return;
+    // Get labId with fallback to legacy lab field
+    const labId = profile?.labId || profile?.lab;
+    if (!labId) return;
 
-    const unsubscribe = subscribeToDayToDayTasks({ labId: profile.labId }, (tasks) => {
+    const unsubscribe = subscribeToDayToDayTasks({ labId }, (tasks) => {
       setDayToDayTasks(tasks);
     });
 
     return () => unsubscribe();
   }, [profile]);
 
-  const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId' | 'createdBy'>) => {
-    if (!currentUser || !profile?.labId) return;
+  const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId'>) => {
+    if (!currentUser) {
+      console.error('No current user for task creation');
+      return;
+    }
+
+    // Get labId with fallback to legacy lab field
+    const labId = profile?.labId || profile?.lab;
+    if (!labId) {
+      console.error('No labId found on profile:', profile);
+      alert('Cannot create task: Your profile is missing a lab assignment. Please update your profile.');
+      return;
+    }
+
     try {
       const order = dayToDayTasks.length;
       await createDayToDayTask({
         ...task,
         createdBy: currentUser.uid,
         order,
-        labId: profile.labId,
+        labId,
       });
-      success(`"${task.title}" has been added to your board.`);
-    } catch (err) {
-      console.error('Error creating task:', err);
-      error("Failed to create task. Please try again.");
+    } catch (error) {
+      console.error('Error creating day-to-day task:', error);
+      alert('Failed to create task: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -59,16 +72,14 @@ export function useDayToDayTasks() {
 
   const handleMoveDayToDayTask = async (taskId: string, newStatus: 'todo' | 'working' | 'done') => {
     try {
+      console.log(`Moving task ${taskId} to status: ${newStatus}`);
       await updateDayToDayTask(taskId, { status: newStatus });
-      const statusNames = {
-        'todo': 'To Do',
-        'working': 'Working On It',
-        'done': 'Done'
-      };
-      success(`Task moved to ${statusNames[newStatus]}.`);
-    } catch (err) {
-      console.error('Error moving task:', err);
-      error("Failed to move task. Please try again.");
+      console.log(`Successfully moved task ${taskId} to ${newStatus}`);
+    } catch (error) {
+      console.error('Error moving day-to-day task:', error);
+      alert('Failed to move task: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      // Re-throw to allow the UI to handle it if needed
+      throw error;
     }
   };
 

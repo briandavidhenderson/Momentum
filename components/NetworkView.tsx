@@ -65,9 +65,12 @@ export function NetworkView({ currentUserProfile }: NetworkViewProps = {}) {
 
   // Filter profiles by lab if currentUserProfile is provided
   // Ensure profiles is always an array
-  const profiles = useMemo(() => (currentUserProfile?.labId
-    ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
-    : allProfiles) || [], [currentUserProfile?.labId, allProfiles])
+  const profiles = useMemo(() =>
+    (currentUserProfile?.labId
+      ? allProfiles.filter(p => p.labId === currentUserProfile.labId)
+      : allProfiles) || [],
+    [currentUserProfile?.labId, allProfiles]
+  )
 
   useEffect(() => {
     if (!svgRef.current) return

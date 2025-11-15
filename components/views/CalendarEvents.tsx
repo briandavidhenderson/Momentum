@@ -11,6 +11,7 @@ import { EventDialog } from "@/components/EventDialog"
 export function CalendarEvents() {
   const {
     events,
+    people,
     handleCreateEvent,
     handleUpdateEvent,
     handleDeleteEvent,
@@ -19,6 +20,8 @@ export function CalendarEvents() {
 
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('week')
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
 
   // Fix Bug #9: Add dialog state for event creation
   const [eventDialogOpen, setEventDialogOpen] = useState(false)
@@ -70,8 +73,8 @@ export function CalendarEvents() {
         </div>
         <Button
           onClick={() => {
-            setSelectedEvent(undefined)
-            setEventDialogOpen(true)
+            setEditingEvent(null)
+            setIsEventDialogOpen(true)
           }}
           className="bg-brand-500 hover:bg-brand-600 text-white gap-2"
         >
@@ -80,8 +83,8 @@ export function CalendarEvents() {
         </Button>
       </div>
 
-      {/* View Mode Toggle */}
-      <div className="flex gap-2 border-b border-border">
+      {/* View Mode Toggle - Disabled until calendar grid views are implemented */}
+      {/* <div className="flex gap-2 border-b border-border">
         <Button
           onClick={() => setViewMode('day')}
           variant={viewMode === 'day' ? 'default' : 'ghost'}
@@ -103,7 +106,7 @@ export function CalendarEvents() {
         >
           Month
         </Button>
-      </div>
+      </div> */}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -267,29 +270,28 @@ export function CalendarEvents() {
         </div>
       </div>
 
-      {/* Fix Bug #9: Event creation dialog */}
       <EventDialog
-        open={eventDialogOpen}
-        mode={selectedEvent ? "edit" : "create"}
-        people={people}
+        open={isEventDialogOpen}
+        mode={editingEvent ? "edit" : "create"}
+        people={people || []}
         onClose={() => {
-          setEventDialogOpen(false)
-          setSelectedEvent(undefined)
+          setIsEventDialogOpen(false)
+          setEditingEvent(null)
         }}
         onSubmit={(event) => {
-          if (selectedEvent) {
-            handleUpdateEvent?.(event.id, event)
+          if (editingEvent) {
+            handleUpdateEvent?.(editingEvent.id, event)
           } else {
             handleCreateEvent?.(event)
           }
-          setEventDialogOpen(false)
-          setSelectedEvent(undefined)
+          setIsEventDialogOpen(false)
+          setEditingEvent(null)
         }}
-        initialEvent={selectedEvent}
+        initialEvent={editingEvent || undefined}
         onDelete={(eventId) => {
           handleDeleteEvent?.(eventId)
-          setEventDialogOpen(false)
-          setSelectedEvent(undefined)
+          setIsEventDialogOpen(false)
+          setEditingEvent(null)
         }}
       />
     </div>

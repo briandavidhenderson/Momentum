@@ -511,7 +511,7 @@ export function DayToDayBoard() {
     }
   }
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveTask(null)
 
@@ -553,8 +553,13 @@ export function DayToDayBoard() {
     // Handle moving to different column
     if (overData?.type === "column") {
       const newStatus = overData.status as TaskStatus
-      if (activeTask.status !== newStatus) {
-        onMoveTask(activeTask.id, newStatus)
+      if (task.status !== newStatus) {
+        try {
+          await onMoveTask(task.id, newStatus)
+        } catch (error) {
+          console.error('Failed to move task:', error)
+          // Error is already shown by the hook, just log here
+        }
       }
     }
   }

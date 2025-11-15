@@ -1,0 +1,24 @@
+{
+  "protectedPaths": [
+    "app/**",
+    "components/**",
+    "lib/**",
+    "firestore.rules",
+    "firestore.indexes.json",
+    "firebase.json",
+    "package.json",
+    "next.config.js",
+    "tailwind.config.ts",
+    "tsconfig.json"
+  ],
+  "backupBranch": "snapshots/revisions",
+  "snapshotPrefix": "snapshot-",
+  "autoBackupOnProtectedChange": true,
+  "requireCommitMessage": true,
+  "excludeFromProtection": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/README.md"
+  ]
+}

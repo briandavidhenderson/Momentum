@@ -9,7 +9,7 @@ import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
 import { ProjectDetailPanel } from "@/components/ProjectDetailPanel";
 import { MasterProject, Task, Workpackage, Project, Person } from "@/lib/types";
-import { Plus, FolderKanban, PackagePlus } from "lucide-react";
+import { Plus, FolderKanban, PackagePlus, Trash2 } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
 import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
@@ -18,9 +18,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
-import { ProfileProject } from "@/lib/types";
-import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
-import { logger } from "@/lib/logger";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -30,6 +27,7 @@ export function ProjectDashboard() {
     workpackagesMap,
     handleCreateMasterProject,
     handleUpdateMasterProject,
+    handleDeleteMasterProject,
     handleUpdateWorkpackage,
     handleCreateWorkpackage: createWorkpackage,
   } = useProjects();
@@ -45,8 +43,25 @@ export function ProjectDashboard() {
       .filter((wp): wp is Workpackage => wp !== undefined);
   }, [workpackagesMap]);
 
-  const handleCreateRegularProject = () => {
-    if (!profile || !user) return;
+  const handleDeleteProject = async () => {
+    if (!selectedProjectId) return;
+
+    const project = projects.find(p => p.id === selectedProjectId);
+    if (!project) return;
+
+    if (confirm(`Are you sure you want to delete "${project.name}"? This will also delete all associated workpackages and tasks. This action cannot be undone.`)) {
+      try {
+        await handleDeleteMasterProject(selectedProjectId);
+        setSelectedProjectId(null); // Clear selection after delete
+      } catch (error) {
+        console.error('Error deleting project:', error);
+        alert('Failed to delete project. Please try again.');
+      }
+    }
+  };
+
+  const handleCreateProject = () => {
+    if (!profile) return;
 
     // Create a simple project with minimal defaults
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
@@ -423,8 +438,9 @@ export function ProjectDashboard() {
           }
           break;
         case "add-dependency":
-          // TODO: Implement dependency management UI
-          alert("Dependency management will be implemented in a future update. For now, you can add dependencies manually in the task details.");
+          // Dependency management not yet implemented
+          // Feature planned for future release
+          console.warn("Dependency management feature not yet implemented");
           break;
       }
     } catch (error) {
@@ -689,6 +705,7 @@ export function ProjectDashboard() {
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [workpackageForm, setWorkpackageForm] = useState({
     name: "",
     startDate: new Date().toISOString().split("T")[0],
@@ -819,17 +836,6 @@ export function ProjectDashboard() {
           {selectedProjectId && (
             <>
               <Button
-                onClick={() => {
-                  const project = projects.find(p => p.id === selectedProjectId);
-                  if (project) setSelectedProjectForDetail(project);
-                }}
-                variant="outline"
-                className="gap-2"
-              >
-                <FolderKanban className="h-4 w-4" />
-                View Details
-              </Button>
-              <Button
                 onClick={() => setShowWorkpackageDialog(true)}
                 variant="outline"
                 className="gap-2"
@@ -837,10 +843,18 @@ export function ProjectDashboard() {
                 <PackagePlus className="h-4 w-4" />
                 Add Workpackage
               </Button>
+              <Button
+                onClick={handleDeleteProject}
+                variant="outline"
+                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Project
+              </Button>
             </>
           )}
 
-          <Button onClick={() => setProjectDialogOpen(true)} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+          <Button onClick={() => setIsProjectDialogOpen(true)} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
           </Button>
@@ -973,14 +987,57 @@ export function ProjectDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Project Detail Panel */}
-      {selectedProjectForDetail && (
-        <ProjectDetailPanel
-          project={selectedProjectForDetail}
-          people={people}
-          onClose={() => setSelectedProjectForDetail(null)}
-        />
-      )}
+      {/* Project Creation Dialog */}
+      <ProjectCreationDialog
+        open={isProjectDialogOpen}
+        onClose={() => setIsProjectDialogOpen(false)}
+        onCreateRegular={handleCreateProject}
+        onCreateMaster={(projectData) => {
+          if (!profile) return;
+
+          // Ensure visibility is a valid MasterProject visibility type
+          const validVisibilities = ["private", "lab", "institute", "organisation"] as const;
+          const visibility = projectData.visibility && validVisibilities.includes(projectData.visibility as any)
+            ? projectData.visibility as "private" | "lab" | "institute" | "organisation"
+            : "lab";
+
+          const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+            name: projectData.name || "New Project",
+            description: projectData.description || "",
+            labId: profile.labId,
+            labName: profile.labName,
+            instituteId: profile.instituteId,
+            instituteName: profile.instituteName,
+            organisationId: profile.organisationId,
+            organisationName: profile.organisationName,
+            grantName: projectData.name || "",
+            grantNumber: projectData.grantNumber || "",
+            totalBudget: projectData.budget || 0,
+            currency: "GBP",
+            startDate: projectData.startDate ? new Date(projectData.startDate).toISOString() : new Date().toISOString(),
+            endDate: projectData.endDate ? new Date(projectData.endDate).toISOString() : new Date().toISOString(),
+            funderId: projectData.funderId || "",
+            funderName: "",
+            accountIds: projectData.fundedBy || [],
+            principalInvestigatorIds: [],
+            coPIIds: [],
+            teamMemberIds: [],
+            teamRoles: {},
+            status: "planning",
+            progress: 0,
+            workpackageIds: [],
+            visibility: visibility,
+            createdBy: user?.uid || "",
+            isExpanded: true,
+          };
+
+          handleCreateMasterProject(newProject);
+          setIsProjectDialogOpen(false);
+        }}
+        currentUserProfileId={profile?.id || null}
+        currentUserId={user?.uid || ""}
+        organisationId={profile?.organisationId}
+      />
     </div>
   );
 }

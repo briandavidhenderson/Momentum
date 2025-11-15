@@ -1,4 +1,77 @@
 // ============================================================================
+// ORCID DATA TYPES
+// ============================================================================
+
+/**
+ * ORCID Employment Entry
+ * Represents a position held at an organization
+ */
+export interface OrcidEmployment {
+  organization: string
+  role?: string
+  department?: string
+  startDate?: string  // ISO date or partial date
+  endDate?: string    // ISO date or partial date (null if current)
+  location?: string
+}
+
+/**
+ * ORCID Education Entry
+ * Represents an educational qualification
+ */
+export interface OrcidEducation {
+  organization: string
+  degree?: string
+  field?: string
+  startDate?: string
+  endDate?: string
+  location?: string
+}
+
+/**
+ * ORCID Work/Publication Entry
+ * Represents a research output
+ */
+export interface OrcidWork {
+  title: string
+  type?: string  // e.g., "journal-article", "conference-paper", "book-chapter"
+  publicationDate?: string
+  journal?: string
+  doi?: string
+  url?: string
+  contributors?: string[]
+}
+
+/**
+ * ORCID Funding Entry
+ * Represents a funding award
+ */
+export interface OrcidFunding {
+  title: string
+  organization: string
+  type?: string
+  startDate?: string
+  endDate?: string
+  amount?: string
+  grantNumber?: string
+  url?: string
+}
+
+/**
+ * Complete ORCID Profile Data
+ * Stores rich academic profile information from ORCID
+ */
+export interface OrcidProfileData {
+  name?: string
+  email?: string | null
+  biography?: string
+  employment?: OrcidEmployment[]
+  education?: OrcidEducation[]
+  works?: OrcidWork[]
+  funding?: OrcidFunding[]
+}
+
+// ============================================================================
 // ORGANIZATIONAL HIERARCHY TYPES (NEW)
 // ============================================================================
 
@@ -509,10 +582,24 @@ export interface PersonProfile {
   orcidUrl?: string                   // Full URL "https://orcid.org/0000-0000-0000-0000"
   orcidVerified?: boolean             // True once ORCID is linked via OAuth
   orcidLastSynced?: string            // ISO date of last sync with ORCID record
-  orcidSyncEnabled?: boolean          // Whether to keep profile in sync with ORCID
-  orcidClaims?: {                     // Snapshot from OIDC/userinfo (non-sensitive)
-    name?: string
-    email?: string | null             // May be null if user hides email
+  orcidData?: OrcidProfileData        // Full ORCID record data
+  orcidClaims?: {
+    name?: string | null              // Name from ORCID
+    email?: string | null             // Email from ORCID
+  }
+
+  // Calendar Integration
+  calendarConnections?: {
+    google?: string                   // Google CalendarConnection document ID
+    microsoft?: string                // Microsoft CalendarConnection document ID
+  }
+  calendarPreferences?: {
+    defaultView?: "week" | "month" | "day"
+    workingHours?: {
+      start: string                   // e.g., "09:00"
+      end: string                     // e.g., "17:00"
+    }
+    showExternalEvents?: boolean      // Show events from connected calendars
   }
 
   // Account
@@ -1314,7 +1401,104 @@ export interface CalendarEvent {
     googleEventId?: string
     outlookEventId?: string
   }
+  calendarSource?: "google" | "microsoft" | "manual"  // Source of calendar event
+  calendarId?: string          // Specific calendar ID within the provider account
+
+  // External calendar sync properties
+  isReadOnly?: boolean          // True for synced external events that can't be edited
+  externalUrl?: string          // URL to view event in external calendar (Google/Outlook)
+  syncStatus?: "synced" | "pending" | "error"  // Sync status for external events
+  lastSyncedAt?: Date          // Timestamp of last successful sync
+  syncError?: string           // Error message if sync failed
+
   labId?: string
+}
+
+/**
+ * Calendar Sync Log
+ * Tracks calendar synchronization history
+ */
+export interface CalendarSyncLog {
+  id: string
+  userId: string
+  connectionId: string         // CalendarConnection ID
+  calendarSource?: "google" | "microsoft"
+  syncType?: "full" | "incremental"
+  timestamp: string            // ISO timestamp when sync occurred
+  status: "success" | "failed" | "partial"
+  eventsImported: number       // Events imported from external calendar
+  eventsExported: number       // Events exported to external calendar
+  eventsUpdated: number        // Events updated during sync
+  eventsDeleted: number        // Events deleted during sync
+  errors?: Array<{ error: string; action: string }>  // Detailed error information
+  duration: number             // Sync duration in milliseconds
+}
+
+/**
+ * Connected Calendar
+ * Represents an individual calendar within a provider account
+ */
+export interface ConnectedCalendar {
+  id: string                    // Calendar ID from provider
+  name: string                  // Calendar name
+  description?: string
+  isPrimary: boolean            // Provider's primary calendar
+  isSelected: boolean           // User chose to sync this calendar
+  color?: string                // Calendar color for UI
+  timeZone?: string             // Calendar timezone
+  accessRole: "owner" | "writer" | "reader"
+}
+
+/**
+ * Calendar Connection
+ * Manages OAuth connection to external calendar provider
+ */
+export interface CalendarConnection {
+  id: string                    // Firestore document ID
+  userId: string                // Momentum user ID
+  provider: "google" | "microsoft"
+  providerAccountId: string     // email or unique ID from provider
+  providerAccountName: string   // Display name (e.g., "john@example.com")
+
+  // Connected calendars from this account
+  calendars: ConnectedCalendar[]
+
+  // Sync settings
+  syncEnabled: boolean
+  syncDirection: "import" | "export" | "bidirectional"
+  defaultCalendarId?: string    // Primary calendar for exports
+
+  // Status & metadata
+  status: "active" | "expired" | "error"
+  lastSyncedAt?: string
+  syncError?: string
+
+  // OAuth metadata (tokens stored server-side only)
+  tokenExpiresAt?: string
+
+  // Webhook/push notification IDs
+  webhookChannelId?: string     // Google push channel
+  subscriptionId?: string       // Microsoft subscription
+
+  createdAt: string
+  updatedAt?: string
+}
+
+/**
+ * Calendar Conflict
+ * Tracks conflicts between local and remote calendar events
+ */
+export interface CalendarConflict {
+  id: string
+  eventId: string
+  userId: string
+  localVersion: Partial<CalendarEvent>
+  remoteVersion: Partial<CalendarEvent>
+  conflictFields: string[]      // Which fields differ
+  detectedAt: string
+  resolution?: "local" | "remote" | "merge" | "manual"
+  resolvedAt?: string
+  resolvedBy?: string           // User ID who resolved
 }
 
 // New: Audit trail entries for compliance and change history

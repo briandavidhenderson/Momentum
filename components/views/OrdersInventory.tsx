@@ -192,7 +192,12 @@ export function OrdersInventory() {
       }
     }
 
-    await handleUpdateOrder(orderId, updates)
+    try {
+      await handleUpdateOrder(orderId, updates)
+    } catch (error) {
+      console.error('Failed to update order status:', error)
+      // Error is already shown by the hook
+    }
   }
 
   const handleEdit = (order: Order) => {
@@ -200,8 +205,13 @@ export function OrdersInventory() {
   }
 
   const handleSaveEdit = async (orderId: string, updates: Partial<Order>) => {
-    await handleUpdateOrder(orderId, updates)
-    setEditingOrder(null)
+    try {
+      await handleUpdateOrder(orderId, updates)
+      setEditingOrder(null)
+    } catch (error) {
+      console.error('Failed to save order edits:', error)
+      // Error is already shown by the hook, keep modal open for user to retry
+    }
   }
 
   const handleDelete = async (orderId: string) => {
