@@ -19,6 +19,7 @@ import {
   Query,
 } from "firebase/firestore"
 import { db } from "./firebase"
+import { logger } from "./logger"
 import {
   PersonProfile,
   ProfileProject,
@@ -128,26 +129,25 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   try {
     const profileRef = doc(collection(db, "personProfiles"))
     const profileId = profileRef.id
-    
-    console.log("Creating profile document with ID:", profileId)
-    console.log("Profile data:", profileData)
-    
+
+    logger.debug("Creating profile document", { profileId, profileData })
+
     await setDoc(profileRef, {
       ...profileData,
       id: profileId,
       userId,
       createdAt: serverTimestamp(),
     })
-    
-    console.log("Profile document created successfully")
-    
+
+    logger.info("Profile document created successfully", { profileId })
+
     // Update user document with profileId (use setDoc with merge to ensure user doc exists)
     const userRef = doc(db, "users", userId)
-    console.log("Updating user document:", userId)
-    
+    logger.debug("Updating user document", { userId })
+
     await setDoc(userRef, { profileId }, { merge: true })
 
-    console.log("User document updated successfully")
+    logger.info("User document updated successfully", { userId, profileId })
 
     // Note: Lab membership is now tracked via PersonProfile.labId
     // No need to update lab.members array (removed in new Lab interface)
@@ -155,9 +155,10 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
 
     return profileId
   } catch (error: any) {
-    console.error("Error in createProfile:", error)
-    console.error("Error code:", error?.code)
-    console.error("Error message:", error?.message)
+    logger.error("Error in createProfile", error, {
+      code: error?.code,
+      message: error?.message
+    })
     throw error
   }
 }
@@ -195,25 +196,25 @@ async function retryWithBackoff<T>(
 
 export async function getProfile(profileId: string): Promise<PersonProfile | null> {
   if (!profileId) {
-    console.warn("getProfile called with undefined or empty profileId")
+    logger.warn("getProfile called with undefined or empty profileId")
     return null
   }
-  
+
   try {
     return await retryWithBackoff(async () => {
       const profileRef = doc(db, "personProfiles", profileId)
       const profileSnap = await getDoc(profileRef)
       if (!profileSnap.exists()) {
-        console.log("Profile document does not exist:", profileId)
+        logger.debug("Profile document does not exist", { profileId })
         return null
       }
       return profileSnap.data() as PersonProfile
     })
   } catch (error: any) {
-    console.error("Error fetching profile by profileId:", error)
+    logger.error("Error fetching profile by profileId", error, { profileId })
     // Log the specific error code to help debug permission issues
     if (error?.code === 'permission-denied') {
-      console.warn("Permission denied when fetching profile - this should not happen for own profile")
+      logger.warn("Permission denied when fetching profile - this should not happen for own profile", { profileId })
     }
     return null
   }
