@@ -13,6 +13,7 @@ import {
 } from "./types"
 import { DayToDayTask } from "./dayToDayTypes"
 import { calculateMaintenanceHealth } from "./equipmentMath"
+import { EQUIPMENT_CONFIG } from "./equipmentConfig"
 
 /**
  * Calculate reorder suggestions based on inventory levels and burn rates
@@ -183,7 +184,11 @@ export function generateEquipmentTasks(
           title: `Perform maintenance on ${device.name}`,
           description: `Maintenance health at ${health}%. Last maintained: ${lastMaintained.toLocaleDateString()}. Due: ${dueDate.toLocaleDateString()}`,
           status: 'todo',
-          importance: health < 25 ? 'critical' : health < 60 ? 'high' : 'medium',
+          importance: health < EQUIPMENT_CONFIG.maintenance.criticalThreshold
+            ? 'critical'
+            : health < EQUIPMENT_CONFIG.maintenance.warningThreshold
+              ? 'high'
+              : 'medium',
           assigneeId: currentUser.id,
           dueDate,
           createdAt: now,

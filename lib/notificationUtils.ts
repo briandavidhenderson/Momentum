@@ -11,6 +11,7 @@
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from './firebase'
 import { InventoryItem, FundingAllocation, PersonProfile } from './types'
+import { getBudgetNotificationPriority } from './equipmentConfig'
 
 export interface NotificationPayload {
   userId: string
@@ -145,9 +146,7 @@ export async function notifyLowBudget(
     return
   }
 
-  let priority: 'high' | 'medium' | 'low' = 'low'
-  if (percentRemaining < 10) priority = 'high'
-  else if (percentRemaining < 25) priority = 'medium'
+  const priority = getBudgetNotificationPriority(percentRemaining)
 
   await createNotification({
     userId: user.id,

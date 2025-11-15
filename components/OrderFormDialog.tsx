@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { AlertCircle, DollarSign } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
 import { notifyLowBudget, notifyBudgetExhausted, shouldSendLowBudgetNotification } from "@/lib/notificationUtils"
+import { getBudgetHealthClass } from "@/lib/equipmentConfig"
 
 interface OrderFormDialogProps {
   open: boolean
@@ -80,9 +81,7 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     const allocated = selectedAllocation.allocatedAmount || 0
     if (allocated === 0) return null
     const percentRemaining = (remaining / allocated) * 100
-    if (percentRemaining < 10) return "critical"
-    if (percentRemaining < 25) return "warning"
-    return "ok"
+    return getBudgetHealthClass(percentRemaining)
   }, [selectedAllocation])
 
   const handleSave = async () => {
