@@ -24,6 +24,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { logger } from "@/lib/logger"
 
 // Droppable Column Component
 function DroppableColumn({
@@ -149,7 +150,7 @@ export function OrdersInventory() {
         } as Order)
 
         if (!validation.valid) {
-          console.error('Order validation failed:', validation.errors)
+          logger.error('Order validation failed', { errors: validation.errors })
           alert(`Cannot reconcile order: ${validation.errors.join(', ')}`)
           return
         }
@@ -167,22 +168,25 @@ export function OrdersInventory() {
             ...result.inventoryItem,
             createdBy: currentUserProfile.id,
           })
-          console.log(`✅ ${result.message}`)
+          logger.info(result.message)
         } else {
           // Update existing inventory item
           await updateInventoryItem(result.inventoryItem.id, result.inventoryItem)
-          console.log(`✅ ${result.message}`)
+          logger.info(result.message)
         }
 
         // If supply was linked to a device, update the device
         if (result.updatedDevices) {
           for (const device of result.updatedDevices) {
             await updateEquipment(device.id, device)
-            console.log(`🔗 Linked ${result.inventoryItem.productName} to device ${device.name}`)
+            logger.info('Linked inventory item to device', {
+              productName: result.inventoryItem.productName,
+              deviceName: device.name,
+            })
           }
         }
       } catch (error) {
-        console.error('Failed to reconcile inventory:', error)
+        logger.error('Failed to reconcile inventory', error)
         alert('Failed to update inventory. Please try again.')
         return // Don't update order status if inventory reconciliation failed
       }
