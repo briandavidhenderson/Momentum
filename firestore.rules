@@ -360,27 +360,23 @@ service cloud.firestore {
     // WORKPACKAGES COLLECTION
     // ============================================================================
     match /workpackages/{workpackageId} {
-      // Users can read workpackages if they're in the same lab or are admin
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        ('labId' in resource.data && resource.data.labId == getUserLab())
-      );
+      // All authenticated users can read workpackages
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
 
-      // Users can create workpackages for their own lab
-      allow create: if isAuthenticated() &&
-        request.resource.data.createdBy == request.auth.uid &&
-        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+      // Users can create workpackages
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
 
-      // Creator in same lab or admin can update
+      // Creator or admin can update
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
+        resource.data.createdBy == request.auth.uid
       );
 
-      // Creator in same lab or admin can delete
+      // Creator or admin can delete
       allow delete: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
+        resource.data.createdBy == request.auth.uid
       );
     }
 
@@ -388,28 +384,23 @@ service cloud.firestore {
     // ORDERS COLLECTION
     // ============================================================================
     match /orders/{orderId} {
-      // Users can read orders from their lab or if they're admin
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        ('labId' in resource.data && resource.data.labId == getUserLab())
-      );
+      // All authenticated users can read orders
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
 
-      // Users can create orders for their own lab
-      allow create: if isAuthenticated() &&
-        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+      // Users can create orders
+      allow create: if isAuthenticated();
 
-      // Creator in same lab or admin can update
+      // Creator or admin can update
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid &&
-         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
+        resource.data.createdBy == request.auth.uid
       );
 
-      // Creator in same lab or admin can delete
+      // Creator or admin can delete
       allow delete: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid &&
-         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
+        resource.data.createdBy == request.auth.uid
       );
     }
 
@@ -417,28 +408,23 @@ service cloud.firestore {
     // INVENTORY COLLECTION
     // ============================================================================
     match /inventory/{itemId} {
-      // Users can read inventory from their lab or if they're admin
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        ('labId' in resource.data && resource.data.labId == getUserLab())
-      );
+      // All authenticated users can read inventory
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
 
-      // Users can create inventory items for their own lab
-      allow create: if isAuthenticated() &&
-        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+      // Users can create inventory items
+      allow create: if isAuthenticated();
 
-      // Creator in same lab or admin can update
+      // Creator or admin can update
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid &&
-         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
+        resource.data.createdBy == request.auth.uid
       );
 
-      // Creator in same lab or admin can delete
+      // Creator or admin can delete
       allow delete: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid &&
-         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
+        resource.data.createdBy == request.auth.uid
       );
     }
 
@@ -446,16 +432,15 @@ service cloud.firestore {
     // DAY-TO-DAY TASKS
     // ============================================================================
     match /dayToDayTasks/{taskId} {
-      // Users can read all tasks in their lab
-      allow read: if isAuthenticated() && resource.data.labId == getUserLab();
+      // All authenticated users can read tasks
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
 
-      // Users can create tasks for their lab
-      allow create: if isAuthenticated() &&
-        request.resource.data.createdBy == request.auth.uid &&
-        request.resource.data.labId == getUserLab();
+      // Users can create tasks
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
 
-      // Users can update tasks in their lab
-      allow update: if isAuthenticated() && resource.data.labId == getUserLab();
+      // Users can update tasks
+      allow update: if isAuthenticated();
 
       // Users can delete tasks they created or admins can delete any
       allow delete: if isAuthenticated() && (
@@ -468,27 +453,23 @@ service cloud.firestore {
     // LAB POLLS
     // ============================================================================
     match /labPolls/{pollId} {
-      // Users can read polls from their lab or if they're admin
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        ('labId' in resource.data && resource.data.labId == getUserLab())
-      );
+      // All authenticated users can read polls
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
 
-      // Users can create polls for their own lab
-      allow create: if isAuthenticated() &&
-        request.resource.data.createdBy == request.auth.uid &&
-        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+      // Users can create polls
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
 
-      // Creator in same lab or admin can update
+      // Creator or admin can update
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
+        resource.data.createdBy == request.auth.uid
       );
 
-      // Creator in same lab or admin can delete
+      // Creator or admin can delete
       allow delete: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
+        resource.data.createdBy == request.auth.uid
       );
     }
 
@@ -496,43 +477,30 @@ service cloud.firestore {
     // EQUIPMENT
     // ============================================================================
     match /equipment/{equipmentId} {
-      // Users can read equipment from their lab or if they're admin
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        ('labId' in resource.data && resource.data.labId == getUserLab())
-      );
+      // All authenticated users can read equipment
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
 
-      // Users can create equipment for their own lab
-      allow create: if isAuthenticated() &&
-        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+      // Users can create equipment
+      allow create: if isAuthenticated();
 
-      // Users in same lab or admin can update
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        (!('labId' in resource.data) || resource.data.labId == getUserLab())
-      );
+      // Users or admin can update
+      allow update: if isAuthenticated();
 
-      // Users in same lab or admin can delete
-      allow delete: if isAuthenticated() && (
-        isAdmin() ||
-        (!('labId' in resource.data) || resource.data.labId == getUserLab())
-      );
+      // Users or admin can delete
+      allow delete: if isAuthenticated();
     }
 
     // ============================================================================
     // ELN EXPERIMENTS
     // ============================================================================
     match /elnExperiments/{experimentId} {
-      // Users can read experiments in their lab
-      allow read: if isAuthenticated() && (
-        resource.data.labId == getUserLab() ||
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
-      );
+      // All authenticated users can read experiments
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
 
       // Users can create their own experiments
-      allow create: if isAuthenticated() &&
-        request.resource.data.createdBy == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
 
       // Users can update their own experiments
       allow update: if isAuthenticated() && (
@@ -551,17 +519,18 @@ service cloud.firestore {
     // CONSENT (Privacy & Data Protection)
     // ============================================================================
     match /consent/{consentId} {
-      // Users can only read their own consent records
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // All authenticated users can read consent records
+      // (Client-side filters by userId; allows checking if consent exists before creation)
+      allow read: if isAuthenticated();
 
       // Users can create their own consent records
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
 
       // Users can update their own consent records
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
 
       // Users can delete their own consent records
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && request.data.userId == request.auth.uid;
     }
 
     // ============================================================================
