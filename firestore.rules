@@ -565,6 +565,37 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // DATA EXPORT REQUESTS (GDPR Article 15 & 20)
+    // ============================================================================
+    match /dataExportRequests/{requestId} {
+      // Users can read their own export requests
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create export requests for themselves
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Admin can update request status (processed by Cloud Function)
+      allow update: if isAdmin();
+
+      // No deletion allowed (audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // SPECIAL CATEGORY DATA MARKERS (GDPR Article 9 - Sensitive Data)
+    // ============================================================================
+    match /specialCategoryDataMarkers/{markerId} {
+      // Users can read markers they acknowledged
+      allow read: if isAuthenticated() && resource.data.acknowledgedBy == request.auth.uid;
+
+      // Users can create acknowledgment markers
+      allow create: if isAuthenticated() && request.resource.data.acknowledgedBy == request.auth.uid;
+
+      // No updates or deletes (immutable audit trail)
+      allow update, delete: if false;
+    }
+
+    // ============================================================================
     // FUNDING ALLOCATIONS
     // ============================================================================
     match /fundingAllocations/{allocationId} {

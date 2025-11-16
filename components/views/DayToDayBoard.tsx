@@ -27,6 +27,8 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { notifyTaskAssigned, notifyTaskReassigned } from "@/lib/notificationUtils"
 import { PersonProfile } from "@/lib/types"
 import { logger } from "@/lib/logger"
+import { CommentsSection } from "@/components/CommentsSection"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 function DroppableColumn({
   id,
@@ -317,13 +319,19 @@ function DayToDayTaskEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
           <DialogDescription>
             Update your task details below.
           </DialogDescription>
         </DialogHeader>
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="comments">Comments</TabsTrigger>
+          </TabsList>
+          <TabsContent value="details" className="space-y-4">
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="taskTitle">Task Title</Label>
@@ -438,6 +446,17 @@ function DayToDayTaskEditDialog({
             </div>
           )}
         </div>
+          </TabsContent>
+          <TabsContent value="comments" className="space-y-4 py-4">
+            {task && (
+              <CommentsSection
+                entityType="dayToDayTask"
+                entityId={task.id}
+                teamMembers={people.map(p => ({ id: p.id, name: p.name }))}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel

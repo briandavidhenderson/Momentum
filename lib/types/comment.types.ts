@@ -10,7 +10,7 @@ export interface Comment {
   id: string
 
   // Entity being commented on
-  entityType: "project" | "workpackage" | "task" | "order" | "eln_experiment" | "equipment"
+  entityType: "project" | "workpackage" | "task" | "dayToDayTask" | "order" | "eln_experiment" | "equipment"
   entityId: string
 
   // Comment content

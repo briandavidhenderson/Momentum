@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
+import { DependencyPickerDialog } from "@/components/DependencyPickerDialog";
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
-import { MasterProject, Task, Workpackage, Project, Person, ProfileProject } from "@/lib/types";
+import { MasterProject, Task, Workpackage, Project, Person, ProfileProject, Subtask } from "@/lib/types";
 import { Plus, FolderKanban, PackagePlus, Trash2 } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
@@ -19,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { logger } from "@/lib/logger";
+import { notifyProjectTaskAssigned, notifyWorkpackageOwnerAssigned } from "@/lib/notificationUtils";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -37,6 +39,11 @@ export function ProjectDashboard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const [dependencyDialog, setDependencyDialog] = useState<{
+    item: Task | Subtask;
+    itemType: "task" | "subtask";
+    workpackageId: string;
+  } | null>(null);
 
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
@@ -437,9 +444,34 @@ export function ProjectDashboard() {
           }
           break;
         case "add-dependency":
-          // Dependency management not yet implemented
-          // Feature planned for future release
-          logger.warn("Dependency management feature not yet implemented");
+          {
+            // Find the task or subtask
+            const context = findTaskContext(action.targetId);
+            if (!context) break;
+
+            // Check if it's a task or subtask
+            const task = context.workpackage.tasks?.find(t => t.id === action.targetId);
+            if (task) {
+              setDependencyDialog({
+                item: task,
+                itemType: "task",
+                workpackageId: context.workpackage.id,
+              });
+            } else {
+              // Check subtasks
+              for (const t of context.workpackage.tasks || []) {
+                const subtask = t.subtasks?.find(st => st.id === action.targetId);
+                if (subtask) {
+                  setDependencyDialog({
+                    item: subtask,
+                    itemType: "subtask",
+                    workpackageId: context.workpackage.id,
+                  });
+                  break;
+                }
+              }
+            }
+          }
           break;
       }
     } catch (error) {
@@ -447,6 +479,45 @@ export function ProjectDashboard() {
       alert("Failed to perform action. Please try again.");
     }
   }, [projects, handleUpdateWorkpackage, findTaskContext, selectedTask, workpackagesMap, getProjectWorkpackages]);
+
+  const handleSaveDependencies = useCallback(async (dependencyIds: string[]) => {
+    if (!dependencyDialog) return;
+
+    try {
+      const { item, itemType, workpackageId } = dependencyDialog;
+      const workpackage = workpackagesMap.get(workpackageId);
+      if (!workpackage) return;
+
+      if (itemType === "task") {
+        const updatedTasks = workpackage.tasks?.map(t =>
+          t.id === item.id
+            ? { ...t, dependencies: dependencyIds }
+            : t
+        );
+        await handleUpdateWorkpackage(workpackageId, {
+          tasks: updatedTasks,
+        });
+      } else {
+        // Subtask
+        const updatedTasks = workpackage.tasks?.map(t => ({
+          ...t,
+          subtasks: t.subtasks?.map(st =>
+            st.id === item.id
+              ? { ...st, dependencies: dependencyIds }
+              : st
+          ),
+        }));
+        await handleUpdateWorkpackage(workpackageId, {
+          tasks: updatedTasks,
+        });
+      }
+
+      setDependencyDialog(null);
+    } catch (error) {
+      logger.error("Error saving dependencies", error);
+      alert("Failed to save dependencies. Please try again.");
+    }
+  }, [dependencyDialog, workpackagesMap, handleUpdateWorkpackage]);
 
   const handlePersonDropOnBar = useCallback(async (
     taskOrProjectId: string,
@@ -482,12 +553,29 @@ export function ProjectDashboard() {
               await handleUpdateWorkpackage(context.workpackage.id, {
                 tasks: updatedTasks,
               });
-              
+
               // Update selected task if it's the one being modified
               if (selectedTask?.id === taskOrProjectId) {
                 const updatedTask = updatedTasks.find(t => t.id === taskOrProjectId);
                 if (updatedTask) {
                   setSelectedTask(updatedTask);
+                }
+              }
+
+              // Send notification to newly assigned helper
+              if (profile && allProfiles) {
+                const assignee = allProfiles.find(p => p.id === personId);
+                if (assignee && assignee.id !== profile.id) {
+                  try {
+                    await notifyProjectTaskAssigned(
+                      task,
+                      assignee,
+                      profile,
+                      context.project.name
+                    );
+                  } catch (error) {
+                    logger.error('Error sending task assignment notification', error);
+                  }
                 }
               }
             }
@@ -497,6 +585,23 @@ export function ProjectDashboard() {
               await handleUpdateWorkpackage(context.workpackage.id, {
                 ownerId: personId,
               });
+
+              // Send notification to newly assigned workpackage owner
+              if (profile && allProfiles) {
+                const assignee = allProfiles.find(p => p.id === personId);
+                if (assignee && assignee.id !== profile.id) {
+                  try {
+                    await notifyWorkpackageOwnerAssigned(
+                      context.workpackage,
+                      assignee,
+                      profile,
+                      context.project.name
+                    );
+                  } catch (error) {
+                    logger.error('Error sending workpackage assignment notification', error);
+                  }
+                }
+              }
             }
           }
         } else {
@@ -507,6 +612,30 @@ export function ProjectDashboard() {
               await handleUpdateWorkpackage(workpackage.id, {
                 ownerId: personId,
               });
+
+              // Send notification to newly assigned workpackage owner
+              if (profile && allProfiles) {
+                const assignee = allProfiles.find(p => p.id === personId);
+                if (assignee && assignee.id !== profile.id) {
+                  try {
+                    // Find the project for this workpackage
+                    const project = projects.find(p => {
+                      const wpIds = getProjectWorkpackages(p).map(wp => wp.id);
+                      return wpIds.includes(workpackage.id);
+                    });
+                    if (project) {
+                      await notifyWorkpackageOwnerAssigned(
+                        workpackage,
+                        assignee,
+                        profile,
+                        project.name
+                      );
+                    }
+                  } catch (error) {
+                    logger.error('Error sending workpackage assignment notification', error);
+                  }
+                }
+              }
             }
           }
         }
@@ -515,7 +644,7 @@ export function ProjectDashboard() {
       logger.error("Error assigning person", error);
       alert("Failed to assign person. Please try again.");
     }
-  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
+  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, profile, allProfiles, getProjectWorkpackages]);
 
   const handleToggleTodo = useCallback(async (subtaskId: string, todoId: string) => {
     if (!selectedTask) return;
@@ -996,6 +1125,20 @@ export function ProjectDashboard() {
         currentUserId={user?.uid || ""}
         organisationId={profile?.organisationId}
       />
+
+      {/* Dependency Picker Dialog */}
+      {dependencyDialog && (
+        <DependencyPickerDialog
+          open={true}
+          onClose={() => setDependencyDialog(null)}
+          onConfirm={handleSaveDependencies}
+          currentItem={dependencyDialog.item}
+          currentItemType={dependencyDialog.itemType}
+          projects={projects}
+          workpackagesMap={workpackagesMap}
+          currentWorkpackageId={dependencyDialog.workpackageId}
+        />
+      )}
     </div>
   );
 }
