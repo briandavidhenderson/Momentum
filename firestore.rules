@@ -175,16 +175,13 @@ service cloud.firestore {
     match /organisations/{orgId} {
       // All authenticated users can read organisations
       allow read: if isAuthenticated();
-      
-      // Any authenticated user can create an organisation
-      allow create: if isAuthenticated();
-      
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || 
-        isAdmin()
-      );
-      
+
+      // Only administrators can create organisations
+      allow create: if isAdmin();
+
+      // Only admin can update
+      allow update: if isAdmin();
+
       // Only admin can delete
       allow delete: if isAdmin();
     }
@@ -215,16 +212,13 @@ service cloud.firestore {
     match /labs/{labId} {
       // All authenticated users can read labs
       allow read: if isAuthenticated();
-      
-      // Any authenticated user can create a lab
-      allow create: if isAuthenticated();
-      
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || 
-        isAdmin()
-      );
-      
+
+      // Only administrators can create labs
+      allow create: if isAdmin();
+
+      // Only admin can update
+      allow update: if isAdmin();
+
       // Only admin can delete
       allow delete: if isAdmin();
     }
@@ -359,22 +353,27 @@ service cloud.firestore {
     // WORKPACKAGES COLLECTION
     // ============================================================================
     match /workpackages/{workpackageId} {
-      // Users can read workpackages if they can see the associated project
-      allow read: if isAuthenticated();
-      
-      // Any authenticated user can create a workpackage
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-      
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+      // Users can read workpackages if they're in the same lab or are admin
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        ('labId' in resource.data && resource.data.labId == getUserLab())
       );
-      
-      // Creator or admin can delete
+
+      // Users can create workpackages for their own lab
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+
+      // Creator in same lab or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
+      );
+
+      // Creator in same lab or admin can delete
       allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
       );
     }
 
@@ -382,22 +381,28 @@ service cloud.firestore {
     // ORDERS COLLECTION
     // ============================================================================
     match /orders/{orderId} {
-      // All authenticated users can read orders
-      allow read: if isAuthenticated();
-      
-      // Any authenticated user can create an order
-      allow create: if isAuthenticated();
-      
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+      // Users can read orders from their lab or if they're admin
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        ('labId' in resource.data && resource.data.labId == getUserLab())
       );
-      
-      // Creator or admin can delete
+
+      // Users can create orders for their own lab
+      allow create: if isAuthenticated() &&
+        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+
+      // Creator in same lab or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid &&
+         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
+      );
+
+      // Creator in same lab or admin can delete
       allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid &&
+         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
       );
     }
 
@@ -405,22 +410,28 @@ service cloud.firestore {
     // INVENTORY COLLECTION
     // ============================================================================
     match /inventory/{itemId} {
-      // All authenticated users can read inventory
-      allow read: if isAuthenticated();
-      
-      // Any authenticated user can create inventory items
-      allow create: if isAuthenticated();
-      
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+      // Users can read inventory from their lab or if they're admin
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        ('labId' in resource.data && resource.data.labId == getUserLab())
       );
-      
-      // Creator or admin can delete
+
+      // Users can create inventory items for their own lab
+      allow create: if isAuthenticated() &&
+        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+
+      // Creator in same lab or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid &&
+         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
+      );
+
+      // Creator in same lab or admin can delete
       allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid &&
+         (!('labId' in resource.data) || resource.data.labId == getUserLab()))
       );
     }
 
@@ -450,23 +461,27 @@ service cloud.firestore {
     // LAB POLLS
     // ============================================================================
     match /labPolls/{pollId} {
-      // Users can read polls (lab filtering done client-side or in query)
-      allow read: if isAuthenticated();
-
-      // Users can create polls
-      allow create: if isAuthenticated() &&
-        request.resource.data.createdBy == request.auth.uid;
-
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+      // Users can read polls from their lab or if they're admin
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        ('labId' in resource.data && resource.data.labId == getUserLab())
       );
 
-      // Creator or admin can delete
+      // Users can create polls for their own lab
+      allow create: if isAuthenticated() &&
+        request.resource.data.createdBy == request.auth.uid &&
+        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
+
+      // Creator in same lab or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
+      );
+
+      // Creator in same lab or admin can delete
       allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid && resource.data.labId == getUserLab())
       );
     }
 
@@ -474,17 +489,27 @@ service cloud.firestore {
     // EQUIPMENT
     // ============================================================================
     match /equipment/{equipmentId} {
-      // Users can read equipment (lab filtering done in query)
-      allow read: if isAuthenticated();
+      // Users can read equipment from their lab or if they're admin
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        ('labId' in resource.data && resource.data.labId == getUserLab())
+      );
 
-      // Users can create equipment
-      allow create: if isAuthenticated();
+      // Users can create equipment for their own lab
+      allow create: if isAuthenticated() &&
+        (!('labId' in request.resource.data) || request.resource.data.labId == getUserLab());
 
-      // Users or admin can update
-      allow update: if isAuthenticated();
+      // Users in same lab or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (!('labId' in resource.data) || resource.data.labId == getUserLab())
+      );
 
-      // Users or admin can delete
-      allow delete: if isAuthenticated();
+      // Users in same lab or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        (!('labId' in resource.data) || resource.data.labId == getUserLab())
+      );
     }
 
     // ============================================================================
