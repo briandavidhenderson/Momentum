@@ -176,11 +176,14 @@ service cloud.firestore {
       // All authenticated users can read organisations
       allow read: if isAuthenticated();
 
-      // Only administrators can create organisations
-      allow create: if isAdmin();
+      // Authenticated users can create organisations (for onboarding)
+      allow create: if isAuthenticated();
 
-      // Only admin can update
-      allow update: if isAdmin();
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
 
       // Only admin can delete
       allow delete: if isAdmin();
@@ -213,11 +216,15 @@ service cloud.firestore {
       // All authenticated users can read labs
       allow read: if isAuthenticated();
 
-      // Only administrators can create labs
-      allow create: if isAdmin();
+      // Authenticated users can create labs (for onboarding)
+      // They will become the PI of the lab they create
+      allow create: if isAuthenticated();
 
-      // Only admin can update
-      allow update: if isAdmin();
+      // Only admin or lab members can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.labId == getUserLab()
+      );
 
       // Only admin can delete
       allow delete: if isAdmin();

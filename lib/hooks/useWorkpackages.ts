@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { Workpackage, Task, PersonProfile } from '@/lib/types';
+import { logger } from '@/lib/logger';
 import { createWorkpackage, subscribeToWorkpackages, updateWorkpackage, deleteWorkpackage } from '@/lib/firestoreService';
 
 export function useWorkpackages(currentUser: PersonProfile | null) {
@@ -17,7 +18,7 @@ export function useWorkpackages(currentUser: PersonProfile | null) {
 
           // Validate workpackage dates
           if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-            console.error('Invalid date found in stored workpackage:', wp);
+            logger.error('Invalid date found in stored workpackage', new Error('Invalid date'), { wp });
             return null;
           }
 
@@ -31,7 +32,7 @@ export function useWorkpackages(currentUser: PersonProfile | null) {
 
               // Validate task dates
               if (isNaN(taskStart.getTime()) || isNaN(taskEnd.getTime())) {
-                console.error('Invalid date found in stored task:', task);
+                logger.error('Invalid date found in stored task', new Error('Invalid date'), { task });
                 return null;
               }
 
@@ -46,7 +47,7 @@ export function useWorkpackages(currentUser: PersonProfile | null) {
 
         setWorkpackages(workpackagesWithDates);
       } catch (error) {
-        console.error('Error parsing stored workpackages from localStorage:', error);
+        logger.error('Error parsing stored workpackages from localStorage', error);
         // Clear invalid data
         localStorage.removeItem('gantt-workpackages');
       }

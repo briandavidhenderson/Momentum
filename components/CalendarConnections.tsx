@@ -14,6 +14,7 @@ import { Calendar, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { linkGoogleCalendar, unlinkGoogleCalendar, isGoogleCalendarLinked, getGoogleCalendarConnectionId, syncGoogleCalendar } from '@/lib/calendar/google'
 import { linkMicrosoftCalendar, unlinkMicrosoftCalendar, isMicrosoftCalendarLinked, getMicrosoftCalendarConnectionId } from '@/lib/calendar/microsoft'
 import { PersonProfile } from '@/lib/types'
+import { logger } from '@/lib/logger'
 
 interface CalendarConnectionsProps {
   currentUserProfile: PersonProfile | null
@@ -45,7 +46,7 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
         alert('Failed to connect Google Calendar')
       }
     } catch (error: any) {
-      console.error('Error connecting Google Calendar:', error)
+      logger.error('Error connecting Google Calendar', error)
       alert(error.message || 'Failed to connect Google Calendar')
     } finally {
       setGoogleLoading(false)
@@ -67,7 +68,7 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
       alert('Google Calendar disconnected')
       onConnectionChange?.()
     } catch (error: any) {
-      console.error('Error disconnecting Google Calendar:', error)
+      logger.error('Error disconnecting Google Calendar', error)
       alert(error.message || 'Failed to disconnect Google Calendar')
     } finally {
       setGoogleLoading(false)
@@ -85,7 +86,7 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
       alert('Google Calendar synced successfully!')
       onConnectionChange?.()
     } catch (error: any) {
-      console.error('Error syncing Google Calendar:', error)
+      logger.error('Error syncing Google Calendar', error)
       alert(error.message || 'Failed to sync Google Calendar')
     } finally {
       setGoogleLoading(false)
@@ -105,7 +106,7 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
         alert('Failed to connect Microsoft Calendar')
       }
     } catch (error: any) {
-      console.error('Error connecting Microsoft Calendar:', error)
+      logger.error('Error connecting Microsoft Calendar', error)
       alert(error.message || 'Microsoft Calendar integration coming in Phase 5')
     } finally {
       setMicrosoftLoading(false)
@@ -127,7 +128,7 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
       alert('Microsoft Calendar disconnected')
       onConnectionChange?.()
     } catch (error: any) {
-      console.error('Error disconnecting Microsoft Calendar:', error)
+      logger.error('Error disconnecting Microsoft Calendar', error)
       alert(error.message || 'Failed to disconnect Microsoft Calendar')
     } finally {
       setMicrosoftLoading(false)

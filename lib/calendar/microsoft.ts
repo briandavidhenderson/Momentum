@@ -128,7 +128,7 @@ export async function unlinkMicrosoftCalendar(connectionId: string): Promise<voi
 
     await unlink({ connectionId })
   } catch (error: any) {
-    console.error("Microsoft Calendar unlinking error:", error)
+    logger.error("Microsoft Calendar unlinking error", error)
     throw new Error(error.message || "Failed to unlink Microsoft Calendar")
   }
 }
@@ -157,7 +157,7 @@ export async function syncMicrosoftCalendar(connectionId: string): Promise<void>
 
     await sync({ connectionId })
   } catch (error: any) {
-    console.error("Microsoft Calendar sync error:", error)
+    logger.error("Microsoft Calendar sync error", error)
     throw new Error(error.message || "Failed to sync Microsoft Calendar")
   }
 }

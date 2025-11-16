@@ -559,7 +559,7 @@ export function DayToDayBoard() {
         try {
           await onMoveTask(activeTask.id, newStatus)
         } catch (error) {
-          console.error('Failed to move task:', error)
+          logger.error('Failed to move task', error)
           // Error is already shown by the hook, just log here
         }
       }

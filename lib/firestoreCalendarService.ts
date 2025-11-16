@@ -25,6 +25,7 @@ import {
   CalendarSyncLog,
   CalendarConflict,
 } from "./types"
+import { logger } from "./logger"
 
 // ============================================================================
 // CALENDAR CONNECTIONS
@@ -144,7 +145,7 @@ export function subscribeToCalendarConnections(
       callback(connections)
     },
     (error) => {
-      console.error("Error subscribing to calendar connections:", error)
+      logger.error("Error subscribing to calendar connections", error)
       callback([])
     }
   )
@@ -318,7 +319,7 @@ export function subscribeToCalendarConflicts(
       callback(conflicts)
     },
     (error) => {
-      console.error("Error subscribing to calendar conflicts:", error)
+      logger.error("Error subscribing to calendar conflicts", error)
       callback([])
     }
   )

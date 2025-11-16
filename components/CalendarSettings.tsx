@@ -16,6 +16,7 @@ import { CalendarConnection, ConnectedCalendar } from '@/lib/types'
 import { updateCalendarConnection } from '@/lib/firestoreCalendarService'
 import { syncGoogleCalendar } from '@/lib/calendar/google'
 import { syncMicrosoftCalendar } from '@/lib/calendar/microsoft'
+import { logger } from '@/lib/logger'
 
 interface CalendarSettingsProps {
   connection: CalendarConnection
@@ -43,7 +44,7 @@ export function CalendarSettings({ connection, onUpdate }: CalendarSettingsProps
 
       onUpdate?.()
     } catch (error) {
-      console.error('Error updating calendar selection:', error)
+      logger.error('Error updating calendar selection', error)
       alert('Failed to update calendar selection')
       // Revert on error
       setCalendars(connection.calendars)
@@ -65,7 +66,7 @@ export function CalendarSettings({ connection, onUpdate }: CalendarSettingsProps
         onUpdate?.()
       }
     } catch (error: any) {
-      console.error('Error syncing calendar:', error)
+      logger.error('Error syncing calendar', error)
       alert(error.message || 'Failed to sync calendar')
     } finally {
       setSyncing(false)

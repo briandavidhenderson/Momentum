@@ -439,7 +439,7 @@ export function ProjectDashboard() {
         case "add-dependency":
           // Dependency management not yet implemented
           // Feature planned for future release
-          console.warn("Dependency management feature not yet implemented");
+          logger.warn("Dependency management feature not yet implemented");
           break;
       }
     } catch (error) {
