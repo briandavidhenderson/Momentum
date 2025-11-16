@@ -483,6 +483,8 @@ export function DayToDayBoard() {
     handleUpdateDayToDayTask: onUpdateTask,
     handleDeleteDayToDayTask: onDeleteTask,
     handleMoveDayToDayTask: onMoveTask,
+    handleReorderDayToDayTask: onReorderTask,
+    syncStatus,
   } = useAppContext()
 
   const tasks = (dayToDayTasks || []) as DayToDayTask[]
@@ -534,7 +536,7 @@ export function DayToDayBoard() {
     }
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     setActiveTask(null)
 
@@ -546,7 +548,7 @@ export function DayToDayBoard() {
 
     if (!activeTask) return
 
-    // Feature #2: Handle reordering within same column
+    // Feature #2: Handle reordering within same column (optimistic)
     if (overTask && activeTask.status === overTask.status) {
       // Reordering within same column
       const tasksInColumn = tasks.filter(t => t.status === activeTask.status)
@@ -554,35 +556,18 @@ export function DayToDayBoard() {
       const newIndex = tasksInColumn.findIndex(t => t.id === overTask.id)
 
       if (oldIndex !== newIndex) {
-        // Reorder tasks
-        const reorderedTasks = arrayMove(tasksInColumn, oldIndex, newIndex)
-
-        // Update order field for all affected tasks
-        const updates = reorderedTasks.map((task, index) => ({
-          id: task.id,
-          order: index,
-        }))
-
-        // Batch update tasks
-        Promise.all(
-          updates.map(update => onUpdateTask(update.id, { order: update.order }))
-        ).catch(error => {
-          logger.error('Error reordering tasks', error)
-        })
+        // Use optimistic reorder function
+        onReorderTask(activeTask.id, newIndex)
       }
       return
     }
 
-    // Handle moving to different column
+    // Handle moving to different column (optimistic)
     if (overData?.type === "column") {
       const newStatus = overData.status as TaskStatus
       if (activeTask.status !== newStatus) {
-        try {
-          await onMoveTask(activeTask.id, newStatus)
-        } catch (error) {
-          logger.error('Failed to move task', error)
-          // Error is already shown by the hook, just log here
-        }
+        // No try-catch needed - optimistic hook handles errors
+        onMoveTask(activeTask.id, newStatus)
       }
     }
   }
@@ -620,11 +605,25 @@ export function DayToDayBoard() {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold">Day to Day</h2>
-          <p className="text-sm text-muted-foreground">
-            Manage your daily tasks and priorities
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-2xl font-bold">Day to Day</h2>
+            <p className="text-sm text-muted-foreground">
+              Manage your daily tasks and priorities
+            </p>
+          </div>
+          {syncStatus === 'syncing' && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Syncing...
+            </Badge>
+          )}
+          {syncStatus === 'error' && (
+            <Badge variant="destructive" className="flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Sync Error
+            </Badge>
+          )}
         </div>
         <Button onClick={() => setShowNewTaskInput(true)}>
           <Plus className="h-4 w-4 mr-2" />

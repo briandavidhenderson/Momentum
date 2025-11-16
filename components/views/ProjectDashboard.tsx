@@ -1,18 +1,17 @@
 "use client"
 
 import { useState, useCallback } from "react";
-import { useProjects } from "@/lib/hooks/useProjects";
+import { useAppContext } from "@/lib/AppContext";
 import { useAuth } from "@/lib/hooks/useAuth";
-import { useProfiles } from "@/lib/useProfiles";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
 import { DependencyPickerDialog } from "@/components/DependencyPickerDialog";
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
 import { MasterProject, Task, Workpackage, Project, Person, ProfileProject, Subtask } from "@/lib/types";
-import { Plus, FolderKanban, PackagePlus, Trash2, Loader2 } from "lucide-react";
-import { personProfilesToPeople } from "@/lib/personHelpers";
+import { Plus, FolderKanban, PackagePlus, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { Task as GanttTask } from "gantt-task-react";
 import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
 import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalculate, updateWorkpackageWithTaskProgress } from "@/lib/progressCalculation";
@@ -32,10 +31,13 @@ export function ProjectDashboard() {
     handleUpdateMasterProject,
     handleDeleteMasterProject,
     handleUpdateWorkpackage,
+    handleUpdateTaskHelpers,
+    handleUpdateTaskDates,
     handleCreateWorkpackage: createWorkpackage,
-  } = useProjects();
-  const allProfiles = useProfiles(profile?.labId || null);
-  const people = personProfilesToPeople(allProfiles);
+    projectsSyncStatus,
+    allProfiles,
+    people,
+  } = useAppContext();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
@@ -202,14 +204,8 @@ export function ProjectDashboard() {
           // Check tasks
           for (const task of workpackage.tasks || []) {
             if (ganttTask.id === task.id) {
-              const updatedTasks = workpackage.tasks.map(t =>
-                t.id === task.id
-                  ? { ...t, start: ganttTask.start, end: ganttTask.end }
-                  : t
-              );
-              await handleUpdateWorkpackage(workpackage.id, {
-                tasks: updatedTasks,
-              });
+              // Optimistic update - no await needed
+              handleUpdateTaskDates(workpackage.id, task.id, ganttTask.start, ganttTask.end);
               return;
             }
 
@@ -241,7 +237,7 @@ export function ProjectDashboard() {
       logger.error("Error updating task dates", error);
       alert("Failed to update task dates. Please try again.");
     }
-  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
+  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskDates, workpackagesMap]);
 
   const handleTaskClick = useCallback((task: Task) => {
     setSelectedTask(task);
@@ -545,37 +541,28 @@ export function ProjectDashboard() {
           if (task) {
             const currentHelpers = task.helpers || [];
             if (!currentHelpers.includes(personId) && task.primaryOwner !== personId) {
-              const updatedTasks = context.workpackage.tasks.map(t =>
-                t.id === taskOrProjectId
-                  ? { ...t, helpers: [...currentHelpers, personId] }
-                  : t
-              );
-              await handleUpdateWorkpackage(context.workpackage.id, {
-                tasks: updatedTasks,
-              });
+              const newHelpers = [...currentHelpers, personId];
+
+              // Optimistic update - no await needed
+              handleUpdateTaskHelpers(context.workpackage.id, taskOrProjectId, newHelpers);
 
               // Update selected task if it's the one being modified
               if (selectedTask?.id === taskOrProjectId) {
-                const updatedTask = updatedTasks.find(t => t.id === taskOrProjectId);
-                if (updatedTask) {
-                  setSelectedTask(updatedTask);
-                }
+                setSelectedTask({ ...task, helpers: newHelpers });
               }
 
-              // Send notification to newly assigned helper
+              // Send notification in background (non-blocking)
               if (profile && allProfiles) {
                 const assignee = allProfiles.find(p => p.id === personId);
                 if (assignee && assignee.id !== profile.id) {
-                  try {
-                    await notifyProjectTaskAssigned(
-                      task,
-                      assignee,
-                      profile,
-                      context.project.name
-                    );
-                  } catch (error) {
+                  notifyProjectTaskAssigned(
+                    task,
+                    assignee,
+                    profile,
+                    context.project.name
+                  ).catch(error => {
                     logger.error('Error sending task assignment notification', error);
-                  }
+                  });
                 }
               }
             }
@@ -586,20 +573,18 @@ export function ProjectDashboard() {
                 ownerId: personId,
               });
 
-              // Send notification to newly assigned workpackage owner
+              // Send notification in background (non-blocking)
               if (profile && allProfiles) {
                 const assignee = allProfiles.find(p => p.id === personId);
                 if (assignee && assignee.id !== profile.id) {
-                  try {
-                    await notifyWorkpackageOwnerAssigned(
-                      context.workpackage,
-                      assignee,
-                      profile,
-                      context.project.name
-                    );
-                  } catch (error) {
+                  notifyWorkpackageOwnerAssigned(
+                    context.workpackage,
+                    assignee,
+                    profile,
+                    context.project.name
+                  ).catch(error => {
                     logger.error('Error sending workpackage assignment notification', error);
-                  }
+                  });
                 }
               }
             }
@@ -617,22 +602,21 @@ export function ProjectDashboard() {
               if (profile && allProfiles) {
                 const assignee = allProfiles.find(p => p.id === personId);
                 if (assignee && assignee.id !== profile.id) {
-                  try {
-                    // Find the project for this workpackage
-                    const project = projects.find(p => {
-                      const wpIds = getProjectWorkpackages(p).map(wp => wp.id);
-                      return wpIds.includes(workpackage.id);
+                  // Find the project for this workpackage
+                  const project = projects.find(p => {
+                    const wpIds = getProjectWorkpackages(p).map(wp => wp.id);
+                    return wpIds.includes(workpackage.id);
+                  });
+                  if (project) {
+                    // Send notification in background (non-blocking)
+                    notifyWorkpackageOwnerAssigned(
+                      workpackage,
+                      assignee,
+                      profile,
+                      project.name
+                    ).catch(error => {
+                      logger.error('Error sending workpackage assignment notification', error);
                     });
-                    if (project) {
-                      await notifyWorkpackageOwnerAssigned(
-                        workpackage,
-                        assignee,
-                        profile,
-                        project.name
-                      );
-                    }
-                  } catch (error) {
-                    logger.error('Error sending workpackage assignment notification', error);
                   }
                 }
               }
@@ -644,7 +628,7 @@ export function ProjectDashboard() {
       logger.error("Error assigning person", error);
       alert("Failed to assign person. Please try again.");
     }
-  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, profile, allProfiles, getProjectWorkpackages]);
+  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskHelpers, workpackagesMap, profile, allProfiles, getProjectWorkpackages]);
 
   const handleToggleTodo = useCallback(async (subtaskId: string, todoId: string) => {
     if (!selectedTask) return;
@@ -954,6 +938,18 @@ export function ProjectDashboard() {
         <div className="flex items-center gap-3">
           <FolderKanban className="h-6 w-6 text-brand-500" />
           <h1 className="text-2xl font-bold text-foreground">Project Dashboard</h1>
+          {projectsSyncStatus === 'syncing' && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Syncing...
+            </Badge>
+          )}
+          {projectsSyncStatus === 'error' && (
+            <Badge variant="destructive" className="flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Sync Error
+            </Badge>
+          )}
           <div className="text-sm text-muted-foreground">
             {people.length > 0 ? `${people.length} people` : 'Loading people...'}
           </div>

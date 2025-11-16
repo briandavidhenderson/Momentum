@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
-import { useProjects } from './hooks/useProjects';
+import { useOptimisticProjects } from './hooks/useOptimisticProjects';
 import { useOrders } from './hooks/useOrders';
-import { useDayToDayTasks } from './hooks/useDayToDayTasks';
+import { useOptimisticDayToDayTasks } from './hooks/useOptimisticDayToDayTasks';
 import { useEquipment } from './hooks/useEquipment';
 import { usePolls } from './hooks/usePolls';
 import { useELN } from './hooks/useELN';
@@ -21,9 +21,9 @@ import { PersonProfile, Person } from './types';
  * Combines all hook return types for proper type safety
  */
 type AppContextType = ReturnType<typeof useAuth> &
-  ReturnType<typeof useProjects> &
+  ReturnType<typeof useOptimisticProjects> &
   ReturnType<typeof useOrders> &
-  ReturnType<typeof useDayToDayTasks> &
+  ReturnType<typeof useOptimisticDayToDayTasks> &
   ReturnType<typeof useEquipment> &
   ReturnType<typeof usePolls> &
   ReturnType<typeof useELN> &
@@ -39,9 +39,9 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppWrapper({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
-  const projectsAndWorkpackages = useProjects();
+  const projectsAndWorkpackages = useOptimisticProjects();
   const orders = useOrders();
-  const dayToDayTasks = useDayToDayTasks();
+  const dayToDayTasks = useOptimisticDayToDayTasks();
   const equipment = useEquipment();
   const polls = usePolls();
   const eln = useELN();
