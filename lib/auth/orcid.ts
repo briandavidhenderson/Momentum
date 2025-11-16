@@ -44,11 +44,11 @@ async function initiateOrcidAuth(): Promise<{ code: string; state: string }> {
   const { authUrl, state } = result.data
 
   if (!authUrl) {
-    console.error("No authUrl returned from orcidAuthStart. Full result:", result)
+    logger.error("No authUrl returned from orcidAuthStart. Full result:", result)
     throw new Error("Invalid response from authentication service - no authorization URL received")
   }
 
-  console.log("Opening ORCID authorization URL:", authUrl)
+  logger.info("Opening ORCID authorization URL:", authUrl)
 
   // Open popup for ORCID authorization
   const width = 500

@@ -9,7 +9,7 @@ export function getProfileById(id: string): PersonProfile | undefined {
 }
 
 export function getProfilesByLab(lab: string): PersonProfile[] {
-  return profiles.filter((p) => p.lab === lab)
+  return profiles.filter((p) => p.labId === lab)
 }
 
 export function getProfilesByInstitute(institute: string): PersonProfile[] {

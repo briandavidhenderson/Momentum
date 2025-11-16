@@ -94,7 +94,9 @@ export async function getUserCalendarConnectionByProvider(
   )
   const snapshot = await getDocs(q)
 
-  if (snapshot.empty) return null
+  if (snapshot.empty || !snapshot.docs[0]) {
+    return null
+  }
   return snapshot.docs[0].data() as CalendarConnection
 }
 
