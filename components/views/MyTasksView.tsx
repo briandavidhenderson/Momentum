@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Search, Filter, Calendar, CheckCircle2, Circle, Clock, ListTodo, FolderKanban } from "lucide-react"
+import { Search, Filter, Calendar, CheckCircle2, Circle, Clock, ListTodo, FolderKanban, Loader2 } from "lucide-react"
 import { Task, Workpackage, MasterProject } from "@/lib/types"
 import { DayToDayTask, TaskStatus } from "@/lib/dayToDayTypes"
 
@@ -38,6 +38,9 @@ export function MyTasksView() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sourceFilter, setSourceFilter] = useState<TaskSource>("all")
   const [statusFilter, setStatusFilter] = useState<TaskFilter>("active")
+
+  // Simple loading check - if we have no profile yet, still loading
+  const isLoading = !currentUserProfile
 
   // Combine all tasks from both sources
   const allTasks = useMemo((): UnifiedTask[] => {
@@ -232,6 +235,21 @@ export function MyTasksView() {
   const overdueCount = allTasks.filter(
     (t) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "done" && t.status !== "completed"
   ).length
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Loader2 className="h-12 w-12 mx-auto mb-4 text-brand-500 animate-spin" />
+          <h3 className="text-lg font-semibold mb-2">Loading Your Tasks</h3>
+          <p className="text-sm text-muted-foreground">
+            Gathering tasks from projects and day-to-day work...
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-6">
