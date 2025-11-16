@@ -748,8 +748,20 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       },
     }
 
+    // Get user's profileId from users collection
+    const userDoc = await admin.firestore().collection("users").doc(context.auth.uid).get()
+    const userData = userDoc.data()
+    const profileId = userData?.profileId
+
+    if (!profileId) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "User profile not found. Please complete your profile setup first."
+      )
+    }
+
     // Merge extracted data (only if fields are not already set)
-    const currentProfile = await admin.firestore().collection("profiles").doc(context.auth.uid).get()
+    const currentProfile = await admin.firestore().collection("personProfiles").doc(profileId).get()
     const currentData = currentProfile.data() || {}
 
     // Only update fields if they're empty or missing
@@ -767,8 +779,8 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       firestoreUpdate.researchInterests = extractedData.researchInterests
     }
 
-    // Store ORCID data in Firestore profile
-    await admin.firestore().collection("profiles").doc(context.auth.uid).update(firestoreUpdate)
+    // Store ORCID data in Firestore personProfiles collection
+    await admin.firestore().collection("personProfiles").doc(profileId).update(firestoreUpdate)
 
     console.log(`ORCID data stored successfully for user ${context.auth.uid}`)
 
@@ -802,8 +814,20 @@ export const orcidResyncProfile = functions.https.onCall(async (data, context) =
   const config = getOrcidConfig()
 
   try {
+    // Get user's profileId from users collection
+    const userDoc = await admin.firestore().collection("users").doc(context.auth.uid).get()
+    const userData = userDoc.data()
+    const profileId = userData?.profileId
+
+    if (!profileId) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "User profile not found. Please complete your profile setup first."
+      )
+    }
+
     // Get current profile to check if ORCID is linked
-    const profileDoc = await admin.firestore().collection("profiles").doc(context.auth.uid).get()
+    const profileDoc = await admin.firestore().collection("personProfiles").doc(profileId).get()
     const profileData = profileDoc.data()
 
     if (!profileData?.orcidId) {
@@ -878,8 +902,8 @@ export const orcidResyncProfile = functions.https.onCall(async (data, context) =
       }
     }
 
-    // Update Firestore profile
-    await admin.firestore().collection("profiles").doc(context.auth.uid).update(firestoreUpdate)
+    // Update Firestore personProfiles collection
+    await admin.firestore().collection("personProfiles").doc(profileId).update(firestoreUpdate)
 
     return {
       success: true,
