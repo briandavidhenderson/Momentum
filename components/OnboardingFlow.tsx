@@ -615,7 +615,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
         // Create account if specified
         if (state.accountNumber && state.accountName) {
-          await createFundingAccount({
+          const accountId = await createFundingAccount({
             accountNumber: state.accountNumber,
             accountName: state.accountName,
             funderId: state.funderId,
@@ -630,6 +630,36 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             status: "active",
             createdBy: user.uid,
           })
+
+          // Create personal funding allocation for the PI
+          if (accountId && state.isPrincipalInvestigator) {
+            const { createFundingAllocation } = await import("@/lib/services/fundingService")
+            // Allocate 50% of total budget to PI by default (can be adjusted later)
+            const piAllocationAmount = budgetValue * 0.5
+
+            await createFundingAllocation({
+              fundingAccountId: accountId,
+              fundingAccountName: state.accountName,
+              labId: state.selectedLab.id,
+              type: "PERSON",
+              personId: profileId,
+              personName: `${profileData.firstName} ${profileData.lastName}`,
+              allocatedAmount: piAllocationAmount,
+              currentSpent: 0,
+              currentCommitted: 0,
+              remainingBudget: piAllocationAmount,
+              currency: state.currency,
+              status: "active",
+              createdAt: new Date().toISOString(),
+              createdBy: user.uid,
+            })
+
+            logger.info("Created PI funding allocation during onboarding", {
+              profileId,
+              accountId,
+              amount: piAllocationAmount,
+            })
+          }
         }
       }
 

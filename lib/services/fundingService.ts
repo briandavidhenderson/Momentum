@@ -324,3 +324,27 @@ export async function getAllocation(allocationId: string): Promise<FundingAlloca
 
   return allocationDoc.data() as FundingAllocation
 }
+
+/**
+ * Create a new funding allocation
+ * @returns The ID of the newly created allocation
+ */
+export async function createFundingAllocation(allocationData: Omit<FundingAllocation, 'id'>): Promise<string> {
+  const db = getFirebaseDb()
+  const allocationRef = doc(collection(db, "fundingAllocations"))
+  const allocationId = allocationRef.id
+
+  await setDoc(allocationRef, {
+    ...allocationData,
+    id: allocationId,
+  })
+
+  logger.info(`Created funding allocation ${allocationId}`, {
+    type: allocationData.type,
+    personId: allocationData.personId,
+    projectId: allocationData.projectId,
+    amount: allocationData.allocatedAmount,
+  })
+
+  return allocationId
+}
