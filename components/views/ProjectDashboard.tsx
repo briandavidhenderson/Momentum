@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { logger } from "@/lib/logger";
+import { notifyProjectTaskAssigned, notifyWorkpackageOwnerAssigned } from "@/lib/notificationUtils";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -552,12 +553,29 @@ export function ProjectDashboard() {
               await handleUpdateWorkpackage(context.workpackage.id, {
                 tasks: updatedTasks,
               });
-              
+
               // Update selected task if it's the one being modified
               if (selectedTask?.id === taskOrProjectId) {
                 const updatedTask = updatedTasks.find(t => t.id === taskOrProjectId);
                 if (updatedTask) {
                   setSelectedTask(updatedTask);
+                }
+              }
+
+              // Send notification to newly assigned helper
+              if (profile && allProfiles) {
+                const assignee = allProfiles.find(p => p.id === personId);
+                if (assignee && assignee.id !== profile.id) {
+                  try {
+                    await notifyProjectTaskAssigned(
+                      task,
+                      assignee,
+                      profile,
+                      context.project.name
+                    );
+                  } catch (error) {
+                    logger.error('Error sending task assignment notification', error);
+                  }
                 }
               }
             }
@@ -567,6 +585,23 @@ export function ProjectDashboard() {
               await handleUpdateWorkpackage(context.workpackage.id, {
                 ownerId: personId,
               });
+
+              // Send notification to newly assigned workpackage owner
+              if (profile && allProfiles) {
+                const assignee = allProfiles.find(p => p.id === personId);
+                if (assignee && assignee.id !== profile.id) {
+                  try {
+                    await notifyWorkpackageOwnerAssigned(
+                      context.workpackage,
+                      assignee,
+                      profile,
+                      context.project.name
+                    );
+                  } catch (error) {
+                    logger.error('Error sending workpackage assignment notification', error);
+                  }
+                }
+              }
             }
           }
         } else {
@@ -577,6 +612,30 @@ export function ProjectDashboard() {
               await handleUpdateWorkpackage(workpackage.id, {
                 ownerId: personId,
               });
+
+              // Send notification to newly assigned workpackage owner
+              if (profile && allProfiles) {
+                const assignee = allProfiles.find(p => p.id === personId);
+                if (assignee && assignee.id !== profile.id) {
+                  try {
+                    // Find the project for this workpackage
+                    const project = projects.find(p => {
+                      const wpIds = getProjectWorkpackages(p).map(wp => wp.id);
+                      return wpIds.includes(workpackage.id);
+                    });
+                    if (project) {
+                      await notifyWorkpackageOwnerAssigned(
+                        workpackage,
+                        assignee,
+                        profile,
+                        project.name
+                      );
+                    }
+                  } catch (error) {
+                    logger.error('Error sending workpackage assignment notification', error);
+                  }
+                }
+              }
             }
           }
         }
@@ -585,7 +644,7 @@ export function ProjectDashboard() {
       logger.error("Error assigning person", error);
       alert("Failed to assign person. Please try again.");
     }
-  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap]);
+  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, profile, allProfiles, getProjectWorkpackages]);
 
   const handleToggleTodo = useCallback(async (subtaskId: string, todoId: string) => {
     if (!selectedTask) return;

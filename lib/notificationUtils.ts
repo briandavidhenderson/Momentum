@@ -305,6 +305,64 @@ export async function notifyOrderPlaced(
 }
 
 /**
+ * PROJECT TASK ASSIGNMENT NOTIFICATIONS
+ *
+ * Triggered when a helper is added to a project task
+ * Notifies the newly assigned helper
+ *
+ * @param task - Project task that the helper was added to
+ * @param assignee - User who was assigned as helper
+ * @param assigner - User who made the assignment
+ * @param projectName - Name of the project
+ */
+export async function notifyProjectTaskAssigned(
+  task: any,
+  assignee: PersonProfile,
+  assigner: PersonProfile,
+  projectName: string
+): Promise<void> {
+  await createNotification({
+    userId: assignee.id,
+    type: 'TASK_ASSIGNED',
+    title: 'Added to Project Task',
+    message: `${assigner.firstName} ${assigner.lastName} added you as a helper on "${task.name}" in ${projectName}`,
+    priority: task.importance === 'high' || task.importance === 'critical' ? 'high' : 'medium',
+    relatedEntityType: 'projectTask',
+    relatedEntityId: task.id,
+    actionUrl: '/projects'
+  })
+}
+
+/**
+ * WORKPACKAGE OWNER ASSIGNMENT NOTIFICATIONS
+ *
+ * Triggered when a user is assigned as owner of a workpackage
+ * Notifies the newly assigned owner
+ *
+ * @param workpackage - Workpackage that was assigned
+ * @param assignee - User who was assigned as owner
+ * @param assigner - User who made the assignment
+ * @param projectName - Name of the project
+ */
+export async function notifyWorkpackageOwnerAssigned(
+  workpackage: any,
+  assignee: PersonProfile,
+  assigner: PersonProfile,
+  projectName: string
+): Promise<void> {
+  await createNotification({
+    userId: assignee.id,
+    type: 'TASK_ASSIGNED',
+    title: 'Assigned as Workpackage Owner',
+    message: `${assigner.firstName} ${assigner.lastName} assigned you as owner of "${workpackage.name}" in ${projectName}`,
+    priority: 'high',
+    relatedEntityType: 'workpackage',
+    relatedEntityId: workpackage.id,
+    actionUrl: '/projects'
+  })
+}
+
+/**
  * Helper: Get lab managers from profiles list
  * Filters profiles to find users with manager/PI role
  *
