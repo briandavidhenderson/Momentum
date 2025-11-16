@@ -11,6 +11,7 @@ import { FileText, Sparkles, Loader2, Download, Calendar } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { generateExperimentReport } from "@/lib/ai/router"
 import { logger } from "@/lib/logger"
+import { AIContentDisclaimer } from "@/components/AIContentDisclaimer"
 
 interface ELNReportGeneratorProps {
   experimentTitle: string
@@ -30,6 +31,7 @@ export function ELNReportGenerator({
   const [showGenerateDialog, setShowGenerateDialog] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [viewingReport, setViewingReport] = useState<ELNReport | null>(null)
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false)
   const toast = useToast()
 
   const extractedItems = items.filter(item =>
@@ -286,7 +288,12 @@ ${report.conclusion}
       </Dialog>
 
       {/* View Report Dialog */}
-      <Dialog open={!!viewingReport} onOpenChange={(open) => !open && setViewingReport(null)}>
+      <Dialog open={!!viewingReport} onOpenChange={(open) => {
+        if (!open) {
+          setViewingReport(null)
+          setDisclaimerAccepted(false)
+        }
+      }}>
         <DialogContent className="sm:max-w-[900px] max-h-[85vh]">
           {viewingReport && (
             <>
@@ -298,52 +305,76 @@ ${report.conclusion}
                       Generated {new Date(viewingReport.generatedAt).toLocaleDateString()} from {viewingReport.sourceItemIds.length} items
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => exportReportAsMarkdown(viewingReport)}
-                    className="gap-1"
-                  >
-                    <Download className="h-3 w-3" />
-                    Export
-                  </Button>
+                  {disclaimerAccepted && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => exportReportAsMarkdown(viewingReport)}
+                      className="gap-1"
+                    >
+                      <Download className="h-3 w-3" />
+                      Export
+                    </Button>
+                  )}
                 </div>
               </DialogHeader>
 
-              <Tabs defaultValue="background" className="mt-4">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="background">Background</TabsTrigger>
-                  <TabsTrigger value="protocols">Protocols</TabsTrigger>
-                  <TabsTrigger value="results">Results</TabsTrigger>
-                  <TabsTrigger value="conclusion">Conclusion</TabsTrigger>
-                </TabsList>
-
+              {!disclaimerAccepted ? (
                 <div className="mt-4 max-h-[60vh] overflow-y-auto">
-                  <TabsContent value="background" className="prose prose-sm max-w-none">
-                    <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
-                      {viewingReport.background}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="protocols" className="prose prose-sm max-w-none">
-                    <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
-                      {viewingReport.protocols}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="results" className="prose prose-sm max-w-none">
-                    <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
-                      {viewingReport.results}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="conclusion" className="prose prose-sm max-w-none">
-                    <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
-                      {viewingReport.conclusion}
-                    </div>
-                  </TabsContent>
+                  <AIContentDisclaimer
+                    entityType="eln_report"
+                    entityId={viewingReport.id}
+                    modelName="OpenAI GPT-4"
+                    promptHash={`report-${viewingReport.id}-${viewingReport.version}`}
+                    generatedContent={`
+                      <h3>Background</h3>
+                      <p>${viewingReport.background.replace(/\n/g, '<br>')}</p>
+                      <h3>Protocols</h3>
+                      <p>${viewingReport.protocols.replace(/\n/g, '<br>')}</p>
+                      <h3>Results</h3>
+                      <p>${viewingReport.results.replace(/\n/g, '<br>')}</p>
+                      <h3>Conclusion</h3>
+                      <p>${viewingReport.conclusion.replace(/\n/g, '<br>')}</p>
+                    `}
+                    onAccept={() => setDisclaimerAccepted(true)}
+                  />
                 </div>
-              </Tabs>
+              ) : (
+                <Tabs defaultValue="background" className="mt-4">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="background">Background</TabsTrigger>
+                    <TabsTrigger value="protocols">Protocols</TabsTrigger>
+                    <TabsTrigger value="results">Results</TabsTrigger>
+                    <TabsTrigger value="conclusion">Conclusion</TabsTrigger>
+                  </TabsList>
+
+                  <div className="mt-4 max-h-[60vh] overflow-y-auto">
+                    <TabsContent value="background" className="prose prose-sm max-w-none">
+                      <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
+                        {viewingReport.background}
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="protocols" className="prose prose-sm max-w-none">
+                      <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
+                        {viewingReport.protocols}
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="results" className="prose prose-sm max-w-none">
+                      <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
+                        {viewingReport.results}
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="conclusion" className="prose prose-sm max-w-none">
+                      <div className="bg-gray-50 rounded-lg p-6 whitespace-pre-wrap">
+                        {viewingReport.conclusion}
+                      </div>
+                    </TabsContent>
+                  </div>
+                </Tabs>
+              )}
             </>
           )}
         </DialogContent>

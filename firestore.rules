@@ -619,6 +619,37 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // NOTIFICATIONS
+    // ============================================================================
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // System and authenticated users can create notifications
+      allow create: if isAuthenticated();
+
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // AI GENERATED CONTENT (GDPR/EU AI Act Compliance)
+    // ============================================================================
+    match /aiGeneratedContent/{contentId} {
+      // Users can read AI content records they created
+      allow read: if isAuthenticated() && resource.data.generatedBy == request.auth.uid;
+
+      // Users can create AI content records
+      allow create: if isAuthenticated() && request.resource.data.generatedBy == request.auth.uid;
+
+      // No updates or deletes (audit trail for compliance)
+      allow update, delete: if false;
+    }
+
+    // ============================================================================
     // DEFAULT DENY (catch-all)
     // ============================================================================
     match /{document=**} {
