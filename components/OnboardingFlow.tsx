@@ -550,9 +550,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
       // If creating a project, create it now
       if (state.createProject && state.projectName) {
-        // Parse and validate budget
-        const budgetValue = state.totalBudget ? parseFloat(state.totalBudget) : undefined
-        if (state.totalBudget && (isNaN(budgetValue!) || budgetValue! < 0)) {
+        // Parse and validate budget (default to 0 if not provided)
+        const budgetValue = state.totalBudget ? parseFloat(state.totalBudget) : 0
+        if (state.totalBudget && (isNaN(budgetValue) || budgetValue < 0)) {
           setError("Invalid budget amount")
           setLoading(false)
           return
