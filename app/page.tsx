@@ -4,7 +4,7 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield } from "lucide-react"
+import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield, DollarSign, Wallet } from "lucide-react"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
@@ -17,6 +17,9 @@ import { EquipmentManagement } from "@/components/views/EquipmentManagement"
 import { CalendarEvents } from "@/components/views/CalendarEvents"
 import { CookieConsentBanner } from "@/components/CookieConsentBanner"
 import { PrivacyDashboard } from "@/components/views/PrivacyDashboard"
+import { FundingAdmin } from "@/components/views/FundingAdmin"
+import { PersonalLedger } from "@/components/PersonalLedger"
+import { UserRole } from "@/lib/types"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -193,6 +196,32 @@ export default function Home() {
               <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
               Calendar
             </Button>
+            {/* Funding Admin - Only for PIs, Finance Admins, and Lab Managers */}
+            {(currentUserProfile?.userRole === UserRole.PI ||
+              currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
+              currentUserProfile?.userRole === UserRole.LAB_MANAGER) && (
+              <Button
+                onClick={() => setMainView('funding')}
+                variant={mainView === 'funding' ? 'default' : 'outline'}
+                size="lg"
+                className={mainView === 'funding' ? 'bg-brand-500 text-white' : ''}
+                aria-current={mainView === 'funding' ? 'page' : undefined}
+              >
+                <DollarSign className="h-4 w-4 mr-2" aria-hidden="true" />
+                Funding
+              </Button>
+            )}
+            {/* Personal Ledger - Available to all users */}
+            <Button
+              onClick={() => setMainView('ledger')}
+              variant={mainView === 'ledger' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'ledger' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'ledger' ? 'page' : undefined}
+            >
+              <Wallet className="h-4 w-4 mr-2" aria-hidden="true" />
+              My Ledger
+            </Button>
             <Button
               onClick={() => setMainView('myprofile')}
               variant={mainView === 'myprofile' ? 'default' : 'outline'}
@@ -236,6 +265,23 @@ export default function Home() {
         {mainView === 'orders' && <OrdersInventory />}
         {mainView === 'equipment' && <EquipmentManagement />}
         {mainView === 'calendar' && <CalendarEvents />}
+        {mainView === 'funding' && (
+          currentUserProfile?.userRole === UserRole.PI ||
+          currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
+          currentUserProfile?.userRole === UserRole.LAB_MANAGER
+        ) && <FundingAdmin />}
+        {mainView === 'funding' && !(
+          currentUserProfile?.userRole === UserRole.PI ||
+          currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
+          currentUserProfile?.userRole === UserRole.LAB_MANAGER
+        ) && (
+          <div className="bg-white rounded-xl shadow-card p-8 text-center">
+            <DollarSign className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-semibold mb-2">Access Restricted</h2>
+            <p className="text-muted-foreground">You need PI, Finance Admin, or Lab Manager privileges to access the Funding panel.</p>
+          </div>
+        )}
+        {mainView === 'ledger' && <PersonalLedger />}
         {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
         {mainView === 'privacy' && <PrivacyDashboard />}
         {mainView === 'profiles' && (currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (

@@ -90,15 +90,11 @@ export function EventDialog({
     const base: CalendarEvent = {
       id: initialEvent?.id ?? `event-${Date.now()}`,
       title: title.trim(),
-      description: description.trim() || undefined,
-      location: location.trim() || undefined,
-      linkUrl: linkUrl.trim() || undefined,
       start: new Date(start),
       end: new Date(end),
-      recurrence,
       attendees: selectedAttendeeIds.map((personId) => ({
         personId,
-        role: attendeeNotes[personId]?.trim() || undefined,
+        ...(attendeeNotes[personId]?.trim() && { role: attendeeNotes[personId].trim() }),
       })),
       reminders,
       tags,
@@ -106,13 +102,19 @@ export function EventDialog({
       createdAt: initialEvent?.createdAt ?? new Date(),
       createdBy: initialEvent?.createdBy ?? "local",
       updatedAt: new Date(),
-      ownerId: initialEvent?.ownerId,
-      relatedIds: initialEvent?.relatedIds,
-      icsUrls: initialEvent?.icsUrls,
-      integrationRefs: initialEvent?.integrationRefs,
       type: initialEvent?.type ?? "meeting",
-      notes: initialEvent?.notes,
     }
+
+    // Only add optional fields if they have values (Firestore doesn't allow undefined)
+    if (description.trim()) base.description = description.trim()
+    if (location.trim()) base.location = location.trim()
+    if (linkUrl.trim()) base.linkUrl = linkUrl.trim()
+    if (recurrence) base.recurrence = recurrence
+    if (initialEvent?.ownerId) base.ownerId = initialEvent.ownerId
+    if (initialEvent?.relatedIds) base.relatedIds = initialEvent.relatedIds
+    if (initialEvent?.icsUrls) base.icsUrls = initialEvent.icsUrls
+    if (initialEvent?.integrationRefs) base.integrationRefs = initialEvent.integrationRefs
+    if (initialEvent?.notes) base.notes = initialEvent.notes
 
     return base
   }, [

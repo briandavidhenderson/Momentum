@@ -541,6 +541,53 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // CONSENT (Privacy & Data Protection)
+    // ============================================================================
+    match /consent/{consentId} {
+      // Users can only read their own consent records
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create their own consent records
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own consent records
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own consent records
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // FUNDING ALLOCATIONS
+    // ============================================================================
+    match /fundingAllocations/{allocationId} {
+      // Users can read allocations for projects they're a member of or in their lab
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        ('labId' in resource.data && resource.data.labId == getUserLab()) ||
+        ('masterProjectId' in resource.data && isProjectMember(resource.data.masterProjectId))
+      );
+
+      // Users can create allocations for projects they're PI of or admins
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        ('masterProjectId' in request.resource.data && isProjectPI(request.resource.data.masterProjectId))
+      );
+
+      // PIs or admins can update allocations
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        ('masterProjectId' in resource.data && isProjectPI(resource.data.masterProjectId))
+      );
+
+      // PIs or admins can delete allocations
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        ('masterProjectId' in resource.data && isProjectPI(resource.data.masterProjectId))
+      );
+    }
+
+    // ============================================================================
     // CALENDAR CONNECTIONS (NEW)
     // ============================================================================
     match /calendarConnections/{connectionId} {
