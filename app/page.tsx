@@ -19,6 +19,7 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner"
 import { PrivacyDashboard } from "@/components/views/PrivacyDashboard"
 import { FundingAdmin } from "@/components/views/FundingAdmin"
 import { PersonalLedger } from "@/components/PersonalLedger"
+import { NotificationBell } from "@/components/NotificationBell"
 import { UserRole } from "@/lib/types"
 
 export default function Home() {
@@ -81,7 +82,13 @@ export default function Home() {
 
   // Show onboarding/setup
   if (authState === 'setup' && currentUser) {
-    return <OnboardingFlow user={currentUser} onComplete={handleProfileSetupComplete} />
+    return (
+      <OnboardingFlow
+        user={currentUser}
+        onComplete={handleProfileSetupComplete}
+        onCancel={handleSignOut}
+      />
+    )
   }
 
   // Main application
@@ -100,7 +107,7 @@ export default function Home() {
               </p>
             </div>
 
-            {/* User Info & Sign Out Button */}
+            {/* User Info, Notifications & Sign Out Button */}
             <div className="flex items-center gap-3">
               {currentUserProfile && (
                 <div className="text-right">
@@ -112,6 +119,7 @@ export default function Home() {
                   </p>
                 </div>
               )}
+              <NotificationBell />
               <Button
                 onClick={handleSignOut}
                 variant="outline"

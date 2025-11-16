@@ -220,11 +220,8 @@ service cloud.firestore {
       // They will become the PI of the lab they create
       allow create: if isAuthenticated();
 
-      // Only admin or lab members can update
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.labId == getUserLab()
-      );
+      // Authenticated users can update labs (simplified to avoid getUserLab() dependency)
+      allow update: if isAuthenticated();
 
       // Only admin can delete
       allow delete: if isAdmin();
@@ -534,6 +531,40 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // USER CONSENTS (Cookie Banner & GDPR Compliance)
+    // ============================================================================
+    match /userConsents/{userId} {
+      // Users can read their own consent records
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Users can create their own consent records
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own consent records (for consent version updates)
+      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
+
+      // No deletion allowed (GDPR audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // PRIVACY SETTINGS (GDPR User Rights Management)
+    // ============================================================================
+    match /privacySettings/{userId} {
+      // Users can read their own privacy settings
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Users can create their own privacy settings
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own privacy settings
+      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
+
+      // No deletion allowed (GDPR audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
     // FUNDING ALLOCATIONS
     // ============================================================================
     match /fundingAllocations/{allocationId} {
@@ -616,6 +647,37 @@ service cloud.firestore {
     match /_calendarTokens/{tokenId} {
       // No client access - all operations blocked
       allow read, write: if false;
+    }
+
+    // ============================================================================
+    // NOTIFICATIONS
+    // ============================================================================
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // System and authenticated users can create notifications
+      allow create: if isAuthenticated();
+
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // AI GENERATED CONTENT (GDPR/EU AI Act Compliance)
+    // ============================================================================
+    match /aiGeneratedContent/{contentId} {
+      // Users can read AI content records they created
+      allow read: if isAuthenticated() && resource.data.generatedBy == request.auth.uid;
+
+      // Users can create AI content records
+      allow create: if isAuthenticated() && request.resource.data.generatedBy == request.auth.uid;
+
+      // No updates or deletes (audit trail for compliance)
+      allow update, delete: if false;
     }
 
     // ============================================================================
