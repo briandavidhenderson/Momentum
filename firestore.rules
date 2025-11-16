@@ -568,12 +568,9 @@ service cloud.firestore {
     // FUNDING ALLOCATIONS
     // ============================================================================
     match /fundingAllocations/{allocationId} {
-      // Users can read allocations for projects they're a member of or in their lab
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        ('labId' in resource.data && resource.data.labId == getUserLab()) ||
-        ('masterProjectId' in resource.data && isProjectMember(resource.data.masterProjectId))
-      );
+      // All authenticated users can read funding allocations
+      // (Matches the pattern used for accounts to avoid permission errors during profile setup)
+      allow read: if isAuthenticated();
 
       // Users can create allocations for projects they're PI of or admins
       allow create: if isAuthenticated() && (
