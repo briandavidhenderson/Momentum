@@ -4,11 +4,12 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield, DollarSign, Wallet } from "lucide-react"
+import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield, DollarSign, Wallet, ListTodo } from "lucide-react"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
 import { DayToDayBoard } from "@/components/views/DayToDayBoard"
+import { MyTasksView } from "@/components/views/MyTasksView"
 import { ElectronicLabNotebook } from "@/components/views/ElectronicLabNotebook"
 import { PersonalProfilePage } from "@/components/views/PersonalProfilePage"
 import { ProfileManagement } from "@/components/views/ProfileManagement"
@@ -165,6 +166,16 @@ export default function Home() {
               Day to Day
             </Button>
             <Button
+              onClick={() => setMainView('mytasks')}
+              variant={mainView === 'mytasks' ? 'default' : 'outline'}
+              size="lg"
+              className={mainView === 'mytasks' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'mytasks' ? 'page' : undefined}
+            >
+              <ListTodo className="h-4 w-4 mr-2" aria-hidden="true" />
+              My Tasks
+            </Button>
+            <Button
               onClick={() => setMainView('eln')}
               variant={mainView === 'eln' ? 'default' : 'outline'}
               size="lg"
@@ -269,6 +280,7 @@ export default function Home() {
         {mainView === 'projects' && <ProjectDashboard />}
         {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
         {mainView === 'daytoday' && <DayToDayBoard />}
+        {mainView === 'mytasks' && <MyTasksView />}
         {mainView === 'eln' && <ElectronicLabNotebook />}
         {mainView === 'orders' && <OrdersInventory />}
         {mainView === 'equipment' && <EquipmentManagement />}
