@@ -549,8 +549,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
       const profileId = await createProfile(user.uid, profileData)
 
-      // Update user document with profileId
-      await updateUser(user.uid, { profileId })
+      // Note: createProfile already updates the user document with profileId
+      // No need to call updateUser again (would be redundant)
 
       // If creating a project, create it now
       if (state.createProject && state.projectName) {
@@ -633,15 +633,16 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         }
       }
 
-      setCurrentStep("complete")
+      // Call onComplete immediately to update app state
+      // Do this BEFORE showing the complete step to ensure state is updated
+      onComplete({
+        ...profileData,
+        id: profileId,
+      } as PersonProfile)
 
-      // Call onComplete immediately
-      setTimeout(() => {
-        onComplete({
-          ...profileData,
-          id: profileId,
-        } as PersonProfile)
-      }, 1500)
+      // Show complete message briefly, then the callback above will transition to app
+      setCurrentStep("complete")
+      setLoading(false)
     } catch (err) {
       logger.error("Error completing onboarding", err)
       setError("Failed to complete onboarding. Please try again.")
