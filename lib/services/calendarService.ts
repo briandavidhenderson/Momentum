@@ -28,6 +28,7 @@ import type {
   CalendarConflict,
   CalendarSyncLog
 } from "../types"
+import { logger } from "../logger"
 
 // ============================================================================
 // EVENTS (Calendar)
@@ -232,7 +233,7 @@ export function subscribeToCalendarConnections(
       callback(connections)
     },
     (error) => {
-      console.error("Error in subscribeToCalendarConnections:", error)
+      logger.error("Error in subscribeToCalendarConnections", error)
       callback([])
     }
   )
@@ -313,7 +314,7 @@ export function subscribeToUnresolvedConflicts(
       callback(conflicts)
     },
     (error) => {
-      console.error("Error in subscribeToUnresolvedConflicts:", error)
+      logger.error("Error in subscribeToUnresolvedConflicts", error)
       callback([])
     }
   )

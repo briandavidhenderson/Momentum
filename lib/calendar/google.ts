@@ -128,7 +128,7 @@ export async function unlinkGoogleCalendar(connectionId: string): Promise<void> 
 
     await unlink({ connectionId })
   } catch (error: any) {
-    console.error("Google Calendar unlinking error:", error)
+    logger.error("Google Calendar unlinking error", error)
     throw new Error(error.message || "Failed to unlink Google Calendar")
   }
 }
@@ -157,7 +157,7 @@ export async function syncGoogleCalendar(connectionId: string): Promise<void> {
 
     await sync({ connectionId })
   } catch (error: any) {
-    console.error("Google Calendar sync error:", error)
+    logger.error("Google Calendar sync error", error)
     throw new Error(error.message || "Failed to sync Google Calendar")
   }
 }

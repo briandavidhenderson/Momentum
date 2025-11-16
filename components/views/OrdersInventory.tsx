@@ -195,7 +195,7 @@ export function OrdersInventory() {
     try {
       await handleUpdateOrder(orderId, updates)
     } catch (error) {
-      console.error('Failed to update order status:', error)
+      logger.error('Failed to update order status', error)
       // Error is already shown by the hook
     }
   }
@@ -209,7 +209,7 @@ export function OrdersInventory() {
       await handleUpdateOrder(orderId, updates)
       setEditingOrder(null)
     } catch (error) {
-      console.error('Failed to save order edits:', error)
+      logger.error('Failed to save order edits', error)
       // Error is already shown by the hook, keep modal open for user to retry
     }
   }

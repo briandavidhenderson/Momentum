@@ -7,6 +7,7 @@ import { FirestoreUser } from "@/lib/firestoreService"
 import { profiles as staticProfiles } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
 import { useProjects } from "@/lib/hooks/useProjects"
+import { logger } from "@/lib/logger"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -466,7 +467,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
           )
           localStorage.setItem("lab-users", JSON.stringify(updatedUsers))
         } catch (error) {
-          console.error('Error parsing lab-users from localStorage:', error)
+          logger.error('Error parsing lab-users from localStorage', error)
           // Clear invalid data
           localStorage.removeItem("lab-users")
         }
@@ -547,12 +548,12 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
         saveProfiles(updatedProfiles)
         alert(`Imported ${imported.length} profile(s)`)
       } catch (error) {
-        console.error('Error importing profiles:', error)
+        logger.error('Error importing profiles', error)
         alert("Error importing file. Please ensure it's valid JSON.")
       }
     }
     reader.onerror = () => {
-      console.error('Error reading file:', reader.error)
+      logger.error('Error reading file', reader.error)
       alert("Error reading file. Please try again.")
     }
     reader.readAsText(file)

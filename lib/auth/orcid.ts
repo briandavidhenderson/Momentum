@@ -37,7 +37,7 @@ async function initiateOrcidAuth(): Promise<{ code: string; state: string }> {
   try {
     result = await startAuth({ redirect_uri: redirectUri })
   } catch (error: any) {
-    console.error("Error calling orcidAuthStart:", error)
+    logger.error("Error calling orcidAuthStart", error)
     throw new Error(`Failed to initiate ORCID authentication: ${error.message || "Unknown error"}`)
   }
 
@@ -321,7 +321,7 @@ export async function syncOrcidData(): Promise<{
       message: "ORCID data synced successfully"
     }
   } catch (error: any) {
-    console.error("ORCID sync error:", error)
+    logger.error("ORCID sync error", error)
     throw new Error(error.message || "Failed to sync ORCID data")
   }
 }
@@ -349,7 +349,7 @@ export async function resyncOrcidProfile(forceUpdate: boolean = false) {
       extractedData: result.data.extractedData,
     }
   } catch (error: any) {
-    console.error("ORCID resync error:", error)
+    logger.error("ORCID resync error", error)
     throw new Error(error.message || "Failed to resync ORCID profile")
   }
 }

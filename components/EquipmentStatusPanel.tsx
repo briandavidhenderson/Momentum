@@ -206,7 +206,7 @@ export function EquipmentStatusPanel({
 
       const device = devices.find(d => d.id === deviceId)
       if (!device) {
-        console.error('Device not found:', deviceId)
+        logger.error('Device not found', new Error(`Device ${deviceId} not found`))
         return false
       }
 
@@ -251,7 +251,7 @@ export function EquipmentStatusPanel({
 
       return true
     } catch (error) {
-      console.error('Error creating order:', error)
+      logger.error('Error creating order', error)
       if (!silent) {
         alert(`Failed to create order: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
@@ -291,7 +291,7 @@ export function EquipmentStatusPanel({
         alert(`✓ Created ${successCount} order(s) for missing supplies on ${device.name}\n\nGo to the Orders tab to complete the order details.`)
       }
     } catch (error) {
-      console.error('Error creating orders:', error)
+      logger.error('Error creating orders', error)
       alert(`Failed to create orders: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }

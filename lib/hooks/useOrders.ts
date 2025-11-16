@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Order, InventoryItem, InventoryLevel } from '@/lib/types';
 import { useAuth } from './useAuth';
 import { useToast } from '@/lib/toast';
+import { logger } from '@/lib/logger';
 import {
   createOrder,
   subscribeToOrders,
@@ -56,7 +57,7 @@ export function useOrders() {
       await createOrder(newOrder);
       success(`"${newOrder.productName}" has been added to orders.`);
     } catch (err) {
-      console.error('Error creating order:', err);
+      logger.error('Error creating order', err);
       error("Failed to create order. Please try again.");
     }
   };
@@ -66,7 +67,7 @@ export function useOrders() {
       await deleteOrder(orderId);
       success("The order has been removed.");
     } catch (err) {
-      console.error('Error deleting order:', err);
+      logger.error('Error deleting order', err);
       error("Failed to delete order. Please try again.");
     }
   };
@@ -85,7 +86,7 @@ export function useOrders() {
         success("Your changes have been saved.");
       }
     } catch (err) {
-      console.error('Error updating order:', err);
+      logger.error('Error updating order', err);
       error("Failed to update order. Please try again.");
     }
   };
@@ -122,7 +123,7 @@ export function useOrders() {
       await updateInventoryItem(item.id, { inventoryLevel: 'empty', lastOrderedDate: new Date() });
       success(`Order created for "${item.productName}".`);
     } catch (err) {
-      console.error('Error creating reorder:', err);
+      logger.error('Error creating reorder', err);
       error("Failed to create reorder. Please try again.");
     }
   };

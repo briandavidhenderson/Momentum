@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { CalendarEvent, Person, Project, Workpackage, PersonProfile } from '@/lib/types';
+import { logger } from '@/lib/logger';
 
 export function useEvents(visibleProjects: Project[], workpackages: Workpackage[], currentUser: PersonProfile | null) {
   const [manualEvents, setManualEvents] = useState<CalendarEvent[]>([]);
@@ -18,7 +19,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
 
           // Validate dates
           if (isNaN(start.getTime()) || isNaN(end.getTime()) || (createdAt && isNaN(createdAt.getTime()))) {
-            console.error('Invalid date found in stored event:', event);
+            logger.error('Invalid date found in stored event', new Error('Invalid date'), { event });
             return null;
           }
 
@@ -33,7 +34,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
 
         setManualEvents(eventsWithDates);
       } catch (error) {
-        console.error('Error parsing stored events from localStorage:', error);
+        logger.error('Error parsing stored events from localStorage', error);
         // Clear invalid data
         localStorage.removeItem('gantt-events');
       }
@@ -59,7 +60,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
       const projectEnd = new Date(project.end);
       // Validate date
       if (isNaN(projectEnd.getTime())) {
-        console.error('Invalid project end date:', project);
+        logger.error('Invalid project end date', new Error('Invalid date'), { project });
         return;
       }
       generated.push({
@@ -85,7 +86,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
         const taskEnd = new Date(task.end);
         // Validate date
         if (isNaN(taskEnd.getTime())) {
-          console.error('Invalid task end date:', task);
+          logger.error('Invalid task end date', new Error('Invalid date'), { task });
           return;
         }
         const attendees = new Set<string>();
@@ -117,7 +118,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
       const wpEnd = new Date(workpackage.end);
       // Validate date
       if (isNaN(wpEnd.getTime())) {
-        console.error('Invalid workpackage end date:', workpackage);
+        logger.error('Invalid workpackage end date', new Error('Invalid date'), { workpackage });
         return;
       }
       generated.push({

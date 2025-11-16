@@ -32,7 +32,7 @@ export function useDayToDayTasks() {
     // Get labId with fallback to legacy lab field
     const labId = profile?.labId || profile?.lab;
     if (!labId) {
-      console.error('No labId found on profile:', profile);
+      logger.error('No labId found on profile', new Error('Profile missing labId'), { profile });
       alert('Cannot create task: Your profile is missing a lab assignment. Please update your profile.');
       return;
     }
@@ -46,7 +46,7 @@ export function useDayToDayTasks() {
         labId,
       });
     } catch (error) {
-      console.error('Error creating day-to-day task:', error);
+      logger.error('Error creating day-to-day task', error);
       alert('Failed to create task: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
@@ -56,7 +56,7 @@ export function useDayToDayTasks() {
       await updateDayToDayTask(taskId, updates);
       success("Your changes have been saved.");
     } catch (err) {
-      console.error('Error updating task:', err);
+      logger.error('Error updating task', err);
       error("Failed to update task. Please try again.");
     }
   };
@@ -66,7 +66,7 @@ export function useDayToDayTasks() {
       await deleteDayToDayTask(taskId);
       success("The task has been removed.");
     } catch (err) {
-      console.error('Error deleting task:', err);
+      logger.error('Error deleting task', err);
       error("Failed to delete task. Please try again.");
     }
   };
