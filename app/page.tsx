@@ -114,20 +114,22 @@ export default function Home() {
                 variant="outline"
                 size="lg"
                 className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
+                aria-label="Sign out of your account"
               >
-                <LogOut className="h-4 w-4 mr-2" />
+                <LogOut className="h-4 w-4 mr-2" aria-hidden="true" />
                 Sign Out
               </Button>
             </div>
           </div>
 
           {/* Main Navigation Tabs */}
-          <div className="flex gap-2 flex-wrap">
+          <nav aria-label="Main navigation" className="flex gap-2 flex-wrap">
             <Button
               onClick={() => setMainView('projects')}
               variant={mainView === 'projects' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'projects' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'projects' ? 'page' : undefined}
             >
               Project Timeline
             </Button>
@@ -136,8 +138,9 @@ export default function Home() {
               variant={mainView === 'people' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'people' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'people' ? 'page' : undefined}
             >
-              <Users className="h-4 w-4 mr-2" />
+              <Users className="h-4 w-4 mr-2" aria-hidden="true" />
               People
             </Button>
             <Button
@@ -145,8 +148,9 @@ export default function Home() {
               variant={mainView === 'daytoday' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'daytoday' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'daytoday' ? 'page' : undefined}
             >
-              <Check className="h-4 w-4 mr-2" />
+              <Check className="h-4 w-4 mr-2" aria-hidden="true" />
               Day to Day
             </Button>
             <Button
@@ -154,8 +158,9 @@ export default function Home() {
               variant={mainView === 'eln' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'eln' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'eln' ? 'page' : undefined}
             >
-              <FileText className="h-4 w-4 mr-2" />
+              <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
               Lab Notebook
             </Button>
             <Button
@@ -163,8 +168,9 @@ export default function Home() {
               variant={mainView === 'orders' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'orders' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'orders' ? 'page' : undefined}
             >
-              <Package className="h-4 w-4 mr-2" />
+              <Package className="h-4 w-4 mr-2" aria-hidden="true" />
               Orders
             </Button>
             <Button
@@ -172,8 +178,9 @@ export default function Home() {
               variant={mainView === 'equipment' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'equipment' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'equipment' ? 'page' : undefined}
             >
-              <Wrench className="h-4 w-4 mr-2" />
+              <Wrench className="h-4 w-4 mr-2" aria-hidden="true" />
               Equipment
             </Button>
             <Button
@@ -181,8 +188,9 @@ export default function Home() {
               variant={mainView === 'calendar' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'calendar' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'calendar' ? 'page' : undefined}
             >
-              <Calendar className="h-4 w-4 mr-2" />
+              <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
               Calendar
             </Button>
             <Button
@@ -190,8 +198,9 @@ export default function Home() {
               variant={mainView === 'myprofile' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'myprofile' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'myprofile' ? 'page' : undefined}
             >
-              <Edit className="h-4 w-4 mr-2" />
+              <Edit className="h-4 w-4 mr-2" aria-hidden="true" />
               My Profile
             </Button>
             <Button
@@ -199,8 +208,9 @@ export default function Home() {
               variant={mainView === 'privacy' ? 'default' : 'outline'}
               size="lg"
               className={mainView === 'privacy' ? 'bg-brand-500 text-white' : ''}
+              aria-current={mainView === 'privacy' ? 'page' : undefined}
             >
-              <Shield className="h-4 w-4 mr-2" />
+              <Shield className="h-4 w-4 mr-2" aria-hidden="true" />
               Privacy
             </Button>
             {(currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
@@ -209,12 +219,13 @@ export default function Home() {
                 variant={mainView === 'profiles' ? 'default' : 'outline'}
                 size="lg"
                 className={mainView === 'profiles' ? 'bg-brand-500 text-white' : ''}
+                aria-current={mainView === 'profiles' ? 'page' : undefined}
               >
-                <Users className="h-4 w-4 mr-2" />
+                <Users className="h-4 w-4 mr-2" aria-hidden="true" />
                 All Profiles
               </Button>
             )}
-          </div>
+          </nav>
         </div>
 
         {/* Render selected view */}
