@@ -109,6 +109,32 @@ async function finalizeOrderTransaction(orderId: string, orderData: any) {
       finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
 
+    // Update FundingAccount budget (account-level tracking)
+    const accountRef = db.collection("accounts").doc(transaction.fundingAccountId)
+    const accountDoc = await accountRef.get()
+
+    if (accountDoc.exists) {
+      const account = accountDoc.data()
+      const actualCost = orderData.actualCost || transaction.amount
+
+      const newCommitted = Math.max(0, (account?.committedAmount || 0) - transaction.amount)
+      const newSpent = (account?.spentAmount || 0) + actualCost
+      const newRemaining = (account?.totalBudget || 0) - newCommitted - newSpent
+
+      await accountRef.update({
+        committedAmount: newCommitted,
+        spentAmount: newSpent,
+        remainingBudget: newRemaining,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+
+      functions.logger.info(`Updated account budget for ${transaction.fundingAccountId}`, {
+        committed: newCommitted,
+        spent: newSpent,
+        remaining: newRemaining,
+      })
+    }
+
     // Update allocation: move from committed to spent
     if (transaction.allocationId) {
       const allocationRef = db.collection("fundingAllocations").doc(transaction.allocationId)
@@ -203,6 +229,28 @@ async function cancelOrderTransaction(orderId: string, orderData: any) {
       status: "CANCELLED",
       finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
+
+    // Update FundingAccount budget (account-level tracking)
+    const accountRef = db.collection("accounts").doc(transaction.fundingAccountId)
+    const accountDoc = await accountRef.get()
+
+    if (accountDoc.exists) {
+      const account = accountDoc.data()
+
+      const newCommitted = Math.max(0, (account?.committedAmount || 0) - transaction.amount)
+      const newRemaining = (account?.totalBudget || 0) - newCommitted - (account?.spentAmount || 0)
+
+      await accountRef.update({
+        committedAmount: newCommitted,
+        remainingBudget: newRemaining,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+
+      functions.logger.info(`Updated account budget for cancelled order ${transaction.fundingAccountId}`, {
+        committed: newCommitted,
+        remaining: newRemaining,
+      })
+    }
 
     // Update allocation: release committed funds
     if (transaction.allocationId) {

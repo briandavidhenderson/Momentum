@@ -6,6 +6,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   updateDoc,
@@ -19,7 +20,7 @@ import {
 } from "firebase/firestore"
 import { getFirebaseDb } from "../firebase"
 import { logger } from "../logger"
-import type { Funder, FundingAccount, FundingAllocation } from "../types"
+import type { Funder, FundingAccount, FundingAllocation, FundingTransaction } from "../types"
 
 // ============================================================================
 // FUNDERS
@@ -248,4 +249,78 @@ export function subscribeToFundingAllocations(
       }
     }
   )
+}
+
+// ============================================================================
+// FUNDING TRANSACTIONS
+// ============================================================================
+
+/**
+ * Creates a new funding transaction (ledger entry)
+ * Used for tracking ORDER_COMMIT, ORDER_RECEIVED, ORDER_CANCELLED, ADJUSTMENTS
+ */
+export async function createFundingTransaction(
+  transactionData: Omit<FundingTransaction, 'id' | 'createdAt'>
+): Promise<string> {
+  const db = getFirebaseDb()
+  const transactionRef = doc(collection(db, "fundingTransactions"))
+  const transactionId = transactionRef.id
+
+  await setDoc(transactionRef, {
+    ...transactionData,
+    id: transactionId,
+    createdAt: new Date().toISOString(),
+  })
+
+  logger.info(`Created funding transaction ${transactionId}`, {
+    type: transactionData.type,
+    amount: transactionData.amount,
+    orderId: transactionData.orderId,
+    allocationId: transactionData.allocationId,
+  })
+
+  return transactionId
+}
+
+/**
+ * Updates a funding allocation's budget tracking
+ * Used when orders are placed, received, or cancelled
+ */
+export async function updateAllocationBudget(
+  allocationId: string,
+  updates: {
+    currentSpent?: number
+    currentCommitted?: number
+    remainingBudget?: number
+    status?: FundingAllocation['status']
+  }
+): Promise<void> {
+  const db = getFirebaseDb()
+  const allocationRef = doc(db, "fundingAllocations", allocationId)
+
+  const updateData: any = {
+    ...updates,
+    updatedAt: new Date().toISOString(),
+    lastTransactionAt: new Date().toISOString(),
+  }
+
+  await updateDoc(allocationRef, updateData)
+
+  logger.info(`Updated allocation budget ${allocationId}`, updates)
+}
+
+/**
+ * Gets an allocation by ID with error handling
+ */
+export async function getAllocation(allocationId: string): Promise<FundingAllocation | null> {
+  const db = getFirebaseDb()
+  const allocationRef = doc(db, "fundingAllocations", allocationId)
+  const allocationDoc = await getDoc(allocationRef)
+
+  if (!allocationDoc.exists()) {
+    logger.warn(`Allocation ${allocationId} not found`)
+    return null
+  }
+
+  return allocationDoc.data() as FundingAllocation
 }
