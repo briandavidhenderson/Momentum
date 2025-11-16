@@ -26,6 +26,11 @@ import {
   notifyAllocationCreated,
   notifyTransactionFinalized,
 } from "./notifications"
+import {
+  generateExperimentSuggestions,
+  generateProjectDescription,
+  suggestMaintenanceSchedule,
+} from "./openai"
 
 // Export GDPR functions
 export {
@@ -58,6 +63,13 @@ export {
   notifyLargeOrder,
   notifyAllocationCreated,
   notifyTransactionFinalized,
+}
+
+// Export OpenAI functions
+export {
+  generateExperimentSuggestions,
+  generateProjectDescription,
+  suggestMaintenanceSchedule,
 }
 
 /**
