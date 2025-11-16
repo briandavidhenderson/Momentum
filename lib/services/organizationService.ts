@@ -178,7 +178,7 @@ export async function getLabs(instituteId?: string): Promise<Lab[]> {
   const db = getFirebaseDb()
   let q
   if (instituteId) {
-    q = query(collection(db, "institutes"), where("instituteId", "==", instituteId))
+    q = query(collection(db, "labs"), where("instituteId", "==", instituteId))
   } else {
     q = collection(db, "labs")
   }

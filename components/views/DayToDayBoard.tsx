@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, GripVertical, Trash2, Edit2, Clock } from "lucide-react"
+import { Plus, GripVertical, Trash2, Edit2, Clock, Loader2, AlertCircle, ListTodo } from "lucide-react"
 import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
@@ -471,13 +471,12 @@ function DayToDayTaskEditDialog({
 }
 
 export function DayToDayBoard() {
-  const { currentUser } = useAuth()
+  const { currentUser, currentUserProfile } = useAuth()
   // Get state and handlers from context
   const {
     dayToDayTasks,
     people,
     allProfiles,
-    currentUserProfile,
     projects,
     workpackages,
     handleCreateDayToDayTask: onCreateTask,
@@ -489,6 +488,9 @@ export function DayToDayBoard() {
   const tasks = (dayToDayTasks || []) as DayToDayTask[]
   const allProjects = (projects || [])
   const allWorkpackages = (workpackages || [])
+
+  // Loading state
+  const isLoading = !currentUserProfile
 
   const [activeTask, setActiveTask] = useState<DayToDayTask | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState("")
@@ -600,6 +602,21 @@ export function DayToDayBoard() {
     setShowNewTaskInput(false)
   }
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 mx-auto mb-4 text-brand-500 animate-spin" />
+          <h3 className="text-lg font-semibold mb-2">Loading Day-to-Day Tasks</h3>
+          <p className="text-sm text-muted-foreground">
+            Fetching your tasks...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
@@ -678,6 +695,26 @@ export function DayToDayBoard() {
         </div>
       )}
 
+      {/* Empty state - when no tasks exist */}
+      {tasks.length === 0 && !showNewTaskInput && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <ListTodo className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-30" />
+            <h3 className="text-xl font-semibold mb-2">No Tasks Yet</h3>
+            <p className="text-muted-foreground mb-6">
+              Create your first day-to-day task to start tracking your work.
+              Tasks help you organize and prioritize your daily activities.
+            </p>
+            <Button onClick={() => setShowNewTaskInput(true)} size="lg">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Your First Task
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Task board - only show when tasks exist */}
+      {tasks.length > 0 && (
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -782,6 +819,7 @@ export function DayToDayBoard() {
           )}
         </DragOverlay>
       </DndContext>
+      )}
 
       <DayToDayTaskEditDialog
         open={isEditDialogOpen}
