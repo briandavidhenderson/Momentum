@@ -38,13 +38,19 @@ export interface FirestoreOrder {
   createdDate: Timestamp
   chargeToAccount?: string
   accountId?: string
+  accountName?: string
+  fundingAllocationId?: string
+  allocationName?: string
+  labId?: string
   category?: string
   subcategory?: string
   priceExVAT?: number
+  currency?: string
+  supplier?: string
 }
 
 /**
- * Create a new order
+ * Create a new order with funding transaction and budget tracking
  * @returns The ID of the newly created order
  */
 export async function createOrder(orderData: Omit<Order, 'id'> & {
@@ -56,12 +62,87 @@ export async function createOrder(orderData: Omit<Order, 'id'> & {
   // Feature #7: Update budget tracking when creating order
   if (orderData.accountId && orderData.priceExVAT) {
     const { updateAccountBudget } = await import('../budgetUtils')
+    const {
+      createFundingTransaction,
+      updateAllocationBudget,
+      getAllocation
+    } = await import('./fundingService')
+
+    // Update account-level budget
     await updateAccountBudget(
       orderData.accountId,
       orderData.priceExVAT,
       null, // old status (creating new order)
       orderData.status // new status
     )
+
+    // If order is linked to an allocation, update allocation and create transaction
+    if (orderData.fundingAllocationId) {
+      const allocation = await getAllocation(orderData.fundingAllocationId)
+
+      if (allocation) {
+        // Only update allocation if order is in "ordered" status (committed)
+        if (orderData.status === 'ordered') {
+          const newCommitted = allocation.currentCommitted + orderData.priceExVAT
+          const newRemaining = (allocation.allocatedAmount || 0) - allocation.currentSpent - newCommitted
+
+          await updateAllocationBudget(orderData.fundingAllocationId, {
+            currentCommitted: newCommitted,
+            remainingBudget: newRemaining,
+            status: newRemaining <= 0 ? 'exhausted' : allocation.status,
+          })
+
+          // Create ORDER_COMMIT transaction
+          await createFundingTransaction({
+            fundingAccountId: orderData.accountId,
+            fundingAccountName: orderData.accountName || '',
+            allocationId: orderData.fundingAllocationId,
+            allocationName: orderData.allocationName,
+            labId: orderData.labId || '',
+            orderId: orderId,
+            orderNumber: orderData.catNum || orderId.substring(0, 8),
+            amount: orderData.priceExVAT,
+            currency: orderData.currency,
+            type: 'ORDER_COMMIT',
+            status: 'PENDING',
+            description: `Order placed: ${orderData.productName}`,
+            createdBy: orderData.createdBy,
+            supplierName: orderData.supplier,
+          })
+        }
+
+        // If order is directly received, create FINAL transaction
+        if (orderData.status === 'received') {
+          const newSpent = allocation.currentSpent + orderData.priceExVAT
+          const newRemaining = (allocation.allocatedAmount || 0) - newSpent - allocation.currentCommitted
+
+          await updateAllocationBudget(orderData.fundingAllocationId, {
+            currentSpent: newSpent,
+            remainingBudget: newRemaining,
+            status: newRemaining <= 0 ? 'exhausted' : allocation.status,
+          })
+
+          // Create ORDER_RECEIVED transaction
+          await createFundingTransaction({
+            fundingAccountId: orderData.accountId,
+            fundingAccountName: orderData.accountName || '',
+            allocationId: orderData.fundingAllocationId,
+            allocationName: orderData.allocationName,
+            labId: orderData.labId || '',
+            orderId: orderId,
+            orderNumber: orderData.catNum || orderId.substring(0, 8),
+            amount: orderData.priceExVAT,
+            currency: orderData.currency,
+            type: 'ORDER_RECEIVED',
+            status: 'FINAL',
+            description: `Order received: ${orderData.productName}`,
+            createdBy: orderData.createdBy,
+            finalizedAt: new Date().toISOString(),
+            supplierName: orderData.supplier,
+          })
+        }
+      }
+    }
   }
 
   await setDoc(orderRef, {
@@ -95,7 +176,7 @@ export async function getOrders(): Promise<Order[]> {
 }
 
 /**
- * Update an order
+ * Update an order and sync budget changes with transactions
  */
 export async function updateOrder(orderId: string, updates: Partial<Order>): Promise<void> {
   const db = getFirebaseDb()
@@ -112,12 +193,67 @@ export async function updateOrder(orderId: string, updates: Partial<Order>): Pro
 
       if (oldStatus !== newStatus && currentOrder.accountId && currentOrder.priceExVAT) {
         const { updateAccountBudget } = await import('../budgetUtils')
+        const {
+          createFundingTransaction,
+          updateAllocationBudget,
+          getAllocation
+        } = await import('./fundingService')
+
+        // Update account-level budget
         await updateAccountBudget(
           currentOrder.accountId,
           currentOrder.priceExVAT,
           oldStatus as OrderStatus | null,
           newStatus as OrderStatus | null
         )
+
+        // Update allocation-level budget if order has an allocation
+        if (currentOrder.fundingAllocationId) {
+          const allocation = await getAllocation(currentOrder.fundingAllocationId)
+
+          if (allocation) {
+            // Calculate new budget values based on status transition
+            let newSpent = allocation.currentSpent
+            let newCommitted = allocation.currentCommitted
+
+            // Moving to 'ordered' - add to committed
+            if (oldStatus === 'to-order' && newStatus === 'ordered') {
+              newCommitted += currentOrder.priceExVAT
+
+              // Create ORDER_COMMIT transaction
+              await createFundingTransaction({
+                fundingAccountId: currentOrder.accountId!,
+                fundingAccountName: currentOrder.accountName || '',
+                allocationId: currentOrder.fundingAllocationId,
+                labId: currentOrder.labId || '',
+                orderId: orderId,
+                amount: currentOrder.priceExVAT,
+                currency: currentOrder.currency || 'EUR',
+                type: 'ORDER_COMMIT',
+                status: 'PENDING',
+                description: `Order committed: ${currentOrder.productName}`,
+                createdBy: currentOrder.createdBy,
+              })
+            }
+
+            // Moving back to 'to-order' - remove from committed
+            if (oldStatus === 'ordered' && newStatus === 'to-order') {
+              newCommitted -= currentOrder.priceExVAT
+            }
+
+            // Note: Moving to 'received' is handled by Cloud Function
+            // The Cloud Function will create ORDER_RECEIVED and update budgets
+
+            const newRemaining = (allocation.allocatedAmount || 0) - newSpent - newCommitted
+
+            await updateAllocationBudget(currentOrder.fundingAllocationId, {
+              currentSpent: newSpent,
+              currentCommitted: newCommitted,
+              remainingBudget: newRemaining,
+              status: newRemaining <= 0 ? 'exhausted' : 'active',
+            })
+          }
+        }
       }
     }
   }
