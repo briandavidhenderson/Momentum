@@ -1344,7 +1344,7 @@ function ProjectDialog({
   onSave: (project: ProfileProject) => void
   currentUserProfile?: PersonProfile | null
 }) {
-  const allProfiles = useProfiles(currentUserProfile?.lab || null)
+  const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const [formData, setFormData] = useState<ProfileProject>(project)
 
   useEffect(() => {

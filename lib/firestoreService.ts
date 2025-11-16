@@ -240,7 +240,9 @@ export async function getProfileByUserId(userId: string): Promise<PersonProfile 
     return await retryWithBackoff(async () => {
       const q = query(collection(db, "personProfiles"), where("userId", "==", userId))
       const querySnapshot = await getDocs(q)
-      if (querySnapshot.empty) return null
+      if (querySnapshot.empty || !querySnapshot.docs[0]) {
+        return null
+      }
       return querySnapshot.docs[0].data() as PersonProfile
     })
   } catch (error: any) {
@@ -252,12 +254,6 @@ export async function getProfileByUserId(userId: string): Promise<PersonProfile 
     }
     return null
   }
-}
-
-export async function getAllProfiles(): Promise<PersonProfile[]> {
-  const db = getFirebaseDb()
-  const querySnapshot = await getDocs(collection(db, "personProfiles"))
-  return querySnapshot.docs.map(doc => doc.data() as PersonProfile)
 }
 
 /**
@@ -968,7 +964,7 @@ export async function createProject(projectData: Omit<Project, 'id'> & {
   let labId: string | undefined = projectData.labId
   if (!labId) {
     const profile = await getProfileByUserId(projectData.createdBy)
-    labId = profile?.lab || undefined
+    labId = profile?.labId || undefined
   }
   
   await setDoc(projectRef, {
