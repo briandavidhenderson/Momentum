@@ -227,7 +227,16 @@ export default function Home() {
         {mainView === 'calendar' && <CalendarEvents />}
         {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
         {mainView === 'privacy' && <PrivacyDashboard />}
-        {mainView === 'profiles' && <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+        {mainView === 'profiles' && (currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
+          <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />
+        )}
+        {mainView === 'profiles' && !(currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
+          <div className="bg-white rounded-xl shadow-card p-8 text-center">
+            <Shield className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-semibold mb-2">Access Restricted</h2>
+            <p className="text-muted-foreground">You need administrator privileges to access the Profile Management panel.</p>
+          </div>
+        )}
       </div>
 
       {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}
