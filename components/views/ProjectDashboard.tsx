@@ -11,7 +11,7 @@ import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
 import { DependencyPickerDialog } from "@/components/DependencyPickerDialog";
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
 import { MasterProject, Task, Workpackage, Project, Person, ProfileProject, Subtask } from "@/lib/types";
-import { Plus, FolderKanban, PackagePlus, Trash2 } from "lucide-react";
+import { Plus, FolderKanban, PackagePlus, Trash2, Loader2 } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
 import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
@@ -929,6 +929,21 @@ export function ProjectDashboard() {
           // For now, we just remove the reference
         }}
       />
+    )
+  }
+
+  // Loading state
+  if (!profile) {
+    return (
+      <div className="h-[calc(100vh-12rem)] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 mx-auto mb-4 text-brand-500 animate-spin" />
+          <h3 className="text-lg font-semibold mb-2">Loading Projects</h3>
+          <p className="text-sm text-muted-foreground">
+            Fetching your project data...
+          </p>
+        </div>
+      </div>
     )
   }
 
