@@ -135,6 +135,77 @@ function parseWorks(worksGroup: any): OrcidWorkSummary[] {
 }
 
 /**
+ * Funding entry from ORCID record
+ */
+export interface OrcidFundingEntry {
+  title: string
+  organization: string
+  type?: string
+  startDate?: {
+    year?: number
+    month?: number
+    day?: number
+  }
+  endDate?: {
+    year?: number
+    month?: number
+    day?: number
+  } | null
+  amount?: string
+  currency?: string
+  grantNumber?: string
+  url?: string
+  putCode?: string
+}
+
+/**
+ * Parse funding from ORCID record
+ */
+function parseFundings(fundingGroups: any): OrcidFundingEntry[] {
+  if (!fundingGroups || !Array.isArray(fundingGroups)) {
+    return []
+  }
+
+  return fundingGroups
+    .map((group: any) => {
+      const fundingSummary = group["funding-summary"]?.[0]
+      if (!fundingSummary) return null
+
+      const org = fundingSummary.organization
+      const title = fundingSummary.title?.title?.value || "Untitled Funding"
+
+      const funding: OrcidFundingEntry = {
+        title,
+        organization: org?.name || "Unknown",
+        type: fundingSummary.type || undefined,
+        startDate: parseOrcidDate(fundingSummary["start-date"]),
+        endDate: fundingSummary["end-date"] ? parseOrcidDate(fundingSummary["end-date"]) : null,
+        url: fundingSummary.url?.value || undefined,
+        putCode: fundingSummary["put-code"]?.toString() || undefined,
+      }
+
+      // Parse amount and currency if available
+      const amount = fundingSummary.amount
+      if (amount) {
+        funding.amount = amount.value
+        funding.currency = amount["currency-code"]
+      }
+
+      // Parse external IDs for grant number
+      const externalIds = fundingSummary["external-ids"]?.["external-id"]
+      if (externalIds && externalIds.length > 0) {
+        const grantId = externalIds.find((id: any) => id["external-id-type"] === "grant_number")
+        if (grantId) {
+          funding.grantNumber = grantId["external-id-value"]
+        }
+      }
+
+      return funding
+    })
+    .filter((f): f is OrcidFundingEntry => f !== null)
+}
+
+/**
  * Fetch full ORCID record from the public API
  */
 export async function fetchOrcidRecord(
@@ -193,6 +264,9 @@ export async function fetchOrcidRecord(
     // Parse works
     const works = parseWorks(activities.works?.group || [])
 
+    // Parse fundings
+    const fundings = parseFundings(activities.fundings?.group || [])
+
     // Build the ORCID record
     const record: OrcidRecord = {
       orcidId,
@@ -206,6 +280,7 @@ export async function fetchOrcidRecord(
       educations,
       qualifications,
       works,
+      fundings,
       raw: json, // Store full JSON for debugging
       lastSyncedAt: new Date().toISOString(),
     }
@@ -298,4 +373,95 @@ export function getLatestAffiliation(record: OrcidRecord): string | undefined {
   return latest.roleTitle
     ? `${latest.roleTitle} at ${latest.organisation}`
     : latest.organisation
+}
+
+/**
+ * Format date object as ISO string
+ */
+function formatOrcidDateToISO(dateObj?: { year?: number; month?: number; day?: number } | null): string | undefined {
+  if (!dateObj || !dateObj.year) return undefined
+
+  const year = dateObj.year
+  const month = dateObj.month || 1
+  const day = dateObj.day || 1
+
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/**
+ * Convert OrcidRecord to OrcidProfileData (format expected by frontend)
+ * This transforms the rich OrcidRecord format into the simplified profile format
+ */
+export function convertOrcidRecordToProfileData(record: OrcidRecord): any {
+  // Import types from lib/types/orcid.types.ts
+  // We use 'any' here to avoid circular dependencies but the actual type is OrcidProfileData
+
+  const profileData: any = {
+    name: formatOrcidName(record),
+    email: null, // Email is typically in orcidClaims, not in the record
+    biography: record.biography || undefined,
+    employment: [],
+    education: [],
+    works: [],
+    funding: [],
+  }
+
+  // Convert employments to simplified format
+  if (record.employments && record.employments.length > 0) {
+    profileData.employment = record.employments.map((emp) => ({
+      organization: emp.organisation,
+      role: emp.roleTitle,
+      department: emp.departmentName,
+      startDate: formatOrcidDateToISO(emp.startDate),
+      endDate: formatOrcidDateToISO(emp.endDate),
+      location: [emp.city, emp.region, emp.country].filter(Boolean).join(", ") || undefined,
+    }))
+  }
+
+  // Convert educations (and qualifications) to simplified format
+  const allEducation = [
+    ...(record.educations || []),
+    ...(record.qualifications || []),
+  ]
+  if (allEducation.length > 0) {
+    profileData.education = allEducation.map((edu) => ({
+      organization: edu.organisation,
+      degree: edu.roleTitle,
+      field: edu.departmentName,
+      startDate: formatOrcidDateToISO(edu.startDate),
+      endDate: formatOrcidDateToISO(edu.endDate),
+      location: [edu.city, edu.region, edu.country].filter(Boolean).join(", ") || undefined,
+    }))
+  }
+
+  // Convert works to simplified format
+  if (record.works && record.works.length > 0) {
+    profileData.works = record.works.map((work) => ({
+      title: work.title,
+      type: work.type,
+      publicationDate: work.year
+        ? `${work.year}${work.month ? `-${String(work.month).padStart(2, '0')}` : ''}${work.day ? `-${String(work.day).padStart(2, '0')}` : ''}`
+        : undefined,
+      journal: work.journal,
+      doi: work.doi,
+      url: work.url,
+      contributors: work.contributors,
+    }))
+  }
+
+  // Convert fundings to simplified format
+  if (record.fundings && record.fundings.length > 0) {
+    profileData.funding = record.fundings.map((fund: any) => ({
+      title: fund.title,
+      organization: fund.organization,
+      type: fund.type,
+      startDate: formatOrcidDateToISO(fund.startDate),
+      endDate: formatOrcidDateToISO(fund.endDate),
+      amount: fund.amount && fund.currency ? `${fund.amount} ${fund.currency}` : fund.amount,
+      grantNumber: fund.grantNumber,
+      url: fund.url,
+    }))
+  }
+
+  return profileData
 }

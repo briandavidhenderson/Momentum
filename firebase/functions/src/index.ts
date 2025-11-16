@@ -289,7 +289,7 @@ async function fetchOrcidRecord(orcidId: string, accessToken: string, config: Or
 }
 
 /**
- * Extract useful profile data from ORCID record
+ * Extract useful profile data from ORCID record for auto-populating profile fields
  */
 function extractOrcidProfileData(record: any) {
   const data: any = {}
@@ -361,6 +361,166 @@ function extractOrcidProfileData(record: any) {
   }
 
   return data
+}
+
+/**
+ * Format ORCID date object to ISO string
+ */
+function formatOrcidDateToISO(dateObj: any): string | undefined {
+  if (!dateObj || !dateObj.year?.value) return undefined
+
+  const year = parseInt(dateObj.year.value)
+  const month = dateObj.month?.value ? parseInt(dateObj.month.value) : 1
+  const day = dateObj.day?.value ? parseInt(dateObj.day.value) : 1
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+/**
+ * Parse ORCID record into structured OrcidProfileData format
+ * This creates the format expected by the frontend PersonalProfilePage
+ */
+function parseOrcidRecordToProfileData(record: any): any {
+  const profileData: any = {
+    biography: undefined,
+    employment: [],
+    education: [],
+    works: [],
+    funding: [],
+  }
+
+  try {
+    const person = record?.person
+    const activities = record?.["activities-summary"]
+
+    // Parse biography
+    if (person?.biography?.content) {
+      profileData.biography = person.biography.content
+    }
+
+    // Parse employment
+    const employmentGroups = activities?.employments?.["affiliation-group"] || []
+    profileData.employment = employmentGroups
+      .map((group: any) => {
+        const summary = group?.summaries?.[0]?.["employment-summary"]
+        if (!summary) return null
+
+        const org = summary.organization
+        return {
+          organization: org?.name || "Unknown",
+          role: summary["role-title"] || undefined,
+          department: summary["department-name"] || undefined,
+          startDate: formatOrcidDateToISO(summary["start-date"]),
+          endDate: formatOrcidDateToISO(summary["end-date"]),
+          location: [
+            org?.address?.city,
+            org?.address?.region,
+            org?.address?.country,
+          ].filter(Boolean).join(", ") || undefined,
+        }
+      })
+      .filter((e: any) => e !== null)
+
+    // Parse education (including qualifications)
+    const educationGroups = activities?.educations?.["affiliation-group"] || []
+    const qualificationGroups = activities?.qualifications?.["affiliation-group"] || []
+    const allEducation = [...educationGroups, ...qualificationGroups]
+
+    profileData.education = allEducation
+      .map((group: any) => {
+        const summary = group?.summaries?.[0]?.["education-summary"] || group?.summaries?.[0]?.["qualification-summary"]
+        if (!summary) return null
+
+        const org = summary.organization
+        return {
+          organization: org?.name || "Unknown",
+          degree: summary["role-title"] || undefined,
+          field: summary["department-name"] || undefined,
+          startDate: formatOrcidDateToISO(summary["start-date"]),
+          endDate: formatOrcidDateToISO(summary["end-date"]),
+          location: [
+            org?.address?.city,
+            org?.address?.region,
+            org?.address?.country,
+          ].filter(Boolean).join(", ") || undefined,
+        }
+      })
+      .filter((e: any) => e !== null)
+
+    // Parse works/publications
+    const workGroups = activities?.works?.group || []
+    profileData.works = workGroups
+      .map((group: any) => {
+        const workSummary = group["work-summary"]?.[0]
+        if (!workSummary) return null
+
+        const title = workSummary.title?.title?.value || "Untitled"
+        const publicationDate = workSummary["publication-date"]
+
+        // Extract DOI
+        const externalIds = workSummary["external-ids"]?.["external-id"] || []
+        const doiId = externalIds.find((id: any) => id["external-id-type"] === "doi")
+
+        const year = publicationDate?.year?.value ? parseInt(publicationDate.year.value) : undefined
+        const month = publicationDate?.month?.value ? parseInt(publicationDate.month.value) : undefined
+        const day = publicationDate?.day?.value ? parseInt(publicationDate.day.value) : undefined
+
+        let pubDateStr = undefined
+        if (year) {
+          pubDateStr = `${year}${month ? `-${String(month).padStart(2, "0")}` : ""}${day ? `-${String(day).padStart(2, "0")}` : ""}`
+        }
+
+        return {
+          title,
+          type: workSummary.type || undefined,
+          publicationDate: pubDateStr,
+          journal: workSummary["journal-title"]?.value || undefined,
+          doi: doiId?.["external-id-value"] || undefined,
+          url: workSummary.url?.value || undefined,
+        }
+      })
+      .filter((w: any) => w !== null)
+
+    // Parse funding
+    const fundingGroups = activities?.fundings?.group || []
+    profileData.funding = fundingGroups
+      .map((group: any) => {
+        const fundingSummary = group["funding-summary"]?.[0]
+        if (!fundingSummary) return null
+
+        const org = fundingSummary.organization
+        const title = fundingSummary.title?.title?.value || "Untitled Funding"
+
+        // Parse amount and currency
+        const amount = fundingSummary.amount
+        let amountStr = undefined
+        if (amount?.value && amount["currency-code"]) {
+          amountStr = `${amount.value} ${amount["currency-code"]}`
+        } else if (amount?.value) {
+          amountStr = amount.value
+        }
+
+        // Parse grant number
+        const externalIds = fundingSummary["external-ids"]?.["external-id"] || []
+        const grantId = externalIds.find((id: any) => id["external-id-type"] === "grant_number")
+
+        return {
+          title,
+          organization: org?.name || "Unknown",
+          type: fundingSummary.type || undefined,
+          startDate: formatOrcidDateToISO(fundingSummary["start-date"]),
+          endDate: formatOrcidDateToISO(fundingSummary["end-date"]),
+          amount: amountStr,
+          grantNumber: grantId?.["external-id-value"] || undefined,
+          url: fundingSummary.url?.value || undefined,
+        }
+      })
+      .filter((f: any) => f !== null)
+  } catch (error) {
+    console.error("Error parsing ORCID record to profile data:", error)
+  }
+
+  return profileData
 }
 
 export const orcidLinkAccount = functions.https.onCall(async (data, context) => {
@@ -463,18 +623,29 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       orcidVerified: true,
     })
 
+    // Parse ORCID data into structured format expected by frontend
+    const parsedOrcidData = orcidData ? parseOrcidRecordToProfileData(orcidData) : {}
+
     // Prepare update data for Firestore
     const firestoreUpdate: any = {
       orcidId,
       orcidUrl: `${config.baseUrl}/${orcidId}`,
       orcidVerified: true,
       orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
-      orcidData: orcidData || {}, // Store rich ORCID data for display
+      orcidData: parsedOrcidData, // Store structured ORCID data for display
       orcidClaims: {
         name: name || extractedData.firstName ? `${extractedData.firstName || ""} ${extractedData.lastName || ""}`.trim() : null,
         email: extractedData.email || null,
       },
     }
+
+    console.log(`Parsed ORCID data:`, {
+      biography: !!parsedOrcidData.biography,
+      employmentCount: parsedOrcidData.employment?.length || 0,
+      educationCount: parsedOrcidData.education?.length || 0,
+      worksCount: parsedOrcidData.works?.length || 0,
+      fundingCount: parsedOrcidData.funding?.length || 0,
+    })
 
     // Get user's profileId from users collection
     const userDoc = await admin.firestore().collection("users").doc(context.auth.uid).get()
@@ -586,17 +757,29 @@ export const orcidResyncProfile = functions.https.onCall(async (data, context) =
 
     const orcidRecord = await response.json()
 
-    // Extract profile data from ORCID record
+    // Extract profile data from ORCID record for auto-population
     const extractedData = extractOrcidProfileData(orcidRecord)
+
+    // Parse ORCID record into structured format expected by frontend
+    const parsedOrcidData = parseOrcidRecordToProfileData(orcidRecord)
 
     // Prepare update data for Firestore
     const firestoreUpdate: any = {
       orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
+      orcidData: parsedOrcidData, // Update structured ORCID data
       orcidClaims: {
         name: extractedData.firstName ? `${extractedData.firstName || ""} ${extractedData.lastName || ""}`.trim() : null,
         email: extractedData.email || null,
       },
     }
+
+    console.log(`Resynced ORCID data for ${orcidId}:`, {
+      biography: !!parsedOrcidData.biography,
+      employmentCount: parsedOrcidData.employment?.length || 0,
+      educationCount: parsedOrcidData.education?.length || 0,
+      worksCount: parsedOrcidData.works?.length || 0,
+      fundingCount: parsedOrcidData.funding?.length || 0,
+    })
 
     // Option to force update all fields (if requested)
     const forceUpdate = data?.forceUpdate || false

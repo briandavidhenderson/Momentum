@@ -77,6 +77,9 @@ export interface OrcidRecord {
   // Works/Publications
   works?: OrcidWorkSummary[]
 
+  // Fundings (will be imported from orcidService.ts)
+  fundings?: any[] // OrcidFundingEntry[] - avoiding circular dependency
+
   // Metadata
   raw?: any // Full JSON from ORCID API for debugging
   lastSyncedAt: string // ISO string
@@ -85,8 +88,10 @@ export interface OrcidRecord {
 
 /**
  * Subset of ORCID data to display in profile UI
+ * DEPRECATED: Use OrcidProfileData from lib/types/orcid.types.ts instead
+ * This type is kept for backward compatibility but should not be used in new code.
  */
-export interface OrcidProfileData {
+export interface OrcidProfileSummary {
   orcidId: string
   name: string
   biography?: string
