@@ -23,6 +23,7 @@ import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { useAppContext } from "@/lib/AppContext"
+import { useAuth } from "@/lib/hooks/useAuth"
 import { notifyTaskAssigned, notifyTaskReassigned } from "@/lib/notificationUtils"
 import { PersonProfile } from "@/lib/types"
 import { logger } from "@/lib/logger"
@@ -451,6 +452,7 @@ function DayToDayTaskEditDialog({
 }
 
 export function DayToDayBoard() {
+  const { currentUser } = useAuth()
   // Get state and handlers from context
   const {
     dayToDayTasks,

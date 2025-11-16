@@ -14,11 +14,9 @@ import { useAuth } from "@/lib/hooks/useAuth"
 export function CalendarEvents() {
   const {
     events,
-    people,
     handleCreateEvent,
     handleUpdateEvent,
     handleDeleteEvent,
-    people = [],  // Fix Bug #9: Get people from context for event attendees
   } = useAppContext()
 
   const { currentUserProfile: profile } = useAuth()

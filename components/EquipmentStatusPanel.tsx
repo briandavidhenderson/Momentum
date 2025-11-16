@@ -63,7 +63,13 @@ export function EquipmentStatusPanel({
   const [checkStockItem, setCheckStockItem] = useState<{ deviceId: string; supplyId: string; currentQty: number } | null>(null)
   const [tempStockQty, setTempStockQty] = useState<string>("")
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
-  const [newDeviceForm, setNewDeviceForm] = useState({
+  const [newDeviceForm, setNewDeviceForm] = useState<{
+    name: string
+    make: string
+    model: string
+    serialNumber: string
+    maintenanceDays: number
+  }>({
     name: '',
     make: '',
     model: '',
@@ -141,14 +147,58 @@ export function EquipmentStatusPanel({
       return
     }
 
-    setCheckStockSupply(enriched)
+    setCheckStockItem({
+      deviceId,
+      supplyId,
+      currentQty: enriched.currentQuantity
+    })
+    setTempStockQty(enriched.currentQuantity.toString())
+  }
+
+  // Handle save stock - updates inventory quantity
+  const handleSaveStock = () => {
+    if (!checkStockItem) return
+
+    const device = devices.find(d => d.id === checkStockItem.deviceId)
+    if (!device) return
+
+    const supply = device.supplies.find(s => s.id === checkStockItem.supplyId)
+    if (!supply || !supply.inventoryItemId) return
+
+    const newQty = parseInt(tempStockQty)
+    if (isNaN(newQty) || newQty < 0) {
+      alert('Please enter a valid quantity')
+      return
+    }
+
+    // Update inventory using the utility function
+    const updatedItem = updateInventoryQuantity(supply.inventoryItemId, newQty, inventory)
+    if (updatedItem) {
+      const updatedInventory = inventory.map(item =>
+        item.id === updatedItem.id ? updatedItem : item
+      )
+      onInventoryUpdate(updatedInventory)
+    }
+
+    // Close dialog
+    setCheckStockItem(null)
+    setTempStockQty('')
   }
 
   // Handle reorder - adds to "To Order" section
   // FIXED: Now takes explicit neededQty to avoid calculation errors
   const handleReorder = async (deviceId: string, supply: EquipmentSupply, explicitNeededQty?: number, silent = false) => {
     try {
-      const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+      // Enrich supply to get current quantity and other inventory data
+      const enrichedSupply = enrichSupply(supply, inventory)
+      if (!enrichedSupply) {
+        logger.error("Cannot create order - inventory item not found", {
+          inventoryItemId: supply.inventoryItemId,
+        })
+        return false
+      }
+
+      const neededQty = explicitNeededQty ?? calculateNeededQuantity(enrichedSupply.currentQuantity || 0, supply.minQty || 1)
       if (neededQty <= 0) {
         logger.info('No reorder needed - sufficient quantity')
         return false
@@ -164,9 +214,9 @@ export function EquipmentStatusPanel({
       const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
       const newOrder: Order = {
         id: generateId('order'), // FIXED: Use crypto.randomUUID()
-        productName: supply.name,
+        productName: enrichedSupply.name,
         catNum: inventoryItem?.catNum || '',
-        supplier: '',
+        supplier: enrichedSupply.supplier || '',
         // Use account from inventory item, or placeholder
         accountId: inventoryItem?.chargeToAccount || "temp_account_placeholder",
         accountName: "Select Account",
@@ -174,7 +224,7 @@ export function EquipmentStatusPanel({
         funderName: "Select Funder",
         masterProjectId: "temp_project_placeholder",
         masterProjectName: "Select Project",
-        priceExVAT: supply.price,
+        priceExVAT: enrichedSupply.price,
         currency: EQUIPMENT_CONFIG.currency.code, // FIXED: Use centralized currency
         status: 'to-order',
         orderedBy: currentUserProfile?.id || '',
@@ -192,11 +242,11 @@ export function EquipmentStatusPanel({
         sourceInventoryItemId: supply.inventoryItemId,
       }
 
-      logger.info(`Creating order for ${supply.name}`)
+      logger.info(`Creating order for ${enrichedSupply.name}`)
       onOrderCreate(newOrder)
 
       if (!silent) {
-        alert(`✓ Order created for "${supply.name}"\n\nGo to the Orders tab to complete the order details.`)
+        alert(`✓ Order created for "${enrichedSupply.name}"\n\nGo to the Orders tab to complete the order details.`)
       }
 
       return true
@@ -214,7 +264,9 @@ export function EquipmentStatusPanel({
   const handleOrderMissing = async (device: EquipmentDevice) => {
     try {
       const missingSupplies = device.supplies.filter(supply => {
-        const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+        const enriched = enrichSupply(supply, inventory)
+        if (!enriched) return false
+        const neededQty = calculateNeededQuantity(enriched.currentQuantity || 0, supply.minQty || 1)
         return neededQty > 0
       })
 
@@ -227,7 +279,9 @@ export function EquipmentStatusPanel({
 
       let successCount = 0
       for (const supply of missingSupplies) {
-        const neededQty = calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
+        const enriched = enrichSupply(supply, inventory)
+        if (!enriched) continue
+        const neededQty = calculateNeededQuantity(enriched.currentQuantity || 0, supply.minQty || 1)
         // Pass explicit needed qty and silent=true to avoid multiple alerts
         const success = await handleReorder(device.id, supply, neededQty, true)
         if (success) successCount++

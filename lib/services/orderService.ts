@@ -55,7 +55,7 @@ export async function createOrder(orderData: Omit<Order, 'id'> & {
 
   // Feature #7: Update budget tracking when creating order
   if (orderData.accountId && orderData.priceExVAT) {
-    const { updateAccountBudget } = await import('./budgetUtils')
+    const { updateAccountBudget } = await import('../budgetUtils')
     await updateAccountBudget(
       orderData.accountId,
       orderData.priceExVAT,
@@ -111,7 +111,7 @@ export async function updateOrder(orderId: string, updates: Partial<Order>): Pro
       const newStatus = updates.status
 
       if (oldStatus !== newStatus && currentOrder.accountId && currentOrder.priceExVAT) {
-        const { updateAccountBudget } = await import('./budgetUtils')
+        const { updateAccountBudget } = await import('../budgetUtils')
         await updateAccountBudget(
           currentOrder.accountId,
           currentOrder.priceExVAT,
@@ -141,7 +141,7 @@ export async function deleteOrder(orderId: string): Promise<void> {
   if (orderDoc.exists()) {
     const order = orderDoc.data() as FirestoreOrder
     if (order.accountId && order.priceExVAT) {
-      const { updateAccountBudget } = await import('./budgetUtils')
+      const { updateAccountBudget } = await import('../budgetUtils')
       await updateAccountBudget(
         order.accountId,
         order.priceExVAT,

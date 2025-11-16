@@ -27,6 +27,7 @@ import {
   AlertCircle,
 } from "lucide-react"
 import { useAppContext } from "@/lib/AppContext"
+import { useAuth } from "@/lib/hooks/useAuth"
 import { ImportanceLevel } from "@/lib/types"
 
 interface ProjectDetailPanelProps {
@@ -40,6 +41,7 @@ export function ProjectDetailPanel({
   people,
   onClose,
 }: ProjectDetailPanelProps) {
+  const { currentUser } = useAuth()
   const {
     dayToDayTasks,
     handleCreateDayToDayTask,
