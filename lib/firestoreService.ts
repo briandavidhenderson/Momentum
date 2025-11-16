@@ -356,10 +356,10 @@ export async function updateProfile(profileId: string, updates: Partial<PersonPr
 }
 
 export function subscribeToProfiles(
-  filters: {
-  const db = getFirebaseDb() labId?: string } | null,
+  filters: { labId?: string } | null,
   callback: (profiles: PersonProfile[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   try {
     let q: Query = collection(db, "personProfiles")
 
@@ -683,10 +683,10 @@ export async function createFundingAccount(accountData: Omit<FundingAccount, 'id
  * Gets all funding accounts, optionally filtered by project or funder
  */
 export async function getFundingAccounts(filters?: {
-  const db = getFirebaseDb()
   masterProjectId?: string
   funderId?: string
 }): Promise<FundingAccount[]> {
+  const db = getFirebaseDb()
   let q = collection(db, "accounts")
 
   if (filters?.masterProjectId) {
@@ -722,11 +722,11 @@ export async function deleteFundingAccount(accountId: string): Promise<void> {
  * Subscribes to funding accounts with optional filters
  */
 export function subscribeToFundingAccounts(
-  filters: {
-  const db = getFirebaseDb() labId?: string; masterProjectId?: string; funderId?: string } | null,
+  filters: { labId?: string; masterProjectId?: string; funderId?: string } | null,
   callback: (accounts: FundingAccount[]) => void,
   errorCallback?: (error: Error) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q = collection(db, "accounts")
 
   if (filters?.labId) {
@@ -762,11 +762,11 @@ export function subscribeToFundingAccounts(
  * @returns Unsubscribe function
  */
 export function subscribeToFundingAllocations(
-  filters: {
-  const db = getFirebaseDb() userId?: string } | null,
+  filters: { userId?: string } | null,
   callback: (allocations: FundingAllocation[]) => void,
   errorCallback?: (error: Error) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "fundingAllocations")
 
   if (filters?.userId) {
@@ -846,11 +846,11 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
  * Gets all master projects, optionally filtered by lab, funder, or person
  */
 export async function getMasterProjects(filters?: {
-  const db = getFirebaseDb()
   labId?: string
   funderId?: string
   personId?: string  // Returns projects where person is a team member
 }): Promise<MasterProject[]> {
+  const db = getFirebaseDb()
   let q = collection(db, "masterProjects")
 
   if (filters?.labId) {
@@ -911,10 +911,10 @@ export async function deleteMasterProject(projectId: string): Promise<void> {
  * Subscribes to master projects with optional filters
  */
 export function subscribeToMasterProjects(
-  filters: {
-  const db = getFirebaseDb() labId?: string; funderId?: string; personId?: string } | null,
+  filters: { labId?: string; funderId?: string; personId?: string } | null,
   callback: (projects: MasterProject[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "masterProjects")
 
   if (filters?.labId) {
@@ -959,7 +959,8 @@ export interface FirestoreProject {
 }
 
 export async function createProject(projectData: Omit<Project, 'id'> & {
-  const db = getFirebaseDb() createdBy: string; labId?: string }): Promise<string> {
+  createdBy: string; labId?: string }): Promise<string> {
+  const db = getFirebaseDb()
   const projectRef = doc(collection(db, "projects"))
   const projectId = projectRef.id
   
@@ -1020,10 +1021,10 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 export function subscribeToProjects(
-  filters: {
-  const db = getFirebaseDb() labId?: string; userId?: string } | null,
+  filters: { labId?: string; userId?: string } | null,
   callback: (projects: Project[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   if (!filters?.userId) {
     logger.warn("subscribeToProjects called with undefined or empty userId")
     // Return a no-op unsubscribe function
@@ -1082,7 +1083,8 @@ export interface FirestoreWorkpackage {
 }
 
 export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'> & {
-  const db = getFirebaseDb() createdBy: string }): Promise<string> {
+  createdBy: string }): Promise<string> {
+  const db = getFirebaseDb()
   const wpRef = doc(collection(db, "workpackages"))
   const wpId = wpRef.id
 
@@ -1154,10 +1156,10 @@ export async function deleteWorkpackage(wpId: string): Promise<void> {
 }
 
 export function subscribeToWorkpackages(
-  filters: {
-  const db = getFirebaseDb() profileProjectId?: string } | null,
+  filters: { profileProjectId?: string } | null,
   callback: (wps: Workpackage[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "workpackages")
 
   if (filters?.profileProjectId) {
@@ -1285,7 +1287,8 @@ export interface FirestoreOrder {
 }
 
 export async function createOrder(orderData: Omit<Order, 'id'> & {
-  const db = getFirebaseDb() createdBy: string }): Promise<string> {
+  createdBy: string }): Promise<string> {
+  const db = getFirebaseDb()
   const orderRef = doc(collection(db, "orders"))
   const orderId = orderRef.id
 
@@ -1382,10 +1385,10 @@ export async function deleteOrder(orderId: string): Promise<void> {
 }
 
 export function subscribeToOrders(
-  filters: {
-  const db = getFirebaseDb() labId?: string } | null,
+  filters: { labId?: string } | null,
   callback: (orders: Order[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "orders")
 
   if (filters?.labId) {
@@ -1436,7 +1439,8 @@ export interface FirestoreInventoryItem {
 }
 
 export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & {
-  const db = getFirebaseDb() createdBy: string }): Promise<string> {
+  createdBy: string }): Promise<string> {
+  const db = getFirebaseDb()
   const itemRef = doc(collection(db, "inventory"))
   const itemId = itemRef.id
   
@@ -1498,10 +1502,10 @@ export async function deleteInventoryItem(itemId: string): Promise<void> {
 }
 
 export function subscribeToInventory(
-  filters: {
-  const db = getFirebaseDb() labId?: string } | null,
+  filters: { labId?: string } | null,
   callback: (inventory: InventoryItem[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "inventory")
 
   if (filters?.labId) {
@@ -1597,10 +1601,10 @@ export async function getEvents(): Promise<CalendarEvent[]> {
 }
 
 export function subscribeToEvents(
-  filters: {
-  const db = getFirebaseDb() labId?: string } | null,
+  filters: { labId?: string } | null,
   callback: (events: CalendarEvent[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "events")
 
   if (filters?.labId) {
@@ -1923,10 +1927,10 @@ export async function getAuditTrails(entityType: AuditTrail['entityType'], entit
 }
 
 export function subscribeToAuditTrails(
-  filters: {
-  const db = getFirebaseDb() entityType: string; entityId: string } | null,
+  filters: { entityType: string; entityId: string } | null,
   callback: (entries: AuditTrail[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "auditTrails")
 
   if (filters?.entityType && filters?.entityId) {
@@ -2208,10 +2212,10 @@ export async function deleteDayToDayTask(taskId: string): Promise<void> {
 }
 
 export function subscribeToDayToDayTasks(
-  filters: {
-  const db = getFirebaseDb() labId?: string; userId?: string } | null,
+  filters: { labId?: string; userId?: string } | null,
   callback: (tasks: any[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "dayToDayTasks")
 
   if (filters?.labId) {
@@ -2277,10 +2281,10 @@ export async function deleteLabPoll(pollId: string): Promise<void> {
 }
 
 export function subscribeToLabPolls(
-  filters: {
-  const db = getFirebaseDb() labId?: string } | null,
+  filters: { labId?: string } | null,
   callback: (polls: LabPoll[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   if (!filters?.labId) {
     logger.warn("subscribeToLabPolls called with undefined or empty labId")
     callback([])
@@ -2451,10 +2455,10 @@ export async function deleteELNExperiment(experimentId: string): Promise<void> {
 }
 
 export function subscribeToELNExperiments(
-  filters: {
-  const db = getFirebaseDb() labId?: string; userId?: string } | null,
+  filters: { labId?: string; userId?: string } | null,
   callback: (experiments: ELNExperiment[]) => void
 ): Unsubscribe {
+  const db = getFirebaseDb()
   let q: Query = collection(db, "elnExperiments")
 
   if (filters?.labId) {
