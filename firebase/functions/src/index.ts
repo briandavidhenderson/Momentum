@@ -679,7 +679,8 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
     }
 
     // Store ORCID data in Firestore personProfiles collection
-    await admin.firestore().collection("personProfiles").doc(profileId).update(firestoreUpdate)
+    // Use set with merge to avoid errors if document doesn't exist
+    await admin.firestore().collection("personProfiles").doc(profileId).set(firestoreUpdate, { merge: true })
 
     console.log(`ORCID data stored successfully for user ${context.auth.uid}`)
 
