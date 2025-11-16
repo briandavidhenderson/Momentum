@@ -6,6 +6,7 @@
 
 import { getFunctions, httpsCallable } from "firebase/functions"
 import { PersonProfile } from "../types"
+import { logger } from "@/lib/logger"
 
 /**
  * Get Firebase Functions instance
@@ -106,13 +107,13 @@ export async function linkMicrosoftCalendar(): Promise<boolean> {
     const { success, connectionId, email, calendarsCount } = result.data
 
     if (success) {
-      console.log(`Microsoft Calendar connected: ${email} (${calendarsCount} calendars)`)
+      logger.info(`Microsoft Calendar connected: ${email} (${calendarsCount} calendars)`)
       return true
     }
 
     return false
   } catch (error: any) {
-    console.error("Microsoft Calendar linking error:", error)
+    logger.error("Microsoft Calendar linking error:", error)
     throw new Error(error.message || "Failed to link Microsoft Calendar")
   }
 }

@@ -150,7 +150,7 @@ export function EquipmentStatusPanel({
     try {
       const neededQty = explicitNeededQty ?? calculateNeededQuantity(supply.qty || 0, supply.minQty || 1)
       if (neededQty <= 0) {
-        console.log('No reorder needed - sufficient quantity')
+        logger.info('No reorder needed - sufficient quantity')
         return false
       }
 
@@ -192,7 +192,7 @@ export function EquipmentStatusPanel({
         sourceInventoryItemId: supply.inventoryItemId,
       }
 
-      console.log(`Creating order for ${supply.name}`)
+      logger.info(`Creating order for ${supply.name}`)
       onOrderCreate(newOrder)
 
       if (!silent) {
@@ -223,7 +223,7 @@ export function EquipmentStatusPanel({
         return
       }
 
-      console.log(`Creating ${missingSupplies.length} orders for ${device.name}`)
+      logger.info(`Creating ${missingSupplies.length} orders for ${device.name}`)
 
       let successCount = 0
       for (const supply of missingSupplies) {

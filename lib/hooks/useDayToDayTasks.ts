@@ -4,6 +4,7 @@ import { DayToDayTask } from '@/lib/dayToDayTypes';
 import { createDayToDayTask, subscribeToDayToDayTasks, updateDayToDayTask, deleteDayToDayTask } from '@/lib/firestoreService';
 import { useAuth } from './useAuth';
 import { useToast } from '@/lib/toast';
+import { logger } from '@/lib/logger';
 
 export function useDayToDayTasks() {
   const { currentUser, currentUserProfile: profile } = useAuth();
@@ -24,7 +25,7 @@ export function useDayToDayTasks() {
 
   const handleCreateDayToDayTask = async (task: Omit<DayToDayTask, 'id' | 'createdAt' | 'updatedAt' | 'order' | 'labId'>) => {
     if (!currentUser) {
-      console.error('No current user for task creation');
+      logger.error('No current user for task creation');
       return;
     }
 
@@ -72,11 +73,11 @@ export function useDayToDayTasks() {
 
   const handleMoveDayToDayTask = async (taskId: string, newStatus: 'todo' | 'working' | 'done') => {
     try {
-      console.log(`Moving task ${taskId} to status: ${newStatus}`);
+      logger.info(`Moving task ${taskId} to status: ${newStatus}`);
       await updateDayToDayTask(taskId, { status: newStatus });
-      console.log(`Successfully moved task ${taskId} to ${newStatus}`);
+      logger.info(`Successfully moved task ${taskId} to ${newStatus}`);
     } catch (error) {
-      console.error('Error moving day-to-day task:', error);
+      logger.error('Error moving day-to-day task:', error);
       alert('Failed to move task: ' + (error instanceof Error ? error.message : 'Unknown error'));
       // Re-throw to allow the UI to handle it if needed
       throw error;
