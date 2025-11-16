@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
+import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
 import { MasterProject, Task, Workpackage, Project, Person, ProfileProject } from "@/lib/types";
-import { Plus, FolderKanban, PackagePlus } from "lucide-react";
+import { Plus, FolderKanban, PackagePlus, Trash2 } from "lucide-react";
 import { personProfilesToPeople } from "@/lib/personHelpers";
 import { Task as GanttTask } from "gantt-task-react";
 import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
@@ -78,49 +79,11 @@ export function ProjectDashboard() {
       progress: 0,
       workpackageIds: [],
       visibility: "lab",
-      createdBy: user.uid,
+      createdBy: user?.uid || "",
       isExpanded: true,
     };
 
     handleCreateMasterProject(newProject);
-    setShowProjectDialog(false);
-  };
-
-  const handleCreateMasterProjectFromDialog = async (projectData: ProfileProject & { funderId?: string }) => {
-    if (!profile || !user) return;
-
-    // Create the master project with proper data from dialog
-    const newProject: Omit<MasterProject, "id" | "createdAt"> = {
-      name: projectData.name,
-      description: projectData.description || "",
-      labId: profile.labId,
-      labName: profile.labName,
-      instituteId: profile.instituteId,
-      instituteName: profile.instituteName,
-      organisationId: profile.organisationId,
-      organisationName: profile.organisationName,
-      grantName: projectData.grantName || "",
-      grantNumber: projectData.grantNumber || "",
-      totalBudget: projectData.budget || 0,
-      currency: "GBP",
-      startDate: projectData.startDate,
-      endDate: projectData.endDate,
-      funderId: projectData.funderId || "",
-      funderName: "", // Will be populated by the handler
-      accountIds: [],
-      principalInvestigatorIds: profile.id ? [profile.id] : [],
-      coPIIds: [],
-      teamMemberIds: profile.id ? [profile.id] : [],
-      teamRoles: profile.id ? { [profile.id]: "PI" } : {},
-      status: projectData.status as "planning" | "active" | "completed" | "on-hold" | "cancelled",
-      progress: 0,
-      workpackageIds: [],
-      visibility: projectData.visibility as "private" | "lab" | "institute" | "organisation",
-      createdBy: user.uid,
-      isExpanded: true,
-    };
-
-    await handleCreateMasterProject(newProject);
     setShowProjectDialog(false);
   };
 

@@ -17,15 +17,7 @@ import {
 import { getFirebaseDb } from "../firebase"
 import { logger } from "../logger"
 import type { PersonProfile } from "../types"
-
-export interface FirestoreUser {
-  uid: string
-  email: string
-  fullName: string
-  profileId: string | null
-  createdAt: any
-  isAdministrator: boolean
-}
+import type { FirestoreUser } from "./userService"
 
 /**
  * Deletes a user and their associated profile
