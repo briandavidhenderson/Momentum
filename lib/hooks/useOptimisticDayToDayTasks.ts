@@ -115,8 +115,12 @@ export function useOptimisticDayToDayTasks() {
 
     const labId = profile?.labId || profile?.lab
     if (!labId) {
-      logger.error('No labId found on profile', new Error('Profile missing labId'), { profile })
-      alert('Cannot create task: Your profile is missing a lab assignment. Please update your profile.')
+      logger.error('No labId found on profile', new Error('Profile missing labId'), {
+        profileId: profile?.id,
+        userId: profile?.userId,
+        hasLegacyLab: !!profile?.lab
+      })
+      alert('Cannot create task: Your profile is missing a lab assignment.\n\nPlease contact your administrator or try logging out and logging back in.\n\nIf the problem persists, your profile may need to be updated.')
       return
     }
 
