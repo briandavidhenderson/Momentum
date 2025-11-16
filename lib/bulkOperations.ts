@@ -13,8 +13,8 @@ import {
   updateOrder,
   deleteOrder,
   updateProfile,
-  deleteProfileCascade,
 } from "./firestoreService"
+import { deleteProfileCascade } from "./services/deleteService"
 import type { Project, CalendarEvent, InventoryItem, Order, PersonProfile } from "./types"
 
 // ============================================================================
