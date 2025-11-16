@@ -101,7 +101,11 @@ type OnboardingStep =
  * Splits a full name into first and last name components.
  * Never uses email-like strings (e.g., "alice.smith") as names.
  */
-function splitFullName(fullName: string): { firstName: string; lastName: string } {
+function splitFullName(fullName: string | undefined | null): { firstName: string; lastName: string } {
+  if (!fullName) {
+    return { firstName: '', lastName: '' }
+  }
+
   const trimmed = fullName.trim()
 
   // If empty or looks like an email local part (contains dots/underscores but no spaces), return empty
@@ -550,9 +554,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
       // If creating a project, create it now
       if (state.createProject && state.projectName) {
-        // Parse and validate budget
-        const budgetValue = state.totalBudget ? parseFloat(state.totalBudget) : undefined
-        if (state.totalBudget && (isNaN(budgetValue!) || budgetValue! < 0)) {
+        // Parse and validate budget (default to 0 if not provided)
+        const budgetValue = state.totalBudget ? parseFloat(state.totalBudget) : 0
+        if (state.totalBudget && (isNaN(budgetValue) || budgetValue < 0)) {
           setError("Invalid budget amount")
           setLoading(false)
           return
