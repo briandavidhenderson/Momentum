@@ -328,13 +328,13 @@ ${report.conclusion}
                     promptHash={`report-${viewingReport.id}-${viewingReport.version}`}
                     generatedContent={`
                       <h3>Background</h3>
-                      <p>${viewingReport.background.replace(/\n/g, '<br>')}</p>
+                      <p>${(viewingReport.background || '').replace(/\n/g, '<br>')}</p>
                       <h3>Protocols</h3>
-                      <p>${viewingReport.protocols.replace(/\n/g, '<br>')}</p>
+                      <p>${(viewingReport.protocols || '').replace(/\n/g, '<br>')}</p>
                       <h3>Results</h3>
-                      <p>${viewingReport.results.replace(/\n/g, '<br>')}</p>
+                      <p>${(viewingReport.results || '').replace(/\n/g, '<br>')}</p>
                       <h3>Conclusion</h3>
-                      <p>${viewingReport.conclusion.replace(/\n/g, '<br>')}</p>
+                      <p>${(viewingReport.conclusion || '').replace(/\n/g, '<br>')}</p>
                     `}
                     onAccept={() => setDisclaimerAccepted(true)}
                   />
