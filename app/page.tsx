@@ -82,7 +82,13 @@ export default function Home() {
 
   // Show onboarding/setup
   if (authState === 'setup' && currentUser) {
-    return <OnboardingFlow user={currentUser} onComplete={handleProfileSetupComplete} />
+    return (
+      <OnboardingFlow
+        user={currentUser}
+        onComplete={handleProfileSetupComplete}
+        onCancel={handleSignOut}
+      />
+    )
   }
 
   // Main application
