@@ -165,7 +165,7 @@ export function useOptimisticProjects() {
 
     // Find the workpackage and update the task
     const updatedWorkpackages = optimisticWorkpackages.map(wp => {
-      if (wp.id === workpackageId) {
+      if (wp.id === workpackageId && wp.tasks) {
         const updatedTasks = wp.tasks.map(task =>
           task.id === taskId ? { ...task, start, end } : task
         )
