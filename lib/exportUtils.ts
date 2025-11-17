@@ -75,11 +75,9 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 export function exportProjectsToCSV(projects: Project[]) {
   const columns = [
     { key: "name" as const, label: "Project Name" },
-    { key: "kind" as const, label: "Type" },
-    { key: "start" as const, label: "Start Date" },
-    { key: "end" as const, label: "End Date" },
+    { key: "startDate" as const, label: "Start Date" },
+    { key: "endDate" as const, label: "End Date" },
     { key: "progress" as const, label: "Progress (%)" },
-    { key: "importance" as const, label: "Importance" },
     { key: "status" as const, label: "Status" },
     { key: "health" as const, label: "Health" },
     { key: "totalBudget" as const, label: "Budget" },
