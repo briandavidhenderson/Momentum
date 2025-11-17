@@ -281,7 +281,7 @@ export function ProjectDashboard() {
           for (const wp of getProjectWorkpackages(project)) {
             const task = wp.tasks?.find(t => t.id === id);
             if (task) {
-              const updatedTasks = wp.tasks.map(t =>
+              const updatedTasks = (wp.tasks || []).map(t =>
                 t.id === id ? { ...t, isExpanded: !t.isExpanded } : t
               );
               await handleUpdateWorkpackage(wp.id, {
@@ -294,11 +294,11 @@ export function ProjectDashboard() {
             for (const task of wp.tasks || []) {
               const subtask = task.subtasks?.find(st => st.id === id);
               if (subtask) {
-                const updatedTasks = wp.tasks.map(t =>
+                const updatedTasks = (wp.tasks || []).map(t =>
                   t.id === task.id
                     ? {
                         ...t,
-                        subtasks: t.subtasks?.map(st =>
+                        subtasks: t.subtasks?.map((st: Subtask) =>
                           st.id === id ? { ...st, isExpanded: !st.isExpanded } : st
                         ),
                       }
