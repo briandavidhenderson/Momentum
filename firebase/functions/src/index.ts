@@ -36,6 +36,11 @@ import {
   getOrphanedConflicts,
   migrateOrphanedConflicts,
 } from "./audit-calendar-collections"
+import {
+  migrateTokensToSecretManager,
+  verifyTokenMigration,
+  cleanupFirestoreTokens,
+} from "./migrate-tokens-to-secret-manager"
 
 // Export GDPR functions
 export {
@@ -82,6 +87,13 @@ export {
   auditCalendarCollections,
   getOrphanedConflicts,
   migrateOrphanedConflicts,
+}
+
+// Export Token Migration functions
+export {
+  migrateTokensToSecretManager,
+  verifyTokenMigration,
+  cleanupFirestoreTokens,
 }
 
 /**
