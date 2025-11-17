@@ -229,7 +229,7 @@ export function ProjectDashboard() {
                   t.id === task.id
                     ? {
                         ...t,
-                        subtasks: t.subtasks?.map(st =>
+                        subtasks: t.subtasks?.map((st: Subtask) =>
                           st.id === subtask.id
                             ? { ...st, start: ganttTask.start, end: ganttTask.end }
                             : st
