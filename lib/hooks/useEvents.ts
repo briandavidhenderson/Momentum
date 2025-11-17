@@ -57,7 +57,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
     const createdBy = currentUser?.id ?? 'system';
 
     visibleProjects.forEach((project) => {
-      const projectEnd = new Date(project.end);
+      const projectEnd = new Date(project.endDate);
       // Validate date
       if (isNaN(projectEnd.getTime())) {
         logger.error('Invalid project end date', new Error('Invalid date'), { project });
