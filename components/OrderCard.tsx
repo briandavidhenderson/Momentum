@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Package, Edit, Trash2, Calendar, DollarSign, User, GripVertical, MoreVertical } from "lucide-react"
+import { Package, Edit, Trash2, Calendar, DollarSign, User, GripVertical, MoreVertical, Target } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -17,9 +17,10 @@ interface OrderCardProps {
   order: Order
   onEdit: (order: Order) => void
   onDelete: (orderId: string) => void
+  deliverableName?: string
 }
 
-export function OrderCard({ order, onEdit, onDelete }: OrderCardProps) {
+export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCardProps) {
   const {
     attributes,
     listeners,
@@ -153,6 +154,17 @@ export function OrderCard({ order, onEdit, onDelete }: OrderCardProps) {
           <div className="pt-2 border-t border-gray-100">
             <div className="text-xs text-gray-500 mb-1">Account</div>
             <div className="text-sm font-medium text-gray-700 truncate">{order.accountName}</div>
+          </div>
+        )}
+
+        {/* Linked Deliverable */}
+        {deliverableName && (
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
+              <Target className="h-3 w-3 text-blue-600" />
+              <span>Linked Deliverable</span>
+            </div>
+            <div className="text-sm font-medium text-blue-700 truncate">{deliverableName}</div>
           </div>
         )}
       </div>

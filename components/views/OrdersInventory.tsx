@@ -62,7 +62,8 @@ export function OrdersInventory() {
   } = useOrders()
 
   // Get equipment for reconciliation (linking new inventory to devices)
-  const { equipment } = useAppContext()
+  // Get deliverables for displaying linked deliverable names
+  const { equipment, deliverables } = useAppContext()
 
   const [showOrderDialog, setShowOrderDialog] = useState(false)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
@@ -218,6 +219,13 @@ export function OrdersInventory() {
     if (confirm('Are you sure you want to delete this order?')) {
       await handleDeleteOrder(orderId)
     }
+  }
+
+  // Helper to get deliverable name for an order
+  const getDeliverableName = (order: Order): string | undefined => {
+    if (!order.linkedDeliverableId) return undefined
+    const deliverable = deliverables?.find(d => d.id === order.linkedDeliverableId)
+    return deliverable?.name
   }
 
   const activeOrder = activeId ? orders?.find(o => o.id === activeId) : null
@@ -416,6 +424,7 @@ export function OrdersInventory() {
                             order={order}
                             onEdit={handleEdit}
                             onDelete={handleDelete}
+                            deliverableName={getDeliverableName(order)}
                           />
                         ))}
                         {items.length === 0 && (
@@ -439,6 +448,7 @@ export function OrdersInventory() {
                     order={activeOrder}
                     onEdit={() => {}}
                     onDelete={() => {}}
+                    deliverableName={getDeliverableName(activeOrder)}
                   />
                 </div>
               ) : null}

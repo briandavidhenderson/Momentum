@@ -33,7 +33,9 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     fundingAccounts,
     fundingAllocations,
     fundingAccountsLoading,
-    fundingAllocationsLoading
+    fundingAllocationsLoading,
+    deliverables,
+    workpackages,
   } = useAppContext()
 
   const loading = fundingAccountsLoading || fundingAllocationsLoading
@@ -47,6 +49,7 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
     status: 'to-order',
     accountId: '',
     fundingAllocationId: '',
+    linkedDeliverableId: '',
   })
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,6 +72,28 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
       (a) => a.fundingAccountId === formData.accountId && a.status === "active"
     )
   }, [fundingAllocations, formData.accountId])
+
+  // Get deliverables for the selected project
+  const availableDeliverables = useMemo(() => {
+    if (!selectedAccount?.masterProjectId) return []
+
+    // Find workpackages for this project
+    const projectWorkpackages = workpackages.filter(wp =>
+      // Match by profileProjectId for legacy support or check project linkage
+      wp.profileProjectId === selectedAccount.masterProjectId
+    )
+
+    // Get deliverables from these workpackages
+    return deliverables.filter(d =>
+      projectWorkpackages.some(wp => wp.id === d.workpackageId)
+    )
+  }, [selectedAccount, workpackages, deliverables])
+
+  // Get selected deliverable
+  const selectedDeliverable = useMemo(
+    () => deliverables.find((d) => d.id === formData.linkedDeliverableId),
+    [deliverables, formData.linkedDeliverableId]
+  )
 
   // Check if allocation has sufficient funds
   const hasSufficientFunds = useMemo(() => {
@@ -161,6 +186,7 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
         status: 'to-order',
         accountId: '',
         fundingAllocationId: '',
+        linkedDeliverableId: '',
       })
 
       onClose()
@@ -212,24 +238,25 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
 
               {/* Funding Allocation Selection (Optional) */}
               {formData.accountId && (
-                <div className="grid gap-2">
-                  <Label htmlFor="fundingAllocationId">
-                    Funding Allocation
-                    <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
-                  </Label>
-                  <select
-                    id="fundingAllocationId"
-                    value={formData.fundingAllocationId || ''}
-                    onChange={(e) => setFormData({ ...formData, fundingAllocationId: e.target.value })}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="">No specific allocation</option>
-                    {availableAllocations.map((allocation) => (
-                      <option key={allocation.id} value={allocation.id}>
-                        {allocation.type === "PERSON" ? allocation.personName : allocation.projectName} - {formatCurrency(allocation.remainingBudget || 0, allocation.currency)} remaining
-                      </option>
-                    ))}
-                  </select>
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="fundingAllocationId">
+                      Funding Allocation
+                      <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
+                    </Label>
+                    <select
+                      id="fundingAllocationId"
+                      value={formData.fundingAllocationId || ''}
+                      onChange={(e) => setFormData({ ...formData, fundingAllocationId: e.target.value })}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <option value="">No specific allocation</option>
+                      {availableAllocations.map((allocation) => (
+                        <option key={allocation.id} value={allocation.id}>
+                          {allocation.type === "PERSON" ? allocation.personName : allocation.projectName} - {formatCurrency(allocation.remainingBudget || 0, allocation.currency)} remaining
+                        </option>
+                      ))}
+                    </select>
 
                   {/* Budget Warning */}
                   {selectedAllocation && (
@@ -260,7 +287,36 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
                       </div>
                     </div>
                   )}
-                </div>
+                  </div>
+
+                  {/* Deliverable Selection (Optional) */}
+                  {availableDeliverables.length > 0 && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="linkedDeliverableId">
+                        Link to Deliverable
+                        <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
+                      </Label>
+                      <select
+                        id="linkedDeliverableId"
+                        value={formData.linkedDeliverableId || ''}
+                        onChange={(e) => setFormData({ ...formData, linkedDeliverableId: e.target.value })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <option value="">No linked deliverable</option>
+                        {availableDeliverables.map((deliverable) => (
+                          <option key={deliverable.id} value={deliverable.id}>
+                            {deliverable.name} ({deliverable.status})
+                          </option>
+                        ))}
+                      </select>
+                      {selectedDeliverable && (
+                        <div className="text-xs text-muted-foreground">
+                          This order will be linked to the deliverable for tracking purposes
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Product Name */}
