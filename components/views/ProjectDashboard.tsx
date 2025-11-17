@@ -713,10 +713,10 @@ export function ProjectDashboard() {
         selectedTask.id,
         subtaskId,
         text.trim()
-      );
+      ) as any;
 
       // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find(wp => wp.id === context.workpackage.id);
+      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
       if (!updatedWorkpackage) {
         throw new Error("Updated workpackage not found");
       }
@@ -759,10 +759,10 @@ export function ProjectDashboard() {
         selectedTask.id,
         subtaskId,
         todoId
-      );
+      ) as any;
 
       // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find(wp => wp.id === context.workpackage.id);
+      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
       if (!updatedWorkpackage) {
         throw new Error("Updated workpackage not found");
       }
