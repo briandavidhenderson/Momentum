@@ -246,7 +246,7 @@ export function GanttChart({
       }
 
       project.workpackageIds?.forEach((workpackageId) => {
-        const workpackage = workpackages.find(wp => wp.id === workpackageId && wp.profileProjectId === project.id);
+        const workpackage = workpackages.find(wp => wp.id === workpackageId);
         if (!workpackage) return;
         
         // Ensure dates are Date objects (converted from Firestore Timestamps)
