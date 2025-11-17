@@ -14,6 +14,7 @@ import {
   POSITION_DISPLAY_NAMES,
   POSITION_CATEGORIES,
 } from "@/lib/types"
+import { getFirebaseAuth } from "@/lib/firebase"
 import {
   getOrganisations,
   getInstitutes,
@@ -460,11 +461,27 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   }
 
   const handleComplete = async () => {
-    // Validate user authentication
+    // Get a valid user object - try prop first, fall back to Firebase Auth if needed
+    let validUser = user
     if (!user || !user.uid || typeof user.uid !== 'string' || user.uid.trim() === '') {
-      logger.error("Invalid user object in onboarding", { user })
-      setError("Authentication error. Please refresh the page and try again.")
-      return
+      // User prop is stale or invalid, get fresh user from Firebase Auth
+      const auth = getFirebaseAuth()
+      const firebaseUser = auth.currentUser
+
+      if (!firebaseUser || !firebaseUser.uid) {
+        logger.error("No authenticated user found", { propUser: user, firebaseUser })
+        setError("Authentication error. Please refresh the page and try again.")
+        return
+      }
+
+      // Create a temporary user object from Firebase Auth user
+      validUser = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email || user?.email || '',
+        fullName: firebaseUser.displayName || user?.fullName || '',
+      }
+
+      logger.info("Using fresh Firebase Auth user instead of stale prop", { uid: validUser.uid })
     }
 
     if (!state.selectedOrganisation || !state.selectedInstitute || !state.selectedLab) {
@@ -489,7 +506,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setLoading(true)
       setError(null)
 
-      logger.info("Starting profile creation", { userId: user.uid })
+      logger.info("Starting profile creation", { userId: validUser.uid })
 
       const positionDisplay = POSITION_DISPLAY_NAMES[state.positionLevel]
 
@@ -550,13 +567,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         notes: "",
 
         // Account
-        userId: user.uid,
+        userId: validUser.uid,
         profileComplete: true,
         onboardingComplete: true,
         isAdministrator: false,
       }
 
-      const profileId = await createProfile(user.uid, profileData)
+      const profileId = await createProfile(validUser.uid, profileData)
 
       // Note: createProfile already updates the user document with profileId
       // No need to call updateUser again (would be redundant)
@@ -619,7 +636,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
           visibility: "lab",
 
           // Metadata
-          createdBy: user.uid,
+          createdBy: validUser.uid,
         })
 
         // Create account if specified
@@ -637,7 +654,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             startDate: state.startDate,
             endDate: state.endDate,
             status: "active",
-            createdBy: user.uid,
+            createdBy: validUser.uid,
           })
 
           // Create personal funding allocation for the PI
@@ -660,7 +677,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               currency: state.currency,
               status: "active",
               createdAt: new Date().toISOString(),
-              createdBy: user.uid,
+              createdBy: validUser.uid,
             })
 
             logger.info("Created PI funding allocation during onboarding", {
