@@ -851,7 +851,7 @@ export function ProjectDashboard() {
       name: workpackageForm.name.trim(),
       start: new Date(workpackageForm.startDate),
       end: new Date(workpackageForm.endDate),
-      profileProjectId: selectedProjectId,
+      projectId: selectedProjectId,
       status: "planning",
       progress: 0,
       tasks: [],
@@ -910,7 +910,7 @@ export function ProjectDashboard() {
           // Create workpackage and link it to the project
           const workpackageId = await createWorkpackage({
             ...workpackageData,
-            profileProjectId: selectedProjectForDetail.id,
+            projectId: selectedProjectForDetail.id,
             createdBy: user?.uid || "",
           } as any)
 

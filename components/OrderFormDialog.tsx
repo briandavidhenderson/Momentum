@@ -79,8 +79,8 @@ export function OrderFormDialog({ open, onClose, onSave }: OrderFormDialogProps)
 
     // Find workpackages for this project
     const projectWorkpackages = workpackages.filter(wp =>
-      // Match by profileProjectId for legacy support or check project linkage
-      wp.profileProjectId === selectedAccount.masterProjectId
+      // Match by projectId
+      wp.projectId === selectedAccount.masterProjectId
     )
 
     // Get deliverables from these workpackages

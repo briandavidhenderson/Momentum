@@ -116,7 +116,7 @@ export function WorkpackageDialog({
 
       if (!workpackage) {
         // Creating new workpackage
-        workpackageData.profileProjectId = projectId
+        workpackageData.projectId = projectId
         workpackageData.progress = 0
         workpackageData.isExpanded = true
       }

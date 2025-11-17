@@ -69,7 +69,7 @@ export function MyTasksView() {
     if (projects && allWorkpackages && currentUserProfile) {
       projects.forEach((project) => {
         const projectWorkpackages = allWorkpackages.filter(
-          (wp) => wp.profileProjectId === project.id
+          (wp) => wp.projectId === project.id
         )
 
         projectWorkpackages.forEach((workpackage) => {
