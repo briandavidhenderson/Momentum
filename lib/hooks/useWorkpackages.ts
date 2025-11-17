@@ -78,7 +78,7 @@ export function useWorkpackages(currentUser: PersonProfile | null) {
 
     const newTask: Task = {
       id: `task-${Date.now()}`,
-      name: `Task ${workpackage.tasks.length + 1}`,
+      name: `Task ${(workpackage.tasks || []).length + 1}`,
       start: taskStart,
       end: taskEnd,
       progress: 0,
@@ -94,7 +94,7 @@ export function useWorkpackages(currentUser: PersonProfile | null) {
     setWorkpackages((prev) =>
       prev.map((wp) =>
         wp.id === workpackageId
-          ? { ...wp, tasks: [...wp.tasks, newTask] }
+          ? { ...wp, tasks: [...(wp.tasks || []), newTask] }
           : wp
       )
     );
