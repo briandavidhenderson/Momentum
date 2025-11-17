@@ -18,6 +18,7 @@ export * from './fundingService'
 // Projects & Workpackages
 export * from './projectService'
 export * from './workpackageService'
+export * from './deliverableService'
 
 // Tasks
 export * from './taskService'

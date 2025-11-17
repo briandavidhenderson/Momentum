@@ -3,13 +3,142 @@
 // ============================================================================
 
 import type { ProjectVisibility, ProjectRole, ImportanceLevel, WorkStatus } from './common.types'
-import type { Workpackage } from './workpackage.types'
-import type { Task } from './task.types'
 
 /**
- * ProfileProject - DEPRECATED
- * Legacy type kept for backward compatibility
- * Use MasterProject instead for new code
+ * Project - Top-level research initiative
+ *
+ * UNIFIED TYPE - Consolidates MasterProject, ProfileProject, and legacy Project
+ *
+ * A Project is the highest level organizational unit for research work.
+ * It represents a major research grant, program, or initiative.
+ *
+ * Hierarchy:
+ * Project → Workpackage → Deliverable → (optional) ProjectTask
+ *
+ * Projects contain only workpackages (not tasks directly).
+ * This enforces proper hierarchical organization.
+ */
+export interface Project {
+  id: string
+  name: string
+  description?: string
+
+  // Organizational Links
+  labId: string
+  labName: string               // Cached for display
+  instituteId: string
+  instituteName: string         // Cached for display
+  organisationId: string
+  organisationName: string      // Cached for display
+
+  // Grant & Funding Information
+  grantName?: string
+  grantNumber?: string
+  grantReference?: string      // Funder's reference number
+
+  // Financial (calculated/cached from orders & allocations)
+  totalBudget?: number
+  spentAmount?: number         // Sum of received orders
+  committedAmount?: number     // Sum of ordered but not received
+  remainingBudget?: number     // Calculated: total - spent - committed
+  currency: string             // "GBP", "USD", "EUR", etc.
+
+  // Dates
+  startDate: string
+  endDate: string
+
+  // Funding Accounts
+  funderId: string             // Primary funder ID
+  funderName: string           // Cached funder name
+  accountIds: string[]         // Multiple funding accounts for this project
+
+  // Team Structure
+  principalInvestigatorIds: string[]  // PI PersonProfile IDs
+  coPIIds: string[]                   // Co-PI PersonProfile IDs
+  teamMemberIds: string[]             // All team member PersonProfile IDs
+  teamRoles: {                        // Role assignment for each member
+    [personProfileId: string]: ProjectRole
+  }
+
+  // Hierarchy - Projects contain ONLY workpackages
+  workpackageIds: string[]      // Array of workpackage IDs in this project
+
+  // Status & Health Tracking
+  status: "planning" | "active" | "completed" | "on-hold" | "cancelled"
+  health?: "good" | "warning" | "at-risk"  // Calculated from overdue deliverables, budget, etc.
+  progress: number              // 0-100, calculated from workpackage/deliverable progress
+
+  // Access Control
+  visibility: "private" | "lab" | "institute" | "organisation"
+  visibleTo?: string[]          // Additional PersonProfile IDs for custom access
+
+  // Categorization & Discovery
+  researchArea?: string         // "Molecular Biology", "Drug Discovery", etc.
+  tags?: string[]               // Custom tags for filtering/search
+
+  // Metadata
+  notes?: string
+  createdAt: string
+  createdBy: string             // User ID
+  updatedAt?: string
+  updatedBy?: string            // User ID
+
+  // UI State
+  isExpanded?: boolean          // For accordion/tree views in dashboard
+}
+
+/**
+ * ProjectHealth - Calculated health indicators
+ *
+ * Helper type for computing project health status
+ */
+export interface ProjectHealth {
+  overall: "good" | "warning" | "at-risk"
+  indicators: {
+    overdueDeliverables: number
+    budgetStatus: "healthy" | "warning" | "overbudget"
+    timeRemaining: number  // Days
+    progressVsTime: "on-track" | "behind" | "ahead"
+  }
+  issues: string[]  // Human-readable issues
+}
+
+/**
+ * ProjectStats - Aggregated statistics
+ *
+ * Helper type for dashboard summaries
+ */
+export interface ProjectStats {
+  totalWorkpackages: number
+  activeWorkpackages: number
+  completedWorkpackages: number
+
+  totalDeliverables: number
+  completedDeliverables: number
+  inProgressDeliverables: number
+  notStartedDeliverables: number
+  overdueDeliverables: number
+
+  totalOrders: number
+  ordersReceived: number
+  ordersOrdered: number
+  ordersToOrder: number
+
+  linkedDayToDayTasks: number
+  linkedELNExperiments: number
+
+  budgetUtilization: number  // Percentage
+}
+
+// ============================================================================
+// DEPRECATED TYPES - Kept for backward compatibility during migration
+// ============================================================================
+
+/**
+ * @deprecated Use Project instead
+ *
+ * ProfileProject is being phased out. All profile-level projects
+ * should use the unified Project type.
  */
 export interface ProfileProject {
   id: string
@@ -19,128 +148,62 @@ export interface ProfileProject {
   endDate: string
   grantName?: string
   grantNumber?: string
-  fundedBy: string[] // Funding account IDs
+  fundedBy: string[]
   budget?: number
   status: "planning" | "active" | "completed" | "on-hold"
   notes?: string
   visibility: ProjectVisibility
-  visibleTo?: string[] // Array of PersonProfile IDs (for "custom" visibility)
+  visibleTo?: string[]
   principalInvestigatorId?: string
   tags?: string[]
 }
 
 /**
- * MasterProject - Major research grant/program
- * Replaces ProfileProject with proper organizational structure
- * Contains work packages, which contain tasks
+ * @deprecated Use Project instead
+ *
+ * MasterProject is being consolidated into the unified Project type.
  */
 export interface MasterProject {
-  isExpanded?: boolean;
+  isExpanded?: boolean
   id: string
   name: string
   description?: string
-
-  // Organizational Links
   labId: string
-  labName: string               // Cached
+  labName: string
   instituteId: string
-  instituteName: string         // Cached
+  instituteName: string
   organisationId: string
-  organisationName: string      // Cached
-
-  // Grant Information
+  organisationName: string
   grantName?: string
   grantNumber?: string
-  grantReference?: string  // Funder's reference number
-
-  // Financial
+  grantReference?: string
   totalBudget?: number
-  spentAmount?: number  // Cached from orders
-  committedAmount?: number  // From pending orders
-  remainingBudget?: number  // Calculated
-  currency: string  // e.g., "GBP", "USD", "EUR"
-
-  // Dates
+  spentAmount?: number
+  committedAmount?: number
+  remainingBudget?: number
+  currency: string
   startDate: string
   endDate: string
-
-  // Funding (UPDATED: Support multiple accounts)
-  funderId: string              // Primary funder
-  funderName: string            // Cached
-  accountIds: string[]          // Multiple accounts per project
-
-  // Team
-  principalInvestigatorIds: string[]  // Array of PI PersonProfile IDs
-  coPIIds: string[]                   // Array of Co-PI PersonProfile IDs
-  teamMemberIds: string[]             // Array of all team member PersonProfile IDs
-  teamRoles: {                        // Role for each team member
+  funderId: string
+  funderName: string
+  accountIds: string[]
+  principalInvestigatorIds: string[]
+  coPIIds: string[]
+  teamMemberIds: string[]
+  teamRoles: {
     [personProfileId: string]: ProjectRole
   }
-
-  // Structure
-  workpackageIds: string[]      // Work packages in this project
-
-  // Status & Progress
+  workpackageIds: string[]
   status: "planning" | "active" | "completed" | "on-hold" | "cancelled"
   health?: "good" | "warning" | "at-risk"
-  progress: number              // 0-100
-
-  // Visibility & Access
+  progress: number
   visibility: "private" | "lab" | "institute" | "organisation"
-  visibleTo?: string[]  // Additional PersonProfile IDs for custom access
-
-  // Categorization
+  visibleTo?: string[]
   researchArea?: string
   tags?: string[]
-
-  // Metadata
   notes?: string
   createdAt: string
   createdBy: string
   updatedAt?: string
   updatedBy?: string
-}
-
-/**
- * Project - Legacy project type
- * Used for backward compatibility with older project structures
- */
-export interface Project {
-  id: string
-  name: string
-
-  // P0-2: Unified Project Model - explicit type distinction
-  kind?: "master" | "regular"  // Legacy field, keep for backward compatibility
-  projectType?: "MASTER" | "REGULAR"  // New explicit field for P0-2 implementation
-
-  // P0-1: Funder link (required for Master projects)
-  funderId?: string  // Funder ID - required if projectType === "MASTER"
-  fundedBy?: string[] // Legacy: Funding account IDs (deprecated in favor of funderId)
-
-  start: Date
-  end: Date
-  progress: number
-  color: string
-  importance: ImportanceLevel
-  notes?: string
-  isExpanded?: boolean
-  principalInvestigatorId?: string // PersonProfile ID of the PI (not Person ID)
-  profileProjectId?: string // Link to ProfileProject if created from profile
-
-  // Note: tasks removed - they now belong to workpackages for master projects
-  tasks?: Task[] // Only for backward compatibility with non-master projects
-
-  // extended fields
-  totalBudget?: number
-  health?: "good" | "warning" | "risk"
-  status?: WorkStatus
-  tags?: string[]
-  workpackages?: Workpackage[]
-  defaultTemplates?: {
-    workPackages?: string[]
-    tasks?: string[]
-    subtasks?: string[]
-  }
-  linkedOrderIds?: string[]
-  linkedInventoryItemIds?: string[]
 }

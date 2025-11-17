@@ -36,7 +36,8 @@ import {
   Building,
   User as UserIcon,
   Plus,
-  Shield
+  Shield,
+  Loader2
 } from "lucide-react"
 
 /**
@@ -575,6 +576,21 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     const current = formData[field] || []
     const updated = current.filter((_, i) => i !== index)
     setFormData({ ...formData, [field]: updated })
+  }
+
+  // Loading state
+  if (!currentUserProfile) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 mx-auto mb-4 text-brand-500 animate-spin" />
+          <h3 className="text-lg font-semibold mb-2">Loading Profiles</h3>
+          <p className="text-sm text-muted-foreground">
+            Fetching team member profiles...
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

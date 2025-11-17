@@ -73,6 +73,7 @@ export function PrivacyDashboard() {
   // Dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [deleteReason, setDeleteReason] = useState("")
 
   // Load user's consent and privacy settings
   useEffect(() => {
@@ -219,7 +220,7 @@ export function PrivacyDashboard() {
   }
 
   // Request account deletion
-  const requestAccountDeletion = async (reason?: string) => {
+  const requestAccountDeletion = async () => {
     const db = getFirebaseDb()
     if (!user) return
     if (deleteConfirmation !== "DELETE MY ACCOUNT") {
@@ -231,12 +232,12 @@ export function PrivacyDashboard() {
     try {
       const deletionRequest: Omit<AccountDeletionRequest, "id"> = {
         userId: user.uid,
-        userEmail: user.email,
-        userName: user.fullName,
+        userEmail: user.email || "",
+        userName: user.fullName || profile?.firstName + " " + profile?.lastName || "Unknown User",
         requestedAt: new Date().toISOString(),
         status: "pending",
         deleteAllData: true,
-        reason,
+        reason: deleteReason.trim() || undefined,
         retainForCompliance: true, // Keep minimal audit trail for 12 months
         retentionExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       }
@@ -244,13 +245,23 @@ export function PrivacyDashboard() {
       await addDoc(collection(db, "accountDeletionRequests"), deletionRequest)
 
       alert(
-        `Account deletion request submitted. An administrator will review your request within 3 business days. You will receive a confirmation email at ${user.email}.
+        `Account deletion request submitted successfully.
 
-IMPORTANT: This action is irreversible. All your personal data will be permanently deleted.`
+Your account and all personal data will be permanently deleted. The deletion process will begin immediately and cannot be reversed.
+
+A confirmation has been sent to ${user.email}.
+
+IMPORTANT: You will be automatically logged out in a few moments.`
       )
 
       setShowDeleteDialog(false)
       setDeleteConfirmation("")
+      setDeleteReason("")
+
+      // Log user out after brief delay to allow them to read the message
+      setTimeout(() => {
+        window.location.href = "/logout"
+      }, 3000)
     } catch (error) {
       logger.error("Error requesting account deletion", error)
       alert("Failed to request account deletion. Please try again.")
@@ -897,6 +908,8 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
               <Label htmlFor="delete-reason">Reason for deletion (optional)</Label>
               <Input
                 id="delete-reason"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
                 placeholder="e.g., Leaving the lab, privacy concerns"
                 className="mt-2"
               />
@@ -904,7 +917,15 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false)
+                setDeleteConfirmation("")
+                setDeleteReason("")
+              }}
+              disabled={loading}
+            >
               Cancel
             </Button>
             <Button
@@ -912,7 +933,7 @@ IMPORTANT: This action is irreversible. All your personal data will be permanent
               onClick={() => requestAccountDeletion()}
               disabled={deleteConfirmation !== "DELETE MY ACCOUNT" || loading}
             >
-              Delete My Account
+              {loading ? "Processing..." : "Delete My Account"}
             </Button>
           </DialogFooter>
         </DialogContent>

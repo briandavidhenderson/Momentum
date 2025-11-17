@@ -3,27 +3,74 @@
 // ============================================================================
 
 import type { ImportanceLevel } from './common.types'
-import type { Task } from './task.types'
-import type { Project } from './project.types'
 
 /**
- * Workpackage - A major work unit within a master project
- * Contains tasks and tracks progress towards specific objectives
+ * Workpackage - Structured unit of work within a project
+ *
+ * A workpackage is a major work unit that groups related deliverables.
+ * It represents a coherent package of work with specific objectives.
+ *
+ * Examples:
+ * - "WP1: Data Collection"
+ * - "WP2: Model Development"
+ * - "WP3: Validation & Testing"
+ * - "WP4: Dissemination & Publication"
+ *
+ * Hierarchy:
+ * Project → Workpackage → Deliverable → (optional) ProjectTask
+ *
+ * Workpackages contain deliverables (NOT tasks directly).
+ * This enforces the hierarchical structure and makes it clear that
+ * deliverables are the primary organizational unit for work.
  */
 export interface Workpackage {
   id: string
   name: string
-  profileProjectId: string // Links to ProfileProject (master project)
+  projectId: string           // Parent project (changed from profileProjectId)
+
+  // Dates
   start: Date
   end: Date
-  progress: number
+
+  // Progress & Status
+  progress: number            // 0-100, calculated from deliverable progress
+  status: "planning" | "active" | "at-risk" | "completed" | "on-hold"
+
+  // Ownership
+  ownerId?: string           // PersonProfile ID responsible for this workpackage
+
+  // Structure - Workpackages contain deliverables
+  deliverableIds: string[]   // CRITICAL CHANGE: Contains deliverables, not tasks
+
+  // Metadata
   importance: ImportanceLevel
   notes?: string
-  tasks: Task[] // Tasks within this workpackage
-  isExpanded?: boolean
-  // extended fields
-  status?: "planning" | "active" | "atRisk" | "completed" | "onHold"
-  colorHex?: string
-  ownerId?: string // PersonProfile ID (not Person ID) // PersonProfile ID responsible for the WP (not Person ID)
-  regularProjects?: Project[] // Nested regular projects within a master project hierarchy
+  colorHex?: string         // For visual distinction in Gantt charts, etc.
+  tags?: string[]
+
+  // UI State
+  isExpanded?: boolean      // For accordion/tree views
+}
+
+/**
+ * WorkpackageTemplate - Reusable workpackage blueprint
+ *
+ * For common workpackage structures that labs use repeatedly
+ */
+export interface WorkpackageTemplate {
+  id: string
+  name: string
+  description?: string
+  defaultDuration: number  // Days
+  defaultImportance: ImportanceLevel
+
+  // Pre-defined deliverable templates
+  suggestedDeliverables?: string[]  // Deliverable names
+  suggestedTags?: string[]
+
+  // Metadata
+  category?: string        // "Experimental", "Administrative", "Publication", etc.
+  labId?: string          // Lab-specific template
+  createdBy: string
+  createdAt: string
 }

@@ -66,6 +66,8 @@ export function WorkpackageDialog({
   const [tasks, setTasks] = useState<Task[]>([])
   const [ownerId, setOwnerId] = useState<string | undefined>(undefined)  // Feature #5: Workpackage lead
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)  // Feature #5: Delete confirmation
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (workpackage && open) {
@@ -87,32 +89,46 @@ export function WorkpackageDialog({
       setStatus("planning")
       setTasks([])
       setOwnerId(undefined)  // Feature #5: Reset lead
+      setError(null)
     }
   }, [workpackage, open])
 
-  const handleSave = () => {
-    if (!name.trim()) return
-
-    const workpackageData: Partial<Workpackage> = {
-      name: name.trim(),
-      notes: notes.trim() || undefined,
-      start: new Date(startDate),
-      end: new Date(endDate),
-      importance,
-      status,
-      tasks,
-      ownerId,  // Feature #5: Save workpackage lead
+  const handleSave = async () => {
+    if (!name.trim()) {
+      setError('Please enter a work package name')
+      return
     }
 
-    if (!workpackage) {
-      // Creating new workpackage
-      workpackageData.profileProjectId = projectId
-      workpackageData.progress = 0
-      workpackageData.isExpanded = true
-    }
+    setIsSaving(true)
+    setError(null)
 
-    onSave(workpackageData)
-    onOpenChange(false)
+    try {
+      const workpackageData: Partial<Workpackage> = {
+        name: name.trim(),
+        notes: notes.trim() || undefined,
+        start: new Date(startDate),
+        end: new Date(endDate),
+        importance,
+        status,
+        tasks,
+        ownerId,  // Feature #5: Save workpackage lead
+      }
+
+      if (!workpackage) {
+        // Creating new workpackage
+        workpackageData.profileProjectId = projectId
+        workpackageData.progress = 0
+        workpackageData.isExpanded = true
+      }
+
+      await onSave(workpackageData)
+      onOpenChange(false)
+    } catch (err) {
+      console.error('Failed to save work package:', err)
+      setError(err instanceof Error ? err.message : 'Failed to save work package. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // Feature #5: Handle delete with confirmation
@@ -394,22 +410,27 @@ export function WorkpackageDialog({
         </div>
 
         <DialogFooter className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-4 flex-1">
             {/* Feature #5: Delete button with confirmation */}
             {isEditing && onDelete && (
-              <Button variant="destructive" onClick={handleDeleteClick}>
+              <Button variant="destructive" onClick={handleDeleteClick} disabled={isSaving}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </Button>
             )}
+            {error && (
+              <div className="text-sm text-red-600">
+                {error}
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
               {isReadOnly ? "Close" : "Cancel"}
             </Button>
             {!isReadOnly && (
-              <Button onClick={handleSave} disabled={!name.trim()}>
-                {mode === "create" ? "Create" : "Save Changes"}
+              <Button onClick={handleSave} disabled={!name.trim() || isSaving}>
+                {isSaving ? 'Saving...' : mode === "create" ? "Create" : "Save Changes"}
               </Button>
             )}
           </div>

@@ -72,10 +72,10 @@ export function OrderCard({ order, onEdit, onDelete }: OrderCardProps) {
           </div>
           <Package className="h-5 w-5 text-gray-500 flex-shrink-0" />
           <h3 className="font-semibold text-foreground text-sm truncate">
-            {order.productName}
+            {order.productName || 'Unnamed Product'}
           </h3>
-          <span className={getStatusPillClass(order.status)}>
-            {formatStatusLabel(order.status)}
+          <span className={getStatusPillClass(order.status || 'to-order')}>
+            {formatStatusLabel(order.status || 'to-order')}
           </span>
         </div>
         <DropdownMenu>
@@ -135,7 +135,7 @@ export function OrderCard({ order, onEdit, onDelete }: OrderCardProps) {
         {/* Price */}
         <div className="flex items-center gap-1.5 text-lg font-semibold text-gray-900">
           <DollarSign className="h-4 w-4 text-gray-500" />
-          {order.currency} {order.priceExVAT?.toFixed(2) || '0.00'}
+          {order.currency || 'GBP'} {order.priceExVAT?.toFixed(2) || '0.00'}
         </div>
 
         {/* Dates */}

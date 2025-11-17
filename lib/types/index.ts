@@ -24,6 +24,7 @@ export * from './funding.types'
 // Projects & Workpackages
 export * from './project.types'
 export * from './workpackage.types'
+export * from './deliverable.types'
 export * from './task.types'
 
 // Lab Operations

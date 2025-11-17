@@ -23,6 +23,8 @@ interface OrderEditDialogProps {
 
 export function OrderEditDialog({ order, open, onClose, onSave }: OrderEditDialogProps) {
   const [formData, setFormData] = useState<Partial<Order>>({})
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (order) {
@@ -37,14 +39,25 @@ export function OrderEditDialog({ order, open, onClose, onSave }: OrderEditDialo
         orderedDate: order.orderedDate,
         receivedDate: order.receivedDate,
       })
+      setError(null)
     }
   }, [order])
 
   if (!order) return null
 
-  const handleSave = () => {
-    onSave(order.id, formData)
-    onClose()
+  const handleSave = async () => {
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      await onSave(order.id, formData)
+      onClose()
+    } catch (err) {
+      console.error('Failed to save order:', err)
+      setError(err instanceof Error ? err.message : 'Failed to save changes. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleDateChange = (field: 'expectedDeliveryDate' | 'orderedDate' | 'receivedDate', dateString: string) => {
@@ -186,11 +199,20 @@ export function OrderEditDialog({ order, open, onClose, onSave }: OrderEditDialo
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          {error && (
+            <div className="flex-1 text-sm text-red-600 mr-4">
+              {error}
+            </div>
+          )}
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
-          <Button onClick={handleSave} className="bg-brand-500 hover:bg-brand-600">
-            Save Changes
+          <Button
+            onClick={handleSave}
+            className="bg-brand-500 hover:bg-brand-600"
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

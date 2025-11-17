@@ -29,6 +29,7 @@ import { PersonProfile } from "@/lib/types"
 import { logger } from "@/lib/logger"
 import { CommentsSection } from "@/components/CommentsSection"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { LabPollPanel } from "@/components/LabPollPanel"
 
 function DroppableColumn({
   id,
@@ -602,6 +603,24 @@ export function DayToDayBoard() {
     )
   }
 
+  // Error state
+  if (syncStatus === 'error') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+          <h3 className="text-lg font-semibold mb-2">Failed to Load Tasks</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            There was an error loading your day-to-day tasks. Please try refreshing the page.
+          </p>
+          <Button onClick={() => window.location.reload()} className="bg-brand-500 hover:bg-brand-600">
+            Refresh Page
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
@@ -625,11 +644,21 @@ export function DayToDayBoard() {
             </Badge>
           )}
         </div>
-        <Button onClick={() => setShowNewTaskInput(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Task
-        </Button>
       </div>
+
+      <Tabs defaultValue="tasks" className="flex-1 flex flex-col">
+        <TabsList className="mb-4">
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="polls">Team Polls</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="tasks" className="flex-1 flex flex-col">
+          <div className="mb-4">
+            <Button onClick={() => setShowNewTaskInput(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Task
+            </Button>
+          </div>
 
       {showNewTaskInput && (
         <div className="mb-4 p-4 bg-card rounded-lg border border-border">
@@ -819,6 +848,12 @@ export function DayToDayBoard() {
         </DragOverlay>
       </DndContext>
       )}
+        </TabsContent>
+
+        <TabsContent value="polls" className="flex-1">
+          <LabPollPanel />
+        </TabsContent>
+      </Tabs>
 
       <DayToDayTaskEditDialog
         open={isEditDialogOpen}
