@@ -10,6 +10,7 @@ import { EventDialog } from "@/components/EventDialog"
 import { personProfilesToPeople } from "@/lib/personHelpers"
 import { useProfiles } from "@/lib/useProfiles"
 import { useAuth } from "@/lib/hooks/useAuth"
+import { CalendarConnections } from "@/components/CalendarConnections"
 
 export function CalendarEvents() {
   const {
@@ -266,6 +267,23 @@ export function CalendarEvents() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Calendar Connections */}
+      <div className="bg-card rounded-lg border border-border p-6">
+        <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
+          <Calendar className="h-5 w-5" />
+          External Calendar Connections
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Connect your Google or Microsoft calendar to sync events automatically.
+        </p>
+        <CalendarConnections
+          currentUserProfile={profile}
+          onConnectionChange={() => {
+            window.location.reload()
+          }}
+        />
       </div>
 
       {/* Event Creation/Edit Dialog */}

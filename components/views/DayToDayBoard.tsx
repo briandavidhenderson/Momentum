@@ -29,6 +29,7 @@ import { PersonProfile } from "@/lib/types"
 import { logger } from "@/lib/logger"
 import { CommentsSection } from "@/components/CommentsSection"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { LabPollPanel } from "@/components/LabPollPanel"
 
 function DroppableColumn({
   id,
@@ -643,11 +644,21 @@ export function DayToDayBoard() {
             </Badge>
           )}
         </div>
-        <Button onClick={() => setShowNewTaskInput(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Task
-        </Button>
       </div>
+
+      <Tabs defaultValue="tasks" className="flex-1 flex flex-col">
+        <TabsList className="mb-4">
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="polls">Team Polls</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="tasks" className="flex-1 flex flex-col">
+          <div className="mb-4">
+            <Button onClick={() => setShowNewTaskInput(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Task
+            </Button>
+          </div>
 
       {showNewTaskInput && (
         <div className="mb-4 p-4 bg-card rounded-lg border border-border">
@@ -837,6 +848,12 @@ export function DayToDayBoard() {
         </DragOverlay>
       </DndContext>
       )}
+        </TabsContent>
+
+        <TabsContent value="polls" className="flex-1">
+          <LabPollPanel />
+        </TabsContent>
+      </Tabs>
 
       <DayToDayTaskEditDialog
         open={isEditDialogOpen}
