@@ -855,6 +855,7 @@ export function ProjectDashboard() {
       status: "planning",
       progress: 0,
       tasks: [],
+      deliverableIds: [],
       isExpanded: true,
       importance: "medium",
     };
