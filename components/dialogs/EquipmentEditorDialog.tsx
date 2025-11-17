@@ -59,6 +59,8 @@ export function EquipmentEditorDialog({
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(device.imageUrl || null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Update form data when device changes
   useEffect(() => {
@@ -75,6 +77,7 @@ export function EquipmentEditorDialog({
     })
     setSupplies(device.supplies)
     setImagePreview(device.imageUrl || null)
+    setError(null)
   }, [device])
 
   // Handle image upload
@@ -105,31 +108,48 @@ export function EquipmentEditorDialog({
   }
 
   const handleSave = async () => {
-    // Handle image upload
-    let finalImageUrl = formData.imageUrl
-    if (imageFile) {
-      const base64Image = await handleImageSave()
-      if (base64Image) {
-        finalImageUrl = base64Image
-      }
+    if (!formData.name.trim()) {
+      setError('Please enter a device name')
+      return
     }
 
-    const updatedDevice: EquipmentDevice = {
-      ...device,
-      name: formData.name,
-      make: formData.make,
-      model: formData.model,
-      serialNumber: formData.serialNumber || "",
-      imageUrl: finalImageUrl || "",
-      type: formData.type,
-      maintenanceDays: formData.maintenanceDays,
-      lastMaintained: formData.lastMaintained,
-      threshold: formData.threshold,
-      supplies,
-      sops: device.sops || [],
-      updatedAt: new Date().toISOString(),
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      // Handle image upload
+      let finalImageUrl = formData.imageUrl
+      if (imageFile) {
+        const base64Image = await handleImageSave()
+        if (base64Image) {
+          finalImageUrl = base64Image
+        }
+      }
+
+      const updatedDevice: EquipmentDevice = {
+        ...device,
+        name: formData.name,
+        make: formData.make,
+        model: formData.model,
+        serialNumber: formData.serialNumber || "",
+        imageUrl: finalImageUrl || "",
+        type: formData.type,
+        maintenanceDays: formData.maintenanceDays,
+        lastMaintained: formData.lastMaintained,
+        threshold: formData.threshold,
+        supplies,
+        sops: device.sops || [],
+        updatedAt: new Date().toISOString(),
+      }
+
+      await onSave(updatedDevice)
+      onClose()
+    } catch (err) {
+      console.error('Failed to save equipment:', err)
+      setError(err instanceof Error ? err.message : 'Failed to save equipment. Please try again.')
+    } finally {
+      setIsSaving(false)
     }
-    onSave(updatedDevice)
   }
 
   // DEPRECATED: Inline supply editor removed - use inventory-first approach
@@ -322,13 +342,24 @@ export function EquipmentEditorDialog({
         )}
       </div>
 
-      <div className="flex justify-end gap-2 mt-4">
-        <Button variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={handleSave} className="bg-brand-500 hover:bg-brand-600 text-white">
-          Save
-        </Button>
+      <div className="flex justify-between items-center gap-2 mt-4">
+        {error && (
+          <div className="text-sm text-red-600 flex-1">
+            {error}
+          </div>
+        )}
+        <div className="flex gap-2 ml-auto">
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className="bg-brand-500 hover:bg-brand-600 text-white"
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
       </div>
     </DialogContent>
   )
