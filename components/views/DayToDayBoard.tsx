@@ -300,7 +300,7 @@ function DayToDayTaskEditDialog({
   // Get tasks from selected project's workpackages
   const availableTasks = linkedProjectId
     ? workpackages
-        .filter((wp: any) => wp.profileProjectId === linkedProjectId)
+        .filter((wp: any) => wp.projectId === linkedProjectId)
         .flatMap((wp: any) => wp.tasks || [])
     : []
 
