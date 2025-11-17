@@ -19,7 +19,7 @@ import {
   Query,
 } from "firebase/firestore"
 import { getFirebaseDb } from "../firebase"
-import type { Workpackage } from "../types"
+import type { Workpackage, Subtask } from "../types"
 
 // ============================================================================
 // WORKPACKAGE MANAGEMENT
@@ -54,7 +54,7 @@ export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'>
     ...task,
     start: task.start instanceof Date ? Timestamp.fromDate(task.start) : task.start,
     end: task.end instanceof Date ? Timestamp.fromDate(task.end) : task.end,
-    subtasks: (task.subtasks || []).map(st => ({
+    subtasks: (task.subtasks || []).map((st: Subtask) => ({
       ...st,
       start: st.start instanceof Date ? Timestamp.fromDate(st.start) : st.start,
       end: st.end instanceof Date ? Timestamp.fromDate(st.end) : st.end,
@@ -85,6 +85,9 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
     const data = doc.data() as FirestoreWorkpackage
     return {
       ...data,
+      projectId: data.profileProjectId, // Map old field to new field name
+      status: 'active', // Default status for legacy data
+      deliverableIds: [], // Default empty array for legacy data
       start: data.start.toDate(),
       end: data.end.toDate(),
       tasks: data.tasks.map(task => ({
@@ -144,6 +147,9 @@ export function subscribeToWorkpackages(
       const data = doc.data() as FirestoreWorkpackage
       return {
         ...data,
+        projectId: data.profileProjectId, // Map old field to new field name
+        status: 'active', // Default status for legacy data
+        deliverableIds: [], // Default empty array for legacy data
         start: data.start.toDate(),
         end: data.end.toDate(),
         tasks: data.tasks.map(task => ({

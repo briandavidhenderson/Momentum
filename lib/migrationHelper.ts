@@ -19,10 +19,10 @@ export function ensureTaskDefaults(task: Task): Task {
 
 export function ensureWorkpackageDefaults(wp: Workpackage): Workpackage {
   return {
+    ...wp,
     status: wp.status ?? "active",
     colorHex: wp.colorHex ?? undefined,
     ownerId: wp.ownerId ?? undefined,
-    ...wp,
     tasks: (wp.tasks || []).map(ensureTaskDefaults),
   }
 }

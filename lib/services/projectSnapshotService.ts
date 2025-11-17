@@ -267,7 +267,7 @@ export async function importProjectSnapshot(
     const projectData = {
       ...project,
       labId: options.labId || project.labId,
-      createdBy: options.userId || project.createdBy,
+      createdBy: options.userId,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     }
@@ -287,7 +287,7 @@ export async function importProjectSnapshot(
       const wpData = {
         ...workpackage,
         profileProjectId: projectId,
-        createdBy: options.userId || workpackage.createdBy,
+        createdBy: options.userId,
         createdAt: Timestamp.now(),
       }
       delete (wpData as any).deliverables
@@ -361,7 +361,7 @@ export async function importProjectSnapshot(
             const taskData = {
               ...task,
               linkedDeliverableId: delivId,
-              createdBy: options.userId || task.createdBy,
+              createdBy: options.userId,
               createdAt: Timestamp.now(),
             }
             delete (taskData as any).todos
@@ -385,7 +385,7 @@ export async function importProjectSnapshot(
             const taskData = {
               ...task,
               linkedDeliverableId: delivId,
-              createdBy: options.userId || task.createdBy,
+              createdBy: options.userId,
               createdAt: Timestamp.now(),
             }
 

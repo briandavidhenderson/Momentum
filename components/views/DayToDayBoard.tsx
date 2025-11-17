@@ -481,15 +481,21 @@ export function DayToDayBoard() {
     allProfiles,
     projects,
     workpackages,
+    polls,
     handleCreateDayToDayTask: onCreateTask,
     handleUpdateDayToDayTask: onUpdateTask,
     handleDeleteDayToDayTask: onDeleteTask,
     handleMoveDayToDayTask: onMoveTask,
     handleReorderDayToDayTask: onReorderTask,
-    syncStatus: rawSyncStatus,
+    handleCreatePoll,
+    handleRespondToPoll,
+    handleDeletePoll,
+    syncStatus,
   } = useAppContext()
 
-  const syncStatus = rawSyncStatus as TaskSyncStatus
+  // Explicitly type syncStatus to work around AppContext type intersection issue
+  // Use a helper function to prevent TypeScript control flow narrowing
+  const getSyncStatus = (): TaskSyncStatus => syncStatus as TaskSyncStatus
   const tasks = (dayToDayTasks || []) as DayToDayTask[]
   const allProjects = (projects || [])
   const allWorkpackages = (workpackages || [])
@@ -606,7 +612,7 @@ export function DayToDayBoard() {
   }
 
   // Error state
-  if (syncStatus === 'error') {
+  if (getSyncStatus() === 'error') {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center max-w-md">
@@ -633,13 +639,13 @@ export function DayToDayBoard() {
               Manage your daily tasks and priorities
             </p>
           </div>
-          {syncStatus === 'syncing' && (
+          {getSyncStatus() === 'syncing' && (
             <Badge variant="secondary" className="flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
               Syncing...
             </Badge>
           )}
-          {syncStatus === 'error' && (
+          {getSyncStatus() === 'error' && (
             <Badge variant="destructive" className="flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               Sync Error
@@ -853,7 +859,14 @@ export function DayToDayBoard() {
         </TabsContent>
 
         <TabsContent value="polls" className="flex-1">
-          <LabPollPanel />
+          <LabPollPanel
+            polls={polls || []}
+            currentUserProfile={currentUserProfile}
+            people={people || []}
+            onCreatePoll={handleCreatePoll}
+            onRespondToPoll={handleRespondToPoll}
+            onDeletePoll={handleDeletePoll}
+          />
         </TabsContent>
       </Tabs>
 

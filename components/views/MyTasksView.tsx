@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Search, Filter, Calendar, CheckCircle2, Circle, Clock, ListTodo, FolderKanban, Loader2 } from "lucide-react"
-import { Task, Workpackage, MasterProject } from "@/lib/types"
+import { Task, Workpackage, MasterProject, Subtask } from "@/lib/types"
 import { DayToDayTask, TaskStatus } from "@/lib/dayToDayTypes"
 
 type TaskSource = "daytoday" | "project" | "all"
@@ -98,7 +98,7 @@ export function MyTasksView() {
 
               // Check subtasks
               if (task.subtasks) {
-                task.subtasks.forEach((subtask) => {
+                task.subtasks.forEach((subtask: Subtask) => {
                   const isSubtaskHelper = subtask.helpers?.includes(currentUserProfile.id)
                   const isSubtaskOwner = subtask.ownerId === currentUserProfile.id
 

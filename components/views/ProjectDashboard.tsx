@@ -225,11 +225,11 @@ export function ProjectDashboard() {
             // Check subtasks
             for (const subtask of task.subtasks || []) {
               if (ganttTask.id === subtask.id) {
-                const updatedTasks = workpackage.tasks.map(t =>
+                const updatedTasks = (workpackage.tasks || []).map(t =>
                   t.id === task.id
                     ? {
                         ...t,
-                        subtasks: t.subtasks?.map(st =>
+                        subtasks: t.subtasks?.map((st: Subtask) =>
                           st.id === subtask.id
                             ? { ...st, start: ganttTask.start, end: ganttTask.end }
                             : st
@@ -281,7 +281,7 @@ export function ProjectDashboard() {
           for (const wp of getProjectWorkpackages(project)) {
             const task = wp.tasks?.find(t => t.id === id);
             if (task) {
-              const updatedTasks = wp.tasks.map(t =>
+              const updatedTasks = (wp.tasks || []).map(t =>
                 t.id === id ? { ...t, isExpanded: !t.isExpanded } : t
               );
               await handleUpdateWorkpackage(wp.id, {
@@ -292,13 +292,13 @@ export function ProjectDashboard() {
 
             // Check if it's a subtask
             for (const task of wp.tasks || []) {
-              const subtask = task.subtasks?.find(st => st.id === id);
+              const subtask = task.subtasks?.find((st: Subtask) => st.id === id);
               if (subtask) {
-                const updatedTasks = wp.tasks.map(t =>
+                const updatedTasks = (wp.tasks || []).map(t =>
                   t.id === task.id
                     ? {
                         ...t,
-                        subtasks: t.subtasks?.map(st =>
+                        subtasks: t.subtasks?.map((st: Subtask) =>
                           st.id === id ? { ...st, isExpanded: !st.isExpanded } : st
                         ),
                       }
@@ -379,7 +379,7 @@ export function ProjectDashboard() {
             for (const project of projects) {
               for (const wp of getProjectWorkpackages(project)) {
                 const task = wp.tasks?.find(t => t.id === action.targetId);
-                if (task) {
+                if (task && wp.tasks) {
                   const updatedTasks = wp.tasks.map(t =>
                     t.id === action.targetId ? { ...t, status: "done" as const } : t
                   );
@@ -418,7 +418,7 @@ export function ProjectDashboard() {
           } else if (action.targetType === "task") {
             // Add a new subtask to the task
             const context = findTaskContext(action.targetId);
-            if (context) {
+            if (context && context.workpackage.tasks) {
               const newSubtask = {
                 id: `subtask-${Date.now()}`,
                 name: "New Subtask",
@@ -428,7 +428,7 @@ export function ProjectDashboard() {
                 status: "not-started" as const,
                 todos: [],
               };
-              
+
               const updatedTasks = context.workpackage.tasks.map(t =>
                 t.id === action.targetId
                   ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] }
@@ -441,10 +441,10 @@ export function ProjectDashboard() {
               });
               
               await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
-              
+
               // If this task is selected, update it
               if (selectedTask?.id === action.targetId) {
-                const updatedTask = updatedWorkpackage.tasks.find(t => t.id === action.targetId);
+                const updatedTask = updatedWorkpackage.tasks?.find(t => t.id === action.targetId);
                 if (updatedTask) {
                   setSelectedTask(updatedTask);
                 }
@@ -469,7 +469,7 @@ export function ProjectDashboard() {
             } else {
               // Check subtasks
               for (const t of context.workpackage.tasks || []) {
-                const subtask = t.subtasks?.find(st => st.id === action.targetId);
+                const subtask = t.subtasks?.find((st: Subtask) => st.id === action.targetId);
                 if (subtask) {
                   setDependencyDialog({
                     item: subtask,
@@ -510,7 +510,7 @@ export function ProjectDashboard() {
         // Subtask
         const updatedTasks = workpackage.tasks?.map(t => ({
           ...t,
-          subtasks: t.subtasks?.map(st =>
+          subtasks: t.subtasks?.map((st: Subtask) =>
             st.id === item.id
               ? { ...st, dependencies: dependencyIds }
               : st
@@ -667,10 +667,10 @@ export function ProjectDashboard() {
         selectedTask.id,
         subtaskId,
         todoId
-      );
+      ) as any;
 
       // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find(wp => wp.id === context.workpackage.id);
+      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
       if (!updatedWorkpackage) {
         throw new Error("Updated workpackage not found");
       }
@@ -679,7 +679,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
@@ -713,10 +713,10 @@ export function ProjectDashboard() {
         selectedTask.id,
         subtaskId,
         text.trim()
-      );
+      ) as any;
 
       // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find(wp => wp.id === context.workpackage.id);
+      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
       if (!updatedWorkpackage) {
         throw new Error("Updated workpackage not found");
       }
@@ -725,7 +725,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
@@ -759,10 +759,10 @@ export function ProjectDashboard() {
         selectedTask.id,
         subtaskId,
         todoId
-      );
+      ) as any;
 
       // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find(wp => wp.id === context.workpackage.id);
+      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
       if (!updatedWorkpackage) {
         throw new Error("Updated workpackage not found");
       }
@@ -771,7 +771,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
@@ -786,7 +786,7 @@ export function ProjectDashboard() {
 
     try {
       const context = findTaskContext(selectedTask.id);
-      if (!context) {
+      if (!context || !context.workpackage.tasks) {
         alert("Could not find task context. Please refresh the page.");
         return;
       }
@@ -818,7 +818,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
@@ -855,6 +855,7 @@ export function ProjectDashboard() {
       status: "planning",
       progress: 0,
       tasks: [],
+      deliverableIds: [],
       isExpanded: true,
       importance: "medium",
     };
