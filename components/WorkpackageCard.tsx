@@ -45,7 +45,7 @@ export function WorkpackageCard({
   const [isExpanded, setIsExpanded] = useState(workpackage.isExpanded ?? false)
 
   // Calculate deliverable statistics
-  const completedDeliverables = deliverables.filter(d => d.status === "completed").length
+  const completedDeliverables = deliverables.filter(d => d.status === "done").length
   const inProgressDeliverables = deliverables.filter(d => d.status === "in-progress").length
   const atRiskDeliverables = deliverables.filter(d => d.status === "at-risk" || d.status === "blocked").length
 
