@@ -50,6 +50,9 @@ export interface Workpackage {
 
   // UI State
   isExpanded?: boolean      // For accordion/tree views
+
+  // Backward compatibility - DEPRECATED
+  tasks?: any[]             // @deprecated Use deliverableIds instead
 }
 
 /**
