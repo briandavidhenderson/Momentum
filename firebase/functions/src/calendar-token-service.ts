@@ -6,7 +6,6 @@
 
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager"
 import * as admin from "firebase-admin"
-import * as functions from "firebase-functions"
 
 const secretManager = new SecretManagerServiceClient()
 
@@ -174,10 +173,11 @@ export async function getTokens(connectionId: string): Promise<TokenData> {
     })
 
     // Decode the payload
-    const payload = version.payload?.data?.toString("utf8")
-    if (!payload) {
+    const payloadData = version.payload?.data
+    if (!payloadData) {
       throw new Error("Secret payload is empty")
     }
+    const payload = Buffer.from(payloadData).toString("utf8")
 
     const tokenData = JSON.parse(payload) as TokenData & { storedAt: string }
 
@@ -362,12 +362,12 @@ export async function listAllTokens(): Promise<string[]> {
     })
 
     const connectionIds = secrets
-      .map((secret) => {
+      .map((secret: { name?: string | null }) => {
         const name = secret.name || ""
         const match = name.match(/calendar-token-(.+)$/)
         return match ? match[1] : null
       })
-      .filter((id): id is string => id !== null)
+      .filter((id: string | null): id is string => id !== null)
 
     return connectionIds
   } catch (error) {
