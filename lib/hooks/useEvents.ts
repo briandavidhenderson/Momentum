@@ -74,7 +74,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
         reminders: [],
         tags: ['project', 'deadline'],
         visibility: 'lab',
-        ownerId: project.principalInvestigatorId,
+        ownerId: project.principalInvestigatorIds?.[0],
         relatedIds: { projectId: project.id },
         type: 'deadline',
         notes: project.notes,
