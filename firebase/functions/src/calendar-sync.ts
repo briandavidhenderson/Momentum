@@ -1,10 +1,12 @@
 /**
  * Calendar Sync Utilities
  * Handles event normalization and syncing between Google Calendar, Microsoft Calendar, and Momentum
+ * Updated for Phase 1 Foundation - uses Google Secret Manager for token storage
  */
 
 import * as admin from "firebase-admin"
 import { CalendarEvent, CalendarSyncLog } from "../../../lib/types"
+import { getTokens, updateTokens, tokensExist } from "./calendar-token-service"
 
 /**
  * Google Calendar Event structure (simplified)
@@ -157,45 +159,104 @@ function mapGoogleVisibility(
 
 /**
  * Get access token for a connection (with refresh if needed)
+ * Updated to use Google Secret Manager instead of Firestore
  */
 export async function getAccessToken(connectionId: string): Promise<string> {
-  const tokenDoc = await admin
-    .firestore()
-    .collection("_calendarTokens")
-    .doc(connectionId)
-    .get()
+  try {
+    // Try Secret Manager first (new storage location)
+    const tokenData = await getTokens(connectionId)
+    const now = Date.now()
 
-  if (!tokenDoc.exists) {
-    throw new Error("Token not found")
+    // Check if token is expired
+    if (tokenData.expiresAt && tokenData.expiresAt < now) {
+      // Token expired, need to refresh
+      const newTokens = await refreshOAuthToken(
+        tokenData.refreshToken,
+        connectionId,
+        tokenData.provider
+      )
+      return newTokens.accessToken
+    }
+
+    return tokenData.accessToken
+  } catch (secretManagerError) {
+    // Fallback to Firestore (for backwards compatibility during migration)
+    console.warn("Secret Manager access failed, falling back to Firestore:", {
+      connectionId,
+      error: secretManagerError instanceof Error ? secretManagerError.message : "Unknown",
+    })
+
+    const tokenDoc = await admin
+      .firestore()
+      .collection("_calendarTokens")
+      .doc(connectionId)
+      .get()
+
+    if (!tokenDoc.exists) {
+      throw new Error(
+        `Token not found in Secret Manager or Firestore: ${
+          secretManagerError instanceof Error ? secretManagerError.message : "Unknown error"
+        }`
+      )
+    }
+
+    const tokenData = tokenDoc.data()!
+    const now = Date.now()
+
+    // Check if token is expired
+    if (tokenData.expiresAt && tokenData.expiresAt < now) {
+      // Get provider from connection document
+      const connectionDoc = await admin
+        .firestore()
+        .collection("calendarConnections")
+        .doc(connectionId)
+        .get()
+
+      const provider = connectionDoc.data()?.provider || "google"
+
+      // Token expired, need to refresh
+      const newTokens = await refreshOAuthToken(
+        tokenData.refreshToken,
+        connectionId,
+        provider
+      )
+      return newTokens.accessToken
+    }
+
+    return tokenData.accessToken
   }
-
-  const tokenData = tokenDoc.data()!
-  const now = Date.now()
-
-  // Check if token is expired
-  if (tokenData.expiresAt && tokenData.expiresAt < now) {
-    // Token expired, need to refresh
-    const newTokens = await refreshGoogleToken(
-      tokenData.refreshToken,
-      connectionId
-    )
-    return newTokens.accessToken
-  }
-
-  return tokenData.accessToken
 }
 
 /**
- * Refresh Google OAuth token
+ * Refresh OAuth token (Google or Microsoft)
+ * Updated to use Google Secret Manager for storage
  */
-async function refreshGoogleToken(
+async function refreshOAuthToken(
   refreshToken: string,
-  connectionId: string
+  connectionId: string,
+  provider: "google" | "microsoft"
 ): Promise<{ accessToken: string; expiresAt: number }> {
-  const config = {
-    clientId: process.env.GOOGLE_CLIENT_ID || "",
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    tokenUrl: "https://oauth2.googleapis.com/token",
+  let config: {
+    clientId: string
+    clientSecret: string
+    tokenUrl: string
+  }
+
+  // Get provider-specific config
+  if (provider === "google") {
+    config = {
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+    }
+  } else if (provider === "microsoft") {
+    config = {
+      clientId: process.env.MICROSOFT_CLIENT_ID || "",
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+      tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+    }
+  } else {
+    throw new Error(`Unsupported provider: ${provider}`)
   }
 
   const response = await fetch(config.tokenUrl, {
@@ -212,7 +273,8 @@ async function refreshGoogleToken(
   })
 
   if (!response.ok) {
-    throw new Error("Failed to refresh token")
+    const errorText = await response.text()
+    throw new Error(`Failed to refresh ${provider} token: ${errorText}`)
   }
 
   const data = await response.json()
@@ -220,15 +282,57 @@ async function refreshGoogleToken(
   const expiresIn = data.expires_in || 3600
   const expiresAt = Date.now() + expiresIn * 1000
 
-  // Update stored tokens
-  await admin
-    .firestore()
-    .collection("_calendarTokens")
-    .doc(connectionId)
-    .update({
-      accessToken,
-      expiresAt,
+  // Try to update in Secret Manager first
+  try {
+    const exists = await tokensExist(connectionId)
+    if (exists) {
+      await updateTokens(connectionId, {
+        accessToken,
+        expiresAt,
+      })
+
+      console.log({
+        action: "TOKEN_REFRESHED_SECRET_MANAGER",
+        connectionId,
+        provider,
+        expiresIn,
+        timestamp: new Date().toISOString(),
+      })
+
+      return { accessToken, expiresAt }
+    }
+  } catch (secretManagerError) {
+    console.warn("Failed to update token in Secret Manager:", {
+      connectionId,
+      error: secretManagerError instanceof Error ? secretManagerError.message : "Unknown",
     })
+  }
+
+  // Fallback: update in Firestore (for backwards compatibility)
+  try {
+    await admin
+      .firestore()
+      .collection("_calendarTokens")
+      .doc(connectionId)
+      .update({
+        accessToken,
+        expiresAt,
+        updatedAt: new Date().toISOString(),
+      })
+
+    console.log({
+      action: "TOKEN_REFRESHED_FIRESTORE",
+      connectionId,
+      provider,
+      expiresIn,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (firestoreError) {
+    console.error("Failed to update token in Firestore:", {
+      connectionId,
+      error: firestoreError instanceof Error ? firestoreError.message : "Unknown",
+    })
+  }
 
   return { accessToken, expiresAt }
 }
