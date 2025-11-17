@@ -82,36 +82,8 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
         createdAt: new Date(),
       });
 
-      project.tasks?.forEach((task) => {
-        const taskEnd = new Date(task.end);
-        // Validate date
-        if (isNaN(taskEnd.getTime())) {
-          logger.error('Invalid task end date', new Error('Invalid date'), { task });
-          return;
-        }
-        const attendees = new Set<string>();
-        if (task.primaryOwner) attendees.add(task.primaryOwner);
-        task.helpers?.forEach((helper) => attendees.add(helper));
-
-        generated.push({
-          id: `auto-task-${task.id}`,
-          title: task.name,
-          description: task.notes,
-          start: taskEnd,
-          end: new Date(taskEnd.getTime() + 45 * 60 * 1000),
-          recurrence: undefined,
-          attendees: Array.from(attendees).map((personId) => ({ personId })),
-          reminders: [],
-          tags: ['task', 'deadline'],
-          visibility: 'lab',
-          ownerId: task.primaryOwner,
-          relatedIds: { projectId: project.id, taskId: task.id },
-          type: 'deadline',
-          notes: task.notes,
-          createdBy,
-          createdAt: new Date(),
-        });
-      });
+      // Note: Tasks are now accessed through workpackages, not directly from projects
+      // Task deadline events are generated from workpackage tasks below
     });
 
     workpackages.forEach((workpackage) => {
