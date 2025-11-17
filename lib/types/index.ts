@@ -26,6 +26,7 @@ export * from './project.types'
 export * from './workpackage.types'
 export * from './deliverable.types'
 export * from './task.types'
+export * from './projectSnapshot'
 
 // Lab Operations
 export * from './order.types'

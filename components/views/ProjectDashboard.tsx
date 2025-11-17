@@ -10,8 +10,9 @@ import { TaskDetailPanel } from "@/components/TaskDetailPanel";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
 import { DependencyPickerDialog } from "@/components/DependencyPickerDialog";
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
+import { ProjectImportDialog } from "@/components/ProjectImportDialog";
 import { MasterProject, Task, Workpackage, Project, Person, ProfileProject, Subtask } from "@/lib/types";
-import { Plus, FolderKanban, PackagePlus, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Plus, FolderKanban, PackagePlus, Trash2, Loader2, AlertCircle, Upload } from "lucide-react";
 import { Task as GanttTask } from "gantt-task-react";
 import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
 import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalculate, updateWorkpackageWithTaskProgress } from "@/lib/progressCalculation";
@@ -45,6 +46,7 @@ export function ProjectDashboard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [dependencyDialog, setDependencyDialog] = useState<{
     item: Task | Subtask;
     itemType: "task" | "subtask";
@@ -60,6 +62,13 @@ export function ProjectDashboard() {
 
   const handleCreateProjectClick = () => {
     setShowProjectDialog(true);
+  };
+
+  const handleImportSuccess = (projectId: string) => {
+    logger.info('Project imported successfully', { projectId })
+    setShowImportDialog(false)
+    // Refresh will show the new project due to Firestore real-time sync
+    alert('Project imported successfully! The new project should appear in the list shortly.')
   };
 
   const handleCreateRegularProject = () => {
@@ -1015,6 +1024,15 @@ export function ProjectDashboard() {
             </>
           )}
 
+          <Button
+            onClick={() => setShowImportDialog(true)}
+            variant="outline"
+            className="gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            Import Project
+          </Button>
+
           <Button onClick={handleCreateProjectClick} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
@@ -1172,6 +1190,15 @@ export function ProjectDashboard() {
           currentWorkpackageId={dependencyDialog.workpackageId}
         />
       )}
+
+      {/* Import Project Dialog */}
+      <ProjectImportDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImportSuccess={handleImportSuccess}
+        labId={profile?.labId || ''}
+        userId={user?.uid || ''}
+      />
     </div>
   );
 }
