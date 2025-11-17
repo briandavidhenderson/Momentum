@@ -401,10 +401,23 @@ export function DeliverableDetailsPanel({
 
         {/* Linked Day-to-Day Tasks */}
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide flex items-center gap-2">
-            <ListTodo className="h-4 w-4 text-blue-600" />
-            Linked Day-to-Day Tasks ({linkedTasks.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide flex items-center gap-2">
+              <ListTodo className="h-4 w-4 text-blue-600" />
+              Linked Day-to-Day Tasks ({linkedTasks.length})
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // TODO: Open create task dialog with deliverable pre-linked
+                alert(`Create Task feature coming soon!\n\nThis will open the task creation dialog with deliverable "${deliverable.name}" pre-selected for linking.`)
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Create Task
+            </Button>
+          </div>
           {linkedTasks.length > 0 ? (
             <div className="space-y-2">
               {linkedTasks.map((task) => (
