@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react"
 import { DayToDayTask, TaskStatus } from "@/lib/dayToDayTypes"
 import { ImportanceLevel, Person } from "@/lib/types"
+import type { TaskSyncStatus } from "@/lib/hooks/useOptimisticDayToDayTasks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -485,9 +486,10 @@ export function DayToDayBoard() {
     handleDeleteDayToDayTask: onDeleteTask,
     handleMoveDayToDayTask: onMoveTask,
     handleReorderDayToDayTask: onReorderTask,
-    syncStatus,
+    syncStatus: rawSyncStatus,
   } = useAppContext()
 
+  const syncStatus = rawSyncStatus as TaskSyncStatus
   const tasks = (dayToDayTasks || []) as DayToDayTask[]
   const allProjects = (projects || [])
   const allWorkpackages = (workpackages || [])
