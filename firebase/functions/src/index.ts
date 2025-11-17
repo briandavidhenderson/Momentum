@@ -652,6 +652,7 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
 
     // Prepare update data for Firestore
     const firestoreUpdate: any = {
+      userId: context.auth.uid, // Required for Firestore security rules
       orcidId,
       orcidUrl: `${config.baseUrl}/${orcidId}`,
       orcidVerified: true,
@@ -674,13 +675,18 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
     // Get user's profileId from users collection
     const userDoc = await admin.firestore().collection("users").doc(context.auth.uid).get()
     const userData = userDoc.data()
-    const profileId = userData?.profileId
+    let profileId = userData?.profileId
 
+    // If profile doesn't exist yet (user is in onboarding), create a new profile ID
+    // The full profile will be created when onboarding completes
     if (!profileId) {
-      throw new functions.https.HttpsError(
-        "failed-precondition",
-        "User profile not found. Please complete your profile setup first."
+      profileId = admin.firestore().collection("personProfiles").doc().id
+      // Update user document with the new profileId
+      await admin.firestore().collection("users").doc(context.auth.uid).set(
+        { profileId },
+        { merge: true }
       )
+      console.log(`Created new profile ID for user ${context.auth.uid}: ${profileId}`)
     }
 
     // Merge extracted data (only if fields are not already set)

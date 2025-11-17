@@ -116,27 +116,49 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
   }
 
   try {
-    const profileRef = doc(collection(db, "personProfiles"))
-    const profileId = profileRef.id
-
-    logger.debug("Creating profile document", { profileId, profileData })
-
-    await setDoc(profileRef, {
-      ...profileData,
-      id: profileId,
-      userId,
-      createdAt: serverTimestamp(),
-    })
-
-    logger.info("Profile document created successfully", { profileId })
-
-    // Update user document with profileId (use setDoc with merge to ensure user doc exists)
+    // Check if user already has a profileId (e.g., from ORCID linking during onboarding)
     const userRef = doc(db, "users", userId)
-    logger.debug("Updating user document", { userId })
+    const userDoc = await getDoc(userRef)
+    const existingProfileId = userDoc.data()?.profileId
 
-    await setDoc(userRef, { profileId }, { merge: true })
+    let profileId: string
+    let profileRef: any
 
-    logger.info("User document updated successfully", { userId, profileId })
+    if (existingProfileId) {
+      // Profile already exists (likely from ORCID linking), update it
+      profileId = existingProfileId
+      profileRef = doc(db, "personProfiles", profileId)
+      logger.debug("Updating existing profile document", { profileId, profileData })
+
+      await setDoc(profileRef, {
+        ...profileData,
+        id: profileId,
+        userId,
+        createdAt: serverTimestamp(),
+      }, { merge: true })
+
+      logger.info("Profile document updated successfully", { profileId })
+    } else {
+      // Create new profile
+      profileRef = doc(collection(db, "personProfiles"))
+      profileId = profileRef.id
+
+      logger.debug("Creating new profile document", { profileId, profileData })
+
+      await setDoc(profileRef, {
+        ...profileData,
+        id: profileId,
+        userId,
+        createdAt: serverTimestamp(),
+      })
+
+      logger.info("Profile document created successfully", { profileId })
+
+      // Update user document with profileId
+      logger.debug("Updating user document", { userId })
+      await setDoc(userRef, { profileId }, { merge: true })
+      logger.info("User document updated successfully", { userId, profileId })
+    }
 
     // Note: Lab membership is now tracked via PersonProfile.labId
     // No need to update lab.members array (removed in new Lab interface)
