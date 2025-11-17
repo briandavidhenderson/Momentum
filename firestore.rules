@@ -31,69 +31,6 @@ service cloud.firestore {
     }
 
     // ============================================================================
-    // CALENDAR CONNECTIONS (Phase 1)
-    // ============================================================================
-    match /calendarConnections/{connectionId} {
-      // Users can only read their own calendar connections
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-
-      // Users can create calendar connections for themselves
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-
-      // Users can update their own calendar connections
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-
-      // Users can delete their own calendar connections
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    // ============================================================================
-    // CALENDAR SYNC CONFLICTS (Phase 1)
-    // ============================================================================
-    match /calendarSyncConflicts/{conflictId} {
-      // Helper function to check if user owns the connection
-      function ownsConnection(connectionId) {
-        let connection = get(/databases/$(database)/documents/calendarConnections/$(connectionId));
-        return connection != null && connection.data != null && connection.data.userId == request.auth.uid;
-      }
-
-      // Users can read conflicts for their own connections
-      allow read: if isAuthenticated() && ownsConnection(resource.data.connectionId);
-
-      // System creates conflicts (via cloud functions), but allow creation for testing
-      allow create: if isAuthenticated() && ownsConnection(request.resource.data.connectionId);
-
-      // Users can update conflicts to resolve them
-      allow update: if isAuthenticated() && ownsConnection(resource.data.connectionId);
-
-      // Users can delete their own conflicts
-      allow delete: if isAuthenticated() && ownsConnection(resource.data.connectionId);
-    }
-
-    // ============================================================================
-    // CALENDAR SYNC LOGS (Phase 1)
-    // ============================================================================
-    match /calendarSyncLogs/{logId} {
-      // Helper function to check if user owns the connection
-      function ownsConnectionLog(connectionId) {
-        let connection = get(/databases/$(database)/documents/calendarConnections/$(connectionId));
-        return connection != null && connection.data != null && connection.data.userId == request.auth.uid;
-      }
-
-      // Users can read sync logs for their own connections
-      allow read: if isAuthenticated() && ownsConnectionLog(resource.data.connectionId);
-
-      // System creates logs (via cloud functions)
-      allow create: if isAuthenticated();
-
-      // System updates logs when sync completes
-      allow update: if isAuthenticated();
-
-      // Users can delete their own logs (cleanup)
-      allow delete: if isAuthenticated() && ownsConnectionLog(resource.data.connectionId);
-    }
-
-    // ============================================================================
     // AUDIT TRAILS
     // ============================================================================
     match /auditTrails/{auditId} {

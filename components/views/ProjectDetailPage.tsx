@@ -15,6 +15,8 @@ import { WorkpackageCard } from "@/components/WorkpackageCard"
 import { DeliverableDialog } from "@/components/DeliverableDialog"
 import { DeliverableDetailsPanel } from "@/components/DeliverableDetailsPanel"
 import { CommentsSection } from "@/components/CommentsSection"
+import { ProjectExportDialog } from "@/components/ProjectExportDialog"
+import { ProjectImportDialog } from "@/components/ProjectImportDialog"
 import {
   ArrowLeft,
   Calendar,
@@ -32,8 +34,11 @@ import {
   Eye,
   Edit2,
   ShoppingCart,
+  Download,
+  Upload,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
+import { useAppContext } from "@/lib/AppContext"
 
 interface ProjectDetailPageProps {
   project: MasterProject
@@ -77,6 +82,11 @@ export function ProjectDetailPage({
   const [selectedWorkpackageForDeliverable, setSelectedWorkpackageForDeliverable] = useState<string | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+
+  // Get current user for import/export
+  const { currentUser, currentUserProfile } = useAppContext()
 
   // Fetch project orders
   useEffect(() => {
@@ -255,6 +265,14 @@ export function ProjectDetailPage({
     return deliverables.filter(d => d.workpackageId === workpackageId)
   }
 
+  // Handle import success
+  const handleImportSuccess = (projectId: string) => {
+    logger.info('Project imported successfully', { projectId })
+    // Parent component should handle navigation to the new project
+    // For now, just log success
+    alert(`Project imported successfully! Refresh the page to see the new project.`)
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
@@ -299,6 +317,15 @@ export function ProjectDetailPage({
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setExportDialogOpen(true)}
+              title="Export project snapshot"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
             {onEdit && (
               <Button variant="outline" size="sm" onClick={onEdit}>
                 <Edit className="h-4 w-4 mr-2" />
@@ -809,6 +836,24 @@ export function ProjectDetailPage({
           people={teamMembers}
         />
       )}
+
+      {/* Export Dialog */}
+      <ProjectExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        projectId={project.id}
+        projectName={project.name}
+        userId={currentUser?.uid || ''}
+      />
+
+      {/* Import Dialog */}
+      <ProjectImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImportSuccess={handleImportSuccess}
+        labId={currentUserProfile?.labId || ''}
+        userId={currentUser?.uid || ''}
+      />
     </div>
   )
 }

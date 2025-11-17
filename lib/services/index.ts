@@ -19,6 +19,7 @@ export * from './fundingService'
 export * from './projectService'
 export * from './workpackageService'
 export * from './deliverableService'
+export * from './projectSnapshotService'
 
 // Tasks
 export * from './taskService'
