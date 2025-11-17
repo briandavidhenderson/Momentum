@@ -292,7 +292,7 @@ export function ProjectDashboard() {
 
             // Check if it's a subtask
             for (const task of wp.tasks || []) {
-              const subtask = task.subtasks?.find(st => st.id === id);
+              const subtask = task.subtasks?.find((st: Subtask) => st.id === id);
               if (subtask) {
                 const updatedTasks = (wp.tasks || []).map(t =>
                   t.id === task.id
