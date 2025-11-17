@@ -130,6 +130,28 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  /**
+   * Get a valid user UID - try prop first, fall back to Firebase Auth if needed
+   * This handles cases where the user prop becomes stale during onboarding
+   */
+  const getValidUserUid = (): string | null => {
+    // Try user prop first
+    if (user?.uid && typeof user.uid === 'string' && user.uid.trim() !== '') {
+      return user.uid
+    }
+
+    // Fall back to Firebase Auth
+    const auth = getFirebaseAuth()
+    const firebaseUser = auth.currentUser
+    if (firebaseUser?.uid) {
+      logger.info("Using fresh Firebase Auth UID instead of stale prop", { uid: firebaseUser.uid })
+      return firebaseUser.uid
+    }
+
+    logger.error("No valid user UID found", { propUser: user, firebaseUser })
+    return null
+  }
+
   // Data lists
   const [organisations, setOrganisations] = useState<Organisation[]>([])
   const [institutes, setInstitutes] = useState<Institute[]>([])
@@ -343,11 +365,17 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       return
     }
 
+    const userId = getValidUserUid()
+    if (!userId) {
+      setError("Authentication error. Please refresh the page and try again.")
+      return
+    }
+
     logger.debug("Creating organisation", {
       name: orgSearchTerm.trim(),
       country: selectedCountry,
       type: "university",
-      createdBy: user.uid,
+      createdBy: userId,
     })
 
     try {
@@ -357,7 +385,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         name: orgSearchTerm.trim(),
         country: selectedCountry,
         type: "university",
-        createdBy: user.uid,
+        createdBy: userId,
       })
       logger.info("Organisation created", { orgId })
 
@@ -384,13 +412,19 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const handleCreateInstitute = async () => {
     if (!instSearchTerm.trim() || !state.selectedOrganisation) return
 
+    const userId = getValidUserUid()
+    if (!userId) {
+      setError("Authentication error. Please refresh the page and try again.")
+      return
+    }
+
     try {
       setLoading(true)
       const instId = await createInstitute({
         name: instSearchTerm.trim(),
         organisationId: state.selectedOrganisation.id,
         organisationName: state.selectedOrganisation.name,
-        createdBy: user.uid,
+        createdBy: userId,
       })
 
       const insts = await loadInstitutes(state.selectedOrganisation.id)
@@ -413,6 +447,12 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const handleCreateLab = async () => {
     if (!labSearchTerm.trim() || !state.selectedOrganisation || !state.selectedInstitute) return
 
+    const userId = getValidUserUid()
+    if (!userId) {
+      setError("Authentication error. Please refresh the page and try again.")
+      return
+    }
+
     try {
       setLoading(true)
       const labId = await createLab({
@@ -423,7 +463,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         organisationName: state.selectedOrganisation.name,
         principalInvestigators: [],
         labManagerIds: [],
-        createdBy: user.uid,
+        createdBy: userId,
       })
 
       const labsList = await loadLabs(state.selectedInstitute.id)
@@ -1787,7 +1827,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         isOpen={showCreateFunder}
         onClose={() => setShowCreateFunder(false)}
         onFunderCreated={handleFunderCreated}
-        currentUserId={user.uid}
+        currentUserId={getValidUserUid() || ''}
         organisationId={state.selectedOrganisation?.id}
       />
     </div>
