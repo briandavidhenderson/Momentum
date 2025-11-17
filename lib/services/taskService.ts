@@ -19,7 +19,7 @@ import {
 } from "firebase/firestore"
 import { getFirebaseDb } from "../firebase"
 import { logger } from "../logger"
-import type { Workpackage, Project } from "../types"
+import type { Workpackage, Project, Subtask } from "../types"
 
 // ============================================================================
 // TODO MANAGEMENT (for Task Subtasks)
@@ -38,11 +38,11 @@ export async function updateWorkpackageWithProgress(wpId: string, workpackage: W
     ...workpackage,
     start: Timestamp.fromDate(workpackage.start),
     end: Timestamp.fromDate(workpackage.end),
-    tasks: workpackage.tasks.map(task => ({
+    tasks: (workpackage.tasks || []).map(task => ({
       ...task,
       start: Timestamp.fromDate(task.start),
       end: Timestamp.fromDate(task.end),
-      subtasks: task.subtasks?.map(subtask => ({
+      subtasks: task.subtasks?.map((subtask: Subtask) => ({
         ...subtask,
         start: Timestamp.fromDate(subtask.start),
         end: Timestamp.fromDate(subtask.end),
@@ -61,42 +61,17 @@ export async function updateProjectWithProgress(projectId: string, project: Proj
   const db = getFirebaseDb()
   const projectRef = doc(db, "projects", projectId)
 
-  // Convert dates to Timestamps
+  // Convert string dates to Timestamps for Firestore
   const updateData: any = {
     ...project,
-    start: Timestamp.fromDate(project.start),
-    end: Timestamp.fromDate(project.end),
   }
 
-  if (project.tasks) {
-    updateData.tasks = project.tasks.map(task => ({
-      ...task,
-      start: Timestamp.fromDate(task.start),
-      end: Timestamp.fromDate(task.end),
-      subtasks: task.subtasks?.map(subtask => ({
-        ...subtask,
-        start: Timestamp.fromDate(subtask.start),
-        end: Timestamp.fromDate(subtask.end),
-      })),
-    }))
+  // Project dates are ISO strings, convert to Firestore Timestamps
+  if (project.startDate) {
+    updateData.start = Timestamp.fromDate(new Date(project.startDate))
   }
-
-  if (project.workpackages) {
-    updateData.workpackages = project.workpackages.map(wp => ({
-      ...wp,
-      start: Timestamp.fromDate(wp.start),
-      end: Timestamp.fromDate(wp.end),
-      tasks: wp.tasks.map(task => ({
-        ...task,
-        start: Timestamp.fromDate(task.start),
-        end: Timestamp.fromDate(task.end),
-        subtasks: task.subtasks?.map(subtask => ({
-          ...subtask,
-          start: Timestamp.fromDate(subtask.start),
-          end: Timestamp.fromDate(subtask.end),
-        })),
-      })),
-    }))
+  if (project.endDate) {
+    updateData.end = Timestamp.fromDate(new Date(project.endDate))
   }
 
   await updateDoc(projectRef, updateData)
