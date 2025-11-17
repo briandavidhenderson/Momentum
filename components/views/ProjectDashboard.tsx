@@ -418,7 +418,7 @@ export function ProjectDashboard() {
           } else if (action.targetType === "task") {
             // Add a new subtask to the task
             const context = findTaskContext(action.targetId);
-            if (context) {
+            if (context && context.workpackage.tasks) {
               const newSubtask = {
                 id: `subtask-${Date.now()}`,
                 name: "New Subtask",
@@ -428,7 +428,7 @@ export function ProjectDashboard() {
                 status: "not-started" as const,
                 todos: [],
               };
-              
+
               const updatedTasks = context.workpackage.tasks.map(t =>
                 t.id === action.targetId
                   ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] }
@@ -441,10 +441,10 @@ export function ProjectDashboard() {
               });
               
               await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
-              
+
               // If this task is selected, update it
               if (selectedTask?.id === action.targetId) {
-                const updatedTask = updatedWorkpackage.tasks.find(t => t.id === action.targetId);
+                const updatedTask = updatedWorkpackage.tasks?.find(t => t.id === action.targetId);
                 if (updatedTask) {
                   setSelectedTask(updatedTask);
                 }
