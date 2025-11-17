@@ -667,10 +667,10 @@ export function ProjectDashboard() {
         selectedTask.id,
         subtaskId,
         todoId
-      );
+      ) as any;
 
       // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find(wp => wp.id === context.workpackage.id);
+      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
       if (!updatedWorkpackage) {
         throw new Error("Updated workpackage not found");
       }
@@ -679,7 +679,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find(t => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
@@ -725,7 +725,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find(t => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
@@ -771,7 +771,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find(t => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
@@ -818,7 +818,7 @@ export function ProjectDashboard() {
       await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
       // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks.find(t => t.id === selectedTask.id);
+      const updatedTask = updatedWorkpackage.tasks?.find(t => t.id === selectedTask.id);
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
