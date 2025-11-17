@@ -481,11 +481,15 @@ export function DayToDayBoard() {
     allProfiles,
     projects,
     workpackages,
+    polls,
     handleCreateDayToDayTask: onCreateTask,
     handleUpdateDayToDayTask: onUpdateTask,
     handleDeleteDayToDayTask: onDeleteTask,
     handleMoveDayToDayTask: onMoveTask,
     handleReorderDayToDayTask: onReorderTask,
+    handleCreatePoll,
+    handleRespondToPoll,
+    handleDeletePoll,
     syncStatus,
   } = useAppContext()
 
@@ -855,7 +859,14 @@ export function DayToDayBoard() {
         </TabsContent>
 
         <TabsContent value="polls" className="flex-1">
-          <LabPollPanel />
+          <LabPollPanel
+            polls={polls || []}
+            currentUserProfile={currentUserProfile}
+            people={people || []}
+            onCreatePoll={handleCreatePoll}
+            onRespondToPoll={handleRespondToPoll}
+            onDeletePoll={handleDeletePoll}
+          />
         </TabsContent>
       </Tabs>
 
