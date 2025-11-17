@@ -31,6 +31,11 @@ import {
   generateProjectDescription,
   suggestMaintenanceSchedule,
 } from "./openai"
+import {
+  auditCalendarCollections,
+  getOrphanedConflicts,
+  migrateOrphanedConflicts,
+} from "./audit-calendar-collections"
 
 // Export GDPR functions
 export {
@@ -70,6 +75,13 @@ export {
   generateExperimentSuggestions,
   generateProjectDescription,
   suggestMaintenanceSchedule,
+}
+
+// Export Calendar Audit functions
+export {
+  auditCalendarCollections,
+  getOrphanedConflicts,
+  migrateOrphanedConflicts,
 }
 
 /**
