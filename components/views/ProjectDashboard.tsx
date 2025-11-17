@@ -786,7 +786,7 @@ export function ProjectDashboard() {
 
     try {
       const context = findTaskContext(selectedTask.id);
-      if (!context) {
+      if (!context || !context.workpackage.tasks) {
         alert("Could not find task context. Please refresh the page.");
         return;
       }
