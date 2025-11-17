@@ -490,7 +490,8 @@ export function DayToDayBoard() {
   } = useAppContext()
 
   // Explicitly type syncStatus to work around AppContext type intersection issue
-  const taskSyncStatus: TaskSyncStatus = syncStatus as TaskSyncStatus
+  // Use a helper function to prevent TypeScript control flow narrowing
+  const getSyncStatus = (): TaskSyncStatus => syncStatus as TaskSyncStatus
   const tasks = (dayToDayTasks || []) as DayToDayTask[]
   const allProjects = (projects || [])
   const allWorkpackages = (workpackages || [])
@@ -607,7 +608,7 @@ export function DayToDayBoard() {
   }
 
   // Error state
-  if (taskSyncStatus === 'error') {
+  if (getSyncStatus() === 'error') {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center max-w-md">
@@ -634,13 +635,13 @@ export function DayToDayBoard() {
               Manage your daily tasks and priorities
             </p>
           </div>
-          {taskSyncStatus === 'syncing' && (
+          {getSyncStatus() === 'syncing' && (
             <Badge variant="secondary" className="flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
               Syncing...
             </Badge>
           )}
-          {taskSyncStatus === 'error' && (
+          {getSyncStatus() === 'error' && (
             <Badge variant="destructive" className="flex items-center gap-1">
               <AlertCircle className="h-3 w-3" />
               Sync Error
