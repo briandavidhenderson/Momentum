@@ -510,7 +510,7 @@ export function ProjectDashboard() {
         // Subtask
         const updatedTasks = workpackage.tasks?.map(t => ({
           ...t,
-          subtasks: t.subtasks?.map(st =>
+          subtasks: t.subtasks?.map((st: Subtask) =>
             st.id === item.id
               ? { ...st, dependencies: dependencyIds }
               : st
