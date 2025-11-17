@@ -105,7 +105,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
         tags: ['workpackage', 'checkpoint'],
         visibility: 'lab',
         ownerId: workpackage.ownerId,
-        relatedIds: { workpackageId: workpackage.id, masterProjectId: workpackage.profileProjectId },
+        relatedIds: { workpackageId: workpackage.id, masterProjectId: workpackage.projectId },
         type: 'milestone',
         notes: workpackage.notes,
         createdBy,
