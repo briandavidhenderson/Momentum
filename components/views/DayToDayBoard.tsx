@@ -602,6 +602,24 @@ export function DayToDayBoard() {
     )
   }
 
+  // Error state
+  if (syncStatus === 'error') {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+          <h3 className="text-lg font-semibold mb-2">Failed to Load Tasks</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            There was an error loading your day-to-day tasks. Please try refreshing the page.
+          </p>
+          <Button onClick={() => window.location.reload()} className="bg-brand-500 hover:bg-brand-600">
+            Refresh Page
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
