@@ -204,8 +204,6 @@ export async function createProject(projectData: Omit<Project, 'id'> & {
     ...projectData,
     id: projectId,
     labId: labId,
-    start: Timestamp.fromDate(projectData.start),
-    end: Timestamp.fromDate(projectData.end),
     createdAt: serverTimestamp(),
   })
 
@@ -220,11 +218,12 @@ export async function getProjects(userId: string): Promise<Project[]> {
 
   const querySnapshot = await getDocs(collection(db, "projects"))
   const allProjects = querySnapshot.docs.map(doc => {
-    const data = doc.data() as FirestoreProject
+    const data = doc.data() as any
     return {
       ...data,
-      start: data.start.toDate(),
-      end: data.end.toDate(),
+      // Convert Firestore timestamps to ISO strings if they exist
+      startDate: data.start ? data.start.toDate().toISOString() : data.startDate,
+      endDate: data.end ? data.end.toDate().toISOString() : data.endDate,
     } as Project
   })
 
@@ -237,9 +236,7 @@ export async function updateProject(projectId: string, updates: Partial<Project>
   const projectRef = doc(db, "projects", projectId)
   const updateData: any = { ...updates }
 
-  // Convert Date objects to Timestamps
-  if (updates.start) updateData.start = Timestamp.fromDate(updates.start)
-  if (updates.end) updateData.end = Timestamp.fromDate(updates.end)
+  // startDate and endDate are already strings in Project type, no conversion needed
 
   await updateDoc(projectRef, updateData)
 }
@@ -271,11 +268,12 @@ export function subscribeToProjects(
       q,
       async (snapshot) => {
         const projects = snapshot.docs.map(doc => {
-          const data = doc.data() as FirestoreProject
+          const data = doc.data() as any
           return {
             ...data,
-            start: data.start.toDate(),
-            end: data.end.toDate(),
+            // Convert Firestore timestamps to ISO strings if they exist
+            startDate: data.start ? data.start.toDate().toISOString() : data.startDate,
+            endDate: data.end ? data.end.toDate().toISOString() : data.endDate,
           } as Project
         })
         callback(projects)

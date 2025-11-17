@@ -93,39 +93,33 @@ export function filterProjects(
     )
   }
 
-  // Importance filter
-  if (filters.importance && filters.importance.length > 0) {
-    filtered = filtered.filter((p) =>
-      filters.importance!.includes(p.importance)
-    )
-  }
-
-  // Kind filter
-  if (filters.kind && filters.kind.length > 0) {
-    filtered = filtered.filter((p) =>
-      filters.kind!.includes(p.kind || "regular")
-    )
-  }
+  // Note: Projects don't have importance or kind properties in the current type structure
+  // These filters are not applicable to projects
 
   // PI filter
   if (filters.principalInvestigatorId) {
     filtered = filtered.filter(
-      (p) => p.principalInvestigatorId === filters.principalInvestigatorId
+      (p) => p.principalInvestigatorIds?.includes(filters.principalInvestigatorId!)
     )
   }
 
   // Date filters
+  // Note: Project dates are strings, so we need to convert filter dates to strings for comparison
   if (filters.startDateFrom) {
-    filtered = filtered.filter((p) => p.start >= filters.startDateFrom!)
+    const dateStr = typeof filters.startDateFrom === 'string' ? filters.startDateFrom : filters.startDateFrom!.toISOString()
+    filtered = filtered.filter((p) => p.startDate >= dateStr)
   }
   if (filters.startDateTo) {
-    filtered = filtered.filter((p) => p.start <= filters.startDateTo!)
+    const dateStr = typeof filters.startDateTo === 'string' ? filters.startDateTo : filters.startDateTo!.toISOString()
+    filtered = filtered.filter((p) => p.startDate <= dateStr)
   }
   if (filters.endDateFrom) {
-    filtered = filtered.filter((p) => p.end >= filters.endDateFrom!)
+    const dateStr = typeof filters.endDateFrom === 'string' ? filters.endDateFrom : filters.endDateFrom!.toISOString()
+    filtered = filtered.filter((p) => p.endDate >= dateStr)
   }
   if (filters.endDateTo) {
-    filtered = filtered.filter((p) => p.end <= filters.endDateTo!)
+    const dateStr = typeof filters.endDateTo === 'string' ? filters.endDateTo : filters.endDateTo!.toISOString()
+    filtered = filtered.filter((p) => p.endDate <= dateStr)
   }
 
   // Progress filters
