@@ -173,7 +173,12 @@ export const CATEGORIES: Category[] = [
 
 /**
  * Order - Supply order for lab consumables/equipment
+ *
  * UPDATED: Account linking is now REQUIRED and includes project/funder info
+ * UPDATED: Added hierarchical project linking (Project → Workpackage → Deliverable → ProjectTask)
+ *
+ * Orders should ideally be linked to a specific Deliverable for accurate budget tracking
+ * and to enable deliverables to show their required supplies/equipment.
  */
 export interface Order {
   id: string
@@ -191,9 +196,16 @@ export interface Order {
   masterProjectId: string         // ✅ Cached from account
   masterProjectName: string       // Cached
 
-  // Optional linking to specific work
-  taskId?: string                 // If ordered for specific task
-  workpackageId?: string          // If ordered for specific work package
+  // NEW: Hierarchical Project Linking (PREFERRED)
+  // Orders should ideally be linked to a specific deliverable for accurate budget tracking
+  linkedProjectId?: string        // Link to unified Project
+  linkedWorkpackageId?: string    // Link to specific Workpackage
+  linkedDeliverableId?: string    // PREFERRED: Link to specific Deliverable
+  linkedProjectTaskId?: string    // Optional: Link to specific ProjectTask
+
+  // DEPRECATED: Old linking fields (use linkedProjectTaskId instead of taskId)
+  taskId?: string                 // @deprecated Use linkedProjectTaskId instead
+  workpackageId?: string          // @deprecated Use linkedWorkpackageId instead
 
   // Provenance fields (for traceability)
   sourceDeviceId?: string         // Device this order originated from
