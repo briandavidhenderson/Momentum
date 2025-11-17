@@ -379,7 +379,7 @@ export function ProjectDashboard() {
             for (const project of projects) {
               for (const wp of getProjectWorkpackages(project)) {
                 const task = wp.tasks?.find(t => t.id === action.targetId);
-                if (task) {
+                if (task && wp.tasks) {
                   const updatedTasks = wp.tasks.map(t =>
                     t.id === action.targetId ? { ...t, status: "done" as const } : t
                   );
