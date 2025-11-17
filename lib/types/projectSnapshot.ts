@@ -10,12 +10,12 @@ import {
   Workpackage,
   Deliverable,
   ProjectTask,
+  ProjectTaskTodo,
   Order,
-  DayToDayTask,
   FundingAccount,
   FundingTransaction,
-  InventoryItem,
 } from './index'
+import type { DayToDayTask } from '../dayToDayTypes'
 
 /**
  * Complete project snapshot for export/import
@@ -87,17 +87,7 @@ export interface DayToDayTaskSnapshot extends Omit<DayToDayTask, 'id'> {
  */
 export interface ProjectTaskSnapshot extends Omit<ProjectTask, 'id'> {
   id: string
-  todos?: TaskTodo[]
-}
-
-/**
- * Individual todo item within a project task
- */
-export interface TaskTodo {
-  id: string
-  text: string
-  completed: boolean
-  createdAt: string
+  todos?: ProjectTaskTodo[]
 }
 
 /**
