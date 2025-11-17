@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order } from "@/lib/types"
+import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable } from "@/lib/types"
 import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 import { logger } from "@/lib/logger"
@@ -11,6 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { WorkpackageDialog } from "@/components/WorkpackageDialog"
+import { WorkpackageCard } from "@/components/WorkpackageCard"
+import { DeliverableDialog } from "@/components/DeliverableDialog"
+import { DeliverableDetailsPanel } from "@/components/DeliverableDetailsPanel"
 import { CommentsSection } from "@/components/CommentsSection"
 import {
   ArrowLeft,
@@ -35,6 +38,7 @@ import { formatCurrency } from "@/lib/constants"
 interface ProjectDetailPageProps {
   project: MasterProject
   workpackages: Workpackage[]
+  deliverables: Deliverable[]
   teamMembers: PersonProfile[]
   fundingAccounts: FundingAccount[]
   onBack: () => void
@@ -42,11 +46,15 @@ interface ProjectDetailPageProps {
   onCreateWorkpackage?: (workpackageData: Partial<Workpackage>) => void
   onUpdateWorkpackage?: (workpackageId: string, updates: Partial<Workpackage>) => void
   onDeleteWorkpackage?: (workpackageId: string) => void
+  onCreateDeliverable?: (deliverableData: Partial<Deliverable>) => void
+  onUpdateDeliverable?: (deliverableId: string, updates: Partial<Deliverable>) => void
+  onDeleteDeliverable?: (deliverableId: string) => void
 }
 
 export function ProjectDetailPage({
   project,
   workpackages,
+  deliverables,
   teamMembers,
   fundingAccounts,
   onBack,
@@ -54,11 +62,19 @@ export function ProjectDetailPage({
   onCreateWorkpackage,
   onUpdateWorkpackage,
   onDeleteWorkpackage,
+  onCreateDeliverable,
+  onUpdateDeliverable,
+  onDeleteDeliverable,
 }: ProjectDetailPageProps) {
   const [activeTab, setActiveTab] = useState("overview")
   const [workpackageDialogOpen, setWorkpackageDialogOpen] = useState(false)
   const [selectedWorkpackage, setSelectedWorkpackage] = useState<Workpackage | null>(null)
   const [workpackageDialogMode, setWorkpackageDialogMode] = useState<"create" | "edit" | "view">("view")
+  const [deliverableDialogOpen, setDeliverableDialogOpen] = useState(false)
+  const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null)
+  const [deliverableDialogMode, setDeliverableDialogMode] = useState<"create" | "edit" | "view">("view")
+  const [selectedDeliverableForPanel, setSelectedDeliverableForPanel] = useState<Deliverable | null>(null)
+  const [selectedWorkpackageForDeliverable, setSelectedWorkpackageForDeliverable] = useState<string | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
 
@@ -195,6 +211,48 @@ export function ProjectDetailPage({
         setWorkpackageDialogOpen(false)
       }
     }
+  }
+
+  // Deliverable dialog handlers
+  const handleCreateDeliverableClick = (workpackageId: string) => {
+    setSelectedWorkpackageForDeliverable(workpackageId)
+    setSelectedDeliverable(null)
+    setDeliverableDialogMode("create")
+    setDeliverableDialogOpen(true)
+  }
+
+  const handleViewDeliverable = (deliverable: Deliverable) => {
+    setSelectedDeliverableForPanel(deliverable)
+  }
+
+  const handleEditDeliverable = (deliverable: Deliverable) => {
+    setSelectedDeliverable(deliverable)
+    setSelectedWorkpackageForDeliverable(deliverable.workpackageId)
+    setDeliverableDialogMode("edit")
+    setDeliverableDialogOpen(true)
+  }
+
+  const handleSaveDeliverable = (deliverableData: Partial<Deliverable>) => {
+    if (deliverableDialogMode === "create" && onCreateDeliverable) {
+      onCreateDeliverable(deliverableData)
+    } else if (deliverableDialogMode === "edit" && selectedDeliverable && onUpdateDeliverable) {
+      onUpdateDeliverable(selectedDeliverable.id, deliverableData)
+    }
+    setDeliverableDialogOpen(false)
+  }
+
+  const handleDeleteDeliverable = (deliverableId: string) => {
+    if (onDeleteDeliverable) {
+      if (confirm("Are you sure you want to delete this deliverable?")) {
+        onDeleteDeliverable(deliverableId)
+        setSelectedDeliverableForPanel(null)
+      }
+    }
+  }
+
+  // Get deliverables for a specific workpackage
+  const getWorkpackageDeliverables = (workpackageId: string): Deliverable[] => {
+    return deliverables.filter(d => d.workpackageId === workpackageId)
   }
 
   return (
@@ -462,7 +520,7 @@ export function ProjectDetailPage({
                     <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">No work packages yet</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Add work packages to organize your project tasks
+                      Add work packages to organize your project deliverables
                     </p>
                     {onCreateWorkpackage && (
                       <Button onClick={handleCreateWorkpackageClick} className="mt-4">
@@ -474,82 +532,18 @@ export function ProjectDetailPage({
                 </Card>
               ) : (
                 workpackages.map((wp) => (
-                  <Card key={wp.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg">{wp.name}</CardTitle>
-                          <CardDescription className="mt-1">
-                            {new Date(wp.start).toLocaleDateString()} - {new Date(wp.end).toLocaleDateString()}
-                          </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              wp.status === "completed" ? "default" :
-                              wp.status === "atRisk" ? "destructive" :
-                              "secondary"
-                            }
-                          >
-                            {wp.status || "planning"}
-                          </Badge>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleViewWorkpackage(wp)}
-                              title="View details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {onUpdateWorkpackage && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => handleEditWorkpackage(wp)}
-                                title="Edit workpackage"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {/* Progress */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium">Progress</span>
-                            <span className="text-sm text-muted-foreground">{wp.progress}%</span>
-                          </div>
-                          <Progress value={wp.progress} className="h-2" />
-                        </div>
-
-                        {/* Tasks Summary */}
-                        {wp.tasks && wp.tasks.length > 0 && (
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <CheckCircle2 className="h-4 w-4" />
-                              {wp.tasks.filter(t => t.status === "done").length} / {wp.tasks.length} tasks
-                            </span>
-                            {wp.importance && (
-                              <Badge variant="outline" className="text-xs">
-                                {wp.importance}
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-
-                        {wp.notes && (
-                          <p className="text-sm text-muted-foreground">{wp.notes}</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <WorkpackageCard
+                    key={wp.id}
+                    workpackage={wp}
+                    deliverables={getWorkpackageDeliverables(wp.id)}
+                    people={teamMembers}
+                    onViewWorkpackage={handleViewWorkpackage}
+                    onEditWorkpackage={onUpdateWorkpackage ? handleEditWorkpackage : undefined}
+                    onCreateDeliverable={onCreateDeliverable ? handleCreateDeliverableClick : undefined}
+                    onEditDeliverable={onUpdateDeliverable ? handleEditDeliverable : undefined}
+                    onDeleteDeliverable={onDeleteDeliverable ? handleDeleteDeliverable : undefined}
+                    onDeliverableClick={handleViewDeliverable}
+                  />
                 ))
               )}
             </div>
@@ -789,6 +783,32 @@ export function ProjectDetailPage({
         mode={workpackageDialogMode}
         availableLeads={teamMembers}
       />
+
+      {/* Deliverable Dialog */}
+      {selectedWorkpackageForDeliverable && (
+        <DeliverableDialog
+          open={deliverableDialogOpen}
+          onOpenChange={setDeliverableDialogOpen}
+          deliverable={selectedDeliverable}
+          workpackageId={selectedWorkpackageForDeliverable}
+          onSave={handleSaveDeliverable}
+          onDelete={deliverableDialogMode === "edit" ? () => selectedDeliverable && handleDeleteDeliverable(selectedDeliverable.id) : undefined}
+          mode={deliverableDialogMode}
+          availableOwners={teamMembers}
+        />
+      )}
+
+      {/* Deliverable Details Panel */}
+      {selectedDeliverableForPanel && (
+        <DeliverableDetailsPanel
+          deliverable={selectedDeliverableForPanel}
+          onClose={() => setSelectedDeliverableForPanel(null)}
+          onEdit={onUpdateDeliverable ? handleEditDeliverable : undefined}
+          onDelete={onDeleteDeliverable ? handleDeleteDeliverable : undefined}
+          orders={orders}
+          people={teamMembers}
+        />
+      )}
     </div>
   )
 }
