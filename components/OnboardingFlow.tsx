@@ -460,6 +460,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   }
 
   const handleComplete = async () => {
+    // Validate user authentication
+    if (!user || !user.uid || typeof user.uid !== 'string' || user.uid.trim() === '') {
+      logger.error("Invalid user object in onboarding", { user })
+      setError("Authentication error. Please refresh the page and try again.")
+      return
+    }
+
     if (!state.selectedOrganisation || !state.selectedInstitute || !state.selectedLab) {
       setError("Please select organisation, institute, and lab")
       return
@@ -481,6 +488,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
     try {
       setLoading(true)
       setError(null)
+
+      logger.info("Starting profile creation", { userId: user.uid })
 
       const positionDisplay = POSITION_DISPLAY_NAMES[state.positionLevel]
 
@@ -1668,7 +1677,12 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               )}
             </div>
 
-            <Button onClick={handleComplete} disabled={loading} size="lg" className="w-full">
+            <Button
+              onClick={handleComplete}
+              disabled={loading || !user || !user.uid}
+              size="lg"
+              className="w-full"
+            >
               {loading ? "Setting up your account..." : "Complete Setup"}
             </Button>
           </div>

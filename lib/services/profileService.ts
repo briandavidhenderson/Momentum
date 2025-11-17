@@ -73,8 +73,22 @@ async function repairUserProfileSync(userId: string, profileId: string): Promise
  */
 export async function createProfile(userId: string, profileData: Omit<PersonProfile, 'id'>): Promise<string> {
   const db = getFirebaseDb()
+
+  // Log the inputs for debugging
+  logger.debug("createProfile called", {
+    userId,
+    userIdType: typeof userId,
+    userIdLength: userId?.length,
+    hasProfileData: !!profileData,
+  })
+
   // Validate required fields
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+    logger.error("Invalid userId in createProfile", {
+      userId,
+      userIdType: typeof userId,
+      userIdValue: JSON.stringify(userId),
+    })
     throw new Error("userId is required and must be a non-empty string")
   }
 
