@@ -14,7 +14,6 @@ import {
   POSITION_DISPLAY_NAMES,
   POSITION_CATEGORIES,
 } from "@/lib/types"
-import { getFirebaseAuth } from "@/lib/firebase"
 import {
   getOrganisations,
   getInstitutes,
@@ -461,16 +460,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   }
 
   const handleComplete = async () => {
-    // Get fresh user from Firebase Auth to avoid stale state
-    const auth = getFirebaseAuth()
-    const firebaseUser = auth.currentUser
-
-    // Validate user authentication with fresh auth state
-    if (!firebaseUser || !firebaseUser.uid) {
-      logger.error("No authenticated user in onboarding", {
-        firebaseUser: firebaseUser ? "exists" : "null",
-        propUser: user ? "exists" : "null"
-      })
+    // Validate user authentication
+    if (!user || !user.uid || typeof user.uid !== 'string' || user.uid.trim() === '') {
+      logger.error("Invalid user object in onboarding", { user })
       setError("Authentication error. Please refresh the page and try again.")
       return
     }
@@ -497,7 +489,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       setLoading(true)
       setError(null)
 
-      logger.info("Starting profile creation", { userId: firebaseUser.uid })
+      logger.info("Starting profile creation", { userId: user.uid })
 
       const positionDisplay = POSITION_DISPLAY_NAMES[state.positionLevel]
 
@@ -558,13 +550,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         notes: "",
 
         // Account
-        userId: firebaseUser.uid,
+        userId: user.uid,
         profileComplete: true,
         onboardingComplete: true,
         isAdministrator: false,
       }
 
-      const profileId = await createProfile(firebaseUser.uid, profileData)
+      const profileId = await createProfile(user.uid, profileData)
 
       // Note: createProfile already updates the user document with profileId
       // No need to call updateUser again (would be redundant)
