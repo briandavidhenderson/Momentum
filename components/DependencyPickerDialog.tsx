@@ -77,7 +77,7 @@ export function DependencyPickerDialog({
           })
 
           // Add subtasks
-          task.subtasks?.forEach(subtask => {
+          task.subtasks?.forEach((subtask: Subtask) => {
             const isCurrentSubtask = subtask.id === currentItem.id && currentItemType === "subtask"
             const wouldCreateSubtaskCycle = checkForCycle(subtask.id, currentItem, currentItemType, workpackagesMap)
 

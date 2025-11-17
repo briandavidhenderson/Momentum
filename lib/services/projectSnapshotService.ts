@@ -15,7 +15,7 @@ import {
   writeBatch,
   Timestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { getFirebaseDb } from '@/lib/firebase'
 import { logger } from '@/lib/logger'
 import {
   ProjectSnapshot,
@@ -45,6 +45,7 @@ export async function exportProjectSnapshot(
     logger.info('Starting project snapshot export', { projectId })
 
     // Fetch project
+    const db = getFirebaseDb()
     const projectDoc = await getDoc(doc(db, 'projects', projectId))
     if (!projectDoc.exists()) {
       throw new Error(`Project ${projectId} not found`)
@@ -241,6 +242,7 @@ export async function importProjectSnapshot(
     result.warnings = validation.warnings
 
     const { project } = snapshot
+    const db = getFirebaseDb()
     const batch = writeBatch(db)
     let operationCount = 0
 
