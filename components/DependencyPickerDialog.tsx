@@ -266,12 +266,12 @@ function checkForCycle(
     for (const workpackage of workpackagesMap.values()) {
       for (const task of workpackage.tasks || []) {
         if (task.id === itemId) {
-          task.dependencies?.forEach(depId => queue.push(depId))
+          task.dependencies?.forEach((depId: string) => queue.push(depId))
         }
 
         for (const subtask of task.subtasks || []) {
           if (subtask.id === itemId) {
-            subtask.dependencies?.forEach(depId => queue.push(depId))
+            subtask.dependencies?.forEach((depId: string) => queue.push(depId))
           }
         }
       }
