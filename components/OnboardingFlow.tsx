@@ -1537,7 +1537,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                 </select>
                 <Button
                   type="button"
-                  onClick={() => setShowCreateFunder(true)}
+                  onClick={() => {
+                    if (!getValidUserUid()) {
+                      setError("Authentication error. Please refresh the page and try again.")
+                      return
+                    }
+                    setShowCreateFunder(true)
+                  }}
                   variant="outline"
                   className="mt-1"
                 >
@@ -1824,7 +1830,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
       {/* Funder Creation Dialog */}
       <FunderCreationDialog
-        isOpen={showCreateFunder}
+        isOpen={showCreateFunder && !!getValidUserUid()}
         onClose={() => setShowCreateFunder(false)}
         onFunderCreated={handleFunderCreated}
         currentUserId={getValidUserUid() || ''}
