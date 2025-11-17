@@ -2,7 +2,7 @@
 // PROJECT TYPES
 // ============================================================================
 
-import type { ProjectVisibility, ProjectRole, ImportanceLevel, WorkStatus } from './common.types'
+import type { ProjectVisibility, ProjectRole } from './common.types'
 
 /**
  * Project - Top-level research initiative

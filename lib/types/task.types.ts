@@ -100,7 +100,7 @@ export interface Task {
   workpackageId: string       // LEGACY: Will be removed
   importance: ImportanceLevel
   notes?: string
-  deliverables: Deliverable[]  // LEGACY: Deliverables are now separate entities
+  deliverables: any[]  // LEGACY: Deliverables are now in deliverable.types.ts
   isExpanded?: boolean
   type?: "experiment" | "writing" | "meeting" | "analysis"
   dependencies?: string[]
@@ -128,7 +128,7 @@ export interface Subtask {
   notes?: string
   tags?: string[]
   todos?: Todo[]
-  deliverables?: Deliverable[]
+  deliverables?: any[]  // LEGACY: Deliverables are now in deliverable.types.ts
   linkedOrderIds?: string[]
   linkedInventoryItemIds?: string[]
   isExpanded?: boolean
@@ -148,54 +148,14 @@ export interface Todo {
   order: number
 }
 
-/**
- * @deprecated Deliverables are now in lib/types/deliverable.types.ts
- */
-export interface Deliverable {
-  id: string
-  name: string
-  progress: number
-  status?: WorkStatus
-  dueDate?: string
-  ownerId?: string
-  description?: string
-  metrics?: DeliverableMetric[]
-  reviewHistory?: DeliverableReview[]
-  documentLinks?: DeliverableLink[]
-  blockers?: string[]
-  notes?: string
-  lastUpdatedAt?: string
-}
-
-/**
- * @deprecated Moved to deliverable.types.ts
- */
-export interface DeliverableLink {
-  id: string
-  provider: "google-drive" | "onedrive" | "url"
-  title: string
-  targetUrl: string
-  lastChecked?: string
-  iconOverride?: string
-}
-
-/**
- * @deprecated Moved to deliverable.types.ts
- */
-export interface DeliverableReview {
-  id: string
-  reviewerId: string
-  reviewedAt: string
-  summary?: string
-  notes?: string
-}
-
-/**
- * @deprecated Moved to deliverable.types.ts
- */
-export interface DeliverableMetric {
-  id: string
-  label: string
-  value: string
-  unit?: string
-}
+// ============================================================================
+// NOTE: Deliverable types have been moved to lib/types/deliverable.types.ts
+// ============================================================================
+// The following types are now defined in deliverable.types.ts:
+// - Deliverable
+// - DeliverableLink
+// - DeliverableReview
+// - DeliverableMetric
+// - DeliverableTemplate
+//
+// Import them from '@/lib/types' or './deliverable.types' instead.
