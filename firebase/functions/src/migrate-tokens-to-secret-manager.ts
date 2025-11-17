@@ -307,7 +307,12 @@ export const verifyTokenMigration = functions.https.onCall(
         .collection("calendarConnections")
         .get()
 
-      const results = []
+      const results: Array<{
+        connectionId: string
+        provider: any
+        userId: any
+        inSecretManager: boolean
+      }> = []
       let allMigrated = true
 
       for (const doc of connectionsSnapshot.docs) {

@@ -489,7 +489,7 @@ function parseOrcidRecordToProfileData(record: any): any {
         const month = publicationDate?.month?.value ? parseInt(publicationDate.month.value) : undefined
         const day = publicationDate?.day?.value ? parseInt(publicationDate.day.value) : undefined
 
-        let pubDateStr = undefined
+        let pubDateStr: string | undefined = undefined
         if (year) {
           pubDateStr = `${year}${month ? `-${String(month).padStart(2, "0")}` : ""}${day ? `-${String(day).padStart(2, "0")}` : ""}`
         }
@@ -517,7 +517,7 @@ function parseOrcidRecordToProfileData(record: any): any {
 
         // Parse amount and currency
         const amount = fundingSummary.amount
-        let amountStr = undefined
+        let amountStr: string | undefined = undefined
         if (amount?.value && amount["currency-code"]) {
           amountStr = `${amount.value} ${amount["currency-code"]}`
         } else if (amount?.value) {
