@@ -1679,7 +1679,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
             <Button
               onClick={handleComplete}
-              disabled={loading || !user || !user.uid}
+              disabled={loading}
               size="lg"
               className="w-full"
             >
