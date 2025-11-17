@@ -127,7 +127,7 @@ export function ProjectDetailPage({
       0
     )
     const completedWorkpackages = workpackages.filter(wp => wp.status === "completed").length
-    const atRiskWorkpackages = workpackages.filter(wp => wp.status === "atRisk").length
+    const atRiskWorkpackages = workpackages.filter(wp => wp.status === "at-risk").length
 
     return {
       totalWorkpackages: workpackages.length,
