@@ -378,6 +378,40 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // DELIVERABLES COLLECTION
+    // ============================================================================
+    // Deliverables are concrete outcomes within workpackages.
+    // They are the primary unit of work output in the project hierarchy:
+    // Project → Workpackage → Deliverable → (optional) ProjectTask
+    match /deliverables/{deliverableId} {
+      // All authenticated users can read deliverables
+      // (Client-side filtering by lab/project; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
+
+      // Users can create deliverables
+      // The deliverable must belong to a workpackage (workpackageId is required)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.createdBy == request.auth.uid &&
+                       'workpackageId' in request.resource.data;
+
+      // Creator, deliverable owner, or admin can update
+      // This allows both the creator and the assigned owner to update progress
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        ('ownerId' in resource.data && resource.data.ownerId == getUserProfileId())
+      );
+
+      // Creator or admin can delete
+      // Note: Deleting a deliverable should also clean up linked ProjectTasks
+      // (Consider implementing cascade deletion via Cloud Functions)
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
     // ORDERS COLLECTION
     // ============================================================================
     match /orders/{orderId} {

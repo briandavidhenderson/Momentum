@@ -27,10 +27,14 @@ export function ProjectDashboard() {
     projects,
     workpackages: allWorkpackages,
     workpackagesMap,
+    deliverables,
     handleCreateMasterProject,
     handleUpdateMasterProject,
     handleDeleteMasterProject,
     handleUpdateWorkpackage,
+    handleCreateDeliverable,
+    handleUpdateDeliverable,
+    handleDeleteDeliverable,
     handleUpdateTaskHelpers,
     handleUpdateTaskDates,
     handleCreateWorkpackage: createWorkpackage,
@@ -876,10 +880,16 @@ export function ProjectDashboard() {
       selectedProjectForDetail.teamMemberIds?.includes(p.id)
     )
 
+    // Get deliverables for this project (filter by workpackages)
+    const projectDeliverables = deliverables.filter(d =>
+      projectWorkpackages.some(wp => wp.id === d.workpackageId)
+    )
+
     return (
       <ProjectDetailPage
         project={selectedProjectForDetail}
         workpackages={projectWorkpackages}
+        deliverables={projectDeliverables}
         teamMembers={projectTeamMembers}
         fundingAccounts={[]} // TODO: Add funding accounts fetch
         onBack={() => setSelectedProjectForDetail(null)}
@@ -911,6 +921,18 @@ export function ProjectDashboard() {
           })
           // Note: The actual workpackage document deletion should be handled by the backend or here
           // For now, we just remove the reference
+        }}
+        onCreateDeliverable={async (deliverableData) => {
+          await handleCreateDeliverable({
+            ...deliverableData,
+            createdBy: user?.uid || "",
+          } as any)
+        }}
+        onUpdateDeliverable={async (deliverableId, updates) => {
+          await handleUpdateDeliverable(deliverableId, updates)
+        }}
+        onDeleteDeliverable={async (deliverableId) => {
+          await handleDeleteDeliverable(deliverableId)
         }}
       />
     )
