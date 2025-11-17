@@ -469,7 +469,7 @@ export function ProjectDashboard() {
             } else {
               // Check subtasks
               for (const t of context.workpackage.tasks || []) {
-                const subtask = t.subtasks?.find(st => st.id === action.targetId);
+                const subtask = t.subtasks?.find((st: Subtask) => st.id === action.targetId);
                 if (subtask) {
                   setDependencyDialog({
                     item: subtask,
