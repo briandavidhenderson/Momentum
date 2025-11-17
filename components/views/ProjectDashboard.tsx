@@ -225,7 +225,7 @@ export function ProjectDashboard() {
             // Check subtasks
             for (const subtask of task.subtasks || []) {
               if (ganttTask.id === subtask.id) {
-                const updatedTasks = workpackage.tasks.map(t =>
+                const updatedTasks = (workpackage.tasks || []).map(t =>
                   t.id === task.id
                     ? {
                         ...t,
