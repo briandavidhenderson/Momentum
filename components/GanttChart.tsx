@@ -275,7 +275,7 @@ export function GanttChart({
           return
         }
 
-        workpackage.tasks?.forEach((task) => {
+        workpackage.tasks?.forEach((task: Task) => {
           // Ensure dates are Date objects (converted from Firestore Timestamps)
           const taskStart = task.start instanceof Date 
             ? task.start 
@@ -301,7 +301,7 @@ export function GanttChart({
 
           if (task.isExpanded === false) {
             // Still add deliverables even if task is collapsed
-            task.deliverables?.forEach((deliverable) => {
+            task.deliverables?.forEach((deliverable: Deliverable) => {
               if (deliverable.dueDate) {
                 addTask(
                   {
@@ -321,7 +321,7 @@ export function GanttChart({
           }
 
           // Add subtasks
-          task.subtasks?.forEach((subtask) => {
+          task.subtasks?.forEach((subtask: Subtask) => {
             // Ensure dates are Date objects (converted from Firestore Timestamps)
             const subtaskStart = subtask.start instanceof Date 
               ? subtask.start 
@@ -346,7 +346,7 @@ export function GanttChart({
             )
 
             // Add deliverables from subtasks
-            subtask.deliverables?.forEach((deliverable) => {
+            subtask.deliverables?.forEach((deliverable: Deliverable) => {
               if (deliverable.dueDate) {
                 addTask(
                   {
@@ -365,7 +365,7 @@ export function GanttChart({
           })
 
           // Add deliverables from tasks
-          task.deliverables?.forEach((deliverable) => {
+          task.deliverables?.forEach((deliverable: Deliverable) => {
             if (deliverable.dueDate) {
               addTask(
                 {
