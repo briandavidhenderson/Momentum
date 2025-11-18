@@ -14,7 +14,7 @@ import { FunderCreationDialog } from "./FunderCreationDialog"
 interface ProjectCreationDialogProps {
   open: boolean
   onClose: () => void
-  onCreateRegular: () => void
+  onCreateRegular: (data: { name: string; startDate: string; endDate: string; description: string }) => void
   onCreateMaster: (masterProject: ProfileProject & { funderId?: string }) => void
   currentUserProfileId: string | null
   currentUserId: string
@@ -30,7 +30,7 @@ export function ProjectCreationDialog({
   currentUserId,
   organisationId,
 }: ProjectCreationDialogProps) {
-  const [step, setStep] = useState<"choose" | "master-details">("choose")
+  const [step, setStep] = useState<"choose" | "master-details" | "regular-details">("choose")
   const [formData, setFormData] = useState<Partial<ProfileProject>>({
     id: "",
     name: "",
@@ -118,7 +118,17 @@ export function ProjectCreationDialog({
   }
 
   const handleRegularProject = () => {
-    onCreateRegular()
+    if (!formData.name?.trim()) {
+      alert("Please enter a project name")
+      return
+    }
+
+    onCreateRegular({
+      name: formData.name,
+      startDate: formData.startDate || new Date().toISOString(),
+      endDate: formData.endDate || new Date().toISOString(),
+      description: formData.description || "",
+    })
     onClose()
   }
 
@@ -140,7 +150,7 @@ export function ProjectCreationDialog({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Regular Project Card */}
               <button
-                onClick={handleRegularProject}
+                onClick={() => setStep("regular-details")}
                 className="flex flex-col items-center gap-4 p-6 border-2 border-border rounded-xl hover:border-brand-500 hover:bg-accent transition-all text-center group"
               >
                 <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -175,6 +185,70 @@ export function ProjectCreationDialog({
                   </p>
                 </div>
               </button>
+            </div>
+          </div>
+        ) : step === "regular-details" ? (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="reg-name">Project Name *</Label>
+              <Input
+                id="reg-name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g., Lab Cleanup 2024"
+                className="mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="reg-startDate">Start Date *</Label>
+                <Input
+                  id="reg-startDate"
+                  type="date"
+                  value={formData.startDate || ""}
+                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="reg-endDate">End Date *</Label>
+                <Input
+                  id="reg-endDate"
+                  type="date"
+                  value={formData.endDate || ""}
+                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="reg-description">Description</Label>
+              <Textarea
+                id="reg-description"
+                value={formData.description || ""}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Brief description..."
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setStep("choose")}
+              >
+                Back
+              </Button>
+              <Button
+                onClick={handleRegularProject}
+                className="bg-brand-500 hover:bg-brand-600"
+              >
+                Create Project
+              </Button>
             </div>
           </div>
         ) : (
@@ -214,9 +288,8 @@ export function ProjectCreationDialog({
                     setSelectedFunderId(e.target.value || null)
                     setFunderError(null)
                   }}
-                  className={`flex-1 px-3 py-2 border rounded-lg bg-background ${
-                    funderError ? "border-red-500" : "border-border"
-                  }`}
+                  className={`flex-1 px-3 py-2 border rounded-lg bg-background ${funderError ? "border-red-500" : "border-border"
+                    }`}
                 >
                   <option value="">Select a funder...</option>
                   {funders.map((funder) => (

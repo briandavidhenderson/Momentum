@@ -28,6 +28,7 @@ import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notif
 import { CheckStockDialog } from "@/components/dialogs/CheckStockDialog"
 import { EquipmentEditorDialog } from "@/components/dialogs/EquipmentEditorDialog"
 import { logger } from "@/lib/logger"
+import { useToast } from "@/lib/toast"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
@@ -56,6 +57,7 @@ export function EquipmentStatusPanel({
   onOrderCreate,
   onTaskCreate,
 }: EquipmentStatusPanelProps) {
+  const { success, error } = useToast()
   const [devices, setDevices] = useState<EquipmentDevice[]>(equipment)
   const [editingDevice, setEditingDevice] = useState<EquipmentDevice | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -100,11 +102,11 @@ export function EquipmentStatusPanel({
   // Get all to-do items (maintenance and low supplies)
   const todoItems = useMemo(() => {
     const todos: Array<{ msg: string; deviceId: string; type: 'maintenance' | 'supplies' }> = []
-    
+
     devices.forEach(device => {
       const mh = maintenanceHealth(device)
       const sh = suppliesHealth(device)
-      
+
       if (mh <= device.threshold) {
         todos.push({
           msg: `${device.name}: maintenance at ${mh}%`,
@@ -112,7 +114,7 @@ export function EquipmentStatusPanel({
           type: 'maintenance'
         })
       }
-      
+
       if (sh <= 25) {
         todos.push({
           msg: `${device.name}: low supplies at ${sh}%`,
@@ -121,7 +123,7 @@ export function EquipmentStatusPanel({
         })
       }
     })
-    
+
     return todos
   }, [devices])
 
@@ -167,7 +169,7 @@ export function EquipmentStatusPanel({
 
     const newQty = parseInt(tempStockQty)
     if (isNaN(newQty) || newQty < 0) {
-      alert('Please enter a valid quantity')
+      error("Invalid Quantity: Please enter a valid non-negative number.")
       return
     }
 
@@ -246,16 +248,16 @@ export function EquipmentStatusPanel({
       onOrderCreate(newOrder)
 
       if (!silent) {
-        alert(`✓ Order created for "${enrichedSupply.name}"\n\nGo to the Orders tab to complete the order details.`)
+        success(`Order Created: Order for ${enrichedSupply.name} has been added to the Orders tab.`)
       }
 
       return true
-    } catch (error) {
-      logger.error('Error creating order', error)
+    } catch (err) {
+      logger.error('Error creating order', err)
       if (!silent) {
-        alert(`Failed to create order: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        error(`Order Failed: ${err instanceof Error ? err.message : "Unknown error occurred"}`)
       }
-      throw error
+      throw err
     }
   }
 
@@ -271,7 +273,7 @@ export function EquipmentStatusPanel({
       })
 
       if (missingSupplies.length === 0) {
-        alert(`No missing supplies for ${device.name}`)
+        success(`No Missing Supplies: All supplies for ${device.name} are sufficiently stocked.`)
         return
       }
 
@@ -288,11 +290,11 @@ export function EquipmentStatusPanel({
       }
 
       if (successCount > 0) {
-        alert(`✓ Created ${successCount} order(s) for missing supplies on ${device.name}\n\nGo to the Orders tab to complete the order details.`)
+        success(`Orders Created: Created ${successCount} order(s) for missing supplies. Check the Orders tab.`)
       }
-    } catch (error) {
-      logger.error('Error creating orders', error)
-      alert(`Failed to create orders: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } catch (err) {
+      logger.error('Error creating orders', err)
+      error(`Order Creation Failed: ${err instanceof Error ? err.message : "Unknown error"}`)
     }
   }
 
@@ -304,7 +306,7 @@ export function EquipmentStatusPanel({
   // Handle create device from modal
   const handleCreateDevice = () => {
     if (!newDeviceForm.name.trim()) {
-      alert('Please enter a device name')
+      error("Name Required: Please enter a device name.")
       return
     }
 
@@ -495,21 +497,21 @@ export function EquipmentStatusPanel({
           <div className="text-xs text-muted-foreground mb-4">
             Two health bars per device: <strong>Maintenance</strong> and <strong>Supplies</strong>. Each supply shows a burn-rate meter.
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {devices.map(device => {
               const mh = maintenanceHealth(device)
               const sh = suppliesHealth(device)
               const mClass = getHealthClass(mh)
               const sClass = getHealthClass(sh)
-              
+
               return (
                 <div key={device.id} className="border border-border rounded-lg p-4 bg-card space-y-3">
                   <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {device.imageUrl ? (
-                      <Image src={device.imageUrl} alt={device.name} width={48} height={48} className="w-12 h-12 object-cover rounded" />
-                    ) : (
+                    <div className="flex items-center gap-2">
+                      {device.imageUrl ? (
+                        <Image src={device.imageUrl} alt={device.name} width={48} height={48} className="w-12 h-12 object-cover rounded" />
+                      ) : (
                         <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">
                           No Image
                         </div>
@@ -534,7 +536,7 @@ export function EquipmentStatusPanel({
                       </Button>
                     </div>
                   </div>
-                  
+
                   {/* Maintenance Bar */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -545,16 +547,15 @@ export function EquipmentStatusPanel({
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-full rounded-full transition-all ${
-                          mClass === 'critical' ? 'bg-red-500' :
+                        className={`h-full rounded-full transition-all ${mClass === 'critical' ? 'bg-red-500' :
                           mClass === 'warning' ? 'bg-orange-500' :
-                          'bg-blue-500'
-                        }`}
+                            'bg-blue-500'
+                          }`}
                         style={{ width: `${mh}%` }}
                       />
                     </div>
                   </div>
-                  
+
                   {/* Supplies Bar */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -565,16 +566,15 @@ export function EquipmentStatusPanel({
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-full rounded-full transition-all ${
-                          sClass === 'critical' ? 'bg-red-500' :
+                        className={`h-full rounded-full transition-all ${sClass === 'critical' ? 'bg-red-500' :
                           sClass === 'warning' ? 'bg-orange-500' :
-                          'bg-green-500'
-                        }`}
+                            'bg-green-500'
+                          }`}
                         style={{ width: `${sh}%` }}
                       />
                     </div>
                   </div>
-                  
+
                   {/* Supplies List - Using Enriched Supply Data */}
                   <div className="flex flex-wrap gap-2">
                     {enrichDeviceSupplies(device, inventory).map(supply => {
@@ -594,11 +594,10 @@ export function EquipmentStatusPanel({
                           </div>
                           <div className={`absolute left-3 right-3 bottom-1 h-0.5 bg-gray-200 rounded-full overflow-hidden`}>
                             <div
-                              className={`h-full ${
-                                supplyClass === 'critical' ? 'bg-red-500' :
+                              className={`h-full ${supplyClass === 'critical' ? 'bg-red-500' :
                                 supplyClass === 'warning' ? 'bg-orange-500' :
-                                'bg-green-500'
-                              }`}
+                                  'bg-green-500'
+                                }`}
                               style={{ width: `${supply.healthPercent}%` }}
                             />
                           </div>
@@ -630,7 +629,7 @@ export function EquipmentStatusPanel({
                       )
                     })}
                   </div>
-                  
+
                   {/* Actions */}
                   <div className="flex gap-2 pt-2">
                     <Button
@@ -652,7 +651,7 @@ export function EquipmentStatusPanel({
                       Order Missing
                     </Button>
                   </div>
-                  
+
                   {/* Device Info */}
                   <div className="text-xs text-muted-foreground pt-2 border-t border-border">
                     <div><strong>Make:</strong> {device.make || 'N/A'}</div>
@@ -791,7 +790,7 @@ export function EquipmentStatusPanel({
             const device = devices.find(d => d.id === checkStockItem.deviceId)
             const supply = device?.supplies.find(s => s.id === checkStockItem.supplyId)
             if (!supply) return null
-            
+
             return (
               <div className="space-y-4">
                 <div>

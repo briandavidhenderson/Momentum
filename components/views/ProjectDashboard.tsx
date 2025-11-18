@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { logger } from "@/lib/logger";
 import { notifyProjectTaskAssigned, notifyWorkpackageOwnerAssigned } from "@/lib/notificationUtils";
+import { useToast } from "@/lib/toast";
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth();
@@ -43,6 +44,7 @@ export function ProjectDashboard() {
     allProfiles,
     people,
   } = useAppContext();
+  const { success, error } = useToast();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
   const [showProjectDialog, setShowProjectDialog] = useState(false);
@@ -52,6 +54,13 @@ export function ProjectDashboard() {
     itemType: "task" | "subtask";
     workpackageId: string;
   } | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);
+  const [workpackageForm, setWorkpackageForm] = useState({
+    name: "",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 30 days from now
+  });
 
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
@@ -67,17 +76,16 @@ export function ProjectDashboard() {
   const handleImportSuccess = (projectId: string) => {
     logger.info('Project imported successfully', { projectId })
     setShowImportDialog(false)
-    // Refresh will show the new project due to Firestore real-time sync
-    alert('Project imported successfully! The new project should appear in the list shortly.')
+    success("Project Imported: The new project should appear in the list shortly.")
   };
 
-  const handleCreateRegularProject = () => {
+  const handleCreateRegularProject = (projectData: { name: string; startDate: string; endDate: string; description: string }) => {
     if (!profile) return;
 
-    // Create a simple project with minimal defaults
+    // Create a simple project with user-provided details
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
-      name: `New Project ${projects.length + 1}`,
-      description: "",
+      name: projectData.name,
+      description: projectData.description,
       labId: profile.labId,
       labName: profile.labName,
       instituteId: profile.instituteId,
@@ -88,8 +96,8 @@ export function ProjectDashboard() {
       grantNumber: "",
       totalBudget: 0,
       currency: "EUR",
-      startDate: new Date().toISOString(),
-      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      startDate: projectData.startDate,
+      endDate: projectData.endDate,
       funderId: "",
       funderName: "",
       accountIds: [],
@@ -114,7 +122,7 @@ export function ProjectDashboard() {
 
     // Fix Bug #1: Validate project name before creation
     if (!projectData.name || !projectData.name.trim()) {
-      alert("Project name is required. Please enter a project name.");
+      error("Name Required: Project name is required. Please enter a project name.")
       return;
     }
 
@@ -173,9 +181,9 @@ export function ProjectDashboard() {
 
     try {
       await handleCreateMasterProject(newProject);
-    } catch (error) {
-      logger.error("Error creating master project", error);
-      alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } catch (err) {
+      logger.error("Error creating master project", err);
+      error(`Creation Failed: Failed to create project: ${err instanceof Error ? err.message : "Unknown error"}`)
     }
   };
 
@@ -228,13 +236,13 @@ export function ProjectDashboard() {
                 const updatedTasks = (workpackage.tasks || []).map(t =>
                   t.id === task.id
                     ? {
-                        ...t,
-                        subtasks: t.subtasks?.map((st: Subtask) =>
-                          st.id === subtask.id
-                            ? { ...st, start: ganttTask.start, end: ganttTask.end }
-                            : st
-                        ),
-                      }
+                      ...t,
+                      subtasks: t.subtasks?.map((st: Subtask) =>
+                        st.id === subtask.id
+                          ? { ...st, start: ganttTask.start, end: ganttTask.end }
+                          : st
+                      ),
+                    }
                     : t
                 );
                 await handleUpdateWorkpackage(workpackage.id, {
@@ -246,11 +254,11 @@ export function ProjectDashboard() {
           }
         }
       }
-    } catch (error) {
-      logger.error("Error updating task dates", error);
-      alert("Failed to update task dates. Please try again.");
+    } catch (err) {
+      logger.error("Error updating task dates", err);
+      error("Update Failed: Failed to update task dates. Please try again.")
     }
-  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskDates, workpackagesMap]);
+  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskDates, workpackagesMap, error]);
 
   const handleTaskClick = useCallback((task: Task) => {
     setSelectedTask(task);
@@ -267,7 +275,7 @@ export function ProjectDashboard() {
           });
         }
       } else {
-          // Toggle workpackage expansion
+        // Toggle workpackage expansion
         for (const project of projects) {
           const workpackage = workpackagesMap.get(id);
           if (workpackage) {
@@ -297,11 +305,11 @@ export function ProjectDashboard() {
                 const updatedTasks = (wp.tasks || []).map(t =>
                   t.id === task.id
                     ? {
-                        ...t,
-                        subtasks: t.subtasks?.map((st: Subtask) =>
-                          st.id === id ? { ...st, isExpanded: !st.isExpanded } : st
-                        ),
-                      }
+                      ...t,
+                      subtasks: t.subtasks?.map((st: Subtask) =>
+                        st.id === id ? { ...st, isExpanded: !st.isExpanded } : st
+                      ),
+                    }
                     : t
                 );
                 await handleUpdateWorkpackage(wp.id, {
@@ -313,11 +321,11 @@ export function ProjectDashboard() {
           }
         }
       }
-    } catch (error) {
-      logger.error("Error toggling expand/collapse", error);
-      alert("Failed to toggle expand/collapse. Please try again.");
+    } catch (err) {
+      logger.error("Error toggling expand/collapse", err);
+      error("Action Failed: Failed to toggle expand/collapse. Please try again.")
     }
-  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, getProjectWorkpackages]);
+  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, getProjectWorkpackages, error]);
 
   // Helper to find the parent project and workpackage for a task
   const findTaskContext = useCallback((taskId: string): { project: MasterProject; workpackage: Workpackage; task: Task } | null => {
@@ -332,7 +340,7 @@ export function ProjectDashboard() {
         }
       }
     }
-      return null;
+    return null;
   }, [projects, workpackagesMap]);
 
   const handleContextAction = useCallback(async (action: { action: string; targetId: string; targetType: string }) => {
@@ -409,7 +417,7 @@ export function ProjectDashboard() {
                 deliverables: [],
                 subtasks: [],
               };
-              
+
               const updatedTasks = [...(workpackage.tasks || []), newTask];
               await handleUpdateWorkpackage(workpackage.id, {
                 tasks: updatedTasks,
@@ -434,12 +442,12 @@ export function ProjectDashboard() {
                   ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] }
                   : t
               );
-              
+
               const updatedWorkpackage = updateWorkpackageWithTaskProgress({
                 ...context.workpackage,
                 tasks: updatedTasks,
               });
-              
+
               await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
 
               // If this task is selected, update it
@@ -483,11 +491,11 @@ export function ProjectDashboard() {
           }
           break;
       }
-    } catch (error) {
-      logger.error("Error handling context action", error);
-      alert("Failed to perform action. Please try again.");
+    } catch (err) {
+      logger.error("Error handling context action", err);
+      error("Action Failed: Failed to perform action. Please try again.")
     }
-  }, [projects, handleUpdateWorkpackage, findTaskContext, selectedTask, workpackagesMap, getProjectWorkpackages]);
+  }, [projects, handleUpdateWorkpackage, findTaskContext, selectedTask, workpackagesMap, getProjectWorkpackages, error]);
 
   const handleSaveDependencies = useCallback(async (dependencyIds: string[]) => {
     if (!dependencyDialog) return;
@@ -522,11 +530,11 @@ export function ProjectDashboard() {
       }
 
       setDependencyDialog(null);
-    } catch (error) {
-      logger.error("Error saving dependencies", error);
-      alert("Failed to save dependencies. Please try again.");
+    } catch (err) {
+      logger.error("Error saving dependencies", err);
+      error("Save Failed: Failed to save dependencies. Please try again.")
     }
-  }, [dependencyDialog, workpackagesMap, handleUpdateWorkpackage]);
+  }, [dependencyDialog, workpackagesMap, handleUpdateWorkpackage, error]);
 
   const handlePersonDropOnBar = useCallback(async (
     taskOrProjectId: string,
@@ -637,11 +645,11 @@ export function ProjectDashboard() {
           }
         }
       }
-    } catch (error) {
-      logger.error("Error assigning person", error);
-      alert("Failed to assign person. Please try again.");
+    } catch (err) {
+      logger.error("Error assigning person", err);
+      error("Assignment Failed: Failed to assign person. Please try again.")
     }
-  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskHelpers, workpackagesMap, profile, allProfiles, getProjectWorkpackages]);
+  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskHelpers, workpackagesMap, profile, allProfiles, getProjectWorkpackages, error]);
 
   const handleToggleTodo = useCallback(async (subtaskId: string, todoId: string) => {
     if (!selectedTask) return;
@@ -649,7 +657,7 @@ export function ProjectDashboard() {
     try {
       const context = findTaskContext(selectedTask.id);
       if (!context) {
-        alert("Could not find task context. Please refresh the page.");
+        error("Context Error: Could not find task context. Please refresh the page.")
         return;
       }
 
@@ -683,11 +691,11 @@ export function ProjectDashboard() {
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
-    } catch (error) {
-      logger.error("Error toggling todo", error);
-      alert("Failed to toggle todo. Please try again.");
+    } catch (err) {
+      logger.error("Error toggling todo", err);
+      error("Update Failed: Failed to toggle todo. Please try again.")
     }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
+  }, [selectedTask, findTaskContext, getProjectWorkpackages, error]);
 
   const handleAddTodo = useCallback(async (subtaskId: string, text: string) => {
     if (!selectedTask || !text.trim()) return;
@@ -695,7 +703,7 @@ export function ProjectDashboard() {
     try {
       const context = findTaskContext(selectedTask.id);
       if (!context) {
-        alert("Could not find task context. Please refresh the page.");
+        error("Context Error: Could not find task context. Please refresh the page.")
         return;
       }
 
@@ -729,11 +737,11 @@ export function ProjectDashboard() {
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
-    } catch (error) {
-      logger.error("Error adding todo", error);
-      alert("Failed to add todo. Please try again.");
+    } catch (err) {
+      logger.error("Error adding todo", err);
+      error("Update Failed: Failed to add todo. Please try again.")
     }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
+  }, [selectedTask, findTaskContext, getProjectWorkpackages, error]);
 
   const handleDeleteTodo = useCallback(async (subtaskId: string, todoId: string) => {
     if (!selectedTask) return;
@@ -741,7 +749,7 @@ export function ProjectDashboard() {
     try {
       const context = findTaskContext(selectedTask.id);
       if (!context) {
-        alert("Could not find task context. Please refresh the page.");
+        error("Context Error: Could not find task context. Please refresh the page.")
         return;
       }
 
@@ -775,11 +783,11 @@ export function ProjectDashboard() {
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
-    } catch (error) {
-      logger.error("Error deleting todo", error);
-      alert("Failed to delete todo. Please try again.");
+    } catch (err) {
+      logger.error("Error deleting todo", err);
+      error("Update Failed: Failed to delete todo. Please try again.")
     }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
+  }, [selectedTask, findTaskContext, getProjectWorkpackages, error]);
 
   const handleAddSubtask = useCallback(async (name: string) => {
     if (!selectedTask || !name.trim()) return;
@@ -787,7 +795,7 @@ export function ProjectDashboard() {
     try {
       const context = findTaskContext(selectedTask.id);
       if (!context || !context.workpackage.tasks) {
-        alert("Could not find task context. Please refresh the page.");
+        error("Context Error: Could not find task context. Please refresh the page.")
         return;
       }
 
@@ -822,20 +830,11 @@ export function ProjectDashboard() {
       if (updatedTask) {
         setSelectedTask(updatedTask);
       }
-    } catch (error) {
-      logger.error("Error adding subtask", error);
-      alert("Failed to add subtask. Please try again.");
+    } catch (err) {
+      logger.error("Error adding subtask", err);
+      error("Update Failed: Failed to add subtask. Please try again.")
     }
-  }, [selectedTask, findTaskContext]);
-
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);
-  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
-  const [workpackageForm, setWorkpackageForm] = useState({
-    name: "",
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 30 days from now
-  });
+  }, [selectedTask, findTaskContext, error]);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
@@ -843,7 +842,7 @@ export function ProjectDashboard() {
     if (!selectedProjectId || !profile) return;
 
     if (!workpackageForm.name.trim()) {
-      alert("Please enter a workpackage name");
+      error("Name Required: Please enter a workpackage name")
       return;
     }
 
@@ -877,9 +876,9 @@ export function ProjectDashboard() {
         startDate: new Date().toISOString().split("T")[0],
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       });
-    } catch (error) {
-      logger.error("Error creating workpackage", error);
-      alert("Failed to create workpackage. Please try again.");
+    } catch (err) {
+      logger.error("Error creating workpackage", err);
+      error("Creation Failed: Failed to create workpackage. Please try again.")
     }
   };
 
@@ -905,7 +904,7 @@ export function ProjectDashboard() {
         onBack={() => setSelectedProjectForDetail(null)}
         onEdit={() => {
           // TODO: Open project edit dialog
-          alert("Edit functionality coming soon")
+          success("Coming Soon: Edit functionality coming soon")
         }}
         onCreateWorkpackage={async (workpackageData) => {
           // Create workpackage and link it to the project

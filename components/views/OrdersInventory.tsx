@@ -25,6 +25,7 @@ import {
 } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { logger } from "@/lib/logger"
+import { useToast } from "@/lib/toast"
 
 // Droppable Column Component
 function DroppableColumn({
@@ -60,6 +61,7 @@ export function OrdersInventory() {
     handleUpdateInventoryLevel,
     handleDeleteInventoryItem,
   } = useOrders()
+  const { success, error } = useToast()
 
   // Get equipment for reconciliation (linking new inventory to devices)
   // Get deliverables for displaying linked deliverable names
@@ -152,7 +154,7 @@ export function OrdersInventory() {
 
         if (!validation.valid) {
           logger.error('Order validation failed', { errors: validation.errors })
-          alert(`Cannot reconcile order: ${validation.errors.join(', ')}`)
+          error(`Reconciliation Failed: Cannot reconcile order: ${validation.errors.join(', ')}`)
           return
         }
 
@@ -186,9 +188,9 @@ export function OrdersInventory() {
             })
           }
         }
-      } catch (error) {
-        logger.error('Failed to reconcile inventory', error)
-        alert('Failed to update inventory. Please try again.')
+      } catch (err) {
+        logger.error('Failed to reconcile inventory', err)
+        error("Inventory Update Failed: Failed to update inventory. Please try again.")
         return // Don't update order status if inventory reconciliation failed
       }
     }
@@ -389,11 +391,11 @@ export function OrdersInventory() {
               {(['to-order', 'ordered', 'received'] as OrderStatus[]).map(status => {
                 const columnStyles = getColumnStyles(status)
                 const itemCount = status === 'to-order' ? ordersByStatus.toOrder.length :
-                                 status === 'ordered' ? ordersByStatus.ordered.length :
-                                 ordersByStatus.received.length
+                  status === 'ordered' ? ordersByStatus.ordered.length :
+                    ordersByStatus.received.length
                 const items = status === 'to-order' ? ordersByStatus.toOrder :
-                             status === 'ordered' ? ordersByStatus.ordered :
-                             ordersByStatus.received
+                  status === 'ordered' ? ordersByStatus.ordered :
+                    ordersByStatus.received
 
                 return (
                   <DroppableColumn
@@ -446,8 +448,8 @@ export function OrdersInventory() {
                 <div className="opacity-90">
                   <OrderCard
                     order={activeOrder}
-                    onEdit={() => {}}
-                    onDelete={() => {}}
+                    onEdit={() => { }}
+                    onDelete={() => { }}
                     deliverableName={getDeliverableName(activeOrder)}
                   />
                 </div>
