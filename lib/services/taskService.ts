@@ -85,9 +85,10 @@ export interface FirestoreDayToDayTask {
   id: string
   title: string
   description?: string
-  status: "todo" | "working" | "done"
+  status: "todo" | "working" | "done" | "history"
   importance: string
-  assigneeId?: string
+  assigneeId?: string // DEPRECATED: Use assigneeIds instead
+  assigneeIds?: string[] // PersonProfile IDs - supports multiple assignees
   dueDate?: Timestamp | null
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -96,6 +97,14 @@ export interface FirestoreDayToDayTask {
   linkedProjectId?: string
   linkedTaskId?: string
   order: number
+
+  // Completion tracking
+  completedBy?: string
+  completedAt?: Timestamp
+
+  // Verification tracking
+  verifiedBy?: string
+  verifiedAt?: Timestamp
 }
 
 /**
@@ -133,8 +142,15 @@ export async function updateDayToDayTask(taskId: string, updates: Partial<any>):
   const taskRef = doc(db, "dayToDayTasks", taskId)
   const updateData: any = { ...updates, updatedAt: serverTimestamp() }
 
+  // Convert Date objects to Firestore Timestamps
   if (updates.dueDate) {
     updateData.dueDate = Timestamp.fromDate(updates.dueDate)
+  }
+  if (updates.completedAt && updates.completedAt instanceof Date) {
+    updateData.completedAt = Timestamp.fromDate(updates.completedAt)
+  }
+  if (updates.verifiedAt && updates.verifiedAt instanceof Date) {
+    updateData.verifiedAt = Timestamp.fromDate(updates.verifiedAt)
   }
 
   // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
@@ -179,6 +195,8 @@ export function subscribeToDayToDayTasks(
             dueDate: data.dueDate?.toDate() || undefined,
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date(),
+            completedAt: data.completedAt?.toDate() || undefined,
+            verifiedAt: data.verifiedAt?.toDate() || undefined,
           }
         })
         callback(tasks)
