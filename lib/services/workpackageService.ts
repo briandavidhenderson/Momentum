@@ -61,9 +61,13 @@ export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'>
     })),
   }))
 
+  // Map projectId to profileProjectId for Firestore (backward compatibility)
+  const { projectId, ...restData } = workpackageData as any
+
   await setDoc(wpRef, {
-    ...workpackageData,
+    ...restData,
     id: wpId,
+    profileProjectId: projectId, // Map projectId to profileProjectId for Firestore
     start: workpackageData.start instanceof Date ? Timestamp.fromDate(workpackageData.start) : workpackageData.start,
     end: workpackageData.end instanceof Date ? Timestamp.fromDate(workpackageData.end) : workpackageData.end,
     tasks: tasksWithTimestamps,
@@ -88,13 +92,13 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
       projectId: data.profileProjectId, // Map old field to new field name
       status: 'active', // Default status for legacy data
       deliverableIds: [], // Default empty array for legacy data
-      start: data.start.toDate(),
-      end: data.end.toDate(),
-      tasks: data.tasks.map(task => ({
+      start: data.start?.toDate() || new Date(),
+      end: data.end?.toDate() || new Date(),
+      tasks: data.tasks?.map(task => ({
         ...task,
-        start: task.start.toDate(),
-        end: task.end.toDate(),
-      })),
+        start: task.start?.toDate() || new Date(),
+        end: task.end?.toDate() || new Date(),
+      })) || [],
     } as Workpackage
   })
 }
@@ -150,13 +154,13 @@ export function subscribeToWorkpackages(
         projectId: data.profileProjectId, // Map old field to new field name
         status: 'active', // Default status for legacy data
         deliverableIds: [], // Default empty array for legacy data
-        start: data.start.toDate(),
-        end: data.end.toDate(),
-        tasks: data.tasks.map(task => ({
+        start: data.start?.toDate() || new Date(),
+        end: data.end?.toDate() || new Date(),
+        tasks: data.tasks?.map(task => ({
           ...task,
-          start: task.start.toDate(),
-          end: task.end.toDate(),
-        })),
+          start: task.start?.toDate() || new Date(),
+          end: task.end?.toDate() || new Date(),
+        })) || [],
       } as Workpackage
     })
     callback(wps)

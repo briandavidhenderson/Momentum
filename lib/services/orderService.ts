@@ -170,7 +170,7 @@ export async function getOrders(): Promise<Order[]> {
       ...data,
       orderedDate: data.orderedDate ? data.orderedDate.toDate() : undefined,
       receivedDate: data.receivedDate ? data.receivedDate.toDate() : undefined,
-      createdDate: data.createdDate.toDate(),
+      createdDate: data.createdDate?.toDate() || new Date(),
     } as Order
   })
 }
@@ -311,7 +311,7 @@ export function subscribeToOrders(
         ...data,
         orderedDate: data.orderedDate ? data.orderedDate.toDate() : undefined,
         receivedDate: data.receivedDate ? data.receivedDate.toDate() : undefined,
-        createdDate: data.createdDate.toDate(),
+        createdDate: data.createdDate?.toDate() || new Date(),
       } as Order
     })
     callback(orders)
