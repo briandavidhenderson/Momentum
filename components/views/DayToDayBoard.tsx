@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, GripVertical, Trash2, Edit2, Clock, Loader2, AlertCircle, ListTodo } from "lucide-react"
+import { Plus, GripVertical, Trash2, Edit2, Clock, Loader2, AlertCircle, ListTodo, Calendar } from "lucide-react"
 import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
@@ -77,6 +77,51 @@ function DroppableColumn({
   )
 }
 
+// Helper function to get card background colors based on importance
+function getCardBackgroundColor(importance?: string) {
+  const colors: Record<string, string> = {
+    low: "bg-gray-50 border-gray-200",
+    medium: "bg-blue-50 border-blue-200",
+    high: "bg-orange-50 border-orange-200",
+    critical: "bg-red-50 border-red-300",
+  }
+  return colors[importance || "medium"] || colors.medium
+}
+
+// Helper function to format due date with days and hours countdown
+function formatDueDate(dueDate?: Date) {
+  if (!dueDate) return null
+
+  const date = new Date(dueDate)
+  const now = new Date()
+  const diffMs = date.getTime() - now.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+
+  const isOverdue = diffMs < 0
+  const isDueSoon = diffMs >= 0 && diffMs <= 3 * 24 * 60 * 60 * 1000 // 3 days
+
+  let timeText = ""
+  if (isOverdue) {
+    const absDays = Math.abs(diffDays)
+    const absHours = Math.abs(diffHours)
+    timeText = `Overdue ${absDays}d ${absHours}h`
+  } else if (isDueSoon) {
+    timeText = `Due in ${diffDays}d ${diffHours}h`
+  } else {
+    timeText = date.toLocaleDateString()
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Calendar className="h-3 w-3" />
+      <span className={`text-xs ${isOverdue ? "text-red-600 font-semibold" : isDueSoon ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
+        {timeText}
+      </span>
+    </div>
+  )
+}
+
 function DraggableTaskCard({
   task,
   people,
@@ -116,7 +161,7 @@ function DraggableTaskCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative bg-card rounded-lg border border-border p-4 shadow-sm hover:shadow-md transition-shadow cursor-move"
+      className={`group relative rounded-lg border p-4 shadow-sm hover:shadow-md transition-shadow cursor-move ${getCardBackgroundColor(task.importance)}`}
     >
       <div className="flex items-start gap-3">
         <div {...listeners} {...attributes} className="mt-1 cursor-grab active:cursor-grabbing">
@@ -163,12 +208,7 @@ function DraggableTaskCard({
               </Badge>
             )}
 
-            {task.dueDate && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                {new Date(task.dueDate).toLocaleDateString()}
-              </div>
-            )}
+            {task.dueDate && formatDueDate(task.dueDate)}
 
             {assignee && (
               <div
