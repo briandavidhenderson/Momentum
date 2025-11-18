@@ -56,7 +56,12 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
     workpackageIds: projectData.workpackageIds || [],
   }
 
-  await setDoc(projectRef, projectToSave)
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedProject = Object.fromEntries(
+    Object.entries(projectToSave).filter(([_, v]) => v !== undefined)
+  )
+
+  await setDoc(projectRef, cleanedProject)
 
   // Update lab's active project count
   const labRef = doc(db, "labs", projectData.labId)

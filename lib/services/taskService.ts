@@ -164,9 +164,9 @@ export function subscribeToDayToDayTasks(
           const data = doc.data() as FirestoreDayToDayTask
           return {
             ...data,
-            dueDate: data.dueDate ? data.dueDate.toDate() : undefined,
-            createdAt: data.createdAt.toDate(),
-            updatedAt: data.updatedAt.toDate(),
+            dueDate: data.dueDate?.toDate() || undefined,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
           }
         })
         callback(tasks)
