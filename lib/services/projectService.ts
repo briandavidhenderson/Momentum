@@ -109,7 +109,13 @@ export async function updateMasterProject(projectId: string, updates: Partial<Ma
   const db = getFirebaseDb()
   const projectRef = doc(db, "masterProjects", projectId)
   const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
-  await updateDoc(projectRef, updateData)
+
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([_, v]) => v !== undefined)
+  )
+
+  await updateDoc(projectRef, cleanedUpdate)
 }
 
 /**
@@ -239,11 +245,19 @@ export async function getProjects(userId: string): Promise<Project[]> {
 export async function updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
   const db = getFirebaseDb()
   const projectRef = doc(db, "projects", projectId)
-  const updateData: any = { ...updates }
+  const updateData: any = {
+    ...updates,
+    updatedAt: new Date().toISOString()
+  }
 
   // startDate and endDate are already strings in Project type, no conversion needed
 
-  await updateDoc(projectRef, updateData)
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([_, v]) => v !== undefined)
+  )
+
+  await updateDoc(projectRef, cleanedUpdate)
 }
 
 export async function deleteProject(projectId: string): Promise<void> {

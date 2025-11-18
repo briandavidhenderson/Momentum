@@ -85,11 +85,18 @@ export async function createDeliverable(
   const deliverableRef = doc(collection(db, "deliverables"))
   const deliverableId = deliverableRef.id
 
-  await setDoc(deliverableRef, {
+  const deliverableToSave = {
     ...deliverableData,
     id: deliverableId,
     createdAt: serverTimestamp(),
-  })
+  }
+
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedDeliverable = Object.fromEntries(
+    Object.entries(deliverableToSave).filter(([_, v]) => v !== undefined)
+  )
+
+  await setDoc(deliverableRef, cleanedDeliverable)
 
   return deliverableId
 }
@@ -194,7 +201,12 @@ export async function updateDeliverable(
     updatedAt: serverTimestamp(),
   }
 
-  await updateDoc(deliverableRef, updateData)
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([_, v]) => v !== undefined)
+  )
+
+  await updateDoc(deliverableRef, cleanedUpdate)
 }
 
 /**

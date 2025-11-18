@@ -107,13 +107,20 @@ export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<str
   const taskRef = doc(collection(db, "dayToDayTasks"))
   const taskId = taskRef.id
 
-  await setDoc(taskRef, {
+  const taskToSave = {
     ...taskData,
     id: taskId,
     dueDate: taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  })
+  }
+
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedTask = Object.fromEntries(
+    Object.entries(taskToSave).filter(([_, v]) => v !== undefined)
+  )
+
+  await setDoc(taskRef, cleanedTask)
 
   return taskId
 }
@@ -130,7 +137,12 @@ export async function updateDayToDayTask(taskId: string, updates: Partial<any>):
     updateData.dueDate = Timestamp.fromDate(updates.dueDate)
   }
 
-  await updateDoc(taskRef, updateData)
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([_, v]) => v !== undefined)
+  )
+
+  await updateDoc(taskRef, cleanedUpdate)
 }
 
 /**

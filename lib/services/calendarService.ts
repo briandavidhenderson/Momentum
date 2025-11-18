@@ -82,8 +82,8 @@ export async function getEvents(): Promise<CalendarEvent[]> {
     const data = d.data() as FirestoreCalendarEvent
     return {
       ...data,
-      start: data.start.toDate(),
-      end: data.end.toDate(),
+      start: data.start?.toDate() || new Date(),
+      end: data.end?.toDate() || new Date(),
       createdAt: (data.createdAt && (data.createdAt as any).toDate) ? (data.createdAt as any).toDate() : new Date(),
     } as CalendarEvent
   })
@@ -105,8 +105,8 @@ export function subscribeToEvents(
       const data = d.data() as FirestoreCalendarEvent
       return {
         ...data,
-        start: data.start.toDate(),
-        end: data.end.toDate(),
+        start: data.start?.toDate() || new Date(),
+        end: data.end?.toDate() || new Date(),
         createdAt: (data.createdAt && (data.createdAt as any).toDate) ? (data.createdAt as any).toDate() : new Date(),
       } as CalendarEvent
     })
