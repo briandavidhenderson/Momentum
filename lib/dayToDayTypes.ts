@@ -1,6 +1,6 @@
 import { ImportanceLevel, EquipmentTaskType } from "./types"
 
-export type TaskStatus = "todo" | "working" | "done"
+export type TaskStatus = "todo" | "working" | "done" | "history"
 
 export interface DayToDayTask {
   id: string
@@ -8,13 +8,22 @@ export interface DayToDayTask {
   description?: string
   status: TaskStatus
   importance: ImportanceLevel
-  assigneeId?: string // PersonProfile ID
+  assigneeId?: string // DEPRECATED: Use assigneeIds instead
+  assigneeIds?: string[] // PersonProfile IDs - supports multiple assignees
   watcherIds?: string[] // PersonProfile IDs who are watching this task
   dueDate?: Date
   createdAt: Date
   updatedAt: Date
   createdBy: string // User ID
   tags?: string[]
+
+  // Completion tracking
+  completedBy?: string // User ID who moved task to "done"
+  completedAt?: Date // When task was completed
+
+  // Verification tracking
+  verifiedBy?: string // User ID who verified the completed task
+  verifiedAt?: Date // When task was verified
 
   // Linking to other modules
   linkedProjectId?: string // Link to Master Project
