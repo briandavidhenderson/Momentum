@@ -349,7 +349,7 @@ export function subscribeToProfiles(
   try {
     let q: Query = collection(db, "personProfiles")
 
-    if (filters?.labId) {
+    if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
       q = query(q, where("labId", "==", filters.labId))
     }
 

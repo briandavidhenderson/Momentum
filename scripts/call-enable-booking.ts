@@ -1,5 +1,8 @@
 /**
  * Call the Firebase Function to enable booking on all equipment
+ * 
+ * NOTE: This is a one-time migration script. It may have already been executed.
+ * Check your equipment documents to see if booking is already enabled before running.
  */
 
 import { getFunctions, httpsCallable } from 'firebase/functions';

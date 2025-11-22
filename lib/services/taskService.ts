@@ -179,7 +179,7 @@ export function subscribeToDayToDayTasks(
   const db = getFirebaseDb()
   let q: Query = collection(db, "dayToDayTasks")
 
-  if (filters?.labId) {
+  if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
     q = query(q, where("labId", "==", filters.labId))
   } else if (filters?.userId) {
     q = query(q, where("createdBy", "==", filters.userId))

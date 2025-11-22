@@ -8,6 +8,9 @@
  * 4. Fixes any orphaned data
  *
  * Run with: npx ts-node scripts/fix-funding-sync.ts
+ * 
+ * NOTE: This is a one-time migration script. It may have already been executed.
+ * Verify your funding data before running to avoid duplicate transactions.
  */
 
 import * as admin from 'firebase-admin'

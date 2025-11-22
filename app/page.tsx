@@ -11,7 +11,7 @@ import PeopleView from "@/components/views/PeopleView"
 import { DayToDayBoard } from "@/components/views/DayToDayBoard"
 import { MyTasksView } from "@/components/views/MyTasksView"
 import { ElectronicLabNotebook } from "@/components/views/ElectronicLabNotebook"
-import { PersonalProfilePage } from "@/components/views/PersonalProfilePage"
+import { EnhancedProfilePage } from "@/components/profile/EnhancedProfilePage"
 import { ProfileManagement } from "@/components/views/ProfileManagement"
 import { OrdersInventory } from "@/components/views/OrdersInventory"
 import { EquipmentManagement } from "@/components/views/EquipmentManagement"
@@ -174,7 +174,7 @@ export default function Home() {
           {mainView === 'whiteboard' && <WhiteboardPage />}
           {mainView === 'funding' && hasRoleRestriction && <FundingAdmin />}
           {mainView === 'ledger' && <PersonalLedger />}
-          {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+          {mainView === 'myprofile' && currentUser && currentUserProfile && <EnhancedProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
           {mainView === 'privacy' && <PrivacyDashboard />}
           {mainView === 'profiles' && isAdmin && (
             <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />

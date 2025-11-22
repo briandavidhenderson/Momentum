@@ -1,6 +1,9 @@
 /**
  * Enable booking settings on all equipment
  * Run this script to enable booking functionality on existing equipment
+ * 
+ * NOTE: This is a one-time migration script. It may have already been executed.
+ * Check your equipment documents to see if booking is already enabled before running.
  */
 
 import { getFirebaseDb } from '../lib/firebase';

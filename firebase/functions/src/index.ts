@@ -1,5 +1,8 @@
 import * as admin from "firebase-admin"
 import * as functions from "firebase-functions/v1"
+import * as dotenv from "dotenv"
+
+dotenv.config()
 
 admin.initializeApp()
 
@@ -91,6 +94,8 @@ import {
 import {
   unlinkGoogleCalendar,
   syncGoogleCalendar,
+  googleCalendarAuthStart,
+  googleCalendarAuthCallback,
 } from "./calendar-google"
 
 // Export GDPR functions
@@ -130,6 +135,8 @@ export {
 export {
   unlinkGoogleCalendar,
   syncGoogleCalendar,
+  googleCalendarAuthStart,
+  googleCalendarAuthCallback,
 }
 
 /**
@@ -150,16 +157,51 @@ interface OrcidConfig {
 }
 
 function getOrcidConfig(): OrcidConfig {
-  const useSandbox = ((functions as any).config() as any).orcid?.use_sandbox === "true"
-  const baseUrl = useSandbox ? "https://sandbox.orcid.org" : "https://orcid.org"
+  try {
+    // Try to get config from functions.config() (deprecated but still works)
+    let config: any = {}
+    try {
+      config = (functions as any).config() || {}
+    } catch (error) {
+      // functions.config() may fail, use environment variables instead
+      console.warn("functions.config() failed, using environment variables:", error)
+    }
 
-  return {
-    clientId: ((functions as any).config() as any).orcid?.client_id || process.env.ORCID_CLIENT_ID || "",
-    clientSecret: ((functions as any).config() as any).orcid?.client_secret || process.env.ORCID_CLIENT_SECRET || "",
-    useSandbox,
-    baseUrl,
-    authorizeUrl: `${baseUrl}/oauth/authorize`,
-    tokenUrl: `${baseUrl}/oauth/token`,
+    const orcidConfig = config.orcid || {}
+
+    // Debug logging
+    console.log("ORCID Config Debug:", {
+      hasFunctionsConfig: !!config.orcid,
+      envClientId: !!process.env.ORCID_CLIENT_ID,
+      envClientSecret: !!process.env.ORCID_CLIENT_SECRET,
+      envUseSandbox: process.env.ORCID_USE_SANDBOX
+    });
+
+    const useSandbox = orcidConfig.use_sandbox === "true" || process.env.ORCID_USE_SANDBOX === "true"
+    const baseUrl = useSandbox ? "https://sandbox.orcid.org" : "https://orcid.org"
+
+    const clientId = orcidConfig.client_id || process.env.ORCID_CLIENT_ID || ""
+    const clientSecret = orcidConfig.client_secret || process.env.ORCID_CLIENT_SECRET || ""
+
+    return {
+      clientId,
+      clientSecret,
+      useSandbox,
+      baseUrl,
+      authorizeUrl: `${baseUrl}/oauth/authorize`,
+      tokenUrl: `${baseUrl}/oauth/token`,
+    }
+  } catch (error) {
+    console.error("Error getting ORCID config:", error)
+    // Return default config with empty values to allow proper error handling
+    return {
+      clientId: "",
+      clientSecret: "",
+      useSandbox: false,
+      baseUrl: "https://orcid.org",
+      authorizeUrl: "https://orcid.org/oauth/authorize",
+      tokenUrl: "https://orcid.org/oauth/token",
+    }
   }
 }
 
@@ -169,39 +211,51 @@ function getOrcidConfig(): OrcidConfig {
  * Returns the authorization URL to redirect the user to
  */
 export const orcidAuthStart = functions.https.onCall(async (data, context) => {
-  const config = getOrcidConfig()
+  try {
+    const config = getOrcidConfig()
 
-  if (!config.clientId) {
+    if (!config.clientId) {
+      console.error("ORCID client ID not configured. Check Firebase Functions config or environment variables.")
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "ORCID client ID not configured. Please contact administrator."
+      )
+    }
+
+    // Get the redirect URI from the request
+    const redirectUri = data.redirect_uri || ""
+
+    if (!redirectUri) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "redirect_uri is required"
+      )
+    }
+
+    // Generate state parameter for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15)
+
+    // Build authorization URL
+    const authUrl = new URL(config.authorizeUrl)
+    authUrl.searchParams.set("client_id", config.clientId)
+    authUrl.searchParams.set("response_type", "code")
+    authUrl.searchParams.set("scope", "/authenticate")
+    authUrl.searchParams.set("redirect_uri", redirectUri)
+    authUrl.searchParams.set("state", state)
+
+    return {
+      authUrl: authUrl.toString(),
+      state,
+    }
+  } catch (error) {
+    console.error("Error in orcidAuthStart:", error)
+    if (error instanceof functions.https.HttpsError) {
+      throw error
+    }
     throw new functions.https.HttpsError(
-      "failed-precondition",
-      "ORCID client ID not configured"
+      "internal",
+      `Failed to initiate ORCID authentication: ${error instanceof Error ? error.message : "Unknown error"}`
     )
-  }
-
-  // Get the redirect URI from the request
-  const redirectUri = data.redirect_uri || ""
-
-  if (!redirectUri) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "redirect_uri is required"
-    )
-  }
-
-  // Generate state parameter for CSRF protection
-  const state = Math.random().toString(36).substring(2, 15)
-
-  // Build authorization URL
-  const authUrl = new URL(config.authorizeUrl)
-  authUrl.searchParams.set("client_id", config.clientId)
-  authUrl.searchParams.set("response_type", "code")
-  authUrl.searchParams.set("scope", "/authenticate")
-  authUrl.searchParams.set("redirect_uri", redirectUri)
-  authUrl.searchParams.set("state", state)
-
-  return {
-    authUrl: authUrl.toString(),
-    state,
   }
 })
 
@@ -693,20 +747,12 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       orcidUrl: `${config.baseUrl}/${orcidId}`,
       orcidVerified: true,
       orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
-      orcidData: parsedOrcidData, // Store structured ORCID data for display
-      orcidClaims: {
+      orcidData: sanitizeForFirestore(parsedOrcidData), // Store structured ORCID data for display
+      orcidClaims: sanitizeForFirestore({
         name: name || extractedData.firstName ? `${extractedData.firstName || ""} ${extractedData.lastName || ""}`.trim() : null,
         email: extractedData.email || null,
-      },
+      }),
     }
-
-    console.log(`Parsed ORCID data:`, {
-      biography: !!parsedOrcidData.biography,
-      employmentCount: parsedOrcidData.employment?.length || 0,
-      educationCount: parsedOrcidData.education?.length || 0,
-      worksCount: parsedOrcidData.works?.length || 0,
-      fundingCount: parsedOrcidData.funding?.length || 0,
-    })
 
     // Get user's profileId from users collection
     const userDoc = await admin.firestore().collection("users").doc(context.auth.uid).get()
@@ -831,13 +877,16 @@ export const orcidResyncProfile = functions.https.onCall(async (data, context) =
     const parsedOrcidData = parseOrcidRecordToProfileData(orcidRecord)
 
     // Prepare update data for Firestore
+    // We sanitize only the nested objects that come from external APIs
+    // We DO NOT sanitize the top-level object because it contains FieldValue.serverTimestamp()
+    // which would be destroyed by the sanitizer
     const firestoreUpdate: any = {
       orcidLastSynced: admin.firestore.FieldValue.serverTimestamp(),
-      orcidData: parsedOrcidData, // Update structured ORCID data
-      orcidClaims: {
+      orcidData: sanitizeForFirestore(parsedOrcidData),
+      orcidClaims: sanitizeForFirestore({
         name: extractedData.firstName ? `${extractedData.firstName || ""} ${extractedData.lastName || ""}`.trim() : null,
         email: extractedData.email || null,
-      },
+      }),
     }
 
     console.log(`Resynced ORCID data for ${orcidId}:`, {
@@ -896,3 +945,35 @@ export const orcidResyncProfile = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError("internal", "Failed to resync ORCID profile")
   }
 })
+
+/**
+ * Helper to sanitize data for Firestore by removing undefined values.
+ * Firestore throws an error if 'undefined' is passed as a value.
+ * This function recursively removes keys with undefined values.
+ */
+function sanitizeForFirestore(data: any): any {
+  // Handle primitives and null
+  if (data === null || typeof data !== 'object') {
+    return data
+  }
+
+  // Handle Date objects (pass through)
+  if (data instanceof Date) {
+    return data
+  }
+
+  // Handle Arrays
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeForFirestore(item))
+  }
+
+  // Handle Objects
+  const sanitized: any = {}
+  for (const key in data) {
+    const value = data[key]
+    if (value !== undefined) {
+      sanitized[key] = sanitizeForFirestore(value)
+    }
+  }
+  return sanitized
+}

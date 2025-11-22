@@ -71,24 +71,29 @@ export function DeliverableDialog({
 
   useEffect(() => {
     if (deliverable && open) {
-      setName(deliverable.name)
-      setDescription(deliverable.description || "")
-      setNotes(deliverable.notes || "")
-      setStartDate(
-        deliverable.startDate
-          ? new Date(deliverable.startDate).toISOString().split("T")[0]
-          : ""
-      )
-      setDueDate(
-        deliverable.dueDate
-          ? new Date(deliverable.dueDate).toISOString().split("T")[0]
-          : ""
-      )
-      setImportance(deliverable.importance)
-      setStatus(deliverable.status)
-      setProgress(deliverable.progress)
-      setOwnerId(deliverable.ownerId)
-      setTags(deliverable.tags?.join(", ") || "")
+      try {
+        setName(deliverable.name || "")
+        setDescription(deliverable.description || "")
+        setNotes(deliverable.notes || "")
+        setStartDate(
+          deliverable.startDate
+            ? new Date(deliverable.startDate).toISOString().split("T")[0]
+            : ""
+        )
+        setDueDate(
+          deliverable.dueDate
+            ? new Date(deliverable.dueDate).toISOString().split("T")[0]
+            : ""
+        )
+        setImportance(deliverable.importance || "medium")
+        setStatus(deliverable.status || "not-started")
+        setProgress(deliverable.progress || 0)
+        setOwnerId(deliverable.ownerId)
+        setTags(deliverable.tags?.join(", ") || "")
+      } catch (error) {
+        console.error("Error loading deliverable data:", error)
+        setError("Error loading deliverable data")
+      }
     } else if (!deliverable && open) {
       // Reset for new deliverable
       setName("")

@@ -37,8 +37,10 @@ import {
   User as UserIcon,
   Plus,
   Shield,
-  Loader2
+  Loader2,
+  Users
 } from "lucide-react"
+import { UserImportDialog } from "@/components/admin/UserImportDialog"
 
 /**
  * Maps a position string to a PositionLevel enum value
@@ -175,6 +177,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
 
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)
   const [projectDialogOpen, setProjectDialogOpen] = useState(false)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
 
   // Check if current user can edit a profile
   const canEditProfile = (profile: PersonProfile): boolean => {
@@ -377,7 +380,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
   const handleSave = () => {
     // Validate required fields - both new and legacy fields for backward compatibility
     const hasRequiredBasicFields = formData.firstName && formData.lastName && formData.email
-    const hasLegacyHierarchyFields = formData.organisation && formData.institute && formData.lab
+    const hasLegacyHierarchyFields = formData.organisation && formData.institute && formData.labName
 
     if (!hasRequiredBasicFields || !hasLegacyHierarchyFields) {
       alert("Please fill in required fields: First Name, Last Name, Email, Organisation, Institute, and Lab")
@@ -398,8 +401,8 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       organisationName: formData.organisation!,
       instituteId: `inst_${formData.institute!.toLowerCase().replace(/\s+/g, '_')}`,
       instituteName: formData.institute!,
-      labId: `lab_${formData.lab!.toLowerCase().replace(/\s+/g, '_')}`,
-      labName: formData.lab!,
+      labId: `lab_${formData.labName!.toLowerCase().replace(/\s+/g, '_')}`,
+      labName: formData.labName!,
 
       // Dynamic organizational memberships
       researchGroupIds: [],
@@ -423,7 +426,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       // Legacy fields (for backward compatibility)
       organisation: formData.organisation!,
       institute: formData.institute!,
-      lab: formData.lab!,
+      lab: formData.labName!,
       reportsTo: formData.reportsTo || null,
       fundedBy: formData.fundedBy || [],
       projects: formData.projects || [],
@@ -622,7 +625,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
             >
               <span>
                 <Upload className="h-4 w-4" />
-                Import
+                Import JSON
               </span>
             </Button>
             <input
@@ -632,6 +635,16 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
               className="hidden"
             />
           </label>
+          {(currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
+            <Button
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Users className="h-4 w-4" />
+              Import Users (CSV)
+            </Button>
+          )}
           <Button
             onClick={handleCreateNew}
             className="bg-brand-500 hover:bg-brand-600 text-white flex items-center gap-2"
@@ -875,8 +888,8 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                 <Label htmlFor="lab">Department *</Label>
                 <Input
                   id="lab"
-                  value={formData.lab || ""}
-                  onChange={(e) => setFormData({ ...formData, lab: e.target.value })}
+                  value={formData.labName || ""}
+                  onChange={(e) => setFormData({ ...formData, labName: e.target.value })}
                   placeholder="e.g., Department of Histopathology"
                   disabled={!isEditing}
                 />
@@ -1340,6 +1353,16 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
           currentUserProfile={currentUserProfile}
         />
       )}
+
+      {/* User Import Dialog */}
+      <UserImportDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
+        onImportComplete={() => {
+          // Refresh profiles after import
+          window.dispatchEvent(new CustomEvent("profiles-updated"))
+        }}
+      />
     </div>
   )
 }

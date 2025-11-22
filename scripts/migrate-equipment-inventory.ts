@@ -15,6 +15,10 @@
  *   --collection      Migrate specific collection only (equipment|inventory|fundingAllocations|all)
  *
  * Part of Equipment & Inventory System Integration - Task 28/28
+ * 
+ * NOTE: This is a one-time migration script. According to MIGRATION_README.md, this migration
+ * (Task 28/28) has been completed. Only run again if you need to re-migrate data or if
+ * new equipment/inventory items were added before the migration was run.
  */
 
 import * as admin from 'firebase-admin'

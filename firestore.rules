@@ -788,6 +788,18 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // ORCID RECORDS
+    // ============================================================================
+    match /orcidRecords/{orcidId} {
+      // Allow read for authenticated users
+      allow read: if isAuthenticated();
+
+      // Allow create/update if authenticated
+      // Ideally we should check if the user claims this ORCID, but for now allow authenticated writes
+      allow write: if isAuthenticated();
+    }
+
+    // ============================================================================
     // DEFAULT DENY (catch-all)
     // ============================================================================
     match /{document=**} {

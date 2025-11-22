@@ -1,36 +1,52 @@
 "use client"
 
-import { useState, useCallback } from "react";
-import { useAppContext } from "@/lib/AppContext";
-import { useAuth } from "@/lib/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { GanttChart } from "@/components/GanttChart";
-import { TaskDetailPanel } from "@/components/TaskDetailPanel";
-import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
-import { DependencyPickerDialog } from "@/components/projects/DependencyPickerDialog";
-import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
-import { ProjectImportDialog } from "@/components/projects/ProjectImportDialog";
-import { DeliverableDialog } from "@/components/DeliverableDialog";
-import { MasterProject, Task, Workpackage, Project, Person, ProfileProject, Subtask, CalendarEvent, Deliverable } from "@/lib/types";
-import { PersonnelList } from "@/components/PersonnelList";
-import { Plus, FolderKanban, PackagePlus, Trash2, Loader2, AlertCircle, Upload } from "lucide-react";
-import { Task as GanttTask } from "gantt-task-react";
-import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
-import { toggleTodoAndRecalculate, addTodoAndRecalculate, deleteTodoAndRecalculate, updateWorkpackageWithTaskProgress } from "@/lib/progressCalculation";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { logger } from "@/lib/logger";
-import { notifyProjectTaskAssigned, notifyWorkpackageOwnerAssigned } from "@/lib/notificationUtils";
+import { useState, useMemo, useCallback } from "react"
+import { useAppContext } from "@/lib/AppContext"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog"
+import { ProjectDetailPage } from "@/components/views/ProjectDetailPage"
+import { ProjectImportDialog } from "@/components/projects/ProjectImportDialog"
+import { DeliverableDialog } from "@/components/DeliverableDialog"
+import { ProjectCard } from "@/components/projects/ProjectCard"
+import { PersonalTasksWidget } from "@/components/projects/PersonalTasksWidget"
+import { TaskCreationDialog } from "@/components/projects/TaskCreationDialog"
+import { TaskEditDialog } from "@/components/projects/TaskEditDialog"
+import { MasterProject, Workpackage, Deliverable, PersonProfile, Task } from "@/lib/types"
+import {
+  Plus,
+  FolderKanban,
+  Loader2,
+  AlertCircle,
+  Upload,
+  Search,
+  Filter,
+  DollarSign,
+  Grid3x3,
+  List,
+  BarChart3,
+} from "lucide-react"
+import { logger } from "@/lib/logger"
+import { calculateProjectHealth, ProjectHealth } from "@/lib/utils/projectHealth"
+import { calculateBudgetsForProjects, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export function ProjectDashboard() {
-  const { currentUser: user, currentUserProfile: profile } = useAuth();
+  const { currentUser: user, currentUserProfile: profile } = useAuth()
   const {
     projects,
     workpackages: allWorkpackages,
-    workpackagesMap,
     deliverables,
+    orders,
     handleCreateMasterProject,
     handleUpdateMasterProject,
     handleDeleteMasterProject,
@@ -38,114 +54,211 @@ export function ProjectDashboard() {
     handleCreateDeliverable,
     handleUpdateDeliverable,
     handleDeleteDeliverable,
-    handleUpdateTaskHelpers,
-    handleUpdateTaskDates,
     handleCreateWorkpackage: createWorkpackage,
     projectsSyncStatus,
     allProfiles,
     people,
-  } = useAppContext();
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null);
-  const [showProjectDialog, setShowProjectDialog] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [dependencyDialog, setDependencyDialog] = useState<{
-    item: Task | Subtask;
-    itemType: "task" | "subtask";
-    workpackageId: string;
-  } | null>(null);
-  const [showDeliverableDialog, setShowDeliverableDialog] = useState(false);
-  const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null);
-  const [deliverableMode, setDeliverableMode] = useState<"create" | "edit" | "view">("create");
-  const [deliverableParentId, setDeliverableParentId] = useState<string | null>(null);
+  } = useAppContext()
 
-  // Helper to get workpackages for a project
-  const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
-    return project.workpackageIds
-      .map(wpId => workpackagesMap.get(wpId))
-      .filter((wp): wp is Workpackage => wp !== undefined);
-  }, [workpackagesMap]);
+  const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null)
+  const [showProjectDialog, setShowProjectDialog] = useState(false)
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const [showDeliverableDialog, setShowDeliverableDialog] = useState(false)
+  const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null)
+  const [deliverableMode, setDeliverableMode] = useState<"create" | "edit" | "view">("create")
+  const [deliverableParentId, setDeliverableParentId] = useState<string | null>(null)
+  const [showTaskDialog, setShowTaskDialog] = useState(false)
+  const [showTaskEditDialog, setShowTaskEditDialog] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [taskDeliverableId, setTaskDeliverableId] = useState<string>("")
+  const [taskWorkpackageId, setTaskWorkpackageId] = useState<string>("")
 
-  const handleCreateProjectClick = () => {
-    setShowProjectDialog(true);
-  };
+  // Filtering and search state
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [fundingFilter, setFundingFilter] = useState<string>("all")
+  const [healthFilter, setHealthFilter] = useState<string>("all")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
-  const handleImportSuccess = (projectId: string) => {
-    logger.info('Project imported successfully', { projectId })
-    setShowImportDialog(false)
-    // Refresh will show the new project due to Firestore real-time sync
-    alert('Project imported successfully! The new project should appear in the list shortly.')
-  };
+  // Calculate budget summaries for all projects
+  const budgetSummaries = useMemo(() => {
+    if (!projects || !orders) return new Map<string, ProjectBudgetSummary>()
+    return calculateBudgetsForProjects(projects, orders)
+  }, [projects, orders])
 
-  const handleCreateRegularProject = () => {
-    if (!profile) return;
+  // Calculate health for all projects
+  const projectHealths = useMemo(() => {
+    if (!projects || !allWorkpackages || !deliverables) return new Map<string, ProjectHealth>()
 
-    // Create a simple project with minimal defaults
-    const newProject: Omit<MasterProject, "id" | "createdAt"> = {
-      name: `New Project ${projects.length + 1}`,
-      description: "",
-      labId: profile.labId,
-      labName: profile.labName,
-      instituteId: profile.instituteId,
-      instituteName: profile.instituteName,
-      organisationId: profile.organisationId,
-      organisationName: profile.organisationName,
-      grantName: "",
-      grantNumber: "",
-      totalBudget: 0,
-      currency: "EUR",
-      startDate: new Date().toISOString(),
-      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      funderId: "",
-      funderName: "",
-      accountIds: [],
-      principalInvestigatorIds: profile.id ? [profile.id] : [],
-      coPIIds: [],
-      teamMemberIds: profile.id ? [profile.id] : [],
-      teamRoles: profile.id ? { [profile.id]: "PI" } : {},
-      status: "planning",
-      progress: 0,
-      workpackageIds: [],
-      visibility: "lab",
-      createdBy: user?.uid || "",
-      isExpanded: true,
-    };
+    const healthMap = new Map<string, ProjectHealth>()
+    projects.forEach(project => {
+      const health = calculateProjectHealth(project, deliverables, allWorkpackages)
+      healthMap.set(project.id, health)
+    })
+    return healthMap
+  }, [projects, allWorkpackages, deliverables])
 
-    handleCreateMasterProject(newProject);
-    setShowProjectDialog(false);
-  };
+  // Filter and group projects
+  const { fundedProjects, unfundedProjects } = useMemo(() => {
+    if (!projects) return { fundedProjects: [], unfundedProjects: [] }
 
-  const handleCreateMasterProjectFromDialog = async (projectData: ProfileProject & { funderId?: string }) => {
-    if (!profile || !user) return;
+    let filtered = [...projects]
 
-    // Fix Bug #1: Validate project name before creation
-    if (!projectData.name || !projectData.name.trim()) {
-      alert("Project name is required. Please enter a project name.");
-      return;
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase()
+      filtered = filtered.filter(
+        p =>
+          p.name.toLowerCase().includes(term) ||
+          p.funderName?.toLowerCase().includes(term) ||
+          p.grantName?.toLowerCase().includes(term) ||
+          p.description?.toLowerCase().includes(term)
+      )
     }
 
-    // Map ProjectVisibility to MasterProject visibility
-    const mapVisibility = (vis: typeof projectData.visibility): "private" | "lab" | "institute" | "organisation" => {
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(p => p.status === statusFilter)
+    }
+
+    // Filter by health
+    if (healthFilter !== "all") {
+      filtered = filtered.filter(p => {
+        const health = projectHealths.get(p.id)
+        return health?.status === healthFilter
+      })
+    }
+
+    // Filter by funding type
+    let funded: MasterProject[] = []
+    let unfunded: MasterProject[] = []
+
+    if (fundingFilter === "funded") {
+      funded = filtered.filter(p => p.funderId && p.totalBudget && p.totalBudget > 0)
+    } else if (fundingFilter === "unfunded") {
+      unfunded = filtered.filter(p => !p.funderId || !p.totalBudget || p.totalBudget === 0)
+    } else {
+      // All projects - separate into funded and unfunded
+      funded = filtered.filter(p => p.funderId && p.totalBudget && p.totalBudget > 0)
+      unfunded = filtered.filter(p => !p.funderId || !p.totalBudget || p.totalBudget === 0)
+    }
+
+    // Sort by name
+    funded.sort((a, b) => a.name.localeCompare(b.name))
+    unfunded.sort((a, b) => a.name.localeCompare(b.name))
+
+    return { fundedProjects: funded, unfundedProjects: unfunded }
+  }, [projects, searchTerm, statusFilter, healthFilter, fundingFilter, projectHealths])
+
+  const handleCreateTask = useCallback(async (taskData: Partial<Task> & { workpackageId: string }) => {
+    try {
+      const workpackage = allWorkpackages.find(wp => wp.id === taskData.workpackageId)
+      if (!workpackage) {
+        throw new Error("Workpackage not found")
+      }
+
+      const newTask: Task = {
+        id: `task-${Date.now()}`,
+        name: taskData.name || "New Task",
+        start: taskData.start || new Date(),
+        end: taskData.end || new Date(),
+        progress: taskData.progress || 0,
+        status: taskData.status || "not-started",
+        workpackageId: taskData.workpackageId,
+        primaryOwner: taskData.primaryOwner,
+        helpers: taskData.helpers,
+        importance: taskData.importance || "medium",
+        notes: taskData.notes,
+        subtasks: [],
+        deliverables: [],
+      }
+
+      const updatedTasks = [...(workpackage.tasks || []), newTask]
+      await handleUpdateWorkpackage(workpackage.id, {
+        tasks: updatedTasks,
+      })
+
+      logger.info("Task created successfully", { taskId: newTask.id, workpackageId: workpackage.id })
+      setShowTaskDialog(false)
+    } catch (error) {
+      logger.error("Error creating task", error)
+      alert(`Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`)
+    }
+  }, [allWorkpackages, handleUpdateWorkpackage])
+
+  const handleUpdateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
+    try {
+      // Find the workpackage containing this task
+      const workpackage = allWorkpackages.find(wp => 
+        wp.tasks?.some(t => t.id === taskId)
+      )
+      if (!workpackage) {
+        throw new Error("Workpackage not found for task")
+      }
+
+      const updatedTasks = (workpackage.tasks || []).map(task =>
+        task.id === taskId ? { ...task, ...updates } : task
+      )
+
+      await handleUpdateWorkpackage(workpackage.id, {
+        tasks: updatedTasks,
+      })
+
+      logger.info("Task updated successfully", { taskId, workpackageId: workpackage.id })
+      setShowTaskEditDialog(false)
+      setSelectedTask(null)
+    } catch (error) {
+      logger.error("Error updating task", error)
+      alert(`Failed to update task: ${error instanceof Error ? error.message : "Unknown error"}`)
+    }
+  }, [allWorkpackages, handleUpdateWorkpackage])
+
+  const handleDeleteTask = useCallback(async (workpackageId: string, taskId: string) => {
+    try {
+      const workpackage = allWorkpackages.find(wp => wp.id === workpackageId)
+      if (!workpackage) {
+        throw new Error("Workpackage not found")
+      }
+
+      const updatedTasks = (workpackage.tasks || []).filter(task => task.id !== taskId)
+
+      await handleUpdateWorkpackage(workpackageId, {
+        tasks: updatedTasks,
+      })
+    } catch (error) {
+      logger.error("Error deleting task", error)
+      alert(`Failed to delete task: ${error instanceof Error ? error.message : "Unknown error"}`)
+    }
+  }, [allWorkpackages, handleUpdateWorkpackage])
+
+  const handleCreateMasterProjectFromDialog = async (projectData: any) => {
+    if (!profile || !user) return
+
+    if (!projectData.name || !projectData.name.trim()) {
+      alert("Project name is required. Please enter a project name.")
+      return
+    }
+
+    const mapVisibility = (vis: string): "private" | "lab" | "institute" | "organisation" => {
       switch (vis) {
         case "private":
         case "postdocs":
         case "pi-researchers":
         case "custom":
-          return "private";
+          return "private"
         case "lab":
-          return "lab";
+          return "lab"
         case "institute":
-          return "institute";
+          return "institute"
         case "organisation":
-          return "organisation";
+          return "organisation"
         default:
-          return "lab";
+          return "lab"
       }
-    };
+    }
 
-    // Convert ProfileProject to MasterProject format
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
-      name: projectData.name.trim(), // Fix Bug #1: Ensure name is trimmed
+      name: projectData.name.trim(),
       description: projectData.description || "",
       labId: profile.labId,
       labName: profile.labName,
@@ -160,12 +273,24 @@ export function ProjectDashboard() {
       startDate: projectData.startDate,
       endDate: projectData.endDate,
       funderId: projectData.funderId || "",
-      funderName: "", // Will be populated by backend or fetched separately
+      funderName: "",
       accountIds: projectData.fundedBy || [],
-      principalInvestigatorIds: projectData.principalInvestigatorId ? [projectData.principalInvestigatorId] : (profile.id ? [profile.id] : []),
+      principalInvestigatorIds: projectData.principalInvestigatorId
+        ? [projectData.principalInvestigatorId]
+        : profile.id
+        ? [profile.id]
+        : [],
       coPIIds: [],
-      teamMemberIds: projectData.principalInvestigatorId ? [projectData.principalInvestigatorId] : (profile.id ? [profile.id] : []),
-      teamRoles: projectData.principalInvestigatorId ? { [projectData.principalInvestigatorId]: "PI" } : (profile.id ? { [profile.id]: "PI" } : {}),
+      teamMemberIds: projectData.principalInvestigatorId
+        ? [projectData.principalInvestigatorId]
+        : profile.id
+        ? [profile.id]
+        : [],
+      teamRoles: projectData.principalInvestigatorId
+        ? { [projectData.principalInvestigatorId]: "PI" }
+        : profile.id
+        ? { [profile.id]: "PI" }
+        : {},
       status: projectData.status,
       progress: 0,
       workpackageIds: [],
@@ -175,672 +300,25 @@ export function ProjectDashboard() {
       notes: projectData.notes,
       createdBy: user.uid,
       isExpanded: true,
-    };
+    }
 
     try {
-      await handleCreateMasterProject(newProject);
+      await handleCreateMasterProject(newProject)
+      setShowProjectDialog(false)
     } catch (error) {
-      logger.error("Error creating master project", error);
-      alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`);
+      logger.error("Error creating master project", error)
+      alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-  };
-
-  const handleDeleteProject = () => {
-    if (!selectedProjectForDetail) return;
-
-    if (confirm(`Are you sure you want to delete the project "${selectedProjectForDetail.name}"? This action cannot be undone.`)) {
-      handleDeleteMasterProject(selectedProjectForDetail.id);
-      setSelectedProjectForDetail(null);
-    }
-  };
-
-  const handleDateChange = useCallback(async (ganttTask: GanttTask) => {
-    try {
-      // Find the project/workpackage/task that matches this gantt task
-      for (const project of projects) {
-        // Check if it's the project itself
-        if (ganttTask.id === project.id) {
-          await handleUpdateMasterProject(project.id, {
-            startDate: ganttTask.start.toISOString(),
-            endDate: ganttTask.end.toISOString(),
-          });
-          return;
-        }
-
-        // Check workpackages
-        for (const wpId of project.workpackageIds) {
-          const workpackage = workpackagesMap.get(wpId);
-          if (!workpackage) continue;
-
-          if (ganttTask.id === workpackage.id) {
-            await handleUpdateWorkpackage(workpackage.id, {
-              start: ganttTask.start,
-              end: ganttTask.end,
-            });
-            return;
-          }
-
-          // Check tasks
-          for (const task of workpackage.tasks || []) {
-            if (ganttTask.id === task.id) {
-              // Optimistic update - no await needed
-              handleUpdateTaskDates(workpackage.id, task.id, ganttTask.start, ganttTask.end);
-              return;
-            }
-
-            // Check subtasks
-            for (const subtask of task.subtasks || []) {
-              if (ganttTask.id === subtask.id) {
-                const updatedTasks = (workpackage.tasks || []).map(t =>
-                  t.id === task.id
-                    ? {
-                      ...t,
-                      subtasks: t.subtasks?.map((st: Subtask) =>
-                        st.id === subtask.id
-                          ? { ...st, start: ganttTask.start, end: ganttTask.end }
-                          : st
-                      ),
-                    }
-                    : t
-                );
-                await handleUpdateWorkpackage(workpackage.id, {
-                  tasks: updatedTasks,
-                });
-                return;
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      logger.error("Error updating task dates", error);
-      alert("Failed to update task dates. Please try again.");
-    }
-  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskDates, workpackagesMap]);
-
-  const handleTaskClick = useCallback((task: MasterProject | Workpackage | CalendarEvent | Task | Deliverable) => {
-    if ('subtasks' in task && 'workpackageId' in task) {
-      setSelectedTask(task as Task);
-    }
-  }, []);
-
-  const handleToggleExpand = useCallback(async (id: string, isProject: boolean) => {
-    try {
-      if (isProject) {
-        // Toggle project expansion
-        const project = projects.find(p => p.id === id);
-        if (project) {
-          await handleUpdateMasterProject(project.id, {
-            isExpanded: !project.isExpanded,
-          });
-        }
-      } else {
-        // Toggle workpackage expansion
-        for (const project of projects) {
-          const workpackage = workpackagesMap.get(id);
-          if (workpackage) {
-            await handleUpdateWorkpackage(workpackage.id, {
-              isExpanded: !workpackage.isExpanded,
-            });
-            return;
-          }
-
-          // Check if it's a task
-          for (const wp of getProjectWorkpackages(project)) {
-            const task = wp.tasks?.find(t => t.id === id);
-            if (task) {
-              const updatedTasks = (wp.tasks || []).map(t =>
-                t.id === id ? { ...t, isExpanded: !t.isExpanded } : t
-              );
-              await handleUpdateWorkpackage(wp.id, {
-                tasks: updatedTasks,
-              });
-              return;
-            }
-
-            // Check if it's a subtask
-            for (const task of wp.tasks || []) {
-              const subtask = task.subtasks?.find((st: Subtask) => st.id === id);
-              if (subtask) {
-                const updatedTasks = (wp.tasks || []).map(t =>
-                  t.id === task.id
-                    ? {
-                      ...t,
-                      subtasks: t.subtasks?.map((st: Subtask) =>
-                        st.id === id ? { ...st, isExpanded: !st.isExpanded } : st
-                      ),
-                    }
-                    : t
-                );
-                await handleUpdateWorkpackage(wp.id, {
-                  tasks: updatedTasks,
-                });
-                return;
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      logger.error("Error toggling expand/collapse", error);
-      alert("Failed to toggle expand/collapse. Please try again.");
-    }
-  }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, workpackagesMap, getProjectWorkpackages]);
-
-  // Helper to find the parent project and workpackage for a task
-  const findTaskContext = useCallback((taskId: string): { project: MasterProject; workpackage: Workpackage; task: Task } | null => {
-    for (const project of projects) {
-      for (const wpId of project.workpackageIds) {
-        const workpackage = workpackagesMap.get(wpId);
-        if (!workpackage) continue;
-
-        const task = workpackage.tasks?.find(t => t.id === taskId);
-        if (task) {
-          return { project, workpackage, task };
-        }
-      }
-    }
-    return null;
-  }, [projects, workpackagesMap]);
-
-  const handleDoubleClick = useCallback((item: Task | Deliverable | Workpackage | MasterProject | CalendarEvent) => {
-    // Check if it's a deliverable
-    if ('dueDate' in item && 'workpackageId' in item) {
-      setSelectedDeliverable(item as Deliverable);
-      setDeliverableMode("edit");
-      setShowDeliverableDialog(true);
-      return;
-    }
-
-    // Check if it's a task
-    if ('status' in item && ('priority' in item || 'assignees' in item)) {
-      setSelectedTask(item as Task);
-      return;
-    }
-  }, []);
-
-  const handleContextAction = useCallback(async (action: { action: string; targetId: string; targetType: string }) => {
-    try {
-      switch (action.action) {
-        case "open-details":
-          // Check if it's a project
-          if (action.targetType === "project") {
-            const project = projects.find(p => p.id === action.targetId);
-            if (project) {
-              setSelectedProjectForDetail(project);
-              return;
-            }
-          }
-
-          // Check if it's a deliverable
-          if (action.targetType === "deliverable") {
-            const deliverable = deliverables.find(d => d.id === action.targetId);
-            if (deliverable) {
-              setSelectedDeliverable(deliverable);
-              setDeliverableMode("edit");
-              setShowDeliverableDialog(true);
-              return;
-            }
-          }
-
-          // Find and open the task details
-          for (const project of projects) {
-            for (const wp of getProjectWorkpackages(project)) {
-              const task = wp.tasks?.find(t => t.id === action.targetId);
-              if (task) {
-                setSelectedTask(task);
-                return;
-              }
-            }
-          }
-          break;
-        case "add-dependency":
-          // Check if it's a task or subtask
-          for (const project of projects) {
-            for (const wp of getProjectWorkpackages(project)) {
-              const targetTask = wp.tasks?.find(t => t.id === action.targetId);
-              if (targetTask) {
-                setDependencyDialog({
-                  item: targetTask,
-                  itemType: "task",
-                  workpackageId: wp.id,
-                });
-                return;
-              } else {
-                // Check subtasks
-                for (const t of wp.tasks || []) {
-                  const subtask = t.subtasks?.find((st: Subtask) => st.id === action.targetId);
-                  if (subtask) {
-                    setDependencyDialog({
-                      item: subtask,
-                      itemType: "subtask",
-                      workpackageId: wp.id,
-                    });
-                    return;
-                  }
-                }
-              }
-            }
-          }
-          break;
-        case "add-child":
-          if (action.targetType === "workpackage") {
-            setDeliverableParentId(action.targetId);
-            setSelectedDeliverable(null);
-            setDeliverableMode("create");
-            setShowDeliverableDialog(true);
-            return;
-          }
-          break;
-      }
-    } catch (error) {
-      logger.error("Error handling context action", error);
-      alert("Failed to perform action. Please try again.");
-    }
-  }, [projects, getProjectWorkpackages]);
-
-  const handleSaveDependencies = useCallback(async (dependencyIds: string[]) => {
-    if (!dependencyDialog) return;
-
-    try {
-      const { item, itemType, workpackageId } = dependencyDialog;
-      const workpackage = workpackagesMap.get(workpackageId);
-      if (!workpackage) return;
-
-      if (itemType === "task") {
-        const updatedTasks = workpackage.tasks?.map(t =>
-          t.id === item.id
-            ? { ...t, dependencies: dependencyIds }
-            : t
-        );
-        await handleUpdateWorkpackage(workpackageId, {
-          tasks: updatedTasks,
-        });
-      } else {
-        // Subtask
-        const updatedTasks = workpackage.tasks?.map(t => ({
-          ...t,
-          subtasks: t.subtasks?.map((st: Subtask) =>
-            st.id === item.id
-              ? { ...st, dependencies: dependencyIds }
-              : st
-          ),
-        }));
-        await handleUpdateWorkpackage(workpackageId, {
-          tasks: updatedTasks,
-        });
-      }
-
-      setDependencyDialog(null);
-    } catch (error) {
-      logger.error("Error saving dependencies", error);
-      alert("Failed to save dependencies. Please try again.");
-    }
-  }, [dependencyDialog, workpackagesMap, handleUpdateWorkpackage]);
-
-  const handlePersonDropOnBar = useCallback(async (
-    taskOrProjectId: string,
-    personId: string,
-    isProject: boolean
-  ) => {
-    try {
-      if (isProject) {
-        // Assign person to project (as team member)
-        const project = projects.find(p => p.id === taskOrProjectId);
-        if (project) {
-          const currentTeamMembers = project.teamMemberIds || [];
-          if (!currentTeamMembers.includes(personId)) {
-            await handleUpdateMasterProject(project.id, {
-              teamMemberIds: [...currentTeamMembers, personId],
-            });
-          }
-        }
-      } else {
-        // Assign person to task or workpackage
-        const context = findTaskContext(taskOrProjectId);
-        if (context) {
-          // Check if it's a task
-          const task = context.workpackage.tasks?.find(t => t.id === taskOrProjectId);
-          if (task) {
-            const currentHelpers = task.helpers || [];
-            if (!currentHelpers.includes(personId) && task.primaryOwner !== personId) {
-              const newHelpers = [...currentHelpers, personId];
-
-              // Optimistic update - no await needed
-              handleUpdateTaskHelpers(context.workpackage.id, taskOrProjectId, newHelpers);
-
-              // Update selected task if it's the one being modified
-              if (selectedTask?.id === taskOrProjectId) {
-                setSelectedTask({ ...task, helpers: newHelpers });
-              }
-
-              // Send notification in background (non-blocking)
-              if (profile && allProfiles) {
-                const assignee = allProfiles.find(p => p.id === personId);
-                if (assignee && assignee.id !== profile.id) {
-                  notifyProjectTaskAssigned(
-                    task,
-                    assignee,
-                    profile,
-                    context.project.name
-                  ).catch(error => {
-                    logger.error('Error sending task assignment notification', error);
-                  });
-                }
-              }
-            }
-          } else {
-            // It's a workpackage - assign as owner
-            if (context.workpackage.ownerId !== personId) {
-              await handleUpdateWorkpackage(context.workpackage.id, {
-                ownerId: personId,
-              });
-
-              // Send notification in background (non-blocking)
-              if (profile && allProfiles) {
-                const assignee = allProfiles.find(p => p.id === personId);
-                if (assignee && assignee.id !== profile.id) {
-                  notifyWorkpackageOwnerAssigned(
-                    context.workpackage,
-                    assignee,
-                    profile,
-                    context.project.name
-                  ).catch(error => {
-                    logger.error('Error sending workpackage assignment notification', error);
-                  });
-                }
-              }
-            }
-          }
-        } else {
-          // Try to find workpackage directly
-          const workpackage = workpackagesMap.get(taskOrProjectId);
-          if (workpackage) {
-            if (workpackage.ownerId !== personId) {
-              await handleUpdateWorkpackage(workpackage.id, {
-                ownerId: personId,
-              });
-
-              // Send notification to newly assigned workpackage owner
-              if (profile && allProfiles) {
-                const assignee = allProfiles.find(p => p.id === personId);
-                if (assignee && assignee.id !== profile.id) {
-                  // Find the project for this workpackage
-                  const project = projects.find(p => {
-                    const wpIds = getProjectWorkpackages(p).map(wp => wp.id);
-                    return wpIds.includes(workpackage.id);
-                  });
-                  if (project) {
-                    // Send notification in background (non-blocking)
-                    notifyWorkpackageOwnerAssigned(
-                      workpackage,
-                      assignee,
-                      profile,
-                      project.name
-                    ).catch(error => {
-                      logger.error('Error sending workpackage assignment notification', error);
-                    });
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      logger.error("Error assigning person", error);
-      alert("Failed to assign person. Please try again.");
-    }
-  }, [projects, findTaskContext, selectedTask, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskHelpers, workpackagesMap, profile, allProfiles, getProjectWorkpackages]);
-
-  const handleToggleTodo = useCallback(async (subtaskId: string, todoId: string) => {
-    if (!selectedTask) return;
-
-    try {
-      const context = findTaskContext(selectedTask.id);
-      if (!context) {
-        alert("Could not find task context. Please refresh the page.");
-        return;
-      }
-
-      // Convert MasterProject to Project format for progress calculation
-      const projectWorkpackages = getProjectWorkpackages(context.project);
-      const projectForCalc: Project = {
-        ...context.project as any,
-        workpackages: projectWorkpackages,
-      };
-
-      // Toggle todo and recalculate progress
-      const updatedProject = toggleTodoAndRecalculate(
-        projectForCalc,
-        context.workpackage.id,
-        selectedTask.id,
-        subtaskId,
-        todoId
-      ) as any;
-
-      // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
-      if (!updatedWorkpackage) {
-        throw new Error("Updated workpackage not found");
-      }
-
-      // Update in Firestore
-      await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
-
-      // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
-      if (updatedTask) {
-        setSelectedTask(updatedTask);
-      }
-    } catch (error) {
-      logger.error("Error toggling todo", error);
-      alert("Failed to toggle todo. Please try again.");
-    }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
-
-  const handleAddTodo = useCallback(async (subtaskId: string, text: string) => {
-    if (!selectedTask || !text.trim()) return;
-
-    try {
-      const context = findTaskContext(selectedTask.id);
-      if (!context) {
-        alert("Could not find task context. Please refresh the page.");
-        return;
-      }
-
-      // Convert MasterProject to Project format for progress calculation
-      const projectWorkpackages = getProjectWorkpackages(context.project);
-      const projectForCalc: Project = {
-        ...context.project as any,
-        workpackages: projectWorkpackages,
-      };
-
-      // Add todo and recalculate progress
-      const updatedProject = addTodoAndRecalculate(
-        projectForCalc,
-        context.workpackage.id,
-        selectedTask.id,
-        subtaskId,
-        text.trim()
-      ) as any;
-
-      // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
-      if (!updatedWorkpackage) {
-        throw new Error("Updated workpackage not found");
-      }
-
-      // Update in Firestore
-      await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
-
-      // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
-      if (updatedTask) {
-        setSelectedTask(updatedTask);
-      }
-    } catch (error) {
-      logger.error("Error adding todo", error);
-      alert("Failed to add todo. Please try again.");
-    }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
-
-  const handleDeleteTodo = useCallback(async (subtaskId: string, todoId: string) => {
-    if (!selectedTask) return;
-
-    try {
-      const context = findTaskContext(selectedTask.id);
-      if (!context) {
-        alert("Could not find task context. Please refresh the page.");
-        return;
-      }
-
-      // Convert MasterProject to Project format for progress calculation
-      const projectWorkpackages = getProjectWorkpackages(context.project);
-      const projectForCalc: Project = {
-        ...context.project as any,
-        workpackages: projectWorkpackages,
-      };
-
-      // Delete todo and recalculate progress
-      const updatedProject = deleteTodoAndRecalculate(
-        projectForCalc,
-        context.workpackage.id,
-        selectedTask.id,
-        subtaskId,
-        todoId
-      ) as any;
-
-      // Get the updated workpackage
-      const updatedWorkpackage = updatedProject.workpackages?.find((wp: Workpackage) => wp.id === context.workpackage.id);
-      if (!updatedWorkpackage) {
-        throw new Error("Updated workpackage not found");
-      }
-
-      // Update in Firestore
-      await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
-
-      // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
-      if (updatedTask) {
-        setSelectedTask(updatedTask);
-      }
-    } catch (error) {
-      logger.error("Error deleting todo", error);
-      alert("Failed to delete todo. Please try again.");
-    }
-  }, [selectedTask, findTaskContext, getProjectWorkpackages]);
-
-  const handleAddSubtask = useCallback(async (name: string) => {
-    if (!selectedTask || !name.trim()) return;
-
-    try {
-      const context = findTaskContext(selectedTask.id);
-      if (!context || !context.workpackage.tasks) {
-        alert("Could not find task context. Please refresh the page.");
-        return;
-      }
-
-      const newSubtask = {
-        id: `subtask - ${Date.now()} `,
-        name: name.trim(),
-        start: new Date(),
-        end: new Date(),
-        progress: 0,
-        status: "not-started" as const,
-        todos: [],
-      };
-
-      // Update task with new subtask
-      const updatedTasks = context.workpackage.tasks.map(t =>
-        t.id === selectedTask.id
-          ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] }
-          : t
-      );
-
-      // Recalculate progress
-      const updatedWorkpackage = updateWorkpackageWithTaskProgress({
-        ...context.workpackage,
-        tasks: updatedTasks,
-      });
-
-      // Update in Firestore
-      await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
-
-      // Update selected task to reflect changes
-      const updatedTask = updatedWorkpackage.tasks?.find((t: Task) => t.id === selectedTask.id);
-      if (updatedTask) {
-        setSelectedTask(updatedTask);
-      }
-    } catch (error) {
-      logger.error("Error adding subtask", error);
-      alert("Failed to add subtask. Please try again.");
-    }
-  }, [selectedTask, findTaskContext]);
-
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [showWorkpackageDialog, setShowWorkpackageDialog] = useState(false);
-  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
-  const [workpackageForm, setWorkpackageForm] = useState({
-    name: "",
-    startDate: new Date().toISOString().split("T")[0],
-    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // 30 days from now
-  });
-
-  const selectedProject = projects.find(p => p.id === selectedProjectId);
-
-  const handleCreateWorkpackage = async () => {
-    if (!selectedProjectId || !profile) return;
-
-    if (!workpackageForm.name.trim()) {
-      alert("Please enter a workpackage name");
-      return;
-    }
-
-    const newWorkpackage: Omit<Workpackage, "id"> = {
-      name: workpackageForm.name.trim(),
-      start: new Date(workpackageForm.startDate),
-      end: new Date(workpackageForm.endDate),
-      projectId: selectedProjectId,
-      status: "planning",
-      progress: 0,
-      tasks: [],
-      deliverableIds: [],
-      isExpanded: true,
-      importance: "medium",
-    };
-
-    try {
-      // Create workpackage and get its ID
-      const workpackageId = await createWorkpackage(newWorkpackage);
-
-      // Add workpackage ID to project
-      if (selectedProject && workpackageId) {
-        await handleUpdateMasterProject(selectedProjectId, {
-          workpackageIds: [...(selectedProject.workpackageIds || []), workpackageId],
-        });
-      }
-
-      setShowWorkpackageDialog(false);
-      setWorkpackageForm({
-        name: "",
-        startDate: new Date().toISOString().split("T")[0],
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      });
-    } catch (error) {
-      logger.error("Error creating workpackage", error);
-      alert("Failed to create workpackage. Please try again.");
-    }
-  };
+  }
 
   // If a project is selected for detail view, show the detail page
   if (selectedProjectForDetail) {
-    const projectWorkpackages = getProjectWorkpackages(selectedProjectForDetail)
+    const projectWorkpackages = allWorkpackages.filter(wp =>
+      selectedProjectForDetail.workpackageIds.includes(wp.id)
+    )
     const projectTeamMembers = allProfiles.filter(p =>
       selectedProjectForDetail.teamMemberIds?.includes(p.id)
     )
-
-    // Get deliverables for this project (filter by workpackages)
     const projectDeliverables = deliverables.filter(d =>
       projectWorkpackages.some(wp => wp.id === d.workpackageId)
     )
@@ -851,14 +329,12 @@ export function ProjectDashboard() {
         workpackages={projectWorkpackages}
         deliverables={projectDeliverables}
         teamMembers={projectTeamMembers}
-        fundingAccounts={[]} // TODO: Add funding accounts fetch
+        fundingAccounts={[]}
         onBack={() => setSelectedProjectForDetail(null)}
         onEdit={() => {
-          // TODO: Open project edit dialog
           alert("Edit functionality coming soon")
         }}
         onCreateWorkpackage={async (workpackageData) => {
-          // Create workpackage and link it to the project
           const workpackageId = await createWorkpackage({
             ...workpackageData,
             projectId: selectedProjectForDetail.id,
@@ -875,12 +351,11 @@ export function ProjectDashboard() {
           await handleUpdateWorkpackage(workpackageId, updates)
         }}
         onDeleteWorkpackage={async (workpackageId) => {
-          // Remove from project's workpackageIds
           await handleUpdateMasterProject(selectedProjectForDetail.id, {
-            workpackageIds: (selectedProjectForDetail.workpackageIds || []).filter(id => id !== workpackageId),
+            workpackageIds: (selectedProjectForDetail.workpackageIds || []).filter(
+              id => id !== workpackageId
+            ),
           })
-          // Note: The actual workpackage document deletion should be handled by the backend or here
-          // For now, we just remove the reference
         }}
         onCreateDeliverable={async (deliverableData) => {
           await handleCreateDeliverable({
@@ -905,21 +380,27 @@ export function ProjectDashboard() {
         <div className="text-center">
           <Loader2 className="h-12 w-12 mx-auto mb-4 text-brand-500 animate-spin" />
           <h3 className="text-lg font-semibold mb-2">Loading Projects</h3>
-          <p className="text-sm text-muted-foreground">
-            Fetching your project data...
-          </p>
+          <p className="text-sm text-muted-foreground">Fetching your project data...</p>
         </div>
       </div>
     )
   }
 
+  const totalProjects = (fundedProjects.length + unfundedProjects.length)
+  const activeProjects = projects?.filter(p => p.status === 'active').length || 0
+
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col gap-4 overflow-hidden">
-      {/* Header with Controls */}
+      {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <FolderKanban className="h-6 w-6 text-brand-500" />
-          <h1 className="text-2xl font-bold text-foreground">Project Dashboard</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Project Portfolio</h1>
+            <p className="text-sm text-muted-foreground">
+              {totalProjects} project{totalProjects !== 1 ? 's' : ''} • {activeProjects} active
+            </p>
+          </div>
           {projectsSyncStatus === 'syncing' && (
             <Badge variant="secondary" className="flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -932,201 +413,395 @@ export function ProjectDashboard() {
               Sync Error
             </Badge>
           )}
-          <div className="text-sm text-muted-foreground">
-            {people.length > 0 ? `${people.length} people` : 'Loading people...'}
-          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Project Selector */}
-          {projects.length > 0 && (
-            <select
-              value={selectedProjectId || ""}
-              onChange={(e) => setSelectedProjectId(e.target.value || null)}
-              className="px-3 py-2 border border-border rounded-lg bg-background text-sm"
-            >
-              <option value="">All Projects</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {selectedProjectId && (
-            <>
-              <Button
-                onClick={() => setShowWorkpackageDialog(true)}
-                variant="outline"
-                className="gap-2"
-              >
-                <PackagePlus className="h-4 w-4" />
-                Add Workpackage
-              </Button>
-              <Button
-                onClick={handleDeleteProject}
-                variant="outline"
-                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete Project
-              </Button>
-            </>
-          )}
-
           <Button
             onClick={() => setShowImportDialog(true)}
             variant="outline"
             className="gap-2"
           >
             <Upload className="h-4 w-4" />
-            Import Project
+            Import
           </Button>
-
-          <Button onClick={handleCreateProjectClick} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
+          <Button onClick={() => setShowProjectDialog(true)} className="bg-brand-500 hover:bg-brand-600 text-white gap-2">
             <Plus className="h-4 w-4" />
             New Project
           </Button>
         </div>
       </div>
 
-      {/* Instructions Banner */}
-      {projects.length === 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-          <p className="font-semibold text-blue-900 mb-2">Getting Started:</p>
-          <ol className="list-decimal list-inside space-y-1 text-blue-800">
-            <li>Click &ldquo;New Project&rdquo; to create a project</li>
-            <li>Select the project and click &ldquo;Add Workpackage&rdquo;</li>
-            <li>Right-click workpackages to add tasks</li>
-            <li>Drag people from the sidebar onto tasks to assign them</li>
-            <li>Click any task to view todos and subtasks</li>
-          </ol>
-        </div>
-      )}
-
-      {/* Main Content Area */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 overflow-hidden min-h-0">
-        {/* Personnel Sidebar - Always visible on larger screens */}
-        <div className="card-monday flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between mb-3 flex-shrink-0">
-            <h2 className="text-lg font-bold text-foreground">Lab Personnel</h2>
-            <span className="text-xs text-muted-foreground">Drag to assign</span>
-          </div>
-          <div className="flex-1 overflow-y-auto min-h-0">
-            {people.length === 0 ? (
-              <div className="text-center p-4 text-muted-foreground text-sm">
-                <p className="mb-2">No lab members found</p>
-                <p className="text-xs">Add people in the People tab</p>
-              </div>
-            ) : (
-              <PersonnelList people={people} />
-            )}
-          </div>
-        </div>
-
-        {/* Gantt Chart */}
-        <div className="card-monday overflow-hidden flex flex-col">
-          <GanttChart
-            projects={selectedProjectId ? projects.filter(p => p.id === selectedProjectId) : projects}
-            workpackages={allWorkpackages}
-            people={people}
-            onDateChange={handleDateChange}
-            onTaskClick={handleTaskClick}
-            onDoubleClick={handleDoubleClick}
-            onPersonDropOnBar={handlePersonDropOnBar}
-            onToggleExpand={handleToggleExpand}
-            onContextAction={handleContextAction}
+      {/* Filters and Search */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search projects..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="pl-10"
           />
+        </div>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="planning">Planning</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="on-hold">On Hold</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={healthFilter} onValueChange={setHealthFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Health" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Health</SelectItem>
+            <SelectItem value="good">Good</SelectItem>
+            <SelectItem value="warning">Warning</SelectItem>
+            <SelectItem value="at-risk">At Risk</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={fundingFilter} onValueChange={setFundingFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Funding" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Projects</SelectItem>
+            <SelectItem value="funded">Funded</SelectItem>
+            <SelectItem value="unfunded">Unfunded</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <div className="flex items-center gap-1 border rounded-lg p-1">
+          <Button
+            variant={viewMode === "grid" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("grid")}
+            className="h-8"
+          >
+            <Grid3x3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "list" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("list")}
+            className="h-8"
+          >
+            <List className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {/* Task Detail Slide-out Panel */}
-      {selectedTask && (
-        <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Task Details</DialogTitle>
-              <DialogDescription>
-                View and manage task details, subtasks, and to-do items
-              </DialogDescription>
-            </DialogHeader>
-            <TaskDetailPanel
-              task={selectedTask}
-              profiles={allProfiles}
-              onToggleTodo={handleToggleTodo}
-              onAddTodo={handleAddTodo}
-              onDeleteTodo={handleDeleteTodo}
-              onAddSubtask={handleAddSubtask}
-              readOnly={false}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* Main Content Area */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 overflow-hidden min-h-0">
+        {/* Personal Tasks Sidebar */}
+        <div className="hidden lg:block overflow-hidden">
+          <PersonalTasksWidget />
+        </div>
 
-      {/* Workpackage Creation Dialog */}
-      <Dialog open={showWorkpackageDialog} onOpenChange={setShowWorkpackageDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create Workpackage</DialogTitle>
-            <DialogDescription>
-              Add a new workpackage to {selectedProject?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="wp-name">Workpackage Name *</Label>
-              <Input
-                id="wp-name"
-                value={workpackageForm.name}
-                onChange={(e) => setWorkpackageForm({ ...workpackageForm, name: e.target.value })}
-                placeholder="e.g., Data Collection & Analysis"
-                className="mt-1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="wp-start">Start Date</Label>
-                <Input
-                  id="wp-start"
-                  type="date"
-                  value={workpackageForm.startDate}
-                  onChange={(e) => setWorkpackageForm({ ...workpackageForm, startDate: e.target.value })}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="wp-end">End Date</Label>
-                <Input
-                  id="wp-end"
-                  type="date"
-                  value={workpackageForm.endDate}
-                  onChange={(e) => setWorkpackageForm({ ...workpackageForm, endDate: e.target.value })}
-                  className="mt-1"
-                />
+        {/* Projects Grid/List */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {totalProjects === 0 ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center max-w-md">
+                <FolderKanban className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-30" />
+                <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Get started by creating your first project or importing an existing one.
+                </p>
+                <div className="flex items-center justify-center gap-2">
+                  <Button onClick={() => setShowProjectDialog(true)} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Create Project
+                  </Button>
+                  <Button onClick={() => setShowImportDialog(true)} variant="outline" className="gap-2">
+                    <Upload className="h-4 w-4" />
+                    Import Project
+                  </Button>
+                </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowWorkpackageDialog(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateWorkpackage} className="bg-brand-500 hover:bg-brand-600 text-white">
-                Create Workpackage
-              </Button>
+          ) : (
+            <div className="space-y-6">
+              {/* Funded Projects Section */}
+              {(fundingFilter === "all" || fundingFilter === "funded") && fundedProjects.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <DollarSign className="h-5 w-5 text-blue-600" />
+                    <h2 className="text-lg font-semibold">Funded Projects</h2>
+                    <Badge variant="secondary">{fundedProjects.length}</Badge>
+                  </div>
+                  <div
+                    className={
+                      viewMode === "grid"
+                        ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                        : "space-y-4"
+                    }
+                  >
+                    {fundedProjects.map(project => {
+                      const budgetSummary = budgetSummaries.get(project.id)
+                      const health = projectHealths.get(project.id)
+                      return (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          workpackages={allWorkpackages}
+                          deliverables={deliverables}
+                          people={allProfiles}
+                          budgetSummary={budgetSummary}
+                          health={health}
+                          onViewProject={setSelectedProjectForDetail}
+                          onCreateWorkpackage={async (projectId) => {
+                            const workpackageId = await createWorkpackage({
+                              name: "New Work Package",
+                              projectId,
+                              start: new Date(),
+                              end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                              status: "planning",
+                              progress: 0,
+                              tasks: [],
+                              deliverableIds: [],
+                              isExpanded: true,
+                              importance: "medium",
+                              createdBy: user?.uid || "",
+                            } as any)
+
+                            if (workpackageId) {
+                              await handleUpdateMasterProject(projectId, {
+                                workpackageIds: [...(project.workpackageIds || []), workpackageId],
+                              })
+                            }
+                          }}
+                          onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
+                          onDeleteWorkpackage={async (workpackageId) => {
+                            await handleUpdateMasterProject(project.id, {
+                              workpackageIds: (project.workpackageIds || []).filter(
+                                id => id !== workpackageId
+                              ),
+                            })
+                          }}
+                          onCreateDeliverable={(workpackageId) => {
+                            setDeliverableParentId(workpackageId)
+                            setSelectedDeliverable(null)
+                            setDeliverableMode("create")
+                            setShowDeliverableDialog(true)
+                          }}
+                          onEditDeliverable={(deliverable) => {
+                            try {
+                              if (deliverable && deliverable.id) {
+                                setSelectedDeliverable(deliverable)
+                                setDeliverableMode("edit")
+                                setShowDeliverableDialog(true)
+                              }
+                            } catch (error) {
+                              logger.error("Error editing deliverable", error)
+                            }
+                          }}
+                          onDeleteDeliverable={handleDeleteDeliverable}
+                          onDeliverableClick={(deliverable) => {
+                            try {
+                              if (deliverable && deliverable.id) {
+                                setSelectedDeliverable(deliverable)
+                                setDeliverableMode("view")
+                                setShowDeliverableDialog(true)
+                              }
+                            } catch (error) {
+                              logger.error("Error opening deliverable dialog", error)
+                            }
+                          }}
+                          onCreateTask={(deliverableId) => {
+                            const deliverable = deliverables.find(d => d.id === deliverableId)
+                            if (deliverable) {
+                              setTaskDeliverableId(deliverableId)
+                              setTaskWorkpackageId(deliverable.workpackageId)
+                              setShowTaskDialog(true)
+                            }
+                          }}
+                          onEditTask={(task) => {
+                            try {
+                              if (task && task.id) {
+                                setSelectedTask(task)
+                                setShowTaskEditDialog(true)
+                              }
+                            } catch (error) {
+                              logger.error("Error opening task edit dialog", error)
+                            }
+                          }}
+                          onDeleteTask={(taskId) => {
+                            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
+                            if (workpackage) {
+                              handleDeleteTask(workpackage.id, taskId)
+                            }
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Unfunded Projects Section */}
+              {(fundingFilter === "all" || fundingFilter === "unfunded") && unfundedProjects.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <FolderKanban className="h-5 w-5 text-gray-600" />
+                    <h2 className="text-lg font-semibold">Internal/Unfunded Projects</h2>
+                    <Badge variant="secondary">{unfundedProjects.length}</Badge>
+                  </div>
+                  <div
+                    className={
+                      viewMode === "grid"
+                        ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                        : "space-y-4"
+                    }
+                  >
+                    {unfundedProjects.map(project => {
+                      const health = projectHealths.get(project.id)
+                      return (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          workpackages={allWorkpackages}
+                          deliverables={deliverables}
+                          people={allProfiles}
+                          health={health}
+                          onViewProject={setSelectedProjectForDetail}
+                          onCreateWorkpackage={async (projectId) => {
+                            const workpackageId = await createWorkpackage({
+                              name: "New Work Package",
+                              projectId,
+                              start: new Date(),
+                              end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                              status: "planning",
+                              progress: 0,
+                              tasks: [],
+                              deliverableIds: [],
+                              isExpanded: true,
+                              importance: "medium",
+                              createdBy: user?.uid || "",
+                            } as any)
+
+                            if (workpackageId) {
+                              await handleUpdateMasterProject(projectId, {
+                                workpackageIds: [...(project.workpackageIds || []), workpackageId],
+                              })
+                            }
+                          }}
+                          onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
+                          onDeleteWorkpackage={async (workpackageId) => {
+                            await handleUpdateMasterProject(project.id, {
+                              workpackageIds: (project.workpackageIds || []).filter(
+                                id => id !== workpackageId
+                              ),
+                            })
+                          }}
+                          onCreateDeliverable={(workpackageId) => {
+                            setDeliverableParentId(workpackageId)
+                            setSelectedDeliverable(null)
+                            setDeliverableMode("create")
+                            setShowDeliverableDialog(true)
+                          }}
+                          onEditDeliverable={(deliverable) => {
+                            try {
+                              if (deliverable && deliverable.id) {
+                                setSelectedDeliverable(deliverable)
+                                setDeliverableMode("edit")
+                                setShowDeliverableDialog(true)
+                              }
+                            } catch (error) {
+                              logger.error("Error editing deliverable", error)
+                            }
+                          }}
+                          onDeleteDeliverable={handleDeleteDeliverable}
+                          onDeliverableClick={(deliverable) => {
+                            try {
+                              if (deliverable && deliverable.id) {
+                                setSelectedDeliverable(deliverable)
+                                setDeliverableMode("view")
+                                setShowDeliverableDialog(true)
+                              }
+                            } catch (error) {
+                              logger.error("Error opening deliverable dialog", error)
+                            }
+                          }}
+                          onCreateTask={(deliverableId) => {
+                            // Find workpackage for this deliverable
+                            const deliverable = deliverables.find(d => d.id === deliverableId)
+                            if (deliverable) {
+                              setTaskDeliverableId(deliverableId)
+                              setTaskWorkpackageId(deliverable.workpackageId)
+                              setShowTaskDialog(true)
+                            }
+                          }}
+                          onEditTask={(task) => {
+                            // Find workpackage for this task
+                            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === task.id))
+                            if (workpackage) {
+                              // For now, just log - could open edit dialog later
+                              logger.info("Edit task", { taskId: task.id })
+                            }
+                          }}
+                          onDeleteTask={(taskId) => {
+                            // Find workpackage for this task
+                            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
+                            if (workpackage) {
+                              handleDeleteTask(workpackage.id, taskId)
+                            }
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* No results message */}
+              {totalProjects > 0 && fundedProjects.length === 0 && unfundedProjects.length === 0 && (
+                <div className="text-center py-12">
+                  <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
+                  <h3 className="text-lg font-semibold mb-2">No projects match your filters</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Try adjusting your search or filter criteria
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          )}
+        </div>
+      </div>
 
       {/* Project Creation Dialog */}
       <ProjectCreationDialog
         open={showProjectDialog}
         onClose={() => setShowProjectDialog(false)}
-        onCreateRegular={handleCreateRegularProject}
+        onCreateRegular={() => {
+          // Handle regular project creation
+          setShowProjectDialog(false)
+        }}
         onCreateMaster={handleCreateMasterProjectFromDialog}
         currentUserProfileId={profile?.id || null}
         currentUserId={user?.uid || ""}
         organisationId={profile?.organisationId}
+      />
+
+      {/* Import Dialog */}
+      <ProjectImportDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImportSuccess={(projectId) => {
+          logger.info('Project imported successfully', { projectId })
+          setShowImportDialog(false)
+        }}
+        labId={profile?.labId || ""}
+        userId={user?.uid || ""}
       />
 
       {/* Deliverable Dialog */}
@@ -1141,40 +816,62 @@ export function ProjectDashboard() {
               await handleCreateDeliverable({
                 ...data,
                 createdBy: user?.uid || "",
-              } as any);
+              } as any)
             } else if (selectedDeliverable) {
-              await handleUpdateDeliverable(selectedDeliverable.id, data);
+              await handleUpdateDeliverable(selectedDeliverable.id, data)
             }
-            setShowDeliverableDialog(false);
+            setShowDeliverableDialog(false)
           } catch (error) {
-            logger.error("Error saving deliverable", error);
-            alert("Failed to save deliverable");
+            logger.error("Error saving deliverable", error)
+            alert("Failed to save deliverable")
           }
         }}
-        onDelete={selectedDeliverable ? async () => {
-          try {
-            await handleDeleteDeliverable(selectedDeliverable.id);
-            setShowDeliverableDialog(false);
-          } catch (error) {
-            logger.error("Error deleting deliverable", error);
-            alert("Failed to delete deliverable");
-          }
-        } : undefined}
+        onDelete={
+          selectedDeliverable
+            ? async () => {
+                try {
+                  await handleDeleteDeliverable(selectedDeliverable.id)
+                  setShowDeliverableDialog(false)
+                } catch (error) {
+                  logger.error("Error deleting deliverable", error)
+                  alert("Failed to delete deliverable")
+                }
+              }
+            : undefined
+        }
         mode={deliverableMode}
         availableOwners={allProfiles}
       />
 
-      {dependencyDialog && (
-        <DependencyPickerDialog
-          open={true}
-          onClose={() => setDependencyDialog(null)}
-          onConfirm={handleSaveDependencies}
-          currentItem={dependencyDialog.item}
-          currentItemType={dependencyDialog.itemType}
-          projects={projects}
-          workpackagesMap={workpackagesMap}
+      {/* Task Creation Dialog */}
+      <TaskCreationDialog
+        open={showTaskDialog}
+        onOpenChange={setShowTaskDialog}
+        deliverableId={taskDeliverableId}
+        workpackageId={taskWorkpackageId}
+        onSave={handleCreateTask}
+        availablePeople={allProfiles}
+      />
+
+      {/* Task Edit Dialog */}
+      {selectedTask && (
+        <TaskEditDialog
+          open={showTaskEditDialog}
+          onOpenChange={setShowTaskEditDialog}
+          task={selectedTask}
+          workpackageId={selectedTask.workpackageId || ""}
+          onSave={handleUpdateTask}
+          onDelete={async (taskId) => {
+            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
+            if (workpackage) {
+              await handleDeleteTask(workpackage.id, taskId)
+              setShowTaskEditDialog(false)
+              setSelectedTask(null)
+            }
+          }}
+          availablePeople={allProfiles}
         />
       )}
     </div>
-  );
+  )
 }

@@ -73,3 +73,35 @@ export function getFirebaseStorage(): FirebaseStorage {
 }
 
 export default app
+
+/**
+ * Helper to sanitize data for Firestore by removing undefined values.
+ * Firestore throws an error if 'undefined' is passed as a value.
+ * This function recursively removes keys with undefined values.
+ */
+export function sanitizeForFirestore(data: any): any {
+  // Handle primitives and null
+  if (data === null || typeof data !== 'object') {
+    return data
+  }
+
+  // Handle Date objects (pass through)
+  if (data instanceof Date) {
+    return data
+  }
+
+  // Handle Arrays
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeForFirestore(item))
+  }
+
+  // Handle Objects
+  const sanitized: any = {}
+  for (const key in data) {
+    const value = data[key]
+    if (value !== undefined) {
+      sanitized[key] = sanitizeForFirestore(value)
+    }
+  }
+  return sanitized
+}

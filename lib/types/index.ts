@@ -14,8 +14,8 @@ export * from './user.types'
 
 // Organization & Structure
 export * from './organization.types'
-export * from './researchgroup.types'
-export * from './network.types'
+export * from './researchgroup.types'  // Research groups - planned feature (users can join groups)
+export * from './network.types'       // Network types for memberships and supervisions
 
 // Profile & People
 export * from './profile.types'

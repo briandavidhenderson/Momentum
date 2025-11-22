@@ -315,7 +315,7 @@ export function subscribeToOrders(
   const db = getFirebaseDb()
   let q: Query = collection(db, "orders")
 
-  if (filters?.labId) {
+  if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
     q = query(q, where("labId", "==", filters.labId))
   }
 

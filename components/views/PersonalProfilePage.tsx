@@ -64,7 +64,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
 
   const handleSave = async (additionalData?: Partial<PersonProfile>) => {
     if (!currentUserProfile || !formData.firstName || !formData.lastName || !formData.email ||
-      !formData.organisation || !formData.institute || !formData.lab) {
+      !formData.organisation || !formData.institute || !formData.labName) {
       alert("Please fill in required fields: First Name, Last Name, Email, Organisation, School/Faculty, and Department")
       return
     }
@@ -77,7 +77,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         position: formData.position || "",
         organisation: formData.organisation!,
         institute: formData.institute!,
-        lab: formData.lab!,
+        labName: formData.labName!,
+        // lab: formData.lab!, // DEPRECATED
         reportsToId: formData.reportsToId || null, // Fix Bug #8: Use reportsToId instead of deprecated reportsTo
         fundedBy: formData.fundedBy || [],
         startDate: formData.startDate || new Date().toISOString().split("T")[0],
@@ -291,8 +292,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               <Label htmlFor="lab">Department *</Label>
               <Input
                 id="lab"
-                value={formData.lab || ""}
-                onChange={(e) => setFormData({ ...formData, lab: e.target.value })}
+                value={formData.labName || ""}
+                onChange={(e) => setFormData({ ...formData, labName: e.target.value })}
                 disabled={!isEditing}
               />
             </div>

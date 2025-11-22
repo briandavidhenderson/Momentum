@@ -1,6 +1,7 @@
 "use client"
 
-import { Deliverable, PersonProfile } from "@/lib/types"
+import { useState } from "react"
+import { Deliverable, PersonProfile, Task } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -10,50 +11,62 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { TaskCard } from "./TaskCard"
 import {
   Target,
   Edit,
   Trash2,
   Calendar,
   User,
-  GripVertical,
   MoreVertical,
   Package,
   ListTodo,
   FlaskConical,
   AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Plus,
 } from "lucide-react"
-import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
 
 interface DeliverableCardProps {
   deliverable: Deliverable
   owner?: PersonProfile
+  tasks?: Task[] // Legacy tasks from workpackage
+  allPeople?: PersonProfile[] // For displaying task owners/helpers
   onEdit: (deliverable: Deliverable) => void
   onDelete: (deliverableId: string) => void
   onClick?: (deliverable: Deliverable) => void
+  onCreateTask?: (deliverableId: string) => void
+  onEditTask?: (task: Task) => void
+  onDeleteTask?: (taskId: string) => void
+  enableDrag?: boolean // Make drag optional
 }
 
 export function DeliverableCard({
   deliverable,
   owner,
+  tasks = [],
+  allPeople = [],
   onEdit,
   onDelete,
   onClick,
+  onCreateTask,
+  onEditTask,
+  onDeleteTask,
+  enableDrag = false,
 }: DeliverableCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: deliverable.id })
+  const [isExpanded, setIsExpanded] = useState(false)
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+  // Filter tasks that might be related to this deliverable
+  // In legacy structure, tasks are in workpackages, so we show all tasks if provided
+  const deliverableTasks = Array.isArray(tasks) 
+    ? tasks.filter(task => task && task.id && typeof task.id === 'string')
+    : []
+  
+  // Get people for task owners/helpers
+  const getPersonById = (id?: string): PersonProfile | undefined => {
+    if (!id || !allPeople || allPeople.length === 0) return undefined
+    return allPeople.find(p => p?.id === id)
   }
 
   const getStatusPillClass = (status: string) => {
@@ -76,6 +89,7 @@ export function DeliverableCard({
   }
 
   const formatStatusLabel = (status: string) => {
+    if (!status || typeof status !== 'string') return "Not Started"
     return status
       .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -97,10 +111,23 @@ export function DeliverableCard({
     }
   }
 
-  const handleCardClick = () => {
-    if (onClick) {
-      onClick(deliverable)
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't trigger if clicking on buttons or dropdown
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('[role="menuitem"]')) {
+      return
     }
+    try {
+      if (onClick) {
+        onClick(deliverable)
+      }
+    } catch (error) {
+      console.error("Error handling deliverable click:", error)
+    }
+  }
+
+  const handleExpandClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsExpanded(!isExpanded)
   }
 
   // Calculate linked entity counts
@@ -110,28 +137,41 @@ export function DeliverableCard({
   const projectTasksCount = deliverable.projectTaskIds?.length || 0
   const blockersCount = deliverable.blockers?.length || 0
 
+  // Safety check - ensure deliverable is valid
+  if (!deliverable || !deliverable.id) {
+    console.warn("Invalid deliverable passed to DeliverableCard:", deliverable)
+    return null
+  }
+
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      className="bg-white rounded-lg border-2 border-gray-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-blue-300"
-      onClick={handleCardClick}
+      className="bg-white rounded-lg border-2 border-gray-200 p-4 shadow-sm hover:shadow-md transition-all hover:border-blue-300"
     >
       {/* Header with Title, Status, and Menu */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded flex-shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-5 w-5 text-gray-400" />
-          </div>
+          {/* Expand/Collapse for tasks */}
+          {deliverableTasks.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 flex-shrink-0"
+              onClick={handleExpandClick}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+          )}
           <Target className="h-5 w-5 text-blue-600 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground text-sm truncate">
-              {deliverable.name}
+            <h3 
+              className="font-semibold text-foreground text-sm truncate cursor-pointer"
+              onClick={handleCardClick}
+            >
+              {deliverable.name || "Unnamed Deliverable"}
             </h3>
             {deliverable.description && (
               <p className="text-xs text-gray-500 truncate mt-0.5">
@@ -141,8 +181,8 @@ export function DeliverableCard({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-          <span className={getStatusPillClass(deliverable.status)}>
-            {formatStatusLabel(deliverable.status)}
+          <span className={getStatusPillClass(deliverable.status || "not-started")}>
+            {formatStatusLabel(deliverable.status || "not-started")}
           </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -159,7 +199,11 @@ export function DeliverableCard({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation()
-                  onEdit(deliverable)
+                  try {
+                    onEdit(deliverable)
+                  } catch (error) {
+                    console.error("Error editing deliverable:", error)
+                  }
                 }}
                 className="cursor-pointer"
               >
@@ -169,7 +213,13 @@ export function DeliverableCard({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation()
-                  onDelete(deliverable.id)
+                  try {
+                    if (deliverable?.id) {
+                      onDelete(deliverable.id)
+                    }
+                  } catch (error) {
+                    console.error("Error deleting deliverable:", error)
+                  }
                 }}
                 className="cursor-pointer text-red-600 focus:text-red-600"
               >
@@ -186,10 +236,10 @@ export function DeliverableCard({
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-gray-500">Progress</span>
           <span className="text-xs font-semibold text-gray-700">
-            {deliverable.progress}%
+            {deliverable.progress || 0}%
           </span>
         </div>
-        <Progress value={deliverable.progress} className="h-2" />
+        <Progress value={deliverable.progress || 0} className="h-2" />
       </div>
 
       {/* Metadata Section */}
@@ -209,7 +259,15 @@ export function DeliverableCard({
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" />
             <span className="text-gray-700">
-              Due: {new Date(deliverable.dueDate).toLocaleDateString()}
+              Due: {(() => {
+                try {
+                  const date = new Date(deliverable.dueDate)
+                  if (isNaN(date.getTime())) return "Invalid date"
+                  return date.toLocaleDateString()
+                } catch {
+                  return "Invalid date"
+                }
+              })()}
             </span>
           </div>
         )}
@@ -218,9 +276,9 @@ export function DeliverableCard({
         <div className="flex items-center gap-2">
           <Badge
             variant="outline"
-            className={getImportanceBadgeColor(deliverable.importance)}
+            className={getImportanceBadgeColor(deliverable.importance || "medium")}
           >
-            {deliverable.importance.toUpperCase()}
+            {(deliverable.importance || "medium").toUpperCase()}
           </Badge>
         </div>
       </div>
@@ -271,6 +329,93 @@ export function DeliverableCard({
             <Badge variant="secondary" className="text-xs px-2 py-0">
               +{deliverable.tags.length - 3}
             </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Expanded Tasks Section */}
+      {isExpanded && (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-semibold text-foreground">Tasks</h4>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                {deliverableTasks.length}
+              </Badge>
+              {onCreateTask && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    try {
+                      if (onCreateTask && deliverable?.id) {
+                        onCreateTask(deliverable.id)
+                      }
+                    } catch (error) {
+                      console.error("Error creating task:", error)
+                    }
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add Task
+                </Button>
+              )}
+            </div>
+          </div>
+          {deliverableTasks.length === 0 ? (
+            <div className="text-center py-6 bg-gray-50 rounded-md border border-dashed border-gray-300">
+              <ListTodo className="h-6 w-6 text-gray-400 mx-auto mb-2" />
+              <p className="text-xs text-gray-500">No tasks yet</p>
+              {onCreateTask && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    try {
+                      if (onCreateTask && deliverable?.id) {
+                        onCreateTask(deliverable.id)
+                      }
+                    } catch (error) {
+                      console.error("Error creating task:", error)
+                    }
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add First Task
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {deliverableTasks.map((task) => {
+                if (!task || !task.id) {
+                  console.warn("Invalid task found:", task)
+                  return null
+                }
+                try {
+                  const taskOwner = task.primaryOwner ? getPersonById(task.primaryOwner) : undefined
+                  const taskHelpers = task.helpers?.map(id => getPersonById(id)).filter((p): p is PersonProfile => p !== undefined) || []
+                  return (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    owner={taskOwner}
+                    helpers={taskHelpers}
+                    onEdit={onEditTask}
+                    onDelete={onDeleteTask}
+                    onClick={onEditTask}
+                  />
+                  )
+                } catch (error) {
+                  console.error("Error rendering task:", error, task)
+                  return null
+                }
+              })}
+            </div>
           )}
         </div>
       )}

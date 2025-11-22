@@ -22,7 +22,10 @@ async function initiateGoogleCalendarAuth(): Promise<{ code: string; state: stri
   const functions = getFunctionsInstance()
   const startAuth = httpsCallable(functions, "googleCalendarAuthStart")
 
-  const result: any = await startAuth({})
+  // Determine the redirect URI based on the current environment
+  const redirectUri = `${window.location.origin}/settings/integrations/google-callback`
+
+  const result: any = await startAuth({ redirectUri })
   const { authUrl, state } = result.data
 
   // Open popup for Google authorization
@@ -54,11 +57,20 @@ async function initiateGoogleCalendarAuth(): Promise<{ code: string; state: stri
         // Check if popup has navigated to our callback URL
         try {
           const popupUrl = new URL(popup.location.href)
+          const currentOrigin = window.location.origin
 
-          // Check if we're on the callback page
-          if (popupUrl.origin === window.location.origin) {
+          // Check if we're on the callback page (same origin)
+          if (popupUrl.origin === currentOrigin && popupUrl.pathname.includes('/settings/integrations/google-callback')) {
             const code = popupUrl.searchParams.get("code")
             const returnedState = popupUrl.searchParams.get("state")
+            const error = popupUrl.searchParams.get("error")
+
+            if (error) {
+              popup.close()
+              clearInterval(checkPopup)
+              reject(new Error(`Google authorization error: ${error}`))
+              return
+            }
 
             if (code && returnedState) {
               popup.close()
@@ -68,6 +80,7 @@ async function initiateGoogleCalendarAuth(): Promise<{ code: string; state: stri
           }
         } catch (e) {
           // Cross-origin error - popup hasn't navigated to our domain yet
+          // This is expected while the popup is on Google's domain
         }
       } catch (e) {
         clearInterval(checkPopup)
@@ -95,6 +108,9 @@ export async function linkGoogleCalendar(): Promise<boolean> {
     // Initiate OAuth flow and get authorization code
     const { code, state } = await initiateGoogleCalendarAuth()
 
+    // Determine the redirect URI (must match what was used in the auth request)
+    const redirectUri = `${window.location.origin}/settings/integrations/google-callback`
+
     // Exchange code for tokens and create connection via backend
     const functions = getFunctionsInstance()
     const callback = httpsCallable(functions, "googleCalendarAuthCallback")
@@ -102,6 +118,7 @@ export async function linkGoogleCalendar(): Promise<boolean> {
     const result: any = await callback({
       code,
       state,
+      redirectUri,
     })
 
     const { success, connectionId, email, calendarsCount } = result.data

@@ -12,29 +12,23 @@ interface GoogleConfig {
 }
 
 function getGoogleConfig(): GoogleConfig {
-    const config = ((functions as any).config() as any).google?.calendar
+    // Firebase Functions v7 no longer supports functions.config()
+    // Use environment variables directly
+    const clientId = process.env.GOOGLE_CLIENT_ID
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
 
-    if (!config) {
-        // Fallback to env vars for local dev if needed, or throw
-        const clientId = process.env.GOOGLE_CLIENT_ID
-        const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-
-        if (!clientId || !clientSecret) {
-            throw new Error("Google Calendar configuration missing")
-        }
-
-        return {
-            clientId,
-            clientSecret,
-            redirectUri: "", // Will be passed from client
-            authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-            tokenUrl: "https://oauth2.googleapis.com/token"
-        }
+    if (!clientId || !clientSecret) {
+        console.error("Google Calendar configuration missing:", {
+            hasClientId: !!clientId,
+            hasClientSecret: !!clientSecret,
+            envKeys: Object.keys(process.env).filter(k => k.startsWith('GOOGLE_'))
+        })
+        throw new Error("Google Calendar configuration missing")
     }
 
     return {
-        clientId: config.client_id,
-        clientSecret: config.client_secret,
+        clientId,
+        clientSecret,
         redirectUri: "", // Will be passed from client
         authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
         tokenUrl: "https://oauth2.googleapis.com/token"

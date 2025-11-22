@@ -105,6 +105,8 @@ export function AdvancedNetworkView() {
         // 2. Extract Hierarchy
         const uniqueOrganisations = Array.from(new Set(profilesWithDefaults.map(p => p.organisationName)));
         const uniqueInstitutes = Array.from(new Set(profilesWithDefaults.map(p => p.instituteName)));
+        // Use labId for unique labs, fallback to labName for display
+        const uniqueLabIds = Array.from(new Set(profilesWithDefaults.map(p => p.labId || p.labName)));
         const uniqueLabs = Array.from(new Set(profilesWithDefaults.map(p => p.labName)));
 
         // 3. Create Hierarchy Objects
@@ -128,11 +130,13 @@ export function AdvancedNetworkView() {
             };
         });
 
-        const labsList: Lab[] = uniqueLabs.map(lab => {
-            const profile = profilesWithDefaults.find(p => p.labName === lab);
+        // Create labs list - prefer labId, fallback to normalized labName
+        const labsList: Lab[] = uniqueLabIds.map(labId => {
+            const profile = profilesWithDefaults.find(p => (p.labId || p.labName) === labId);
+            const labName = profile?.labName || labId;
             return {
-                id: lab.replace(/\s+/g, '_'),
-                label: lab,
+                id: labId, // Use labId directly (or normalized labName if labId not available)
+                label: labName,
                 institute: (profile?.instituteName || "Unknown Institute").replace(/\s+/g, '_'),
                 organisation: (profile?.organisationName || "Unknown Organization").replace(/\s+/g, '_')
             };
@@ -143,7 +147,7 @@ export function AdvancedNetworkView() {
             id: p.id,
             label: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`,
             role: getRoleFromPosition(p.positionLevel),
-            lab: p.labName.replace(/\s+/g, '_'),
+            lab: p.labId || p.labName.replace(/\s+/g, '_'), // Use labId (preferred) or fallback to normalized labName for graph identifier
             employer: p.reportsToId || p.id, // Use reportsToId
             funders: [], // TODO: Map funding if needed
             organisation: p.organisationName.replace(/\s+/g, '_'),

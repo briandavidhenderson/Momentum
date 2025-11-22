@@ -180,6 +180,7 @@ export interface PersonProfile {
   email: string
   phone: string
   officeLocation: string
+  avatarUrl?: string              // Profile photo URL from Firebase Storage
 
   // Organizational Hierarchy - FIXED (set during onboarding, immutable)
   // NOTE: Field names remain the same but semantic meaning has changed:
