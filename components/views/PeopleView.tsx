@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { PersonProfile, FUNDING_ACCOUNTS } from "@/lib/types"
+import { PersonProfile } from "@/lib/types"
 import { useProfiles } from "@/lib/useProfiles"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Mail, Phone, MapPin, GraduationCap, Users, Building, Network } from "lucide-react"
-import { NetworkView } from "../NetworkView"
+import { AdvancedNetworkView } from "@/components/AdvancedNetworkView"
 import PositionBadge from "@/components/PositionBadge"
 import { OrcidIcon } from "@/components/OrcidBadge"
 import { logger } from "@/lib/logger"
@@ -112,10 +112,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
   }
 
   const getFundingAccountNames = (fundedBy: string[] = []) => {
-    return fundedBy.map(id => {
-      const account = FUNDING_ACCOUNTS.find(a => a.id?.toLowerCase?.() === id?.toLowerCase?.())
-      return account?.name ?? id
-    }).join(", ")
+    return fundedBy.join(", ")
   }
 
   // Close modal on ESC key
@@ -218,7 +215,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
       {/* Network View */}
       {viewMode === "network" && (
         <div className="bg-card rounded-lg border border-border p-4">
-          <NetworkView currentUserProfile={currentUserProfile} />
+          <AdvancedNetworkView />
         </div>
       )}
 
@@ -473,7 +470,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
                   <div className="flex items-center gap-3">
                     <Users className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium text-foreground">Lab</p>
+                      <p className="text-sm font-medium text-foreground">Department</p>
                       <p className="text-sm text-muted-foreground">{selectedProfile.labName}</p>
                     </div>
                   </div>
@@ -482,7 +479,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
                   <div className="flex items-center gap-3">
                     <GraduationCap className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium text-foreground">Institute</p>
+                      <p className="text-sm font-medium text-foreground">School/Faculty</p>
                       <p className="text-sm text-muted-foreground">{selectedProfile.instituteName}</p>
                     </div>
                   </div>

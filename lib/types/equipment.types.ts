@@ -50,6 +50,23 @@ export interface EquipmentSOP {
 }
 
 /**
+ * EquipmentBookingSettings - Per-equipment booking configuration
+ * Stored as a field in EquipmentDevice
+ */
+export interface EquipmentBookingSettings {
+  bookingEnabled: boolean          // Allow bookings for this equipment
+  requireApproval: boolean         // Does booking need admin/PI approval?
+  approverIds: string[]            // PersonProfile IDs who can approve
+  maxBookingDuration: number       // Max hours per booking (0 = unlimited)
+  minBookingDuration: number       // Min hours per booking (0 = no minimum)
+  advanceBookingDays: number       // How many days ahead can users book?
+  bufferTimeBefore: number         // Required minutes before booking starts
+  bufferTimeAfter: number          // Required minutes after booking ends
+  allowRecurring: boolean          // Can users create recurring bookings?
+  autoBlockMaintenance: boolean    // Auto-block slots when maintenance due?
+}
+
+/**
  * EquipmentDevice - Lab equipment/instrument
  */
 export interface EquipmentDevice {
@@ -68,6 +85,16 @@ export interface EquipmentDevice {
   labId?: string // Associated lab ID
   createdAt: string
   updatedAt?: string
+
+  // Booking System Integration
+  bookingSettings?: EquipmentBookingSettings
+  currentBookingId?: string        // If equipment is currently booked
+  currentBookingUserId?: string    // Who is using it now
+  currentBookingEndTime?: string   // When current booking ends (ISO string)
+  totalBookedHours?: number        // Lifetime total booked hours
+  lastBookedDate?: string          // Last time equipment was booked (ISO string)
+  averageBookingDuration?: number  // Average booking length in hours
+  utilizationRate?: number         // Percentage of time booked (last 30 days)
 }
 
 /**

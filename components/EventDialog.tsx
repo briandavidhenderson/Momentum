@@ -11,7 +11,7 @@ import { buildICSForEvent, getRecurrenceSummary } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Trash2, Lock, ExternalLink, Calendar as CalendarIcon } from "lucide-react"
 
-type EventDialogMode = "create" | "edit"
+type EventDialogMode = "create" | "edit" | "view"
 
 interface EventDialogProps {
   open: boolean
@@ -77,9 +77,9 @@ export function EventDialog({
   const [visibility, setVisibility] = useState<EventVisibility>(initialEvent?.visibility ?? defaultVisibility)
   const [rruleError, setRRuleError] = useState<string | null>(null)
 
-  const dialogTitle = mode === "create" ? "Create event" : "Edit event"
+  const dialogTitle = mode === "create" ? "Create event" : mode === "edit" ? "Edit event" : "Event Details"
   const isEditMode = mode === "edit" && Boolean(initialEvent)
-  const isReadOnly = initialEvent?.isReadOnly ?? false
+  const isReadOnly = (initialEvent?.isReadOnly ?? false) || mode === "view"
   const isExternalEvent = initialEvent?.calendarSource && initialEvent.calendarSource !== 'manual'
 
   const recurrenceSummary = useMemo(() => getRecurrenceSummary(recurrence), [recurrence])
@@ -260,7 +260,7 @@ export function EventDialog({
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
-            Capture all the essentials, add recurrence, reminders and attendees. Events sync across the dashboard once saved.
+            {mode === "view" ? "View event details." : "Capture all the essentials, add recurrence, reminders and attendees. Events sync across the dashboard once saved."}
           </DialogDescription>
         </DialogHeader>
 
@@ -490,9 +490,8 @@ export function EventDialog({
                       key={person.id}
                       type="button"
                       onClick={() => toggleAttendee(person.id)}
-                      className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${
-                        selected ? "border-brand-500 bg-brand-50" : "hover:bg-muted"
-                      }`}
+                      className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${selected ? "border-brand-500 bg-brand-50" : "hover:bg-muted"
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{person.name}</span>
@@ -558,9 +557,8 @@ export function EventDialog({
                 {["private", "lab", "organisation"].map((value) => (
                   <label
                     key={value}
-                    className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 ${
-                      visibility === value ? "border-brand-500 bg-brand-50" : "hover:bg-muted"
-                    }`}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 ${visibility === value ? "border-brand-500 bg-brand-50" : "hover:bg-muted"
+                      }`}
                   >
                     <input
                       type="radio"
@@ -599,11 +597,13 @@ export function EventDialog({
               </Button>
             )}
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {mode === "view" ? "Close" : "Cancel"}
             </Button>
-            <Button type="button" onClick={handleSubmit} disabled={!isValid} className="bg-brand-500 text-white hover:bg-brand-600">
-              {mode === "create" ? "Create event" : "Save changes"}
-            </Button>
+            {mode !== "view" && (
+              <Button type="button" onClick={handleSubmit} disabled={!isValid} className="bg-brand-500 text-white hover:bg-brand-600">
+                {mode === "create" ? "Create event" : "Save changes"}
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

@@ -116,11 +116,10 @@ service cloud.firestore {
       // Authenticated users can create organisations (for onboarding)
       allow create: if isAuthenticated();
 
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
-      );
+      // Allow updates for:
+      // - Creator or admin for all fields
+      // - Any authenticated user can update (simplified for onboarding)
+      allow update: if isAuthenticated();
 
       // Only admin can delete
       allow delete: if isAdmin();
@@ -128,26 +127,26 @@ service cloud.firestore {
 
     // ============================================================================
     // INSTITUTES (Shared Reference Data)
+    // NOTE: "Institutes" now represents Schools/Faculties in the UI
     // ============================================================================
     match /institutes/{instituteId} {
       // All authenticated users can read institutes
       allow read: if isAuthenticated();
-      
+
       // Any authenticated user can create an institute
       allow create: if isAuthenticated();
-      
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid || 
-        isAdmin()
-      );
-      
+
+      // Allow updates for:
+      // - Any authenticated user can update (simplified for onboarding)
+      allow update: if isAuthenticated();
+
       // Only admin can delete
       allow delete: if isAdmin();
     }
 
     // ============================================================================
     // LABS (Shared Reference Data)
+    // NOTE: "Labs" now represents Departments in the UI
     // ============================================================================
     match /labs/{labId} {
       // All authenticated users can read labs
@@ -159,6 +158,54 @@ service cloud.firestore {
 
       // Authenticated users can update labs (simplified to avoid getUserLab() dependency)
       allow update: if isAuthenticated();
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // RESEARCH GROUPS (Dynamic Membership)
+    // ============================================================================
+    match /researchGroups/{groupId} {
+      // All authenticated users can read research groups
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create research groups
+      allow create: if isAuthenticated();
+
+      // Group PIs, coordinators, creator, or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin() ||
+        // Check if user is a PI or coordinator of this group
+        (getUserProfileId() != null && (
+          getUserProfileId() in resource.data.principalInvestigators ||
+          getUserProfileId() in resource.data.coordinatorIds
+        ))
+      );
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // WORKING LABS (Dynamic Membership)
+    // ============================================================================
+    match /workingLabs/{workingLabId} {
+      // All authenticated users can read working labs
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create working labs
+      allow create: if isAuthenticated();
+
+      // Lab managers, creator, or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin() ||
+        // Check if user is a lab manager
+        (getUserProfileId() != null &&
+         getUserProfileId() in resource.data.labManagerIds)
+      );
 
       // Only admin can delete
       allow delete: if isAdmin();
@@ -187,14 +234,6 @@ service cloud.firestore {
     // ============================================================================
     // FUNDING ACCOUNTS
     // ============================================================================
-    // Helper function to check if user is a member of a master project
-    function isProjectMember(projectId) {
-      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
-      return project != null && project.data != null && (
-        getUserProfileId() in project.data.teamMemberIds
-      );
-    }
-
     // Helper function to check if user is PI of a master project
     function isProjectPI(projectId) {
       let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
@@ -460,6 +499,48 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // EQUIPMENT BOOKINGS
+    // ============================================================================
+    match /equipmentBookings/{bookingId} {
+      // Helper: Check if user is equipment manager
+      function isEquipmentManager(equipmentId) {
+        let equipment = get(/databases/$(database)/documents/equipment/$(equipmentId));
+        let profileId = getUserProfileId();
+        return equipment != null && equipment.data != null && (
+          (equipment.data.managerId != null && equipment.data.managerId == profileId) ||
+          (equipment.data.managerIds != null && profileId in equipment.data.managerIds)
+        );
+      }
+
+      // All authenticated users can read bookings
+      // (Required for conflict checking - users need to see existing bookings to avoid conflicts)
+      // Client-side filtering by lab; avoids null getUserLab() issues during profile setup
+      allow read: if isAuthenticated();
+
+      // Users can create bookings for their lab
+      allow create: if isAuthenticated() && (
+        request.resource.data.bookedBy == getUserProfileId() &&
+        request.resource.data.labId == getUserLab() &&
+        request.resource.data.createdBy == request.auth.uid
+      );
+
+      // Users can update their own bookings
+      // Admins and equipment managers can update any
+      allow update: if isAuthenticated() && (
+        resource.data.bookedBy == getUserProfileId() ||
+        isAdmin() ||
+        isEquipmentManager(resource.data.equipmentId)
+      );
+
+      // Only booking owner, admin, or equipment manager can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.bookedBy == getUserProfileId() ||
+        isAdmin() ||
+        isEquipmentManager(resource.data.equipmentId)
+      );
+    }
+
+    // ============================================================================
     // ELN EXPERIMENTS
     // ============================================================================
     match /elnExperiments/{experimentId} {
@@ -680,6 +761,30 @@ service cloud.firestore {
 
       // No updates or deletes (audit trail for compliance)
       allow update, delete: if false;
+    }
+
+    // ============================================================================
+    // WHITEBOARDS
+    // ============================================================================
+    match /whiteboards/{whiteboardId} {
+      // All authenticated users can read whiteboards
+      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
+      allow read: if isAuthenticated();
+
+      // Users can create whiteboards
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
     }
 
     // ============================================================================

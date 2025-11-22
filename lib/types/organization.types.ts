@@ -1,10 +1,23 @@
 // ============================================================================
-// ORGANIZATIONAL HIERARCHY TYPES
+// ORGANIZATIONAL HIERARCHY TYPES - FIXED STRUCTURE
+// ============================================================================
+// These represent the fixed 3-level organizational hierarchy set during onboarding.
+// Field names remain unchanged for backward compatibility, but semantic meaning has evolved:
+//
+// HIERARCHY (Fixed at onboarding):
+//   1. Organisation - University/Institution (unchanged)
+//   2. Institute - Now represents School/Faculty (e.g., "School of Medicine")
+//   3. Lab - Now represents Department (e.g., "Department of Histopathology")
+//
+// DYNAMIC GROUPS (can join/leave multiple):
+//   4. ResearchGroup - Research collaboration groups (see researchgroup.types.ts)
+//   5. WorkingLab - Physical laboratory spaces (see researchgroup.types.ts)
 // ============================================================================
 
 /**
  * Organisation - Top-level entity (e.g., University, Research Institute)
  * Represents the highest level in the organizational hierarchy
+ * Examples: "Trinity College Dublin", "University of Cambridge", "Max Planck Institute"
  */
 export interface Organisation {
   id: string
@@ -21,8 +34,13 @@ export interface Organisation {
 }
 
 /**
- * Institute - Mid-level entity (e.g., Department, School, Faculty)
- * Belongs to an Organisation, contains Labs
+ * Institute - Mid-level entity representing School or Faculty
+ *
+ * SEMANTIC CHANGE: This now represents "School/Faculty" in the UI
+ * (e.g., "School of Medicine", "Faculty of Engineering", "School of Biological Sciences")
+ *
+ * Belongs to an Organisation, contains Labs (which now represent Departments)
+ * Field names remain "institute*" for backward compatibility
  */
 export interface Institute {
   id: string
@@ -41,8 +59,15 @@ export interface Institute {
 }
 
 /**
- * Lab - Research group/laboratory
- * Belongs to an Institute, contains People and Projects
+ * Lab - Represents an academic Department
+ *
+ * SEMANTIC CHANGE: This now represents "Department" in the UI
+ * (e.g., "Department of Histopathology", "Department of Physics", "Department of Computer Science")
+ *
+ * Belongs to an Institute (School/Faculty), contains People and Projects
+ * Field names remain "lab*" for backward compatibility
+ *
+ * NOTE: For physical laboratory spaces, see WorkingLab in researchgroup.types.ts
  */
 export interface Lab {
   id: string
@@ -56,8 +81,8 @@ export interface Lab {
   organisationName: string    // Cached
 
   // Leadership
-  principalInvestigators: string[]  // Array of PersonProfile IDs who are PIs
-  labManagerIds: string[]           // Array of PersonProfile IDs who are lab managers
+  principalInvestigators: string[]  // Array of PersonProfile IDs who are PIs in this Department
+  labManagerIds: string[]           // Array of PersonProfile IDs who manage this Department (e.g., Department Manager, Administrator)
 
   // Details
   researchAreas?: string[]

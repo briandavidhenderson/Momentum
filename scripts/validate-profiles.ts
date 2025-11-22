@@ -17,7 +17,8 @@ import * as admin from 'firebase-admin'
 if (!admin.apps.length) {
   try {
     // Try to load service account from environment
-    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || './momentum-a60c5-firebase-adminsdk-7fwnw-5a5a10f3e1.json'
+    const path = require('path')
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || path.resolve(process.cwd(), 'momentum-a60c5-firebase-adminsdk-fbsvc-edb055161c.json')
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const serviceAccount = require(serviceAccountPath)
     admin.initializeApp({

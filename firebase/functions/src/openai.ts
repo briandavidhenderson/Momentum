@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions"
+import * as functions from "firebase-functions/v1"
 import * as admin from "firebase-admin"
 
 /**
@@ -38,7 +38,7 @@ export const generateExperimentSuggestions = functions.https.onCall(
 
     try {
       // Get API key from environment config
-      const apiKey = functions.config().openai?.api_key
+      const apiKey = ((functions as any).config() as any).openai?.api_key
 
       if (!apiKey) {
         throw new functions.https.HttpsError(
@@ -138,7 +138,7 @@ export const generateProjectDescription = functions.https.onCall(
     }
 
     try {
-      const apiKey = functions.config().openai?.api_key
+      const apiKey = ((functions as any).config() as any).openai?.api_key
 
       if (!apiKey) {
         throw new functions.https.HttpsError(
@@ -224,7 +224,7 @@ export const suggestMaintenanceSchedule = functions.https.onCall(
     const { equipmentName, equipmentType, usageHistory, lastMaintenance } = data
 
     try {
-      const apiKey = functions.config().openai?.api_key
+      const apiKey = ((functions as any).config() as any).openai?.api_key
 
       if (!apiKey) {
         throw new functions.https.HttpsError(

@@ -26,7 +26,7 @@ export function getColorForProfile(profile: PersonProfile, index: number): strin
     const hueShift = index * 15
     return baseColor // Could enhance with actual color manipulation
   }
-  
+
   // Default color palette
   const colors = [
     "#3b82f6", // blue
@@ -38,7 +38,7 @@ export function getColorForProfile(profile: PersonProfile, index: number): strin
     "#06b6d4", // cyan
     "#14b8a6", // teal
   ]
-  
+
   return colors[index % colors.length]
 }
 
@@ -53,6 +53,7 @@ export function personProfileToPerson(profile: PersonProfile, index: number = 0)
     color: getColorForProfile(profile, index),
     avatarUrl: undefined, // Can be added later
     roleId: undefined, // Can be added later
+    role: profile.positionDisplayName || profile.position || "Member",
   }
 }
 

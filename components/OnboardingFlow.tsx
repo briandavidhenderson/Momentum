@@ -165,6 +165,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [labSearchTerm, setLabSearchTerm] = useState("")
   const [funderSearchTerm, setFunderSearchTerm] = useState("")
   const [positionFilter, setPositionFilter] = useState("")
+  const [supervisorSearchTerm, setSupervisorSearchTerm] = useState("")
+  const [supervisorFilter, setSupervisorFilter] = useState<"all" | "org" | "school" | "dept">("dept")
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showCreateInst, setShowCreateInst] = useState(false)
   const [showCreateLab, setShowCreateLab] = useState(false)
@@ -438,7 +440,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       }
     } catch (err) {
       logger.error("Error creating institute", err)
-      setError("Failed to create institute")
+      setError("Failed to create school/faculty")
     } finally {
       setLoading(false)
     }
@@ -479,7 +481,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       logger.error("Error creating lab", err)
       // Fix Bug #7: Show specific error message instead of generic message
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
-      setError(`Failed to create lab: ${errorMessage}. Please try again or contact support if the issue persists.`)
+      setError(`Failed to create department: ${errorMessage}. Please try again or contact support if the issue persists.`)
     } finally {
       setLoading(false)
     }
@@ -565,6 +567,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         instituteName: state.selectedInstitute.name,
         labId: state.selectedLab.id,
         labName: state.selectedLab.name,
+
+        // Dynamic organizational memberships (can be added later)
+        researchGroupIds: [],
+        workingLabIds: [],
 
         // Position
         positionLevel: state.positionLevel,
@@ -959,16 +965,16 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
           <div className="space-y-6">
             <div className="text-center mb-8">
               <GraduationCap className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-              <h2 className="text-2xl font-bold">Select Your Institute</h2>
-              <p className="text-gray-600">Choose your department or school</p>
+              <h2 className="text-2xl font-bold">Select Your School/Faculty</h2>
+              <p className="text-gray-600">Choose your school or faculty</p>
               <p className="text-sm text-gray-500 mt-1">at {state.selectedOrganisation?.name}</p>
             </div>
 
             <div>
-              <Label htmlFor="inst-search">Search for your institute</Label>
+              <Label htmlFor="inst-search">Search for your school/faculty</Label>
               <Input
                 id="inst-search"
-                placeholder="e.g., Department of Physics"
+                placeholder="e.g., School of Medicine, Faculty of Engineering"
                 value={instSearchTerm}
                 onChange={(e) => setInstSearchTerm(e.target.value)}
                 className="mt-1"
@@ -978,7 +984,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             <div className="max-h-64 overflow-y-auto border rounded-lg">
               {filteredInstitutes.length === 0 ? (
                 <div className="p-6 text-center text-gray-500">
-                  <p>No institutes found.</p>
+                  <p>No schools/faculties found.</p>
                   {instSearchTerm && (
                     <Button variant="outline" size="sm" onClick={() => setShowCreateInst(true)} className="mt-2">
                       Create &quot;{instSearchTerm}&quot;
@@ -1005,13 +1011,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
             {!showCreateInst && instSearchTerm && filteredInstitutes.length === 0 && (
               <Button variant="outline" onClick={() => setShowCreateInst(true)} className="w-full">
-                Create new institute: &quot;{instSearchTerm}&quot;
+                Create new school/faculty: &quot;{instSearchTerm}&quot;
               </Button>
             )}
 
             {showCreateInst && (
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-2">Create New Institute</h3>
+                <h3 className="font-semibold mb-2">Create New School/Faculty</h3>
                 <p className="text-sm text-gray-600 mb-4">Name: {instSearchTerm}</p>
                 <div className="flex gap-2">
                   <Button onClick={handleCreateInstitute} disabled={loading}>
@@ -1031,16 +1037,16 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
           <div className="space-y-6">
             <div className="text-center mb-8">
               <BookOpen className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-              <h2 className="text-2xl font-bold">Select Your Lab</h2>
-              <p className="text-gray-600">Choose your research group</p>
+              <h2 className="text-2xl font-bold">Select Your Department</h2>
+              <p className="text-gray-600">Choose your academic department</p>
               <p className="text-sm text-gray-500 mt-1">at {state.selectedInstitute?.name}</p>
             </div>
 
             <div>
-              <Label htmlFor="lab-search">Search for your lab</Label>
+              <Label htmlFor="lab-search">Search for your department</Label>
               <Input
                 id="lab-search"
-                placeholder="e.g., Quantum Physics Lab"
+                placeholder="e.g., Department of Histopathology, Department of Physics"
                 value={labSearchTerm}
                 onChange={(e) => setLabSearchTerm(e.target.value)}
                 className="mt-1"
@@ -1050,7 +1056,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             <div className="max-h-64 overflow-y-auto border rounded-lg">
               {filteredLabs.length === 0 ? (
                 <div className="p-6 text-center text-gray-500">
-                  <p>No labs found.</p>
+                  <p>No departments found.</p>
                   {labSearchTerm && (
                     <Button variant="outline" size="sm" onClick={() => setShowCreateLab(true)} className="mt-2">
                       Create &quot;{labSearchTerm}&quot;
@@ -1077,13 +1083,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
             {!showCreateLab && labSearchTerm && filteredLabs.length === 0 && (
               <Button variant="outline" onClick={() => setShowCreateLab(true)} className="w-full">
-                Create new lab: &quot;{labSearchTerm}&quot;
+                Create new department: &quot;{labSearchTerm}&quot;
               </Button>
             )}
 
             {showCreateLab && (
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-2">Create New Lab</h3>
+                <h3 className="font-semibold mb-2">Create New Department</h3>
                 <p className="text-sm text-gray-600 mb-4">Name: {labSearchTerm}</p>
                 <div className="flex gap-2">
                   <Button onClick={handleCreateLab} disabled={loading}>
@@ -1367,7 +1373,33 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         )
 
       case "supervisor-selection":
-        // Feature #8: Supervisor assignment for non-PIs
+        // Feature #8: Supervisor assignment for non-PIs with network-wide search
+        const allPIs = profiles.filter((p) => p.isPrincipalInvestigator)
+        const filteredSupervisors = allPIs
+          .filter((p) => {
+            // Apply scope filter
+            if (supervisorFilter === "dept") {
+              return p.labId === state.selectedLab?.id
+            } else if (supervisorFilter === "school") {
+              return p.instituteId === state.selectedInstitute?.id
+            } else if (supervisorFilter === "org") {
+              return p.organisationId === state.selectedOrganisation?.id
+            }
+            // "all" - no filter
+            return true
+          })
+          .filter((p) => {
+            // Apply search filter
+            if (!supervisorSearchTerm) return true
+            const searchLower = supervisorSearchTerm.toLowerCase()
+            const fullName = `${p.firstName} ${p.lastName}`.toLowerCase()
+            const position = (p.positionDisplayName || p.position || "").toLowerCase()
+            const department = (p.labName || "").toLowerCase()
+            return fullName.includes(searchLower) ||
+                   position.includes(searchLower) ||
+                   department.includes(searchLower)
+          })
+
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
@@ -1375,20 +1407,90 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <p className="text-gray-600">
                 Who is your primary supervisor or PI?
               </p>
+              <p className="text-sm text-gray-500 mt-1">
+                You can search across the entire network
+              </p>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-sm text-gray-700">
                 Your supervisor will be able to view your projects and track your progress.
                 You can update this later from your profile settings.
               </p>
             </div>
 
-            <div className="space-y-3">
-              <Label>Available Supervisors / PIs in {state.selectedLab?.name}</Label>
-              {profiles
-                .filter((p) => p.isPrincipalInvestigator && p.labId === state.selectedLab?.id)
-                .map((supervisor) => (
+            {/* Filter Tabs */}
+            <div className="flex gap-2 border-b">
+              <button
+                onClick={() => setSupervisorFilter("all")}
+                className={`px-4 py-2 font-medium border-b-2 transition ${
+                  supervisorFilter === "all"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                All Network
+              </button>
+              <button
+                onClick={() => setSupervisorFilter("org")}
+                className={`px-4 py-2 font-medium border-b-2 transition ${
+                  supervisorFilter === "org"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                My Organisation
+              </button>
+              <button
+                onClick={() => setSupervisorFilter("school")}
+                className={`px-4 py-2 font-medium border-b-2 transition ${
+                  supervisorFilter === "school"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                My School/Faculty
+              </button>
+              <button
+                onClick={() => setSupervisorFilter("dept")}
+                className={`px-4 py-2 font-medium border-b-2 transition ${
+                  supervisorFilter === "dept"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                My Department
+              </button>
+            </div>
+
+            {/* Search Field */}
+            <div>
+              <Label htmlFor="supervisor-search">Search supervisors by name</Label>
+              <Input
+                id="supervisor-search"
+                placeholder="Search by name, position, or department..."
+                value={supervisorSearchTerm}
+                onChange={(e) => setSupervisorSearchTerm(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            {/* Supervisor List */}
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {filteredSupervisors.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No supervisors found.</p>
+                  <p className="text-sm mt-2">Try changing your search or filter settings.</p>
+                  <Button
+                    onClick={() => setState((s) => ({ ...s, supervisorId: null }))}
+                    variant="outline"
+                    className="mt-4"
+                  >
+                    Continue Without Supervisor
+                  </Button>
+                </div>
+              ) : (
+                filteredSupervisors.map((supervisor) => (
                   <button
                     key={supervisor.id}
                     onClick={() => setState((s) => ({ ...s, supervisorId: supervisor.id }))}
@@ -1404,20 +1506,16 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     <div className="text-sm text-gray-600">
                       {supervisor.positionDisplayName || supervisor.position}
                     </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {supervisor.labName} • {supervisor.instituteName}
+                    </div>
+                    {supervisor.organisationId !== state.selectedOrganisation?.id && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        {supervisor.organisationName}
+                      </div>
+                    )}
                   </button>
-                ))}
-              {profiles.filter((p) => p.isPrincipalInvestigator && p.labId === state.selectedLab?.id).length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No supervisors found in this lab yet.</p>
-                  <p className="text-sm mt-2">You can select a supervisor later from your profile.</p>
-                  <Button
-                    onClick={() => setState((s) => ({ ...s, supervisorId: null }))}
-                    variant="outline"
-                    className="mt-4"
-                  >
-                    Continue Without Supervisor
-                  </Button>
-                </div>
+                ))
               )}
             </div>
           </div>

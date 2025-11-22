@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable } from "@/lib/types"
+import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment } from "@/lib/types"
 import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 import { logger } from "@/lib/logger"
@@ -10,13 +10,14 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { WorkpackageDialog } from "@/components/WorkpackageDialog"
-import { WorkpackageCard } from "@/components/WorkpackageCard"
+import { WorkpackageDialog } from "@/components/projects/WorkpackageDialog"
+import { WorkpackageCard } from "@/components/projects/WorkpackageCard"
 import { DeliverableDialog } from "@/components/DeliverableDialog"
-import { DeliverableDetailsPanel } from "@/components/DeliverableDetailsPanel"
+import { DeliverableDetailsPanel } from "@/components/projects/DeliverableDetailsPanel"
 import { CommentsSection } from "@/components/CommentsSection"
 import { ProjectExportDialog } from "@/components/ProjectExportDialog"
-import { ProjectImportDialog } from "@/components/ProjectImportDialog"
+import { ProjectImportDialog } from "@/components/projects/ProjectImportDialog"
+import { ProjectResources } from "@/components/ProjectResources"
 import {
   ArrowLeft,
   Calendar,
@@ -36,6 +37,7 @@ import {
   ShoppingCart,
   Download,
   Upload,
+  FlaskConical,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
 import { useAppContext } from "@/lib/AppContext"
@@ -46,6 +48,7 @@ interface ProjectDetailPageProps {
   deliverables: Deliverable[]
   teamMembers: PersonProfile[]
   fundingAccounts: FundingAccount[]
+  events?: CalendarEvent[]
   onBack: () => void
   onEdit?: () => void
   onCreateWorkpackage?: (workpackageData: Partial<Workpackage>) => void
@@ -54,6 +57,12 @@ interface ProjectDetailPageProps {
   onCreateDeliverable?: (deliverableData: Partial<Deliverable>) => void
   onUpdateDeliverable?: (deliverableId: string, updates: Partial<Deliverable>) => void
   onDeleteDeliverable?: (deliverableId: string) => void
+  onUpdateProject?: (updates: Partial<MasterProject>) => void
+  onUpdateTask?: (workpackageId: string, taskId: string, updates: any) => void
+  onDeleteTask?: (workpackageId: string, taskId: string) => void
+  onViewOrder?: (orderId: string) => void
+  onViewExperiment?: (experimentId: string) => void
+  onViewEvent?: (eventId: string) => void
 }
 
 export function ProjectDetailPage({
@@ -62,6 +71,7 @@ export function ProjectDetailPage({
   deliverables,
   teamMembers,
   fundingAccounts,
+  events = [],
   onBack,
   onEdit,
   onCreateWorkpackage,
@@ -70,6 +80,12 @@ export function ProjectDetailPage({
   onCreateDeliverable,
   onUpdateDeliverable,
   onDeleteDeliverable,
+  onUpdateProject,
+  onUpdateTask,
+  onDeleteTask,
+  onViewOrder,
+  onViewExperiment,
+  onViewEvent,
 }: ProjectDetailPageProps) {
   const [activeTab, setActiveTab] = useState("overview")
   const [workpackageDialogOpen, setWorkpackageDialogOpen] = useState(false)
@@ -82,6 +98,8 @@ export function ProjectDetailPage({
   const [selectedWorkpackageForDeliverable, setSelectedWorkpackageForDeliverable] = useState<string | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
+  const [experiments, setExperiments] = useState<ELNExperiment[]>([])
+  const [loadingExperiments, setLoadingExperiments] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
 
@@ -91,7 +109,7 @@ export function ProjectDetailPage({
   // Fetch project orders
   useEffect(() => {
     const fetchProjectOrders = async () => {
-    const db = getFirebaseDb()
+      const db = getFirebaseDb()
       setLoadingOrders(true)
       try {
         const ordersQuery = query(
@@ -117,6 +135,34 @@ export function ProjectDetailPage({
     }
 
     fetchProjectOrders()
+  }, [project.id])
+
+  // Fetch project experiments
+  useEffect(() => {
+    const fetchProjectExperiments = async () => {
+      const db = getFirebaseDb()
+      setLoadingExperiments(true)
+      try {
+        const experimentsQuery = query(
+          collection(db, "experiments"),
+          where("masterProjectId", "==", project.id),
+          orderBy("createdAt", "desc")
+        )
+        const experimentsSnapshot = await getDocs(experimentsQuery)
+        const experimentsData = experimentsSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt || new Date().toISOString(),
+        })) as ELNExperiment[]
+        setExperiments(experimentsData)
+      } catch (error) {
+        logger.error("Error fetching project experiments", error)
+      } finally {
+        setLoadingExperiments(false)
+      }
+    }
+
+    fetchProjectExperiments()
   }, [project.id])
 
   // Calculate project statistics
@@ -356,6 +402,10 @@ export function ProjectDetailPage({
             <Package className="h-4 w-4" />
             Work Packages ({stats.totalWorkpackages})
           </TabsTrigger>
+          <TabsTrigger value="resources" className="gap-2">
+            <FlaskConical className="h-4 w-4" />
+            Resources
+          </TabsTrigger>
           <TabsTrigger value="files" className="gap-2">
             <FileText className="h-4 w-4" />
             Files
@@ -576,6 +626,19 @@ export function ProjectDetailPage({
             </div>
           </TabsContent>
 
+          {/* Resources Tab */}
+          <TabsContent value="resources" className="p-0 m-0">
+            <ProjectResources
+              project={project}
+              orders={orders}
+              events={events}
+              experiments={experiments}
+              onViewOrder={(order) => onViewOrder?.(order.id)}
+              onViewExperiment={(experiment) => onViewExperiment?.(experiment.id)}
+              onViewEvent={(event) => onViewEvent?.(event.id)}
+            />
+          </TabsContent>
+
           {/* Files Tab */}
           <TabsContent value="files" className="p-6 m-0">
             <Card>
@@ -749,15 +812,14 @@ export function ProjectDetailPage({
                               </div>
                               <Badge
                                 variant="outline"
-                                className={`text-xs ${
-                                  order.status === 'received' ? 'bg-green-50 text-green-700 border-green-200' :
+                                className={`text-xs ${order.status === 'received' ? 'bg-green-50 text-green-700 border-green-200' :
                                   order.status === 'ordered' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                  'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                }`}
+                                    'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                  }`}
                               >
                                 {order.status === 'to-order' ? 'To Order' :
-                                 order.status === 'ordered' ? 'Ordered' :
-                                 'Received'}
+                                  order.status === 'ordered' ? 'Ordered' :
+                                    'Received'}
                               </Badge>
                             </div>
                           </div>
@@ -832,6 +894,7 @@ export function ProjectDetailPage({
           onClose={() => setSelectedDeliverableForPanel(null)}
           onEdit={onUpdateDeliverable ? handleEditDeliverable : undefined}
           onDelete={onDeleteDeliverable ? handleDeleteDeliverable : undefined}
+          onUpdate={onUpdateDeliverable}
           orders={orders}
           people={teamMembers}
         />

@@ -185,6 +185,8 @@ export interface Order {
   productName: string
   catNum: string
   supplier: string
+  url?: string
+  priority?: "normal" | "high" | "critical"
 
   // Linking (UPDATED: Account is now REQUIRED)
   accountId: string               // ✅ REQUIRED: Link to funding account

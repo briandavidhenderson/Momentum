@@ -8,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { GanttChart } from "@/components/GanttChart";
 import { TaskDetailPanel } from "@/components/TaskDetailPanel";
 import { ProjectCreationDialog } from "@/components/ProjectCreationDialog";
-import { DependencyPickerDialog } from "@/components/DependencyPickerDialog";
+import { DependencyPickerDialog } from "@/components/projects/DependencyPickerDialog";
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage";
-import { ProjectImportDialog } from "@/components/ProjectImportDialog";
-import { MasterProject, Task, Workpackage, Project, Person, ProfileProject, Subtask } from "@/lib/types";
+import { ProjectImportDialog } from "@/components/projects/ProjectImportDialog";
+import { DeliverableDialog } from "@/components/DeliverableDialog";
+import { MasterProject, Task, Workpackage, Project, Person, ProfileProject, Subtask, CalendarEvent, Deliverable } from "@/lib/types";
+import { PersonnelList } from "@/components/PersonnelList";
 import { Plus, FolderKanban, PackagePlus, Trash2, Loader2, AlertCircle, Upload } from "lucide-react";
 import { Task as GanttTask } from "gantt-task-react";
 import { updateWorkpackageWithProgress } from "@/lib/firestoreService";
@@ -52,6 +54,10 @@ export function ProjectDashboard() {
     itemType: "task" | "subtask";
     workpackageId: string;
   } | null>(null);
+  const [showDeliverableDialog, setShowDeliverableDialog] = useState(false);
+  const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null);
+  const [deliverableMode, setDeliverableMode] = useState<"create" | "edit" | "view">("create");
+  const [deliverableParentId, setDeliverableParentId] = useState<string | null>(null);
 
   // Helper to get workpackages for a project
   const getProjectWorkpackages = useCallback((project: MasterProject): Workpackage[] => {
@@ -228,13 +234,13 @@ export function ProjectDashboard() {
                 const updatedTasks = (workpackage.tasks || []).map(t =>
                   t.id === task.id
                     ? {
-                        ...t,
-                        subtasks: t.subtasks?.map((st: Subtask) =>
-                          st.id === subtask.id
-                            ? { ...st, start: ganttTask.start, end: ganttTask.end }
-                            : st
-                        ),
-                      }
+                      ...t,
+                      subtasks: t.subtasks?.map((st: Subtask) =>
+                        st.id === subtask.id
+                          ? { ...st, start: ganttTask.start, end: ganttTask.end }
+                          : st
+                      ),
+                    }
                     : t
                 );
                 await handleUpdateWorkpackage(workpackage.id, {
@@ -252,8 +258,10 @@ export function ProjectDashboard() {
     }
   }, [projects, handleUpdateMasterProject, handleUpdateWorkpackage, handleUpdateTaskDates, workpackagesMap]);
 
-  const handleTaskClick = useCallback((task: Task) => {
-    setSelectedTask(task);
+  const handleTaskClick = useCallback((task: MasterProject | Workpackage | CalendarEvent | Task | Deliverable) => {
+    if ('subtasks' in task && 'workpackageId' in task) {
+      setSelectedTask(task as Task);
+    }
   }, []);
 
   const handleToggleExpand = useCallback(async (id: string, isProject: boolean) => {
@@ -267,7 +275,7 @@ export function ProjectDashboard() {
           });
         }
       } else {
-          // Toggle workpackage expansion
+        // Toggle workpackage expansion
         for (const project of projects) {
           const workpackage = workpackagesMap.get(id);
           if (workpackage) {
@@ -297,11 +305,11 @@ export function ProjectDashboard() {
                 const updatedTasks = (wp.tasks || []).map(t =>
                   t.id === task.id
                     ? {
-                        ...t,
-                        subtasks: t.subtasks?.map((st: Subtask) =>
-                          st.id === id ? { ...st, isExpanded: !st.isExpanded } : st
-                        ),
-                      }
+                      ...t,
+                      subtasks: t.subtasks?.map((st: Subtask) =>
+                        st.id === id ? { ...st, isExpanded: !st.isExpanded } : st
+                      ),
+                    }
                     : t
                 );
                 await handleUpdateWorkpackage(wp.id, {
@@ -332,8 +340,24 @@ export function ProjectDashboard() {
         }
       }
     }
-      return null;
+    return null;
   }, [projects, workpackagesMap]);
+
+  const handleDoubleClick = useCallback((item: Task | Deliverable | Workpackage | MasterProject | CalendarEvent) => {
+    // Check if it's a deliverable
+    if ('dueDate' in item && 'workpackageId' in item) {
+      setSelectedDeliverable(item as Deliverable);
+      setDeliverableMode("edit");
+      setShowDeliverableDialog(true);
+      return;
+    }
+
+    // Check if it's a task
+    if ('status' in item && ('priority' in item || 'assignees' in item)) {
+      setSelectedTask(item as Task);
+      return;
+    }
+  }, []);
 
   const handleContextAction = useCallback(async (action: { action: string; targetId: string; targetType: string }) => {
     try {
@@ -344,6 +368,17 @@ export function ProjectDashboard() {
             const project = projects.find(p => p.id === action.targetId);
             if (project) {
               setSelectedProjectForDetail(project);
+              return;
+            }
+          }
+
+          // Check if it's a deliverable
+          if (action.targetType === "deliverable") {
+            const deliverable = deliverables.find(d => d.id === action.targetId);
+            if (deliverable) {
+              setSelectedDeliverable(deliverable);
+              setDeliverableMode("edit");
+              setShowDeliverableDialog(true);
               return;
             }
           }
@@ -359,127 +394,42 @@ export function ProjectDashboard() {
             }
           }
           break;
-        case "open-project-details":
-          // Open project detail panel
-          const project = projects.find(p => p.id === action.targetId);
-          if (project) {
-            setSelectedProjectForDetail(project);
-          }
-          break;
-        case "mark-complete":
-          // Mark task/workpackage as complete
-          if (action.targetType === "workpackage") {
-            const workpackage = workpackagesMap.get(action.targetId);
-            if (workpackage) {
-              await handleUpdateWorkpackage(workpackage.id, {
-                status: "completed",
-              });
-            }
-          } else if (action.targetType === "task") {
-            for (const project of projects) {
-              for (const wp of getProjectWorkpackages(project)) {
-                const task = wp.tasks?.find(t => t.id === action.targetId);
-                if (task && wp.tasks) {
-                  const updatedTasks = wp.tasks.map(t =>
-                    t.id === action.targetId ? { ...t, status: "done" as const } : t
-                  );
-                  await handleUpdateWorkpackage(wp.id, {
-                    tasks: updatedTasks,
-                  });
-                  return;
+        case "add-dependency":
+          // Check if it's a task or subtask
+          for (const project of projects) {
+            for (const wp of getProjectWorkpackages(project)) {
+              const targetTask = wp.tasks?.find(t => t.id === action.targetId);
+              if (targetTask) {
+                setDependencyDialog({
+                  item: targetTask,
+                  itemType: "task",
+                  workpackageId: wp.id,
+                });
+                return;
+              } else {
+                // Check subtasks
+                for (const t of wp.tasks || []) {
+                  const subtask = t.subtasks?.find((st: Subtask) => st.id === action.targetId);
+                  if (subtask) {
+                    setDependencyDialog({
+                      item: subtask,
+                      itemType: "subtask",
+                      workpackageId: wp.id,
+                    });
+                    return;
+                  }
                 }
               }
             }
           }
           break;
         case "add-child":
-          // Add a child task or subtask based on target type
           if (action.targetType === "workpackage") {
-            // Add a new task to the workpackage
-            const workpackage = workpackagesMap.get(action.targetId);
-            if (workpackage) {
-              const newTask: Task = {
-                id: `task-${Date.now()}`,
-                name: "New Task",
-                start: new Date(),
-                end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-                progress: 0,
-                workpackageId: workpackage.id,
-                importance: "medium",
-                deliverables: [],
-                subtasks: [],
-              };
-              
-              const updatedTasks = [...(workpackage.tasks || []), newTask];
-              await handleUpdateWorkpackage(workpackage.id, {
-                tasks: updatedTasks,
-              });
-            }
-          } else if (action.targetType === "task") {
-            // Add a new subtask to the task
-            const context = findTaskContext(action.targetId);
-            if (context && context.workpackage.tasks) {
-              const newSubtask = {
-                id: `subtask-${Date.now()}`,
-                name: "New Subtask",
-                start: new Date(),
-                end: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
-                progress: 0,
-                status: "not-started" as const,
-                todos: [],
-              };
-
-              const updatedTasks = context.workpackage.tasks.map(t =>
-                t.id === action.targetId
-                  ? { ...t, subtasks: [...(t.subtasks || []), newSubtask] }
-                  : t
-              );
-              
-              const updatedWorkpackage = updateWorkpackageWithTaskProgress({
-                ...context.workpackage,
-                tasks: updatedTasks,
-              });
-              
-              await updateWorkpackageWithProgress(context.workpackage.id, updatedWorkpackage);
-
-              // If this task is selected, update it
-              if (selectedTask?.id === action.targetId) {
-                const updatedTask = updatedWorkpackage.tasks?.find(t => t.id === action.targetId);
-                if (updatedTask) {
-                  setSelectedTask(updatedTask);
-                }
-              }
-            }
-          }
-          break;
-        case "add-dependency":
-          {
-            // Find the task or subtask
-            const context = findTaskContext(action.targetId);
-            if (!context) break;
-
-            // Check if it's a task or subtask
-            const task = context.workpackage.tasks?.find(t => t.id === action.targetId);
-            if (task) {
-              setDependencyDialog({
-                item: task,
-                itemType: "task",
-                workpackageId: context.workpackage.id,
-              });
-            } else {
-              // Check subtasks
-              for (const t of context.workpackage.tasks || []) {
-                const subtask = t.subtasks?.find((st: Subtask) => st.id === action.targetId);
-                if (subtask) {
-                  setDependencyDialog({
-                    item: subtask,
-                    itemType: "subtask",
-                    workpackageId: context.workpackage.id,
-                  });
-                  break;
-                }
-              }
-            }
+            setDeliverableParentId(action.targetId);
+            setSelectedDeliverable(null);
+            setDeliverableMode("create");
+            setShowDeliverableDialog(true);
+            return;
           }
           break;
       }
@@ -487,7 +437,7 @@ export function ProjectDashboard() {
       logger.error("Error handling context action", error);
       alert("Failed to perform action. Please try again.");
     }
-  }, [projects, handleUpdateWorkpackage, findTaskContext, selectedTask, workpackagesMap, getProjectWorkpackages]);
+  }, [projects, getProjectWorkpackages]);
 
   const handleSaveDependencies = useCallback(async (dependencyIds: string[]) => {
     if (!dependencyDialog) return;
@@ -792,7 +742,7 @@ export function ProjectDashboard() {
       }
 
       const newSubtask = {
-        id: `subtask-${Date.now()}`,
+        id: `subtask - ${Date.now()} `,
         name: name.trim(),
         start: new Date(),
         end: new Date(),
@@ -1083,6 +1033,7 @@ export function ProjectDashboard() {
             people={people}
             onDateChange={handleDateChange}
             onTaskClick={handleTaskClick}
+            onDoubleClick={handleDoubleClick}
             onPersonDropOnBar={handlePersonDropOnBar}
             onToggleExpand={handleToggleExpand}
             onContextAction={handleContextAction}
@@ -1178,7 +1129,41 @@ export function ProjectDashboard() {
         organisationId={profile?.organisationId}
       />
 
-      {/* Dependency Picker Dialog */}
+      {/* Deliverable Dialog */}
+      <DeliverableDialog
+        open={showDeliverableDialog}
+        onOpenChange={setShowDeliverableDialog}
+        deliverable={selectedDeliverable}
+        workpackageId={deliverableParentId || selectedDeliverable?.workpackageId || ""}
+        onSave={async (data) => {
+          try {
+            if (deliverableMode === "create") {
+              await handleCreateDeliverable({
+                ...data,
+                createdBy: user?.uid || "",
+              } as any);
+            } else if (selectedDeliverable) {
+              await handleUpdateDeliverable(selectedDeliverable.id, data);
+            }
+            setShowDeliverableDialog(false);
+          } catch (error) {
+            logger.error("Error saving deliverable", error);
+            alert("Failed to save deliverable");
+          }
+        }}
+        onDelete={selectedDeliverable ? async () => {
+          try {
+            await handleDeleteDeliverable(selectedDeliverable.id);
+            setShowDeliverableDialog(false);
+          } catch (error) {
+            logger.error("Error deleting deliverable", error);
+            alert("Failed to delete deliverable");
+          }
+        } : undefined}
+        mode={deliverableMode}
+        availableOwners={allProfiles}
+      />
+
       {dependencyDialog && (
         <DependencyPickerDialog
           open={true}
@@ -1188,36 +1173,8 @@ export function ProjectDashboard() {
           currentItemType={dependencyDialog.itemType}
           projects={projects}
           workpackagesMap={workpackagesMap}
-          currentWorkpackageId={dependencyDialog.workpackageId}
         />
       )}
-
-      {/* Import Project Dialog */}
-      <ProjectImportDialog
-        open={showImportDialog}
-        onClose={() => setShowImportDialog(false)}
-        onImportSuccess={handleImportSuccess}
-        labId={profile?.labId || ''}
-        userId={user?.uid || ''}
-      />
-    </div>
-  );
-}
-
-function PersonnelList({ people }: { people: Person[] }) {
-  return (
-    <div className="space-y-2">
-      {people.map((person) => (
-        <div key={person.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-100">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
-            style={{ backgroundColor: person.color }}
-          >
-            {person.name.charAt(0)}
-          </div>
-          <span className="text-sm font-medium text-foreground">{person.name}</span>
-        </div>
-      ))}
     </div>
   );
 }

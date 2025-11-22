@@ -159,11 +159,17 @@ export interface Person {
   color: string
   avatarUrl?: string
   roleId?: string
+  role?: string // Display role/position name
 }
 
 /**
- * PersonProfile - Complete profile for a lab member
- * UPDATED: Now uses organizational hierarchy with IDs
+ * PersonProfile - Complete profile for a research team member
+ *
+ * ORGANIZATIONAL HIERARCHY (5 levels):
+ * - Fixed (set at onboarding): Organisation → School/Faculty → Department
+ * - Dynamic (can join multiple): Research Groups → Working Labs
+ *
+ * UPDATED: Now uses organizational hierarchy with IDs + dynamic group memberships
  */
 export interface PersonProfile {
   id: string
@@ -175,13 +181,20 @@ export interface PersonProfile {
   phone: string
   officeLocation: string
 
-  // Organizational Hierarchy (NEW: Use IDs instead of names)
-  organisationId: string      // ✅ NEW: Link to organisation
+  // Organizational Hierarchy - FIXED (set during onboarding, immutable)
+  // NOTE: Field names remain the same but semantic meaning has changed:
+  // - instituteId now represents School/Faculty
+  // - labId now represents Department
+  organisationId: string      // ✅ Link to organisation (unchanged)
   organisationName: string    // Cached for display
-  instituteId: string         // ✅ NEW: Link to institute
-  instituteName: string       // Cached for display
-  labId: string               // ✅ NEW: Link to lab
-  labName: string             // Cached for display
+  instituteId: string         // ✅ Link to School/Faculty (formerly institute)
+  instituteName: string       // Cached for display (now shows School/Faculty name)
+  labId: string               // ✅ Link to Department (formerly lab)
+  labName: string             // Cached for display (now shows Department name)
+
+  // Dynamic Organizational Memberships (NEW: Users can join/leave multiple groups)
+  researchGroupIds: string[]  // ✅ NEW: Array of ResearchGroup IDs user belongs to
+  workingLabIds: string[]     // ✅ NEW: Array of WorkingLab IDs (physical labs) user works in
 
   // Position & Hierarchy (UPDATED)
   positionLevel: PositionLevel  // ✅ NEW: Enum-based position

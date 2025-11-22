@@ -2,7 +2,7 @@
 
 import { Gantt, Task as GanttTask, ViewMode } from "gantt-task-react"
 import "gantt-task-react/dist/index.css"
-import { MasterProject, Workpackage, Task, Person, Subtask, Deliverable } from "@/lib/types"
+import { MasterProject, Workpackage, Task, Person, Subtask, Deliverable, CalendarEvent } from "@/lib/types"
 import { useMemo, useState, useCallback } from "react"
 import type { MouseEvent } from "react"
 import { ChevronDown, ChevronRight, ZoomIn, ZoomOut } from "lucide-react"
@@ -14,6 +14,7 @@ interface GanttChartProps {
   people: Person[]
   onDateChange?: (task: GanttTask) => void
   onTaskClick?: (task: Task) => void
+  onDoubleClick?: (task: Task | Deliverable | Workpackage | MasterProject | CalendarEvent) => void
   onPersonDropOnBar?: (taskOrProjectId: string, personId: string, isProject: boolean) => void
   onToggleExpand?: (id: string, isProject: boolean) => void
   onContextAction?: (action: GanttContextAction) => void
@@ -81,95 +82,94 @@ const CustomTaskListTable: React.FC<{
   childCount,
   onContextMenu,
 }) => {
-  return (
-    <div
-      style={{
-        fontFamily: fontFamily,
-        fontSize: fontSize,
-      }}
-    >
-      {tasks.map((task) => {
-        const isSelected = task.id === selectedTaskId
-        const meta = taskMeta.get(task.id)
-        const type: GanttContextTargetType = meta?.type ?? (task.type === "project" ? "project" : task.type === "milestone" ? "deliverable" : "task")
-        const isProject = type === "project" && !task.project
-        const isMilestone = type === "deliverable"
+    return (
+      <div
+        style={{
+          fontFamily: fontFamily,
+          fontSize: fontSize,
+        }}
+      >
+        {tasks.map((task) => {
+          const isSelected = task.id === selectedTaskId
+          const meta = taskMeta.get(task.id)
+          const type: GanttContextTargetType = meta?.type ?? (task.type === "project" ? "project" : task.type === "milestone" ? "deliverable" : "task")
+          const isProject = type === "project" && !task.project
+          const isMilestone = type === "deliverable"
 
-        let level = 0
-        let isExpanded = meta?.reference?.isExpanded !== false
+          let level = 0
+          let isExpanded = meta?.reference?.isExpanded !== false
 
-        switch (type) {
-          case "project":
-            level = 0
-            break
-          case "workpackage":
-            level = 1
-            break
-          case "task":
-            level = 2
-            break
-          case "subtask":
-            level = 3
-            break
-          case "deliverable":
-            level = 4
-            isExpanded = false
-            break;
-        }
+          switch (type) {
+            case "project":
+              level = 0
+              break
+            case "workpackage":
+              level = 1
+              break
+            case "task":
+              level = 2
+              break
+            case "subtask":
+              level = 3
+              break
+            case "deliverable":
+              level = 4
+              isExpanded = false
+              break;
+          }
 
-        const hasChildren = (childCount.get(task.id) ?? 0) > 0 && !isMilestone
-        const paddingLeft = `${10 + level * 20}px`
+          const hasChildren = (childCount.get(task.id) ?? 0) > 0 && !isMilestone
+          const paddingLeft = `${10 + level * 20}px`
 
-        return (
-          <div
-            key={task.id}
-            style={{
-              height: rowHeight,
-              width: rowWidth,
-              display: "flex",
-              alignItems: "center",
-              paddingLeft: paddingLeft,
-              cursor: "pointer",
-              fontWeight: isProject ? "bold" : level === 1 ? "600" : "normal",
-              background: isSelected ? "hsl(var(--accent))" : "transparent",
-              fontSize: isMilestone ? "0.9em" : "1em",
-            }}
-            onClick={() => setSelectedTask(task.id)}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              onContextMenu?.(event, task)
-            }}
-          >
-            {hasChildren && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleExpand?.(task.id, isProject)
-                }}
-                style={{
-                  marginRight: "8px",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "2px",
-                }}
-              >
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-              </button>
-            )}
-            {task.name.split("[")[0].trim()}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
+          return (
+            <div
+              key={task.id}
+              style={{
+                height: rowHeight,
+                width: rowWidth,
+                display: "flex",
+                alignItems: "center",
+                paddingLeft: paddingLeft,
+                cursor: "pointer",
+                fontWeight: isProject ? "bold" : level === 1 ? "600" : "normal",
+                background: isSelected ? "hsl(var(--accent))" : "transparent",
+                fontSize: isMilestone ? "0.9em" : "1em",
+              }}
+              onClick={() => setSelectedTask(task.id)}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                onContextMenu?.(event, task)
+              }}
+            >
+              {hasChildren && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleExpand?.(task.id, isProject)
+                  }}
+                  className="p-0.5 rounded-md hover:bg-accent text-muted-foreground transition-colors flex items-center justify-center h-5 w-5 mr-2"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+              {task.name.split("[")[0].trim()}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
 
 export function GanttChart({
   projects,
@@ -177,6 +177,7 @@ export function GanttChart({
   people,
   onDateChange,
   onTaskClick,
+  onDoubleClick,
   onPersonDropOnBar,
   onToggleExpand,
   onContextAction,
@@ -188,7 +189,7 @@ export function GanttChart({
     y: number
     taskId: string
   } | null>(null)
-  
+
   const columnWidth = useMemo(() => {
     switch (viewMode) {
       case ViewMode.Hour:
@@ -221,13 +222,13 @@ export function GanttChart({
 
     projects.forEach((project) => {
       // Ensure dates are Date objects (convert from ISO string if needed)
-      const projectStart = typeof project.startDate === 'string' 
+      const projectStart = typeof project.startDate === 'string'
         ? new Date(project.startDate)
         : project.startDate
       const projectEnd = typeof project.endDate === 'string'
         ? new Date(project.endDate)
         : project.endDate
-      
+
       addTask(
         {
           id: project.id,
@@ -248,15 +249,15 @@ export function GanttChart({
       project.workpackageIds?.forEach((workpackageId) => {
         const workpackage = workpackages.find(wp => wp.id === workpackageId);
         if (!workpackage) return;
-        
+
         // Ensure dates are Date objects (converted from Firestore Timestamps)
-        const wpStart = workpackage.start instanceof Date 
-          ? workpackage.start 
+        const wpStart = workpackage.start instanceof Date
+          ? workpackage.start
           : new Date(workpackage.start)
-        const wpEnd = workpackage.end instanceof Date 
-          ? workpackage.end 
+        const wpEnd = workpackage.end instanceof Date
+          ? workpackage.end
           : new Date(workpackage.end)
-        
+
         addTask(
           {
             id: workpackage.id,
@@ -277,13 +278,13 @@ export function GanttChart({
 
         workpackage.tasks?.forEach((task: Task) => {
           // Ensure dates are Date objects (converted from Firestore Timestamps)
-          const taskStart = task.start instanceof Date 
-            ? task.start 
+          const taskStart = task.start instanceof Date
+            ? task.start
             : new Date(task.start)
-          const taskEnd = task.end instanceof Date 
-            ? task.end 
+          const taskEnd = task.end instanceof Date
+            ? task.end
             : new Date(task.end)
-          
+
           addTask(
             {
               id: task.id,
@@ -323,13 +324,13 @@ export function GanttChart({
           // Add subtasks
           task.subtasks?.forEach((subtask: Subtask) => {
             // Ensure dates are Date objects (converted from Firestore Timestamps)
-            const subtaskStart = subtask.start instanceof Date 
-              ? subtask.start 
+            const subtaskStart = subtask.start instanceof Date
+              ? subtask.start
               : new Date(subtask.start)
-            const subtaskEnd = subtask.end instanceof Date 
-              ? subtask.end 
+            const subtaskEnd = subtask.end instanceof Date
+              ? subtask.end
               : new Date(subtask.end)
-            
+
             addTask(
               {
                 id: subtask.id,
@@ -498,11 +499,17 @@ export function GanttChart({
           {ganttTasks.length} {ganttTasks.length === 1 ? 'item' : 'items'}
         </div>
       </div>
-      
+
       <Gantt
         tasks={ganttTasks}
         viewMode={viewMode}
         onDateChange={onDateChange}
+        onDoubleClick={(task) => {
+          const meta = metaMap.get(task.id)
+          if (meta && onDoubleClick) {
+            onDoubleClick(meta.reference)
+          }
+        }}
         onClick={(task) => {
           const meta = metaMap.get(task.id)
           if (meta?.type === "task" && onTaskClick) {

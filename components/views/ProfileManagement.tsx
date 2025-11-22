@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS, MasterProject, PositionLevel } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility, MasterProject, PositionLevel } from "@/lib/types"
 import { FirestoreUser } from "@/lib/firestoreService"
 import { profiles as staticProfiles } from "@/lib/profiles"
 import { useProfiles } from "@/lib/useProfiles"
@@ -179,12 +179,12 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
   // Check if current user can edit a profile
   const canEditProfile = (profile: PersonProfile): boolean => {
     if (!currentUserProfile) return false
-    
+
     // Administrator can edit any profile
     if (currentUserProfile.isAdministrator || currentUser?.isAdministrator) {
       return true
     }
-    
+
     // Users can only edit their own profile
     return profile.id === currentUserProfile.id || profile.userId === currentUser?.uid
   }
@@ -195,7 +195,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     const staticIds = new Set(staticProfiles.map(p => p.id))
     const customProfiles = profilesToSave.filter(p => !staticIds.has(p.id))
     localStorage.setItem("lab-profiles", JSON.stringify(customProfiles))
-    
+
     // Dispatch event to notify other components of profile updates
     window.dispatchEvent(new CustomEvent("profiles-updated"))
   }
@@ -308,7 +308,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     if (confirm("Are you sure you want to delete this project?")) {
       const updatedProjects = (formData.projects || []).filter(p => p.id !== projectId)
       const updatedPIs = (formData.principalInvestigatorProjects || []).filter(id => id !== projectId)
-      
+
       setFormData({
         ...formData,
         projects: updatedProjects,
@@ -320,7 +320,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
   const toggleProjectPI = (projectId: string) => {
     const currentPIs = formData.principalInvestigatorProjects || []
     const isPI = currentPIs.includes(projectId)
-    
+
     setFormData({
       ...formData,
       principalInvestigatorProjects: isPI
@@ -401,6 +401,10 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       labId: `lab_${formData.lab!.toLowerCase().replace(/\s+/g, '_')}`,
       labName: formData.lab!,
 
+      // Dynamic organizational memberships
+      researchGroupIds: [],
+      workingLabIds: [],
+
       // Position (new enum-based + legacy string)
       positionLevel: mapPositionToPositionLevel(formData.position || ""),
       positionDisplayName: formData.position || "Unknown",
@@ -452,9 +456,9 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     const updatedProfiles = selectedProfile
       ? allProfiles.map(p => p.id === selectedProfile.id ? newProfile : p)
       : [...allProfiles, newProfile]
-    
+
     saveProfiles(updatedProfiles as PersonProfile[])
-    
+
     // Update User record if this profile is linked to a user
     if (newProfile.userId && currentUser?.uid === newProfile.userId) {
       const storedUsers = localStorage.getItem("lab-users")
@@ -474,7 +478,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
         }
       }
     }
-    
+
     setIsDialogOpen(false)
     setSelectedProfile(null)
     setIsEditing(false)
@@ -717,7 +721,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                   </Badge>
                 )}
               </div>
-              
+
               <div className="mt-3 pt-3 border-t border-border">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                   <Mail className="h-3 w-3" />
@@ -784,8 +788,8 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
               {isEditing ? (selectedProfile ? "Edit Profile" : "Create New Profile") : "View Profile"}
             </DialogTitle>
             <DialogDescription>
-              {isEditing 
-                ? selectedProfile 
+              {isEditing
+                ? selectedProfile
                   ? "Update the profile information below."
                   : "Fill in the details to create a new team member profile."
                 : "View profile information. Click Edit to make changes."}
@@ -858,22 +862,22 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                 />
               </div>
               <div>
-                <Label htmlFor="institute">Institute *</Label>
+                <Label htmlFor="institute">School/Faculty *</Label>
                 <Input
                   id="institute"
                   value={formData.institute || ""}
                   onChange={(e) => setFormData({ ...formData, institute: e.target.value })}
-                  placeholder="e.g., Molecular Biology"
+                  placeholder="e.g., School of Medicine, Faculty of Engineering"
                   disabled={!isEditing}
                 />
               </div>
               <div>
-                <Label htmlFor="lab">Lab *</Label>
+                <Label htmlFor="lab">Department *</Label>
                 <Input
                   id="lab"
                   value={formData.lab || ""}
                   onChange={(e) => setFormData({ ...formData, lab: e.target.value })}
-                  placeholder="e.g., Martinez Lab"
+                  placeholder="e.g., Department of Histopathology"
                   disabled={!isEditing}
                 />
               </div>
@@ -1032,19 +1036,13 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                 <Label>Funded By</Label>
                 {(formData.fundedBy || []).map((funder, index) => (
                   <div key={index} className="flex gap-2 mt-2">
-                    <select
+                    <Input
                       value={funder}
                       onChange={(e) => updateArrayItem("fundedBy", index, e.target.value)}
                       disabled={!isEditing}
-                      className="flex-1 px-3 py-2 rounded-md border border-border bg-background"
-                    >
-                      <option value="">Select Account...</option>
-                      {FUNDING_ACCOUNTS.map(account => (
-                        <option key={account.id} value={account.name}>
-                          {account.name} ({account.accountNumber})
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Funding Source"
+                      className="flex-1"
+                    />
                     {isEditing && (
                       <Button
                         type="button"
@@ -1166,7 +1164,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                   </Button>
                 )}
               </div>
-              
+
               {(formData.projects || []).length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
                   No projects yet. {isEditing && "Click 'Add Project' to create one."}
@@ -1218,12 +1216,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                             {project.fundedBy && project.fundedBy.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1">
                                 {project.fundedBy.map((funderId) => {
-                                  const account = FUNDING_ACCOUNTS.find(a => a.id === funderId || a.name === funderId)
-                                  return account ? (
+                                  return (
                                     <Badge key={funderId} variant="outline" className="text-xs">
-                                      {account.name}
+                                      {funderId}
                                     </Badge>
-                                  ) : null
+                                  )
                                 })}
                               </div>
                             )}
@@ -1501,18 +1498,12 @@ function ProjectDialog({
             <Label>Funding Accounts</Label>
             {(formData.fundedBy || []).map((funderId, index) => (
               <div key={index} className="flex gap-2 mt-2">
-                <select
+                <Input
                   value={funderId}
                   onChange={(e) => updateFunder(index, e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-md border border-border bg-background"
-                >
-                  <option value="">Select Account...</option>
-                  {FUNDING_ACCOUNTS.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} ({account.accountNumber})
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Funding Source"
+                  className="flex-1"
+                />
                 <Button
                   type="button"
                   variant="outline"

@@ -13,6 +13,7 @@ import { useInterface } from './hooks/useInterface';
 import { useUI } from './hooks/useUI';
 import { useFunding } from './hooks/useFunding';
 import { useDeliverables } from './hooks/useDeliverables';
+import { useBookings } from './hooks/useBookings';
 import { useProfiles } from './useProfiles';
 import { personProfilesToPeople } from './personHelpers';
 import { PersonProfile, Person } from './types';
@@ -32,6 +33,7 @@ type AppContextType = ReturnType<typeof useAuth> &
   ReturnType<typeof useInterface> &
   ReturnType<typeof useUI> &
   ReturnType<typeof useDeliverables> &
+  ReturnType<typeof useBookings> &
   Omit<ReturnType<typeof useFunding>, never> & {
     allProfiles: PersonProfile[]
     people: Person[]
@@ -52,6 +54,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
   const uiState = useUI();
   const funding = useFunding(auth.currentUserProfile?.labId, auth.currentUser?.uid);
   const deliverablesState = useDeliverables(auth.currentUserProfile);
+  const bookingsState = useBookings();
 
   // Fix Bug #3 & #4: Add profiles and convert to people for UI
   const allProfiles = useProfiles(auth.currentUserProfile?.labId || null);
@@ -70,6 +73,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     ...interfaceState,
     ...uiState,
     ...deliverablesState,
+    ...bookingsState,
     allProfiles,  // Expose profiles for components that need full profile data
     people,       // Expose people for UI components (assignee dropdowns, etc.)
   };

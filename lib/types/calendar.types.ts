@@ -60,8 +60,9 @@ export interface CalendarEvent {
     taskId?: string
     subtaskId?: string
     deliverableId?: string
+    equipmentId?: string
   }
-  type?: "meeting" | "deadline" | "milestone" | "training" | "other"
+  type?: "meeting" | "deadline" | "milestone" | "training" | "equipment" | "other"
   notes?: string
   createdBy: string // User ID
   createdAt: Date

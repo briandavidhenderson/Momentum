@@ -1,7 +1,64 @@
 import * as admin from "firebase-admin"
-import * as functions from "firebase-functions"
+import * as functions from "firebase-functions/v1"
 
 admin.initializeApp()
+
+/**
+ * Enable booking on all equipment (one-time migration)
+ * Call this function to enable booking functionality on existing equipment
+ */
+export const enableEquipmentBooking = functions.https.onCall(async (data, context) => {
+  // Require authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be authenticated');
+  }
+
+  const db = admin.firestore();
+  const equipmentRef = db.collection('equipment');
+
+  try {
+    const snapshot = await equipmentRef.get();
+    console.log(`Found ${snapshot.size} equipment items`);
+
+    let updated = 0;
+    const batch = db.batch();
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+
+      // Skip if booking is already enabled
+      if (data.bookingSettings?.bookingEnabled) {
+        return;
+      }
+
+      // Enable booking with default settings
+      batch.update(doc.ref, {
+        bookingSettings: {
+          bookingEnabled: true,
+          requireApproval: false,
+          maxBookingDuration: 480, // 8 hours in minutes
+          minBookingDuration: 30,   // 30 minutes
+          advanceBookingDays: 30,   // Can book up to 30 days in advance
+          allowRecurring: true,
+        }
+      });
+
+      updated++;
+    });
+
+    await batch.commit();
+
+    return {
+      success: true,
+      message: `Successfully enabled booking on ${updated} equipment items`,
+      totalEquipment: snapshot.size,
+      updated,
+    };
+  } catch (error) {
+    console.error('Error enabling booking:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to enable booking');
+  }
+});
 
 // Import GDPR functions
 import { processDataExportRequest, processAccountDeletion } from "./gdpr"
@@ -26,21 +83,15 @@ import {
   notifyAllocationCreated,
   notifyTransactionFinalized,
 } from "./notifications"
+// import {
+//   migrateTokensToSecretManager,
+//   verifyTokenMigration,
+//   cleanupFirestoreTokens,
+// } from "./migrate-tokens-to-secret-manager"
 import {
-  generateExperimentSuggestions,
-  generateProjectDescription,
-  suggestMaintenanceSchedule,
-} from "./openai"
-import {
-  auditCalendarCollections,
-  getOrphanedConflicts,
-  migrateOrphanedConflicts,
-} from "./audit-calendar-collections"
-import {
-  migrateTokensToSecretManager,
-  verifyTokenMigration,
-  cleanupFirestoreTokens,
-} from "./migrate-tokens-to-secret-manager"
+  unlinkGoogleCalendar,
+  syncGoogleCalendar,
+} from "./calendar-google"
 
 // Export GDPR functions
 export {
@@ -77,23 +128,8 @@ export {
 
 // Export OpenAI functions
 export {
-  generateExperimentSuggestions,
-  generateProjectDescription,
-  suggestMaintenanceSchedule,
-}
-
-// Export Calendar Audit functions
-export {
-  auditCalendarCollections,
-  getOrphanedConflicts,
-  migrateOrphanedConflicts,
-}
-
-// Export Token Migration functions
-export {
-  migrateTokensToSecretManager,
-  verifyTokenMigration,
-  cleanupFirestoreTokens,
+  unlinkGoogleCalendar,
+  syncGoogleCalendar,
 }
 
 /**
@@ -114,12 +150,12 @@ interface OrcidConfig {
 }
 
 function getOrcidConfig(): OrcidConfig {
-  const useSandbox = functions.config().orcid?.use_sandbox === "true"
+  const useSandbox = ((functions as any).config() as any).orcid?.use_sandbox === "true"
   const baseUrl = useSandbox ? "https://sandbox.orcid.org" : "https://orcid.org"
 
   return {
-    clientId: functions.config().orcid?.client_id || process.env.ORCID_CLIENT_ID || "",
-    clientSecret: functions.config().orcid?.client_secret || process.env.ORCID_CLIENT_SECRET || "",
+    clientId: ((functions as any).config() as any).orcid?.client_id || process.env.ORCID_CLIENT_ID || "",
+    clientSecret: ((functions as any).config() as any).orcid?.client_secret || process.env.ORCID_CLIENT_SECRET || "",
     useSandbox,
     baseUrl,
     authorizeUrl: `${baseUrl}/oauth/authorize`,

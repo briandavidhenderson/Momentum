@@ -4,7 +4,7 @@
  * Runs daily at 2:00 AM UTC to enforce retention policies
  */
 
-import * as functions from "firebase-functions"
+import * as functions from "firebase-functions/v1"
 import * as admin from "firebase-admin"
 import { Storage } from "@google-cloud/storage"
 
