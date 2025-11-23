@@ -11,7 +11,13 @@ service cloud.firestore {
     // EVENTS (Calendar)
     // ============================================================================
     match /events/{eventId} {
-      allow read: if isAuthenticated();
+      // Users can read events they created OR events with lab/org visibility in their lab
+      // Private events are only visible to creator
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        (resource.data.visibility == 'lab' && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
+        (resource.data.visibility == 'organisation')
+      );
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
 
       // Users can update events they created OR events in same lab (if admin)
@@ -65,6 +71,12 @@ service cloud.firestore {
     function getUserLab() {
       let userProfile = getUserProfile();
       return userProfile != null && userProfile.data != null ? userProfile.data.labId : null;
+    }
+
+    // Helper function to check if user is member of a specific lab
+    function isLabMember(labId) {
+      let userProfile = getUserProfile();
+      return userProfile != null && userProfile.data != null && userProfile.data.labId == labId;
     }
 
 
@@ -269,12 +281,6 @@ service cloud.firestore {
     // ============================================================================
     // MASTER PROJECTS
     // ============================================================================
-    // Helper function to check if user is member of project's lab
-    function isLabMember(labId) {
-      let userProfile = getUserProfile();
-      return userProfile != null && userProfile.data != null && userProfile.data.labId == labId;
-    }
-
     match /masterProjects/{projectId} {
       // Users can read projects if they are:
       // - A member of the project's lab
@@ -309,9 +315,13 @@ service cloud.firestore {
     // PROJECTS COLLECTION (LEGACY)
     // ============================================================================
     match /projects/{projectId} {
-      // Users can read projects (lab filtering done client-side)
-      // Simplified to avoid circular dependency with getUserLab()
-      allow read: if isAuthenticated();
+      // Users can only read projects they created OR projects in their lab
+      // This ensures proper data privacy - client-side filtering is NOT a security boundary
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Any authenticated user can create a project
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
@@ -333,9 +343,12 @@ service cloud.firestore {
     // WORKPACKAGES COLLECTION
     // ============================================================================
     match /workpackages/{workpackageId} {
-      // All authenticated users can read workpackages
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can only read workpackages they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create workpackages
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
@@ -360,9 +373,13 @@ service cloud.firestore {
     // They are the primary unit of work output in the project hierarchy:
     // Project → Workpackage → Deliverable → (optional) ProjectTask
     match /deliverables/{deliverableId} {
-      // All authenticated users can read deliverables
-      // (Client-side filtering by lab/project; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can only read deliverables they created, own, or in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        ('ownerId' in resource.data && resource.data.ownerId == getUserProfileId()) ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create deliverables
       // The deliverable must belong to a workpackage (workpackageId is required)
@@ -398,11 +415,8 @@ service cloud.firestore {
       // Users can create orders
       allow create: if isAuthenticated();
 
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.createdBy == request.auth.uid
-      );
+      // Any authenticated user can update orders (collaborative lab environment)
+      allow update: if isAuthenticated();
 
       // Creator or admin can delete
       allow delete: if isAuthenticated() && (
@@ -439,9 +453,12 @@ service cloud.firestore {
     // DAY-TO-DAY TASKS
     // ============================================================================
     match /dayToDayTasks/{taskId} {
-      // All authenticated users can read tasks
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can only read tasks they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create tasks
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
@@ -460,9 +477,12 @@ service cloud.firestore {
     // LAB POLLS
     // ============================================================================
     match /labPolls/{pollId} {
-      // All authenticated users can read polls
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can only read polls they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create polls
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
@@ -484,9 +504,11 @@ service cloud.firestore {
     // EQUIPMENT
     // ============================================================================
     match /equipment/{equipmentId} {
-      // All authenticated users can read equipment
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can only read equipment in their lab
+      allow read: if isAuthenticated() && (
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create equipment
       allow create: if isAuthenticated();
@@ -512,10 +534,13 @@ service cloud.firestore {
         );
       }
 
-      // All authenticated users can read bookings
-      // (Required for conflict checking - users need to see existing bookings to avoid conflicts)
-      // Client-side filtering by lab; avoids null getUserLab() issues during profile setup
-      allow read: if isAuthenticated();
+      // Users can read bookings in their lab (for conflict checking)
+      // Required for conflict checking - users need to see existing bookings to avoid conflicts
+      allow read: if isAuthenticated() && (
+        resource.data.bookedBy == getUserProfileId() ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create bookings for their lab
       allow create: if isAuthenticated() && (
@@ -544,9 +569,12 @@ service cloud.firestore {
     // ELN EXPERIMENTS
     // ============================================================================
     match /elnExperiments/{experimentId} {
-      // All authenticated users can read experiments
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can only read experiments they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create their own experiments
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
@@ -788,9 +816,12 @@ service cloud.firestore {
     // WHITEBOARDS
     // ============================================================================
     match /whiteboards/{whiteboardId} {
-      // All authenticated users can read whiteboards
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can only read whiteboards they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create whiteboards
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
@@ -805,6 +836,36 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (
         isAdmin() ||
         resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
+    // RESEARCH PINS (Research Board)
+    // ============================================================================
+    match /researchPins/{pinId} {
+      // Users can read pins they created OR public/lab pins in their lab
+      // Private pins are only visible to creator
+      allow read: if isAuthenticated() && (
+        resource.data.author.userId == request.auth.uid ||
+        (resource.data.visibility == 'public') ||
+        (resource.data.visibility == 'lab' && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
+        isAdmin()
+      );
+
+      // Create: Authenticated users (must be the author)
+      allow create: if isAuthenticated() && 
+        request.resource.data.author.userId == request.auth.uid;
+
+      // Update: Creator or admin
+      allow update: if isAuthenticated() && (
+        resource.data.author.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Delete: Creator or admin
+      allow delete: if isAuthenticated() && (
+        resource.data.author.userId == request.auth.uid ||
+        isAdmin()
       );
     }
 
