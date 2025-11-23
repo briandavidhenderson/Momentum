@@ -102,7 +102,7 @@ import {
   generateProjectDescription,
   suggestMaintenanceSchedule,
 } from "./gemini"
-import { fixCalendarTokenPermissions } from "./fix-calendar-token-permissions"
+import { fixCalendarTokenPermissions, fixCalendarTokenPermissionsHTTP } from "./fix-calendar-token-permissions"
 
 // Export GDPR functions
 export {
@@ -147,6 +147,7 @@ export {
   generateProjectDescription,
   suggestMaintenanceSchedule,
   fixCalendarTokenPermissions,
+  fixCalendarTokenPermissionsHTTP,
 }
 
 export { importProtocolFromPdf } from "./protocol-import"
