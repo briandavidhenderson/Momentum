@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react"
 import { useAppContext } from "@/lib/AppContext"
+import { useGroupContext } from "@/lib/GroupContext"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -39,6 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { GroupSelector } from "@/components/GroupSelector"
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth()
@@ -59,6 +61,9 @@ export function ProjectDashboard() {
     allProfiles,
     people,
   } = useAppContext()
+
+  // Get selected group for filtering
+  const { selectedGroupId } = useGroupContext()
 
   const [selectedProjectForDetail, setSelectedProjectForDetail] = useState<MasterProject | null>(null)
   const [showProjectDialog, setShowProjectDialog] = useState(false)
@@ -129,6 +134,12 @@ export function ProjectDashboard() {
       })
     }
 
+    if (selectedGroupId) {
+      filtered = filtered.filter(p =>
+        !p.groupIds || p.groupIds.length === 0 || p.groupIds.includes(selectedGroupId)
+      )
+    }
+
     // Filter by funding type
     let funded: MasterProject[] = []
     let unfunded: MasterProject[] = []
@@ -148,7 +159,7 @@ export function ProjectDashboard() {
     unfunded.sort((a, b) => a.name.localeCompare(b.name))
 
     return { fundedProjects: funded, unfundedProjects: unfunded }
-  }, [projects, searchTerm, statusFilter, healthFilter, fundingFilter, projectHealths])
+  }, [projects, searchTerm, statusFilter, healthFilter, fundingFilter, projectHealths, selectedGroupId])
 
   const handleCreateTask = useCallback(async (taskData: Partial<Task> & { workpackageId: string }) => {
     try {
@@ -189,7 +200,7 @@ export function ProjectDashboard() {
   const handleUpdateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
     try {
       // Find the workpackage containing this task
-      const workpackage = allWorkpackages.find(wp => 
+      const workpackage = allWorkpackages.find(wp =>
         wp.tasks?.some(t => t.id === taskId)
       )
       if (!workpackage) {
@@ -278,22 +289,23 @@ export function ProjectDashboard() {
       principalInvestigatorIds: projectData.principalInvestigatorId
         ? [projectData.principalInvestigatorId]
         : profile.id
-        ? [profile.id]
-        : [],
+          ? [profile.id]
+          : [],
       coPIIds: [],
       teamMemberIds: projectData.principalInvestigatorId
         ? [projectData.principalInvestigatorId]
         : profile.id
-        ? [profile.id]
-        : [],
+          ? [profile.id]
+          : [],
       teamRoles: projectData.principalInvestigatorId
         ? { [projectData.principalInvestigatorId]: "PI" }
         : profile.id
-        ? { [profile.id]: "PI" }
-        : {},
+          ? { [profile.id]: "PI" }
+          : {},
       status: projectData.status,
       progress: 0,
       workpackageIds: [],
+      groupIds: projectData.groupIds || (selectedGroupId ? [selectedGroupId] : []),
       visibility: mapVisibility(projectData.visibility),
       visibleTo: projectData.visibleTo,
       tags: projectData.tags,
@@ -433,6 +445,7 @@ export function ProjectDashboard() {
 
       {/* Filters and Search */}
       <div className="flex items-center gap-3 flex-wrap">
+        <GroupSelector />
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -790,6 +803,8 @@ export function ProjectDashboard() {
         currentUserProfileId={profile?.id || null}
         currentUserId={user?.uid || ""}
         organisationId={profile?.organisationId}
+        labId={profile?.labId}
+        defaultGroupId={selectedGroupId}
       />
 
       {/* Import Dialog */}
@@ -829,14 +844,14 @@ export function ProjectDashboard() {
         onDelete={
           selectedDeliverable
             ? async () => {
-                try {
-                  await handleDeleteDeliverable(selectedDeliverable.id)
-                  setShowDeliverableDialog(false)
-                } catch (error) {
-                  logger.error("Error deleting deliverable", error)
-                  alert("Failed to delete deliverable")
-                }
+              try {
+                await handleDeleteDeliverable(selectedDeliverable.id)
+                setShowDeliverableDialog(false)
+              } catch (error) {
+                logger.error("Error deleting deliverable", error)
+                alert("Failed to delete deliverable")
               }
+            }
             : undefined
         }
         mode={deliverableMode}

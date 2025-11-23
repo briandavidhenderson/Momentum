@@ -69,7 +69,7 @@ export interface ProjectFilters {
  * Search projects by query string
  */
 export function searchProjects(projects: Project[], query: string): Project[] {
-  return fuzzySearch(projects, query, ["name", "notes", "tags"])
+  return fuzzySearch(projects, query, ["name"])
 }
 
 /**
@@ -131,11 +131,7 @@ export function filterProjects(
   }
 
   // Tags filter
-  if (filters.tags && filters.tags.length > 0) {
-    filtered = filtered.filter((p) =>
-      p.tags?.some((tag) => filters.tags!.includes(tag))
-    )
-  }
+  // Tags filter removed - Project type doesn't have tags field
 
   return filtered
 }

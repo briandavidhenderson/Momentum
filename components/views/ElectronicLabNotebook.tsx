@@ -90,9 +90,7 @@ export function ElectronicLabNotebook() {
     const newItem: ELNItem = {
       ...item,
       id: `item-${Date.now()}`,
-      order: selectedExperiment.items?.length || 0,
-      createdAt: new Date().toISOString(),
-      createdBy: currentUserProfile?.id
+      order: selectedExperiment.items?.length || 0
     }
 
     const updatedExperiment = {

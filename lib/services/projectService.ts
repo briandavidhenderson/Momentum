@@ -53,6 +53,7 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
     committedAmount: 0,
     remainingBudget: projectData.totalBudget || 0,
     progress: 0,
+    groupIds: projectData.groupIds || [],
     workpackageIds: projectData.workpackageIds || [],
   }
 
@@ -99,7 +100,14 @@ export async function getMasterProjects(filters?: {
   }
 
   const querySnapshot = await getDocs(q)
-  return querySnapshot.docs.map(doc => doc.data() as MasterProject)
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data() as MasterProject
+    return {
+      ...data,
+      groupIds: data.groupIds || [],
+      workpackageIds: data.workpackageIds || [],
+    }
+  })
 }
 
 /**
@@ -168,7 +176,14 @@ export function subscribeToMasterProjects(
   }
 
   return onSnapshot(q, (snapshot) => {
-    const projects = snapshot.docs.map(doc => doc.data() as MasterProject)
+    const projects = snapshot.docs.map(doc => {
+      const data = doc.data() as MasterProject
+      return {
+        ...data,
+        groupIds: data.groupIds || [],
+        workpackageIds: data.workpackageIds || [],
+      }
+    })
     callback(projects)
   })
 }

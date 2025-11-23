@@ -32,7 +32,7 @@ import { logger } from '../../logger'
 
 export class GeminiProvider implements AIProvider {
   name = 'Gemini'
-  capabilities: AICapability[] = ['ocr', 'vlm', 'llm']
+  capabilities: AICapability[] = ['stt', 'ocr', 'vlm', 'llm']
 
   private apiKey: string
   private baseURL = 'https://generativelanguage.googleapis.com/v1'
@@ -45,17 +45,82 @@ export class GeminiProvider implements AIProvider {
   }
 
   /**
-   * STT: Not supported by Gemini, will throw error
+   * STT: Transcribe audio using Gemini's multimodal capabilities
    */
   async transcribeAudio(
     audio: File,
     options: TranscribeOptions = {}
   ): Promise<AIResponse<TranscriptResponse>> {
-    throw new AIProviderError(
-      'Speech-to-text not supported by Gemini. Use OpenAI Whisper instead.',
-      'Gemini',
-      'stt'
-    )
+    const startTime = Date.now()
+
+    try {
+      // Convert audio to base64
+      const base64Audio = await this.fileToBase64(audio)
+
+      const promptText = options.language
+        ? `Transcribe this audio file exactly as spoken. The language is ${options.language}. Return only the transcription text, no other commentary.`
+        : "Transcribe this audio file exactly as spoken. Return only the transcription text, no other commentary."
+
+      const response = await fetch(
+        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': this.apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: promptText },
+                {
+                  inlineData: {
+                    data: base64Audio,
+                    mimeType: audio.type || 'audio/mp3' // Default to mp3 if type missing
+                  }
+                }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 8192, // Allow long transcriptions
+            }
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error?.message || 'Gemini API error')
+      }
+
+      const data = await response.json()
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+      const latency = Date.now() - startTime
+
+      // Estimate cost (Gemini Flash audio input is cheap)
+      const cost = 0.0001 // Placeholder estimate
+
+      return {
+        data: {
+          text: text.trim(),
+          language: options.language || 'en', // Gemini doesn't explicitly return detected language in this mode
+        },
+        confidence: 90,
+        provider: this.name,
+        cost,
+        latency,
+      }
+    } catch (error) {
+      throw new AIProviderError(
+        `Failed to transcribe audio: ${(error as Error).message}`,
+        this.name,
+        'stt',
+        error,
+        true
+      )
+    }
   }
 
   /**

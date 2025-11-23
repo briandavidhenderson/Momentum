@@ -21,6 +21,7 @@ import {
   Presentation,
   Wallet,
   DollarSign,
+  BrainCircuit,
   LucideIcon
 } from "lucide-react"
 
@@ -78,6 +79,7 @@ export const NAV_ITEMS: NavCategory[] = [
       { id: "equipment", label: "Equipment", icon: Wrench },
       { id: "orders", label: "Orders", icon: Package },
       { id: "eln", label: "Lab Notebook", icon: FileText },
+      { id: "groups", label: "Groups", icon: Users },
       { id: "funding", label: "Funding", icon: DollarSign, roleRestricted: true },
     ]
   },
@@ -107,6 +109,7 @@ export const NAV_ITEMS: NavCategory[] = [
     subItems: [
       { id: "people", label: "People", icon: Users },
       { id: "whiteboard", label: "Whiteboard", icon: Presentation },
+      { id: "research", label: "Research Board", icon: BrainCircuit },
       { id: "profiles", label: "All Profiles", icon: Users, adminOnly: true },
     ]
   }

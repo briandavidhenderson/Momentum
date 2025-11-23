@@ -6,19 +6,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ProfileProject, ProjectVisibility, Funder } from "@/lib/types"
+import { ProfileProject, ProjectVisibility, Funder, ResearchGroup } from "@/lib/types"
 import { Building2, FolderKanban, Plus } from "lucide-react"
 import { subscribeToFunders } from "@/lib/firestoreService"
 import { FunderCreationDialog } from "./FunderCreationDialog"
+import { getResearchGroups } from "@/lib/services/groupService"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface ProjectCreationDialogProps {
   open: boolean
   onClose: () => void
   onCreateRegular: () => void
-  onCreateMaster: (masterProject: ProfileProject & { funderId?: string }) => void
+  onCreateMaster: (masterProject: ProfileProject & { funderId?: string; groupIds?: string[] }) => void
   currentUserProfileId: string | null
   currentUserId: string
   organisationId?: string
+  labId?: string
+  defaultGroupId?: string | null
 }
 
 export function ProjectCreationDialog({
@@ -29,9 +33,11 @@ export function ProjectCreationDialog({
   currentUserProfileId,
   currentUserId,
   organisationId,
+  labId,
+  defaultGroupId = null,
 }: ProjectCreationDialogProps) {
   const [step, setStep] = useState<"choose" | "master-details">("choose")
-  const [formData, setFormData] = useState<Partial<ProfileProject>>({
+  const [formData, setFormData] = useState<Partial<ProfileProject & { groupIds?: string[] }>>({
     id: "",
     name: "",
     grantNumber: "",
@@ -42,6 +48,7 @@ export function ProjectCreationDialog({
     notes: "",
     fundedBy: [],
     visibility: "lab",
+    groupIds: defaultGroupId ? [defaultGroupId] : [],
   })
 
   // P0-1: Funder selection state
@@ -49,6 +56,7 @@ export function ProjectCreationDialog({
   const [selectedFunderId, setSelectedFunderId] = useState<string | null>(null)
   const [showFunderDialog, setShowFunderDialog] = useState(false)
   const [funderError, setFunderError] = useState<string | null>(null)
+  const [availableGroups, setAvailableGroups] = useState<ResearchGroup[]>([])
 
   // Reset when dialog opens
   useEffect(() => {
@@ -65,11 +73,12 @@ export function ProjectCreationDialog({
         notes: "",
         fundedBy: [],
         visibility: "lab",
+        groupIds: defaultGroupId ? [defaultGroupId] : [],
       })
       setSelectedFunderId(null)
       setFunderError(null)
     }
-  }, [open])
+  }, [open, defaultGroupId])
 
   // P0-1: Load funders when master project step is reached
   useEffect(() => {
@@ -89,6 +98,23 @@ export function ProjectCreationDialog({
       return () => unsubscribe()
     }
   }, [step, open, organisationId, showFunderDialog])
+
+  // Load research groups for assignment
+  useEffect(() => {
+    if (!open || !labId) {
+      setAvailableGroups([])
+      return
+    }
+    const fetchGroups = async () => {
+      try {
+        const groups = await getResearchGroups(labId)
+        setAvailableGroups(groups)
+      } catch (error) {
+        console.error('Failed to load research groups for project creation', error)
+      }
+    }
+    fetchGroups()
+  }, [open, labId])
 
   // P0-1: Handler for funder creation
   const handleFunderCreated = (funderId: string) => {
@@ -113,6 +139,7 @@ export function ProjectCreationDialog({
     onCreateMaster({
       ...(formData as ProfileProject),
       funderId: selectedFunderId,
+      groupIds: formData.groupIds,
     })
     onClose()
   }
@@ -297,6 +324,39 @@ export function ProjectCreationDialog({
                   className="mt-1"
                   rows={3}
                 />
+              </div>
+
+              <div>
+                <Label>Assign to Research Groups</Label>
+                {availableGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    No research groups available for your department yet.
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                    {availableGroups.map(group => (
+                      <label key={group.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={formData.groupIds?.includes(group.id) || false}
+                          onCheckedChange={(checked) => {
+                            const next = new Set(formData.groupIds || [])
+                            if (checked) {
+                              next.add(group.id)
+                            } else {
+                              next.delete(group.id)
+                            }
+                            setFormData({ ...formData, groupIds: Array.from(next) })
+                          }}
+                        />
+                        <span className="flex-1">{group.name}</span>
+                        <span className="text-xs text-muted-foreground">{group.memberCount || 0} members</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  You can update group memberships later from the project dashboard.
+                </p>
               </div>
 
 

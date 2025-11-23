@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -35,11 +35,7 @@ export function EquipmentAvailabilityTimeline({
   const [error, setError] = useState<string | null>(null)
   const [selectedDay, setSelectedDay] = useState(0)
 
-  useEffect(() => {
-    loadAvailability()
-  }, [equipment.id, days])
-
-  const loadAvailability = async () => {
+  const loadAvailability = useCallback(async () => {
     setLoading(true)
     setError(null)
 
@@ -55,7 +51,11 @@ export function EquipmentAvailabilityTimeline({
     } finally {
       setLoading(false)
     }
-  }
+  }, [equipment.id, days])
+
+  useEffect(() => {
+    loadAvailability()
+  }, [loadAvailability])
 
   const getDaySlots = (dayIndex: number): AvailabilitySlot[] => {
     const dayStart = startOfDay(addDays(new Date(), dayIndex))

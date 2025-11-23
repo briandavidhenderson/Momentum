@@ -543,10 +543,11 @@ service cloud.firestore {
       );
 
       // Users can create bookings for their lab
+      // Allow if user is creating for themselves and either has a lab or is admin
       allow create: if isAuthenticated() && (
         request.resource.data.bookedBy == getUserProfileId() &&
-        request.resource.data.labId == getUserLab() &&
-        request.resource.data.createdBy == request.auth.uid
+        request.resource.data.createdBy == request.auth.uid &&
+        (getUserLab() == null || request.resource.data.labId == getUserLab() || isAdmin())
       );
 
       // Users can update their own bookings

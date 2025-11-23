@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { PersonProfile } from "@/lib/types"
 import { useProfiles } from "@/lib/useProfiles"
+import { useUserGroups } from "@/lib/hooks/useUserGroups"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Mail, Phone, MapPin, GraduationCap, Users, Building, Network } from "lucide-react"
@@ -39,6 +40,10 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
 
     return filtered
   }, [currentUserProfile?.labId, allProfiles, orcidFilter])
+
+  // Fetch group memberships for all profiles
+  const userIds = useMemo(() => profiles.map(p => p.id), [profiles])
+  const { userGroupsMap } = useUserGroups(userIds)
 
   // Debug logging (only in development)
   useEffect(() => {
@@ -386,6 +391,25 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
                         </Badge>
                       </div>
                     )}
+
+                    {/* Group Memberships */}
+                    {userGroupsMap[profile.id]?.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-xs text-muted-foreground mb-1">Groups:</p>
+                        <div className="flex gap-1 flex-wrap">
+                          {userGroupsMap[profile.id].slice(0, 2).map((groupName, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">
+                              {groupName}
+                            </Badge>
+                          ))}
+                          {userGroupsMap[profile.id].length > 2 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{userGroupsMap[profile.id].length - 2}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -503,6 +527,18 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
                 <div className="flex gap-2 flex-wrap">
                   {selectedProfile.researchInterests.map((ri, i) => (
                     <Badge key={i} variant="secondary">{ri}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Group Memberships */}
+            {userGroupsMap[selectedProfile.id]?.length > 0 && (
+              <div className="space-y-4 mb-6">
+                <h3 className="font-semibold text-lg text-foreground">Research Groups</h3>
+                <div className="flex gap-2 flex-wrap">
+                  {userGroupsMap[selectedProfile.id].map((groupName, i) => (
+                    <Badge key={i} variant="outline">{groupName}</Badge>
                   ))}
                 </div>
               </div>

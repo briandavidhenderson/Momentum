@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -49,11 +49,7 @@ export function MyBookingsView({ onBookingClick, onRecordSupply }: MyBookingsVie
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"upcoming" | "active" | "completed">("upcoming")
 
-  useEffect(() => {
-    loadBookings()
-  }, [currentUserProfile])
-
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     if (!currentUserProfile) return
 
     setLoading(true)
@@ -68,7 +64,11 @@ export function MyBookingsView({ onBookingClick, onRecordSupply }: MyBookingsVie
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentUserProfile])
+
+  useEffect(() => {
+    loadBookings()
+  }, [loadBookings])
 
   const handleCancel = async (bookingId: string) => {
     if (!currentUser || !confirm("Are you sure you want to cancel this booking?")) return

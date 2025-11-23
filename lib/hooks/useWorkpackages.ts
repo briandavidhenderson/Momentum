@@ -86,7 +86,7 @@ export function useWorkpackages(currentUser: PersonProfile | null) {
       helpers: [],
       workpackageId: workpackageId,
       importance: 'medium',
-      notes: '',
+      notes: undefined,
       deliverables: [],
       isExpanded: false,
     };

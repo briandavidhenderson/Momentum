@@ -37,6 +37,9 @@ export * from './equipment.types'
 export * from './booking.types'
 export * from './poll.types'
 
+// Research Board
+export * from './research.types'
+
 // Electronic Lab Notebook
 export * from './eln.types'
 

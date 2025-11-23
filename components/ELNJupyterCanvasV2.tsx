@@ -76,8 +76,7 @@ export function ELNJupyterCanvasV2({
 
   const handleSaveEdit = (itemId: string) => {
     onUpdateItem(itemId, {
-      description: editContent,
-      updatedAt: new Date().toISOString()
+      description: editContent
     })
     setEditingCell(null)
     setEditContent("")

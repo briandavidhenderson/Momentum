@@ -20,6 +20,7 @@ export * from './projectService'
 export * from './workpackageService'
 export * from './deliverableService'
 export * from './projectSnapshotService'
+export * from './groupService'
 
 // Tasks
 export * from './taskService'
@@ -35,6 +36,9 @@ export * from './elnService'
 
 // Calendar & Events
 export * from './calendarService'
+
+// Research Board
+export * from './researchService'
 
 // Audit & Compliance
 export * from './auditService'

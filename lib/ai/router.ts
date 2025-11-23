@@ -22,7 +22,7 @@ import type {
 } from './types'
 import { logger } from '@/lib/logger'
 
-import { OpenAIProvider } from './providers/openai'
+
 import { GeminiProvider } from './providers/gemini'
 
 /**
@@ -49,12 +49,12 @@ export class AIRouter {
     // Default configuration
     this.config = {
       providers: config.providers || [],
-      defaultProvider: config.defaultProvider || 'OpenAI',
+      defaultProvider: config.defaultProvider || 'Gemini',
       fallbackOrder: config.fallbackOrder || {
-        stt: ['OpenAI'],
-        ocr: ['OpenAI'],
-        vlm: ['OpenAI'],
-        llm: ['OpenAI'],
+        stt: ['Gemini'],
+        ocr: ['Gemini'],
+        vlm: ['Gemini'],
+        llm: ['Gemini'],
       },
       costOptimization: config.costOptimization ?? false,
     }
@@ -68,11 +68,7 @@ export class AIRouter {
    */
   private initializeProviders() {
     // Add OpenAI by default
-    const openaiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
-    if (openaiKey) {
-      const openai = new OpenAIProvider(openaiKey)
-      this.providers.set(openai.name, openai)
-    }
+
 
     // Add any additional providers from config
     for (const provider of this.config.providers) {
@@ -339,18 +335,21 @@ export class AIRouter {
  * Default router instance with Gemini provider
  * Can be imported and used directly
  */
-const geminiKey = 'AIzaSyDhpoQh3TcaXfoAzpAXjKNMck7Djj6Mi9o'
+/**
+ * Default router instance with Gemini provider
+ * Can be imported and used directly
+ */
+const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY
 const geminiProvider = new GeminiProvider(geminiKey)
-const openaiProvider = new OpenAIProvider() // Fallback for STT
 
 export const defaultRouter = new AIRouter({
-  providers: [geminiProvider, openaiProvider],
+  providers: [geminiProvider],
   defaultProvider: 'Gemini',
   fallbackOrder: {
-    stt: ['OpenAI'], // Gemini doesn't support STT, use OpenAI
-    ocr: ['Gemini', 'OpenAI'],
-    vlm: ['Gemini', 'OpenAI'],
-    llm: ['Gemini', 'OpenAI'],
+    stt: ['Gemini'],
+    ocr: ['Gemini'],
+    vlm: ['Gemini'],
+    llm: ['Gemini'],
   }
 })
 

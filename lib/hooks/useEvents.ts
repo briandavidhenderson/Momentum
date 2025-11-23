@@ -66,7 +66,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
       generated.push({
         id: `auto-project-${project.id}`,
         title: `${project.name} deadline`,
-        description: project.notes,
+        description: undefined,
         start: projectEnd,
         end: new Date(projectEnd.getTime() + 60 * 60 * 1000),
         recurrence: undefined,
@@ -77,7 +77,7 @@ export function useEvents(visibleProjects: Project[], workpackages: Workpackage[
         ownerId: project.principalInvestigatorIds?.[0],
         relatedIds: { projectId: project.id },
         type: 'deadline',
-        notes: project.notes,
+        notes: undefined,
         createdBy,
         createdAt: new Date(),
       });
