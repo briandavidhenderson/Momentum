@@ -29,9 +29,9 @@ export type ProjectStatusType = typeof PROJECT_STATUS[keyof typeof PROJECT_STATU
 export const WORKPACKAGE_STATUS = {
   PLANNING: "planning",
   ACTIVE: "active",
-  AT_RISK: "atRisk",
+  AT_RISK: "at-risk",
   COMPLETED: "completed",
-  ON_HOLD: "onHold",
+  ON_HOLD: "on-hold",
 } as const
 
 export type WorkpackageStatusType = typeof WORKPACKAGE_STATUS[keyof typeof WORKPACKAGE_STATUS]

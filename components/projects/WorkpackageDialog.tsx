@@ -47,6 +47,30 @@ interface WorkpackageDialogProps {
   availableLeads?: PersonProfile[]  // Feature #5: For workpackage lead assignment
 }
 
+const workpackageStatusValues: Workpackage["status"][] = [
+  "planning",
+  "active",
+  "at-risk",
+  "completed",
+  "on-hold",
+]
+
+const legacyStatusMap: Record<string, Workpackage["status"]> = {
+  atRisk: "at-risk",
+  onHold: "on-hold",
+}
+
+const normalizeWorkpackageStatus = (value?: string | null): Workpackage["status"] => {
+  if (!value) return "planning"
+
+  const upgraded = legacyStatusMap[value]
+  if (upgraded) return upgraded
+
+  return workpackageStatusValues.includes(value as Workpackage["status"])
+    ? (value as Workpackage["status"])
+    : "planning"
+}
+
 export function WorkpackageDialog({
   open,
   onOpenChange,
@@ -76,7 +100,7 @@ export function WorkpackageDialog({
       setStartDate(new Date(workpackage.start).toISOString().split("T")[0])
       setEndDate(new Date(workpackage.end).toISOString().split("T")[0])
       setImportance(workpackage.importance)
-      setStatus(workpackage.status || "planning")
+      setStatus(normalizeWorkpackageStatus(workpackage.status))
       setTasks(workpackage.tasks || [])
       setOwnerId(workpackage.ownerId)  // Feature #5: Load workpackage lead
     } else if (!workpackage && open) {
@@ -109,7 +133,7 @@ export function WorkpackageDialog({
         start: new Date(startDate),
         end: new Date(endDate),
         importance,
-        status,
+        status: normalizeWorkpackageStatus(status),
         tasks,
         ownerId,  // Feature #5: Save workpackage lead
       }
@@ -187,9 +211,9 @@ export function WorkpackageDialog({
   const statusOptions = [
     { value: "planning", label: "Planning" },
     { value: "active", label: "Active" },
-    { value: "atRisk", label: "At Risk" },
+    { value: "at-risk", label: "At Risk" },
     { value: "completed", label: "Completed" },
-    { value: "onHold", label: "On Hold" },
+    { value: "on-hold", label: "On Hold" },
   ]
 
   const isReadOnly = mode === "view"
@@ -271,7 +295,7 @@ export function WorkpackageDialog({
                 <select
                   id="wp-status"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as Workpackage["status"])}
+                  onChange={(e) => setStatus(normalizeWorkpackageStatus(e.target.value))}
                   disabled={isReadOnly}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
