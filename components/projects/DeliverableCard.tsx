@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Deliverable, PersonProfile, Task } from "@/lib/types"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -27,6 +26,7 @@ import {
   ChevronRight,
   Plus,
 } from "lucide-react"
+import { formatStatusLabel, getStatusPillClass } from "@/lib/utils/statusStyles"
 
 interface DeliverableCardProps {
   deliverable: Deliverable
@@ -67,33 +67,6 @@ export function DeliverableCard({
   const getPersonById = (id?: string): PersonProfile | undefined => {
     if (!id || !allPeople || allPeople.length === 0) return undefined
     return allPeople.find(p => p?.id === id)
-  }
-
-  const getStatusPillClass = (status: string) => {
-    switch (status) {
-      case "not-started":
-        return "status-pill bg-gray-100 text-gray-700 border-gray-300"
-      case "in-progress":
-        return "status-pill bg-blue-100 text-blue-700 border-blue-300"
-      case "at-risk":
-        return "status-pill bg-orange-100 text-orange-700 border-orange-300"
-      case "completed":
-        return "status-pill bg-green-100 text-green-700 border-green-300"
-      case "on-hold":
-        return "status-pill bg-yellow-100 text-yellow-700 border-yellow-300"
-      case "blocked":
-        return "status-pill bg-red-100 text-red-700 border-red-300"
-      default:
-        return "status-pill"
-    }
-  }
-
-  const formatStatusLabel = (status: string) => {
-    if (!status || typeof status !== 'string') return "Not Started"
-    return status
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ")
   }
 
   const getImportanceBadgeColor = (importance: string) => {
