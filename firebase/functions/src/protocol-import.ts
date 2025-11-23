@@ -4,10 +4,11 @@ import Busboy from "busboy"
 import cors from "cors"
 import { randomUUID } from "crypto"
 import { defineSecret } from "firebase-functions/params"
+import { callGeminiJSON } from "./gemini"
 
 const corsHandler = cors({ origin: true })
 const MAX_FILE_SIZE = 15 * 1024 * 1024 // 15MB
-const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY")
+const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY")
 
 interface UploadedFile {
   buffer: Buffer
@@ -174,56 +175,10 @@ function buildWhiteboardProtocol(
   }
 }
 
-function parseJsonFromString(raw: string) {
-  const trimmed = raw.trim()
-  if (trimmed.startsWith("{")) {
-    return JSON.parse(trimmed)
-  }
+async function callGemini(text: string): Promise<ProtocolStructure> {
+  const prompt = `${WHITEBOARD_PROTOCOL_PROMPT}\n\nProtocol to convert:\n${text}`
 
-  const match = trimmed.match(/\{[\s\S]*\}/)
-  if (match) {
-    return JSON.parse(match[0])
-  }
-
-  throw new Error("LLM response did not contain JSON")
-}
-
-async function callOpenAI(text: string): Promise<ProtocolStructure> {
-  const apiKey = OPENAI_API_KEY.value()
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY param not configured.")
-  }
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      temperature: 0.2,
-      max_tokens: 2000,
-      messages: [
-        { role: "system", content: WHITEBOARD_PROTOCOL_PROMPT },
-        { role: "user", content: text },
-      ],
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`OpenAI API error: ${errorText}`)
-  }
-
-  const data = await response.json()
-  const content = data.choices?.[0]?.message?.content
-  if (!content) {
-    throw new Error("OpenAI response missing content")
-  }
-
-  const parsed = parseJsonFromString(content) as ProtocolStructure
+  const parsed = await callGeminiJSON(prompt) as ProtocolStructure
   parsed.steps = parsed.steps || []
   return parsed
 }
@@ -267,7 +222,7 @@ function parseMultipart(req: functions.Request): Promise<{ fields: Record<string
 
 export const importProtocolFromPdf = functions
   .region("us-central1")
-  .runWith({ memory: "1GB", timeoutSeconds: 120, secrets: [OPENAI_API_KEY] })
+  .runWith({ memory: "1GB", timeoutSeconds: 120, secrets: [GEMINI_API_KEY] })
   .https.onRequest((req, res) => {
     corsHandler(req, res, async () => {
       if (req.method === "OPTIONS") {
@@ -302,7 +257,7 @@ export const importProtocolFromPdf = functions
           return
         }
 
-        const structured = await callOpenAI(combinedText)
+        const structured = await callGemini(combinedText)
         const protocol = buildWhiteboardProtocol(structured, {
           name: fields.name || file.fileName || "Imported Protocol",
           description: fields.description || "",
@@ -313,7 +268,7 @@ export const importProtocolFromPdf = functions
 
         res.json({
           protocol,
-          llmProvider: "openai",
+          llmProvider: "gemini",
           confidence: structured.confidence || 80,
         })
       } catch (error) {
@@ -322,4 +277,3 @@ export const importProtocolFromPdf = functions
       }
     })
   })
-

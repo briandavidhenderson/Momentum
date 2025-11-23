@@ -97,6 +97,12 @@ import {
   googleCalendarAuthStart,
   googleCalendarAuthCallback,
 } from "./calendar-google"
+import {
+  generateExperimentSuggestions,
+  generateProjectDescription,
+  suggestMaintenanceSchedule,
+} from "./gemini"
+import { fixCalendarTokenPermissions } from "./fix-calendar-token-permissions"
 
 // Export GDPR functions
 export {
@@ -131,12 +137,16 @@ export {
   notifyTransactionFinalized,
 }
 
-// Export OpenAI functions
+// Export Gemini functions
 export {
   unlinkGoogleCalendar,
   syncGoogleCalendar,
   googleCalendarAuthStart,
   googleCalendarAuthCallback,
+  generateExperimentSuggestions,
+  generateProjectDescription,
+  suggestMaintenanceSchedule,
+  fixCalendarTokenPermissions,
 }
 
 export { importProtocolFromPdf } from "./protocol-import"

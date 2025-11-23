@@ -45,12 +45,23 @@ type NavCategory = {
 // Refined, Subtle Color Palette
 export const NAV_ITEMS: NavCategory[] = [
   {
+    id: "home",
+    label: "Home",
+    // Neutral / Brand Color
+    activeColor: "text-slate-900 bg-slate-100 border-slate-200",
+    hoverColor: "hover:bg-slate-50 hover:text-slate-900",
+    icon: LayoutDashboard,
+    subItems: [
+      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ]
+  },
+  {
     id: "project",
     label: "Project",
     // Subtle Blue-Grey for Projects
     activeColor: "text-blue-600 bg-blue-50 border-blue-200",
     hoverColor: "hover:bg-blue-50/50 hover:text-blue-600",
-    icon: LayoutDashboard,
+    icon: Activity,
     subItems: [
       { id: "projects", label: "Timeline", icon: Activity },
       { id: "ledger", label: "My Ledger", icon: Wallet },

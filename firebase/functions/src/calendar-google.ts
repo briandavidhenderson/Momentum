@@ -62,7 +62,7 @@ export const googleCalendarAuthStart = functions.https.onCall(async (data: any, 
         const authUrl = new URL(config.authUrl)
         authUrl.searchParams.set("client_id", config.clientId)
         authUrl.searchParams.set("response_type", "code")
-        authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/calendar")
+        authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email")
         authUrl.searchParams.set("access_type", "offline") // Required for refresh token
         authUrl.searchParams.set("prompt", "consent") // Force consent to ensure refresh token
         authUrl.searchParams.set("state", state)
@@ -135,8 +135,19 @@ export const googleCalendarAuthCallback = functions.https.onCall(async (data: an
         const userResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
             headers: { Authorization: `Bearer ${tokens.access_token}` }
         })
+
+        if (!userResponse.ok) {
+            console.error("Failed to fetch user info from Google:", await userResponse.text())
+            throw new functions.https.HttpsError("internal", "Failed to fetch user info from Google")
+        }
+
         const userData = await userResponse.json()
         const email = userData.email
+
+        if (!email) {
+            console.error("No email returned from Google userinfo:", userData)
+            throw new functions.https.HttpsError("internal", "Failed to retrieve email from Google account")
+        }
 
         // Create a connection ID
         const connectionId = `google_${context.auth!.uid}_${Date.now()}`
@@ -223,14 +234,120 @@ export const unlinkGoogleCalendar = functions.https.onCall(async (data: any, con
 })
 
 /**
- * Sync Google Calendar (Placeholder)
+ * Sync Google Calendar
+ * Fetches events from Google Calendar and stores them in Firestore
  */
 export const syncGoogleCalendar = functions.https.onCall(async (data: any, context: any) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated")
     }
 
-    // In a real implementation, this would trigger the sync logic
-    // For now, we just return success to satisfy the frontend call
-    return { success: true, message: "Sync started" }
+    try {
+        const { connectionId } = data
+
+        if (!connectionId) {
+            throw new functions.https.HttpsError("invalid-argument", "Connection ID is required")
+        }
+
+        // Get the OAuth tokens
+        const { getTokens } = await import("./calendar-token-service")
+        const tokens = await getTokens(connectionId)
+
+        // Fetch events from Google Calendar API
+        const now = new Date()
+        const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        const oneMonthFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+
+        const calendarUrl = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events")
+        calendarUrl.searchParams.set("timeMin", oneMonthAgo.toISOString())
+        calendarUrl.searchParams.set("timeMax", oneMonthFromNow.toISOString())
+        calendarUrl.searchParams.set("singleEvents", "true")
+        calendarUrl.searchParams.set("orderBy", "startTime")
+
+        const eventsResponse = await fetch(calendarUrl.toString(), {
+            headers: {
+                "Authorization": `Bearer ${tokens.accessToken}`
+            }
+        })
+
+        if (!eventsResponse.ok) {
+            const errorText = await eventsResponse.text()
+            console.error("Failed to fetch Google Calendar events:", errorText)
+            throw new functions.https.HttpsError("internal", "Failed to fetch calendar events from Google")
+        }
+
+        const eventsData = await eventsResponse.json()
+        const events = eventsData.items || []
+
+        // Get user's profile to store events
+        const userDoc = await admin.firestore().collection("users").doc(context.auth.uid).get()
+        const profileId = userDoc.data()?.profileId
+
+        if (!profileId) {
+            throw new functions.https.HttpsError("not-found", "User profile not found")
+        }
+
+        // Store events in Firestore
+        let syncedCount = 0
+        const batch = admin.firestore().batch()
+
+        for (const event of events) {
+            const eventId = `google_${event.id}`
+            const eventRef = admin.firestore().collection("calendarEvents").doc(eventId)
+
+            const eventData = {
+                id: eventId,
+                googleEventId: event.id,
+                title: event.summary || "Untitled Event",
+                description: event.description || "",
+                startDate: event.start.dateTime ? admin.firestore.Timestamp.fromDate(new Date(event.start.dateTime)) :
+                           event.start.date ? admin.firestore.Timestamp.fromDate(new Date(event.start.date)) : null,
+                endDate: event.end.dateTime ? admin.firestore.Timestamp.fromDate(new Date(event.end.dateTime)) :
+                         event.end.date ? admin.firestore.Timestamp.fromDate(new Date(event.end.date)) : null,
+                location: event.location || "",
+                isAllDay: !!event.start.date, // If there's a date instead of dateTime, it's all-day
+                source: "google",
+                connectionId,
+                profileId,
+                userId: context.auth.uid,
+                htmlLink: event.htmlLink,
+                syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }
+
+            batch.set(eventRef, eventData, { merge: true })
+            syncedCount++
+        }
+
+        await batch.commit()
+
+        // Update the last sync timestamp in the user's profile
+        await admin.firestore().collection("personProfiles").doc(profileId).update({
+            "calendarConnections.googleLastSync": admin.firestore.FieldValue.serverTimestamp()
+        })
+
+        console.log({
+            action: "CALENDAR_SYNCED",
+            connectionId,
+            userId: context.auth.uid,
+            eventsSynced: syncedCount,
+            timestamp: new Date().toISOString()
+        })
+
+        return {
+            success: true,
+            message: "Calendar synced successfully",
+            eventsSynced: syncedCount
+        }
+
+    } catch (error) {
+        console.error("Error syncing Google Calendar:", error)
+
+        // Check if it's already a HttpsError
+        if (error instanceof functions.https.HttpsError) {
+            throw error
+        }
+
+        throw new functions.https.HttpsError("internal", "Failed to sync Google Calendar")
+    }
 })

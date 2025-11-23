@@ -87,7 +87,7 @@ export async function storeTokens(
 
     // Create secret if it doesn't exist
     if (!secretExists) {
-      await secretManager.createSecret({
+      const [secret] = await secretManager.createSecret({
         parent,
         secretId,
         secret: {
@@ -96,11 +96,37 @@ export async function storeTokens(
           },
           labels: {
             type: "calendar-oauth-token",
-            connectionId,
             provider: tokenData.provider,
           },
         },
       })
+
+      // Grant access to the Cloud Functions service account
+      const serviceAccount = `${projectId}@appspot.gserviceaccount.com`
+      try {
+        await secretManager.setIamPolicy({
+          resource: secret.name,
+          policy: {
+            bindings: [
+              {
+                role: "roles/secretmanager.secretAccessor",
+                members: [`serviceAccount:${serviceAccount}`],
+              },
+            ],
+          },
+        })
+
+        console.log({
+          action: "SECRET_IAM_GRANTED",
+          secretId,
+          serviceAccount,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (iamError) {
+        console.error("Failed to grant IAM permissions:", iamError)
+        // Don't fail the entire operation if IAM grant fails
+        // The admin might need to grant permissions manually
+      }
 
       console.log({
         action: "SECRET_CREATED",
@@ -393,19 +419,25 @@ async function logTokenAccess(event: {
   error?: string
 }): Promise<void> {
   try {
-    await admin.firestore().collection("auditLogs").add({
+    const logEntry: any = {
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       userId: event.userId,
       action: event.action,
       entityType: "calendarToken",
       entityId: event.connectionId,
       success: event.success,
-      errorMessage: event.error,
       details: {
         provider: event.provider,
       },
       gdprCompliance: "Article 30 - Records of Processing Activities",
-    })
+    }
+
+    // Only add errorMessage if it's defined
+    if (event.error) {
+      logEntry.errorMessage = event.error
+    }
+
+    await admin.firestore().collection("auditLogs").add(logEntry)
   } catch (error) {
     console.error("Failed to log token access:", {
       event,

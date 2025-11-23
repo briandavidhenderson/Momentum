@@ -25,6 +25,7 @@ import { UserRole } from "@/lib/types"
 import { MyBookingsView } from "@/components/equipment/MyBookingsView"
 import WhiteboardPage from "@/app/whiteboard/page"
 import { TopModuleNavigation } from "@/components/TopModuleNavigation"
+import { HomeDashboard } from "@/components/views/dashboard/HomeDashboard"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -162,6 +163,7 @@ export default function Home() {
 
         {/* Render selected view */}
         <div className="p-6">
+          {mainView === 'dashboard' && <HomeDashboard />}
           {mainView === 'projects' && <ProjectDashboard />}
           {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
           {mainView === 'daytoday' && <DayToDayBoard />}
