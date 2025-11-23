@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 /**
  * Google Calendar OAuth Callback Page
@@ -6,11 +6,28 @@
  * The parent window reads the authorization code from this page's URL and closes the popup.
  */
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Loader2, CheckCircle, XCircle } from 'lucide-react'
 
 export default function GoogleCalendarCallback() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 max-w-md w-full mx-4 flex flex-col items-center space-y-4">
+          <Loader2 className="h-16 w-16 text-blue-500 animate-spin" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Connecting Google Calendar
+          </h1>
+        </div>
+      </div>
+    }>
+      <GoogleCalendarCallbackContent />
+    </Suspense>
+  )
+}
+
+function GoogleCalendarCallbackContent() {
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [message, setMessage] = useState('Processing authorization...')

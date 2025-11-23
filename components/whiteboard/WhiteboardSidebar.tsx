@@ -2,9 +2,10 @@
 
 import React, { useState } from "react"
 import { Beaker, AlertTriangle, FileText, Activity, Ban, Search, Users, FolderKanban } from "lucide-react"
+import { LucideIcon } from "lucide-react"
 import { useAppContext } from "@/lib/AppContext"
 import { useProjects, usePeople } from "@/lib/store"
-import { LucideIcon } from "lucide-react"
+import { PROTOCOL_OPERATIONS } from "./protocolConfig"
 
 export interface AssetDef {
     id: string
@@ -18,12 +19,19 @@ export const ASSETS: AssetDef[] = [
     { id: "note", Icon: FileText, label: "Protocol" },
 ]
 
+type DragPayload = {
+    kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol'
+    id: string
+    name?: string
+    operationType?: string
+}
+
 interface WhiteboardSidebarProps {
-    onDragStart: (e: React.DragEvent, payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person', id: string, name?: string }) => void
+    onDragStart: (e: React.DragEvent, payload: DragPayload) => void
 }
 
 export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
-    const [assetTab, setAssetTab] = useState<'assets' | 'inventory' | 'equipment' | 'projects' | 'people'>('assets')
+    const [assetTab, setAssetTab] = useState<'protocol' | 'assets' | 'inventory' | 'equipment' | 'projects' | 'people'>('assets')
     const [assetSearch, setAssetSearch] = useState("")
 
     const { inventory, equipment } = useAppContext()
@@ -34,6 +42,7 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
     const filteredEquipment = (equipment || []).filter(eq => eq.name.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredPeople = people.filter(p => p.name.toLowerCase().includes(assetSearch.toLowerCase()))
+    const filteredProtocolOps = PROTOCOL_OPERATIONS.filter(op => op.label.toLowerCase().includes(assetSearch.toLowerCase()) || op.description.toLowerCase().includes(assetSearch.toLowerCase()))
 
     return (
         <div className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col z-10 h-full">
@@ -42,6 +51,7 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
                 <div className="px-3 pb-2">
                     <div className="flex flex-wrap gap-1 text-[11px] bg-slate-100 rounded-lg p-0.5">
                         {[
+                            { id: "protocol", label: "Protocol" },
                             { id: "assets", label: "Icons" },
                             { id: "inventory", label: "Inv" },
                             { id: "equipment", label: "Equip" },
@@ -71,6 +81,33 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
                 </div>
             </div>
             <div className="flex-1 p-4 overflow-y-auto space-y-2">
+                {assetTab === "protocol" && (
+                    <div className="space-y-3">
+                        {filteredProtocolOps.length === 0 ? (
+                            <div className="text-center py-8 text-xs text-slate-400">
+                                No protocol operations found
+                            </div>
+                        ) : (
+                            filteredProtocolOps.map((op) => (
+                                <div
+                                    key={op.type}
+                                    draggable
+                                    onDragStart={(e) => onDragStart(e, { kind: "protocol", id: op.type, name: op.label, operationType: op.type })}
+                                    className="bg-white p-3 rounded-lg border shadow-sm hover:shadow-md cursor-grab flex items-center gap-3"
+                                    style={{ borderColor: `${op.color}40` }}
+                                >
+                                    <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ backgroundColor: `${op.color}1a` }}>
+                                        <op.Icon className="w-5 h-5" style={{ color: op.color }} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-700">{op.label}</p>
+                                        <p className="text-xs text-slate-500">{op.description}</p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
                 {assetTab === "assets" && (
                     <div className="grid grid-cols-2 gap-3">
                         {ASSETS.map((a) => (

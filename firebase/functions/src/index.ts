@@ -139,6 +139,8 @@ export {
   googleCalendarAuthCallback,
 }
 
+export { importProtocolFromPdf } from "./protocol-import"
+
 /**
  * ORCID OAuth Configuration
  * These should be set via Firebase Functions config:

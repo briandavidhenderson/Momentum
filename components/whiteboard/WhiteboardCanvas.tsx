@@ -4,6 +4,8 @@ import React, { useRef, useEffect } from "react"
 import { Shape } from "@/lib/whiteboardService"
 import { Lock, Ban, Beaker, AlertTriangle, FileText, Activity, ArrowRight, Circle, Minus } from "lucide-react"
 import { ASSETS } from "./WhiteboardSidebar"
+import { UnitOperation } from "@/lib/protocol/types"
+import { getOperationDefinition } from "./protocolConfig"
 
 interface WhiteboardCanvasProps {
     shapes: Shape[]
@@ -56,6 +58,16 @@ export function WhiteboardCanvas({
     dragStart,
     lastMousePos
 }: WhiteboardCanvasProps) {
+
+    const formatSummary = (operation?: UnitOperation) => {
+        if (!operation?.parameters) return ""
+        const { time, timeUnit, temperature, temperatureUnit, cycleCount } = operation.parameters as Record<string, any>
+        const summary: string[] = []
+        if (temperature) summary.push(`${temperature}${temperatureUnit || "°C"}`)
+        if (time) summary.push(`${time}${timeUnit || "min"}`)
+        if (cycleCount) summary.push(`${cycleCount} cycles`)
+        return summary.join(" · ")
+    }
 
     // -- RENDER SHAPE --
     const renderShape = (shape: Shape) => {
@@ -172,6 +184,12 @@ export function WhiteboardCanvas({
             }
         }
 
+        const protocolOperation = shape.type === "protocol_node" ? shape.protocolData : undefined
+        const definition = protocolOperation ? getOperationDefinition(protocolOperation.type) : null
+        const ProtocolIcon = definition?.Icon || Beaker
+        const protocolSummary = formatSummary(protocolOperation)
+        const accent = definition?.color || "#cbd5e1"
+
         const content = (
             <>
                 {shape.type === "rect" && <rect x={x} y={y} width={w} height={h} rx={4} {...commonProps} />}
@@ -189,6 +207,28 @@ export function WhiteboardCanvas({
                     const { stroke, fill, ...propsRest } = commonProps;
                     return <rect x={x - 2} y={y - 2} width={w + 4} height={h + 4} {...propsRest} fill="transparent" stroke="none" />
                 })()}
+                {shape.type === "protocol_node" && (
+                    <g transform={`translate(${x}, ${y})`} className={commonProps.className} onMouseDown={commonProps.onMouseDown} onDoubleClick={commonProps.onDoubleClick}>
+                        <rect width={w} height={h} rx={16} fill="#ffffff" stroke={accent} strokeWidth={1.6} />
+                        <foreignObject width={w} height={h} className="pointer-events-none">
+                            <div className="w-full h-full flex flex-col justify-between p-3 text-slate-700">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: `${accent}` }}>
+                                        <ProtocolIcon className="w-5 h-5 opacity-95" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold leading-tight">{protocolOperation?.label || "Protocol Step"}</p>
+                                        <p className="text-[11px] uppercase tracking-wide" style={{ color: accent }}>{definition?.label || protocolOperation?.type || "custom"}</p>
+                                    </div>
+                                </div>
+                                {protocolSummary && <p className="text-xs text-slate-500 mt-2">{protocolSummary}</p>}
+                                {protocolOperation?.objects && protocolOperation.objects.length > 0 && (
+                                    <p className="text-[11px] text-slate-500 truncate">With {protocolOperation.objects.join(", ")}</p>
+                                )}
+                            </div>
+                        </foreignObject>
+                    </g>
+                )}
                 {
                     shape.type === "asset" && (
                         <g transform={`translate(${x}, ${y})`} className={commonProps.className} onMouseDown={commonProps.onMouseDown} onDoubleClick={commonProps.onDoubleClick}>

@@ -1,5 +1,19 @@
 import * as functions from "firebase-functions/v1"
 import * as admin from "firebase-admin"
+import { defineSecret } from "firebase-functions/params"
+
+const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY")
+
+function getOpenAiKey() {
+  const key = OPENAI_API_KEY.value()
+  if (!key) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "OPENAI_API_KEY param is not configured"
+    )
+  }
+  return key
+}
 
 /**
  * OpenAI Integration for Momentum
@@ -17,7 +31,9 @@ import * as admin from "firebase-admin"
 /**
  * Generate AI-powered experiment notes suggestions for ELN
  */
-export const generateExperimentSuggestions = functions.https.onCall(
+export const generateExperimentSuggestions = functions
+  .runWith({ secrets: [OPENAI_API_KEY] })
+  .https.onCall(
   async (data, context) => {
     // Ensure user is authenticated
     if (!context.auth) {
@@ -38,14 +54,7 @@ export const generateExperimentSuggestions = functions.https.onCall(
 
     try {
       // Get API key from environment config
-      const apiKey = ((functions as any).config() as any).openai?.api_key
-
-      if (!apiKey) {
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "OpenAI API key not configured. Please set via: firebase functions:config:set openai.api_key=YOUR_KEY"
-        )
-      }
+      const apiKey = getOpenAiKey()
 
       // Call OpenAI API
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -118,7 +127,9 @@ Please suggest:
 /**
  * Generate project description from project details
  */
-export const generateProjectDescription = functions.https.onCall(
+export const generateProjectDescription = functions
+  .runWith({ secrets: [OPENAI_API_KEY] })
+  .https.onCall(
   async (data, context) => {
     // Ensure user is authenticated
     if (!context.auth) {
@@ -138,14 +149,7 @@ export const generateProjectDescription = functions.https.onCall(
     }
 
     try {
-      const apiKey = ((functions as any).config() as any).openai?.api_key
-
-      if (!apiKey) {
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "OpenAI API key not configured"
-        )
-      }
+      const apiKey = getOpenAiKey()
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -212,7 +216,9 @@ Write a concise 2-3 paragraph project description suitable for a grant applicati
 /**
  * Smart equipment maintenance suggestions based on usage patterns
  */
-export const suggestMaintenanceSchedule = functions.https.onCall(
+export const suggestMaintenanceSchedule = functions
+  .runWith({ secrets: [OPENAI_API_KEY] })
+  .https.onCall(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -224,14 +230,7 @@ export const suggestMaintenanceSchedule = functions.https.onCall(
     const { equipmentName, equipmentType, usageHistory, lastMaintenance } = data
 
     try {
-      const apiKey = ((functions as any).config() as any).openai?.api_key
-
-      if (!apiKey) {
-        throw new functions.https.HttpsError(
-          "failed-precondition",
-          "OpenAI API key not configured"
-        )
-      }
+      const apiKey = getOpenAiKey()
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
