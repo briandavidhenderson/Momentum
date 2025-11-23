@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { PersonProfile, ProfileProject, ProjectVisibility, FUNDING_ACCOUNTS } from "@/lib/types"
+import { PersonProfile, ProfileProject, ProjectVisibility } from "@/lib/types"
 import { FirestoreUser } from "@/lib/firestoreService"
 import { useProfiles } from "@/lib/useProfiles"
 import { logger } from "@/lib/logger"
@@ -64,8 +64,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
 
   const handleSave = async (additionalData?: Partial<PersonProfile>) => {
     if (!currentUserProfile || !formData.firstName || !formData.lastName || !formData.email ||
-        !formData.organisation || !formData.institute || !formData.lab) {
-      alert("Please fill in required fields: First Name, Last Name, Email, Organisation, Institute, and Lab")
+      !formData.organisation || !formData.institute || !formData.labName) {
+      alert("Please fill in required fields: First Name, Last Name, Email, Organisation, School/Faculty, and Department")
       return
     }
 
@@ -77,7 +77,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         position: formData.position || "",
         organisation: formData.organisation!,
         institute: formData.institute!,
-        lab: formData.lab!,
+        labName: formData.labName!,
+        // lab: formData.lab!, // DEPRECATED
         reportsToId: formData.reportsToId || null, // Fix Bug #8: Use reportsToId instead of deprecated reportsTo
         fundedBy: formData.fundedBy || [],
         startDate: formData.startDate || new Date().toISOString().split("T")[0],
@@ -144,14 +145,14 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
 
     if (isNew) {
       updatedProjects = [...currentProjects, project]
-      updatedPIs = isPI 
+      updatedPIs = isPI
         ? [...(formData.principalInvestigatorProjects || []), project.id]
         : formData.principalInvestigatorProjects || []
     } else {
       updatedProjects = currentProjects.map(p => p.id === project.id ? project : p)
       updatedPIs = formData.principalInvestigatorProjects || []
     }
-    
+
     // Update form data
     const updatedFormData = {
       ...formData,
@@ -173,7 +174,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
 
     setProjectDialogOpen(false)
     setEditingProject(null)
-    
+
     // Dispatch event to sync with timeline
     window.dispatchEvent(new CustomEvent("profiles-updated"))
   }
@@ -187,7 +188,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
     if (confirm("Are you sure you want to delete this project?")) {
       const updatedProjects = (formData.projects || []).filter(p => p.id !== projectId)
       const updatedPIs = (formData.principalInvestigatorProjects || []).filter(id => id !== projectId)
-      
+
       setFormData({
         ...formData,
         projects: updatedProjects,
@@ -279,7 +280,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               />
             </div>
             <div>
-              <Label htmlFor="institute">Institute *</Label>
+              <Label htmlFor="institute">School/Faculty *</Label>
               <Input
                 id="institute"
                 value={formData.institute || ""}
@@ -288,11 +289,11 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               />
             </div>
             <div>
-              <Label htmlFor="lab">Lab *</Label>
+              <Label htmlFor="lab">Department *</Label>
               <Input
                 id="lab"
-                value={formData.lab || ""}
-                onChange={(e) => setFormData({ ...formData, lab: e.target.value })}
+                value={formData.labName || ""}
+                onChange={(e) => setFormData({ ...formData, labName: e.target.value })}
                 disabled={!isEditing}
               />
             </div>
@@ -346,8 +347,8 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <svg className="h-5 w-5" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
-              <path fill="#A6CE39" d="M256,128c0,70.7-57.3,128-128,128C57.3,256,0,198.7,0,128C0,57.3,57.3,0,128,0C198.7,0,256,57.3,256,128z"/>
-              <g><path fill="#FFF" d="M86.3,186.2H70.9V79.1h15.4v48.4V186.2z"/><path fill="#FFF" d="M108.9,79.1h41.6c39.6,0,57,28.3,57,53.6c0,27.5-21.5,53.6-56.8,53.6h-41.8V79.1z M124.3,172.4h24.5 c34.9,0,42.9-26.5,42.9-39.7c0-21.5-13.7-39.7-43.7-39.7h-23.7V172.4z"/><path fill="#FFF" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1 C84.2,46.7,88.7,51.3,88.7,56.8z"/></g>
+              <path fill="#A6CE39" d="M256,128c0,70.7-57.3,128-128,128C57.3,256,0,198.7,0,128C0,57.3,57.3,0,128,0C198.7,0,256,57.3,256,128z" />
+              <g><path fill="#FFF" d="M86.3,186.2H70.9V79.1h15.4v48.4V186.2z" /><path fill="#FFF" d="M108.9,79.1h41.6c39.6,0,57,28.3,57,53.6c0,27.5-21.5,53.6-56.8,53.6h-41.8V79.1z M124.3,172.4h24.5 c34.9,0,42.9-26.5,42.9-39.7c0-21.5-13.7-39.7-43.7-39.7h-23.7V172.4z" /><path fill="#FFF" d="M88.7,56.8c0,5.5-4.5,10.1-10.1,10.1c-5.6,0-10.1-4.6-10.1-10.1c0-5.6,4.5-10.1,10.1-10.1 C84.2,46.7,88.7,51.3,88.7,56.8z" /></g>
             </svg>
             ORCID
           </h2>
@@ -603,11 +604,10 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
           </h3>
           <div className="space-y-2">
             {(formData.fundedBy || []).map((funderId, index) => {
-              const account = FUNDING_ACCOUNTS.find(a => a.id === funderId || a.name === funderId)
               return (
                 <div key={index} className="flex items-center gap-2">
                   <span className="px-3 py-2 rounded-md border border-border bg-background flex-1">
-                    {account ? `${account.name} (${account.accountNumber})` : funderId}
+                    {funderId}
                   </span>
                   {isEditing && (
                     <Button
@@ -627,25 +627,21 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
             })}
           </div>
           {isEditing && (
-            <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  setFormData({
-                    ...formData,
-                    fundedBy: [...(formData.fundedBy || []), e.target.value],
-                  })
-                  e.target.value = ""
-                }
-              }}
-              className="w-full px-3 py-2 rounded-md border border-border bg-background"
-            >
-              <option value="">Add Funding Account...</option>
-              {FUNDING_ACCOUNTS.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name} ({account.accountNumber})
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add funding source..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                    e.preventDefault()
+                    setFormData({
+                      ...formData,
+                      fundedBy: [...(formData.fundedBy || []), e.currentTarget.value.trim()],
+                    })
+                    e.currentTarget.value = ""
+                  }
+                }}
+              />
+            </div>
           )}
         </div>
 
@@ -760,7 +756,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               Add Project
             </Button>
           </div>
-          
+
           {(formData.projects || []).length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               No projects yet. Click &apos;Add Project&apos; to create one.
@@ -1111,11 +1107,10 @@ function ProjectDialog({
             <Label>Funding Accounts</Label>
             <div className="space-y-2">
               {(formData.fundedBy || []).map((funderId, index) => {
-                const account = FUNDING_ACCOUNTS.find(a => a.id === funderId || a.name === funderId)
                 return (
                   <div key={index} className="flex items-center gap-2">
                     <span className="px-3 py-2 rounded-md border border-border bg-background flex-1">
-                      {account ? `${account.name} (${account.accountNumber})` : funderId}
+                      {funderId}
                     </span>
                     <Button
                       type="button"
@@ -1132,25 +1127,21 @@ function ProjectDialog({
                 )
               })}
             </div>
-            <select
-              value=""
-              onChange={(e) => {
-                if (e.target.value) {
-                  setFormData({
-                    ...formData,
-                    fundedBy: [...(formData.fundedBy || []), e.target.value],
-                  })
-                }
-              }}
-              className="w-full mt-2 px-3 py-2 rounded-md border border-border bg-background"
-            >
-              <option value="">Add Funding Account...</option>
-              {FUNDING_ACCOUNTS.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name} ({account.accountNumber})
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2 mt-2">
+              <Input
+                placeholder="Add funding source..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                    e.preventDefault()
+                    setFormData({
+                      ...formData,
+                      fundedBy: [...(formData.fundedBy || []), e.currentTarget.value.trim()],
+                    })
+                    e.currentTarget.value = ""
+                  }
+                }}
+              />
+            </div>
           </div>
 
           <div>
@@ -1176,6 +1167,6 @@ function ProjectDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   )
 }

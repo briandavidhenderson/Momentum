@@ -452,6 +452,8 @@ momentum/
 │   └── functions/                # Cloud Functions
 │       └── src/
 │           └── index.ts          # ORCID integration
+├── src/                          # Generated code (Data Connect)
+│   └── dataconnect-generated/    # Auto-generated SDKs
 ├── firestore.rules               # Security rules (608 lines)
 ├── firestore.indexes.json        # Database indexes
 ├── storage.rules                 # Storage security

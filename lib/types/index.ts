@@ -14,6 +14,8 @@ export * from './user.types'
 
 // Organization & Structure
 export * from './organization.types'
+export * from './researchgroup.types'  // Research groups - planned feature (users can join groups)
+export * from './network.types'       // Network types for memberships and supervisions
 
 // Profile & People
 export * from './profile.types'
@@ -32,6 +34,7 @@ export * from './projectSnapshot'
 export * from './order.types'
 export * from './inventory.types'
 export * from './equipment.types'
+export * from './booking.types'
 export * from './poll.types'
 
 // Electronic Lab Notebook

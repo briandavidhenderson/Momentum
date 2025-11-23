@@ -85,9 +85,10 @@ export interface FirestoreDayToDayTask {
   id: string
   title: string
   description?: string
-  status: "todo" | "working" | "done"
+  status: "todo" | "working" | "done" | "history"
   importance: string
-  assigneeId?: string
+  assigneeId?: string // DEPRECATED: Use assigneeIds instead
+  assigneeIds?: string[] // PersonProfile IDs - supports multiple assignees
   dueDate?: Timestamp | null
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -96,6 +97,14 @@ export interface FirestoreDayToDayTask {
   linkedProjectId?: string
   linkedTaskId?: string
   order: number
+
+  // Completion tracking
+  completedBy?: string
+  completedAt?: Timestamp
+
+  // Verification tracking
+  verifiedBy?: string
+  verifiedAt?: Timestamp
 }
 
 /**
@@ -107,13 +116,20 @@ export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<str
   const taskRef = doc(collection(db, "dayToDayTasks"))
   const taskId = taskRef.id
 
-  await setDoc(taskRef, {
+  const taskToSave = {
     ...taskData,
     id: taskId,
     dueDate: taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  })
+  }
+
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedTask = Object.fromEntries(
+    Object.entries(taskToSave).filter(([_, v]) => v !== undefined)
+  )
+
+  await setDoc(taskRef, cleanedTask)
 
   return taskId
 }
@@ -126,11 +142,23 @@ export async function updateDayToDayTask(taskId: string, updates: Partial<any>):
   const taskRef = doc(db, "dayToDayTasks", taskId)
   const updateData: any = { ...updates, updatedAt: serverTimestamp() }
 
+  // Convert Date objects to Firestore Timestamps
   if (updates.dueDate) {
     updateData.dueDate = Timestamp.fromDate(updates.dueDate)
   }
+  if (updates.completedAt && updates.completedAt instanceof Date) {
+    updateData.completedAt = Timestamp.fromDate(updates.completedAt)
+  }
+  if (updates.verifiedAt && updates.verifiedAt instanceof Date) {
+    updateData.verifiedAt = Timestamp.fromDate(updates.verifiedAt)
+  }
 
-  await updateDoc(taskRef, updateData)
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([_, v]) => v !== undefined)
+  )
+
+  await updateDoc(taskRef, cleanedUpdate)
 }
 
 /**
@@ -151,7 +179,7 @@ export function subscribeToDayToDayTasks(
   const db = getFirebaseDb()
   let q: Query = collection(db, "dayToDayTasks")
 
-  if (filters?.labId) {
+  if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
     q = query(q, where("labId", "==", filters.labId))
   } else if (filters?.userId) {
     q = query(q, where("createdBy", "==", filters.userId))
@@ -167,6 +195,8 @@ export function subscribeToDayToDayTasks(
             dueDate: data.dueDate?.toDate() || undefined,
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date(),
+            completedAt: data.completedAt?.toDate() || undefined,
+            verifiedAt: data.verifiedAt?.toDate() || undefined,
           }
         })
         callback(tasks)

@@ -249,3 +249,49 @@ Return JSON:
   },
   "tags": ["Suggested tags for searchability"]
 }`
+
+export const WHITEBOARD_PROTOCOL_PROMPT = `You are an assistant that converts experimental procedures into a visual protocol used by our Momentum Whiteboard. The whiteboard expects a list of unit operations that can be rendered as nodes. Supported operation types are:
+- mix: combine reagents, optional speed/time
+- heat: raise temperature for a specified time
+- cool: lower temperature or place on ice
+- incubate: hold at temperature (may include atmosphere like CO2, shaking)
+- centrifuge: spin samples; include speed (rpm or g), time, optional temperature
+- pipette: transfer volume; include volume, unit, from, to
+- measure: record a readout; include measurementType, instrument/wavelength
+- thermocycle: PCR style cycles; include cycleCount, denature/anneal/extension temps and times, final hold
+- custom: for steps that do not map above (provide descriptive parameters)
+
+Return strict JSON:
+{
+  "protocolName": "short title",
+  "objective": "goal",
+  "steps": [
+    {
+      "id": "op-1",
+      "type": "mix|heat|cool|incubate|centrifuge|pipette|measure|thermocycle|custom",
+      "label": "Readable card title",
+      "parameters": { "time": 15, "timeUnit": "min", "temperature": 37, ... },
+      "objects": ["Sample A", "Buffer X"],
+      "inputs": ["op-0"],
+      "outputs": ["incubated_sample"],
+      "metadata": {
+        "notes": "Important instructions",
+        "equipment": "Instrument or station",
+        "safetyFlags": ["Biosafety cabinet required"]
+      }
+    }
+  ],
+  "connections": [
+    { "from": "op-1", "to": "op-2" }
+  ]
+}
+
+Guidelines:
+- Preserve chronological order.
+- Use the supported types above (avoid inventing new ones).
+- Populate parameters with numeric values + units when possible.
+- Every step should have a human-friendly label.
+- Use outputs to name intermediate materials so later inputs can reference them.
+- Include safety or atmosphere details in metadata.notes.
+- If the source describes parallel branches, create multiple outputs and connect them appropriately.
+- Do not include free text outside the JSON object.`

@@ -72,7 +72,7 @@ export function normalizeGoogleEvent(
 
   // Map attendees
   const attendees = (googleEvent.attendees || []).map(attendee => ({
-    personId: "", // TODO: Map email to PersonProfile ID
+    personId: "", // TODO: Map email to PersonProfile ID - Currently incomplete, calendar events won't be linked to user profiles
     role: attendee.displayName || attendee.email,
     response: mapGoogleResponseStatus(attendee.responseStatus),
     workloadImpactHours: undefined,
@@ -644,7 +644,7 @@ export function normalizeMicrosoftEvent(
 
   // Map attendees
   const attendees = (msEvent.attendees || []).map(attendee => ({
-    personId: "", // TODO: Map email to PersonProfile ID
+    personId: "", // TODO: Map email to PersonProfile ID - Currently incomplete, calendar events won't be linked to user profiles
     role: attendee.emailAddress.name || attendee.emailAddress.address,
     response: mapMicrosoftResponseStatus(attendee.status.response),
     workloadImpactHours: undefined,

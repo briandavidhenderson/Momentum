@@ -184,7 +184,7 @@ export function subscribeToFundingAccounts(
   const db = getFirebaseDb()
   let q = collection(db, "accounts")
 
-  if (filters?.labId) {
+  if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
     q = query(q as any, where("labId", "==", filters.labId)) as any
   }
   if (filters?.masterProjectId) {

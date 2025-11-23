@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, GripVertical, Trash2, Edit2, Clock, Loader2, AlertCircle, ListTodo } from "lucide-react"
+import { Plus, GripVertical, Trash2, Edit2, Clock, Loader2, AlertCircle, ListTodo, Calendar, CheckCircle2, User } from "lucide-react"
 import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
@@ -77,18 +77,67 @@ function DroppableColumn({
   )
 }
 
+// Helper function to get card background colors based on importance
+function getCardBackgroundColor(importance?: string) {
+  const colors: Record<string, string> = {
+    low: "bg-gray-50 border-gray-200",
+    medium: "bg-blue-50 border-blue-200",
+    high: "bg-orange-50 border-orange-200",
+    critical: "bg-red-50 border-red-300",
+  }
+  return colors[importance || "medium"] || colors.medium
+}
+
+// Helper function to format due date with days and hours countdown
+function formatDueDate(dueDate?: Date) {
+  if (!dueDate) return null
+
+  const date = new Date(dueDate)
+  const now = new Date()
+  const diffMs = date.getTime() - now.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+
+  const isOverdue = diffMs < 0
+  const isDueSoon = diffMs >= 0 && diffMs <= 3 * 24 * 60 * 60 * 1000 // 3 days
+
+  let timeText = ""
+  if (isOverdue) {
+    const absDays = Math.abs(diffDays)
+    const absHours = Math.abs(diffHours)
+    timeText = `Overdue ${absDays}d ${absHours}h`
+  } else if (isDueSoon) {
+    timeText = `Due in ${diffDays}d ${diffHours}h`
+  } else {
+    timeText = date.toLocaleDateString()
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Calendar className="h-3 w-3" />
+      <span className={`text-xs ${isOverdue ? "text-red-600 font-semibold" : isDueSoon ? "text-orange-600 font-semibold" : "text-muted-foreground"}`}>
+        {timeText}
+      </span>
+    </div>
+  )
+}
+
 function DraggableTaskCard({
   task,
   people,
   projects,
+  currentUserId,
   onEdit,
   onDelete,
+  onVerify,
 }: {
   task: DayToDayTask
   people: Person[]
   projects: any[]
+  currentUserId?: string
   onEdit: () => void
   onDelete: () => void
+  onVerify?: () => void
 }) {
   // Feature #2: Use useSortable for both column switching and reordering
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -102,8 +151,13 @@ function DraggableTaskCard({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  const assignee = (people || []).find((p) => p.id === task.assigneeId)
+  // Support both old single assignee and new multiple assignees
+  const assigneeIdsList = task.assigneeIds || (task.assigneeId ? [task.assigneeId] : [])
+  const assignees = (people || []).filter((p) => assigneeIdsList.includes(p.id))
   const linkedProject = (projects || []).find((p: any) => p.id === task.linkedProjectId)
+
+  const completedByPerson = task.completedBy ? (people || []).find((p) => p.id === task.completedBy) : null
+  const verifiedByPerson = task.verifiedBy ? (people || []).find((p) => p.id === task.verifiedBy) : null
 
   const importanceColors = {
     low: "bg-gray-100 text-gray-700",
@@ -116,7 +170,7 @@ function DraggableTaskCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative bg-card rounded-lg border border-border p-4 shadow-sm hover:shadow-md transition-shadow cursor-move"
+      className={`group relative rounded-lg border p-4 shadow-sm hover:shadow-md transition-shadow cursor-move ${getCardBackgroundColor(task.importance)}`}
     >
       <div className="flex items-start gap-3">
         <div {...listeners} {...attributes} className="mt-1 cursor-grab active:cursor-grabbing">
@@ -127,6 +181,20 @@ function DraggableTaskCard({
           <div className="flex items-start justify-between gap-2 mb-2">
             <h4 className="font-medium text-sm line-clamp-2">{task.title}</h4>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {task.status === "done" && onVerify && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onVerify()
+                  }}
+                  title="Verify completion"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -163,23 +231,48 @@ function DraggableTaskCard({
               </Badge>
             )}
 
-            {task.dueDate && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                {new Date(task.dueDate).toLocaleDateString()}
-              </div>
-            )}
+            {task.dueDate && formatDueDate(task.dueDate)}
 
-            {assignee && (
-              <div
-                className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold text-white"
-                style={{ backgroundColor: assignee.color }}
-                title={assignee.name}
-              >
-                {assignee.name.charAt(0).toUpperCase()}
+            {assignees.length > 0 && (
+              <div className="flex items-center gap-1">
+                {assignees.slice(0, 3).map((assignee) => (
+                  <div
+                    key={assignee.id}
+                    className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold text-white border-2 border-white"
+                    style={{ backgroundColor: assignee.color }}
+                    title={assignee.name}
+                  >
+                    {assignee.name.charAt(0).toUpperCase()}
+                  </div>
+                ))}
+                {assignees.length > 3 && (
+                  <Badge variant="secondary" className="text-xs h-6 px-1.5">
+                    +{assignees.length - 3}
+                  </Badge>
+                )}
               </div>
             )}
           </div>
+
+          {/* History metadata - show completion and verification info */}
+          {task.status === "history" && (completedByPerson || verifiedByPerson) && (
+            <div className="mt-2 pt-2 border-t border-border space-y-1">
+              {completedByPerson && task.completedAt && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                  <span>Completed by {completedByPerson.name}</span>
+                  <span className="text-xs">({new Date(task.completedAt).toLocaleDateString()})</span>
+                </div>
+              )}
+              {verifiedByPerson && task.verifiedAt && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-3 w-3 text-blue-600" />
+                  <span>Verified by {verifiedByPerson.name}</span>
+                  <span className="text-xs">({new Date(task.verifiedAt).toLocaleDateString()})</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -210,7 +303,7 @@ function DayToDayTaskEditDialog({
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [importance, setImportance] = useState<ImportanceLevel>("medium")
-  const [assigneeId, setAssigneeId] = useState<string>("")
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [dueDate, setDueDate] = useState("")
   const [linkedProjectId, setLinkedProjectId] = useState<string>("")
   const [linkedTaskId, setLinkedTaskId] = useState<string>("")
@@ -220,7 +313,9 @@ function DayToDayTaskEditDialog({
       setTitle(task.title)
       setDescription(task.description || "")
       setImportance(task.importance)
-      setAssigneeId(task.assigneeId || "")
+      // Support both old single assignee and new multiple assignees
+      const currentAssignees = task.assigneeIds || (task.assigneeId ? [task.assigneeId] : [])
+      setAssigneeIds(currentAssignees)
       setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "")
       setLinkedProjectId(task.linkedProjectId || "")
       setLinkedTaskId(task.linkedTaskId || "")
@@ -228,7 +323,7 @@ function DayToDayTaskEditDialog({
       setTitle("")
       setDescription("")
       setImportance("medium")
-      setAssigneeId("")
+      setAssigneeIds([])
       setDueDate("")
       setLinkedProjectId("")
       setLinkedTaskId("")
@@ -242,7 +337,7 @@ function DayToDayTaskEditDialog({
       title: title.trim(),
       description: description.trim() || undefined,
       importance,
-      assigneeId: assigneeId || undefined,
+      assigneeIds: assigneeIds.length > 0 ? assigneeIds : undefined,
       dueDate: dueDate ? new Date(dueDate) : undefined,
       linkedProjectId: linkedProjectId || undefined,
       linkedTaskId: linkedTaskId || undefined,
@@ -250,45 +345,25 @@ function DayToDayTaskEditDialog({
 
     onSave(task.id, updates)
 
-    // PHASE 4: Trigger task assignment notifications
+    // PHASE 4: Trigger task assignment notifications for new assignees
     if (currentUserProfile && allProfiles) {
       try {
-        const oldAssigneeId = task.assigneeId
-        const newAssigneeId = assigneeId || undefined
+        const oldAssigneeIdsList = task.assigneeIds || (task.assigneeId ? [task.assigneeId] : [])
+        const newAssigneeIdsList = assigneeIds
 
-        // Check if assignee changed
-        if (oldAssigneeId !== newAssigneeId) {
-          // Task was assigned to someone new
-          if (newAssigneeId && newAssigneeId !== currentUserProfile.id) {
-            const newAssignee = allProfiles.find(p => p.id === newAssigneeId)
+        // Check for newly added assignees
+        const addedAssignees = newAssigneeIdsList.filter(id => !oldAssigneeIdsList.includes(id))
 
+        // Notify newly added assignees
+        for (const assigneeId of addedAssignees) {
+          if (assigneeId !== currentUserProfile.id) {
+            const newAssignee = allProfiles.find(p => p.id === assigneeId)
             if (newAssignee) {
-              // Was previously assigned to someone else (reassignment)
-              if (oldAssigneeId && oldAssigneeId !== currentUserProfile.id) {
-                const oldAssignee = allProfiles.find(p => p.id === oldAssigneeId)
-                if (oldAssignee) {
-                  await notifyTaskReassigned(
-                    { ...task, ...updates },
-                    newAssignee,
-                    oldAssignee,
-                    currentUserProfile
-                  )
-                } else {
-                  // Old assignee not found, just notify new assignee
-                  await notifyTaskAssigned({ ...task, ...updates }, newAssignee, currentUserProfile)
-                }
-              } else {
-                // First time assignment
-                await notifyTaskAssigned({ ...task, ...updates }, newAssignee, currentUserProfile)
-              }
+              await notifyTaskAssigned({ ...task, ...updates }, newAssignee, currentUserProfile)
             }
           }
-          // Task was unassigned from someone
-          else if (!newAssigneeId && oldAssigneeId && oldAssigneeId !== currentUserProfile.id) {
-            // Could notify old assignee that task was unassigned, but this is typically not needed
-            // as it's shown in the UI
-          }
         }
+
       } catch (error) {
         logger.error('Error sending task assignment notification', error)
         // Don't block the UI on notification failure
@@ -376,20 +451,57 @@ function DayToDayTaskEditDialog({
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="taskAssignee">Assignee</Label>
-            <select
-              id="taskAssignee"
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Unassigned</option>
-              {(people || []).map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </select>
+            <Label htmlFor="taskAssignees">Assignees (multiple allowed)</Label>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2 p-2 min-h-[40px] rounded-md border border-input bg-background">
+                {assigneeIds.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">No assignees</span>
+                ) : (
+                  assigneeIds.map((assigneeId) => {
+                    const assignee = people.find((p) => p.id === assigneeId)
+                    return assignee ? (
+                      <Badge key={assigneeId} variant="secondary" className="flex items-center gap-1">
+                        <div
+                          className="w-4 h-4 rounded-full flex items-center justify-center text-white text-xs"
+                          style={{ backgroundColor: assignee.color }}
+                        >
+                          {assignee.name.charAt(0).toUpperCase()}
+                        </div>
+                        {assignee.name}
+                        <button
+                          type="button"
+                          onClick={() => setAssigneeIds(assigneeIds.filter((id) => id !== assigneeId))}
+                          className="ml-1 hover:text-destructive"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ) : null
+                  })
+                )}
+              </div>
+              <select
+                id="taskAssignees"
+                value=""
+                onChange={(e) => {
+                  const selectedId = e.target.value
+                  if (selectedId && !assigneeIds.includes(selectedId)) {
+                    setAssigneeIds([...assigneeIds, selectedId])
+                  }
+                  e.target.value = "" // Reset select
+                }}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">+ Add assignee</option>
+                {(people || [])
+                  .filter((person) => !assigneeIds.includes(person.id))
+                  .map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="taskDueDate">Due Date</Label>
@@ -538,6 +650,10 @@ export function DayToDayBoard() {
     .filter((t) => t.status === "done")
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()) // Most recently completed first
 
+  const historyTasks = tasks
+    .filter((t) => t.status === "history")
+    .sort((a, b) => (b.verifiedAt?.getTime() || b.updatedAt.getTime()) - (a.verifiedAt?.getTime() || a.updatedAt.getTime())) // Most recently verified first
+
   const handleDragStart = (event: DragStartEvent) => {
     const task = event.active.data.current?.task as DayToDayTask | undefined
     if (task) {
@@ -575,10 +691,35 @@ export function DayToDayBoard() {
     if (overData?.type === "column") {
       const newStatus = overData.status as TaskStatus
       if (activeTask.status !== newStatus) {
-        // No try-catch needed - optimistic hook handles errors
-        onMoveTask(activeTask.id, newStatus)
+        // Don't allow drag-and-drop to history - must use verify button
+        if (newStatus === "history") {
+          return
+        }
+
+        // Track completion when moving to "done"
+        if (newStatus === "done" && currentUser?.uid) {
+          onUpdateTask(activeTask.id, {
+            status: newStatus,
+            completedBy: currentUser.uid,
+            completedAt: new Date(),
+          })
+        } else {
+          // For todo/working status changes, use the move function
+          onMoveTask(activeTask.id, newStatus as "todo" | "working" | "done")
+        }
       }
     }
+  }
+
+  const handleVerifyTask = (taskId: string) => {
+    if (!currentUser?.uid) return
+
+    // Move task to history with verification metadata
+    onUpdateTask(taskId, {
+      status: "history",
+      verifiedBy: currentUser.uid,
+      verifiedAt: new Date(),
+    })
   }
 
   const handleCreateTask = () => {
@@ -757,7 +898,7 @@ export function DayToDayBoard() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 flex-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 flex-1">
           <DroppableColumn
             id="todo"
             title="To Do"
@@ -770,11 +911,13 @@ export function DayToDayBoard() {
                 task={task}
                 people={people}
                 projects={allProjects}
+                currentUserId={currentUser?.uid}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
                 }}
                 onDelete={() => onDeleteTask(task.id)}
+                onVerify={() => handleVerifyTask(task.id)}
               />
             ))}
             {todoTasks.length === 0 && (
@@ -796,11 +939,13 @@ export function DayToDayBoard() {
                 task={task}
                 people={people}
                 projects={allProjects}
+                currentUserId={currentUser?.uid}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
                 }}
                 onDelete={() => onDeleteTask(task.id)}
+                onVerify={() => handleVerifyTask(task.id)}
               />
             ))}
             {workingTasks.length === 0 && (
@@ -822,16 +967,46 @@ export function DayToDayBoard() {
                 task={task}
                 people={people}
                 projects={allProjects}
+                currentUserId={currentUser?.uid}
                 onEdit={() => {
                   setEditingTask(task)
                   setIsEditDialogOpen(true)
                 }}
                 onDelete={() => onDeleteTask(task.id)}
+                onVerify={() => handleVerifyTask(task.id)}
               />
             ))}
             {doneTasks.length === 0 && (
               <div className="text-center text-muted-foreground text-sm py-8">
                 Completed tasks will appear here
+              </div>
+            )}
+          </DroppableColumn>
+
+          <DroppableColumn
+            id="history"
+            title="History"
+            tasks={historyTasks}
+            count={historyTasks.length}
+          >
+            {historyTasks.map((task) => (
+              <DraggableTaskCard
+                key={task.id}
+                task={task}
+                people={people}
+                projects={allProjects}
+                currentUserId={currentUser?.uid}
+                onEdit={() => {
+                  setEditingTask(task)
+                  setIsEditDialogOpen(true)
+                }}
+                onDelete={() => onDeleteTask(task.id)}
+                onVerify={() => handleVerifyTask(task.id)}
+              />
+            ))}
+            {historyTasks.length === 0 && (
+              <div className="text-center text-muted-foreground text-sm py-8">
+                Verified tasks will appear here
               </div>
             )}
           </DroppableColumn>

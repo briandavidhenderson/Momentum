@@ -42,28 +42,7 @@ export interface FundingAccount {
   updatedAt?: string
 }
 
-/**
- * Legacy funding account reference (DEPRECATED)
- * For backward compatibility with old code that expects simple structure
- * New code should use FundingAccount interface defined at top of file
- */
-export interface LegacyFundingAccountReference {
-  id: string
-  name: string
-  accountNumber: string
-}
 
-/**
- * DEPRECATED: Legacy funding accounts list
- * This is kept for backward compatibility only
- * New code should query FundingAccount collection from Firestore
- */
-export const FUNDING_ACCOUNTS: LegacyFundingAccountReference[] = [
-  { id: "club", name: "CLuB", accountNumber: "1735578" },
-  { id: "bcr", name: "BCR", accountNumber: "4627784" },
-  { id: "deans", name: "Deans", accountNumber: "74738383" },
-  { id: "account4", name: "Account_4", accountNumber: "4838949" },
-]
 
 /**
  * FundingAllocationType - What the allocation is for

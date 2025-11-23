@@ -9,7 +9,7 @@ export function useUI() {
   const [activeTab, setActiveTab] = useState<string>('orders');
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
-  const [mainView, setMainView] = useState<'projects' | 'people' | 'profiles' | 'myprofile' | 'daytoday' | 'mytasks' | 'eln' | 'orders' | 'equipment' | 'calendar' | 'funding' | 'ledger' | 'privacy'>('myprofile');
+  const [mainView, setMainView] = useState<'dashboard' | 'projects' | 'people' | 'profiles' | 'myprofile' | 'daytoday' | 'mytasks' | 'eln' | 'orders' | 'equipment' | 'bookings' | 'calendar' | 'whiteboard' | 'funding' | 'ledger' | 'privacy'>('dashboard');
   const [taskDetailPanelOpen, setTaskDetailPanelOpen] = useState(false);
   const [taskDetailPanelTask, setTaskDetailPanelTask] = useState<Task | null>(null);
   const [taskDetailPanelWorkpackageId, setTaskDetailPanelWorkpackageId] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export function useUI() {
     setActiveDragOrder(null);
     // This will be handled by the individual hooks
   };
-  
+
   const handleOrderClick = (order: Order) => {
     setEditingOrder(order)
     setOrderDialogOpen(true)

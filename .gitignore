@@ -27,6 +27,10 @@ out/
 # Firebase local/cache + compiled functions
 .firebase/
 firebase/functions/lib/
+lib/
+
+# Firebase service account keys (NEVER commit these!)
+*-firebase-adminsdk-*.json
 
 # Environment files
 .env.local

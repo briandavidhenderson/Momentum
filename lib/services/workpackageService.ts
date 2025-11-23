@@ -37,6 +37,7 @@ export interface FirestoreWorkpackage {
   tasks: any[]
   createdBy: string
   createdAt: Timestamp
+  updatedAt?: Timestamp
 }
 
 /**
@@ -109,7 +110,7 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
 export async function updateWorkpackage(wpId: string, updates: Partial<Workpackage>): Promise<void> {
   const db = getFirebaseDb()
   const wpRef = doc(db, "workpackages", wpId)
-  const updateData: any = { ...updates }
+  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
 
   if (updates.start) updateData.start = Timestamp.fromDate(updates.start)
   if (updates.end) updateData.end = Timestamp.fromDate(updates.end)
@@ -121,7 +122,12 @@ export async function updateWorkpackage(wpId: string, updates: Partial<Workpacka
     }))
   }
 
-  await updateDoc(wpRef, updateData)
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([_, v]) => v !== undefined)
+  )
+
+  await updateDoc(wpRef, cleanedUpdate)
 }
 
 /**

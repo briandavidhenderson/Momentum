@@ -3,7 +3,7 @@
  * Implements GDPR Articles 15-21 for data export and account deletion
  */
 
-import * as functions from "firebase-functions"
+import * as functions from "firebase-functions/v1"
 import * as admin from "firebase-admin"
 import { Storage } from "@google-cloud/storage"
 import archiver from "archiver"

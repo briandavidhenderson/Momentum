@@ -6,6 +6,7 @@
 import { OrcidRecord, OrcidAffiliation, OrcidWorkSummary } from "./orcidTypes"
 import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore"
 import { logger } from "./logger"
+import { sanitizeForFirestore } from "./firebase"
 
 const ORCID_API_BASE = "https://pub.orcid.org/v3.0"
 const ORCID_SANDBOX_API_BASE = "https://sandbox.orcid.org/v3.0"
@@ -305,7 +306,10 @@ export async function saveOrcidRecord(orcidRecord: OrcidRecord, userId?: string)
     lastSyncedAt: new Date().toISOString(),
   }
 
-  await setDoc(recordRef, dataToSave, { merge: true })
+  // Sanitize data to remove undefined values which Firestore doesn't support
+  const sanitizedData = sanitizeForFirestore(dataToSave)
+
+  await setDoc(recordRef, sanitizedData, { merge: true })
 }
 
 /**

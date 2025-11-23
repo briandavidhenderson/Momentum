@@ -7,10 +7,10 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { EquipmentDevice, EquipmentSupply, InventoryItem, Order, InventoryLevel, MasterProject, ReorderSuggestion, PersonProfile, EquipmentTaskType } from "@/lib/types"
-import { Package, Plus, Edit2, Wrench, ShoppingCart, AlertTriangle } from "lucide-react"
+import { Package, Plus, Edit2, Wrench, ShoppingCart, AlertTriangle, Calendar } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { calculateReorderSuggestions } from "@/lib/equipmentUtils"
-import { ReorderSuggestionsPanel } from "@/components/ReorderSuggestionsPanel"
+import { ReorderSuggestionsPanel } from "@/components/orders/ReorderSuggestionsPanel"
 import { DayToDayTask } from "@/lib/dayToDayTypes"
 import {
   calculateMaintenanceHealth,
@@ -41,6 +41,7 @@ interface EquipmentStatusPanelProps {
   onInventoryUpdate: (inventory: InventoryItem[]) => void
   onOrderCreate: (order: Order) => void
   onTaskCreate?: (task: DayToDayTask) => void
+  onBookEquipment?: (device: EquipmentDevice) => void
 }
 
 export function EquipmentStatusPanel({
@@ -55,6 +56,7 @@ export function EquipmentStatusPanel({
   onInventoryUpdate,
   onOrderCreate,
   onTaskCreate,
+  onBookEquipment,
 }: EquipmentStatusPanelProps) {
   const [devices, setDevices] = useState<EquipmentDevice[]>(equipment)
   const [editingDevice, setEditingDevice] = useState<EquipmentDevice | null>(null)
@@ -100,11 +102,11 @@ export function EquipmentStatusPanel({
   // Get all to-do items (maintenance and low supplies)
   const todoItems = useMemo(() => {
     const todos: Array<{ msg: string; deviceId: string; type: 'maintenance' | 'supplies' }> = []
-    
+
     devices.forEach(device => {
       const mh = maintenanceHealth(device)
       const sh = suppliesHealth(device)
-      
+
       if (mh <= device.threshold) {
         todos.push({
           msg: `${device.name}: maintenance at ${mh}%`,
@@ -112,7 +114,7 @@ export function EquipmentStatusPanel({
           type: 'maintenance'
         })
       }
-      
+
       if (sh <= 25) {
         todos.push({
           msg: `${device.name}: low supplies at ${sh}%`,
@@ -121,7 +123,7 @@ export function EquipmentStatusPanel({
         })
       }
     })
-    
+
     return todos
   }, [devices])
 
@@ -495,21 +497,21 @@ export function EquipmentStatusPanel({
           <div className="text-xs text-muted-foreground mb-4">
             Two health bars per device: <strong>Maintenance</strong> and <strong>Supplies</strong>. Each supply shows a burn-rate meter.
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {devices.map(device => {
               const mh = maintenanceHealth(device)
               const sh = suppliesHealth(device)
               const mClass = getHealthClass(mh)
               const sClass = getHealthClass(sh)
-              
+
               return (
                 <div key={device.id} className="border border-border rounded-lg p-4 bg-card space-y-3">
                   <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {device.imageUrl ? (
-                      <Image src={device.imageUrl} alt={device.name} width={48} height={48} className="w-12 h-12 object-cover rounded" />
-                    ) : (
+                    <div className="flex items-center gap-2">
+                      {device.imageUrl ? (
+                        <Image src={device.imageUrl} alt={device.name} width={48} height={48} className="w-12 h-12 object-cover rounded" />
+                      ) : (
                         <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">
                           No Image
                         </div>
@@ -534,7 +536,7 @@ export function EquipmentStatusPanel({
                       </Button>
                     </div>
                   </div>
-                  
+
                   {/* Maintenance Bar */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -545,16 +547,15 @@ export function EquipmentStatusPanel({
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-full rounded-full transition-all ${
-                          mClass === 'critical' ? 'bg-red-500' :
-                          mClass === 'warning' ? 'bg-orange-500' :
-                          'bg-blue-500'
-                        }`}
+                        className={`h-full rounded-full transition-all ${mClass === 'critical' ? 'bg-red-500' :
+                            mClass === 'warning' ? 'bg-orange-500' :
+                              'bg-blue-500'
+                          }`}
                         style={{ width: `${mh}%` }}
                       />
                     </div>
                   </div>
-                  
+
                   {/* Supplies Bar */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -565,16 +566,15 @@ export function EquipmentStatusPanel({
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className={`h-full rounded-full transition-all ${
-                          sClass === 'critical' ? 'bg-red-500' :
-                          sClass === 'warning' ? 'bg-orange-500' :
-                          'bg-green-500'
-                        }`}
+                        className={`h-full rounded-full transition-all ${sClass === 'critical' ? 'bg-red-500' :
+                            sClass === 'warning' ? 'bg-orange-500' :
+                              'bg-green-500'
+                          }`}
                         style={{ width: `${sh}%` }}
                       />
                     </div>
                   </div>
-                  
+
                   {/* Supplies List - Using Enriched Supply Data */}
                   <div className="flex flex-wrap gap-2">
                     {enrichDeviceSupplies(device, inventory).map(supply => {
@@ -594,11 +594,10 @@ export function EquipmentStatusPanel({
                           </div>
                           <div className={`absolute left-3 right-3 bottom-1 h-0.5 bg-gray-200 rounded-full overflow-hidden`}>
                             <div
-                              className={`h-full ${
-                                supplyClass === 'critical' ? 'bg-red-500' :
-                                supplyClass === 'warning' ? 'bg-orange-500' :
-                                'bg-green-500'
-                              }`}
+                              className={`h-full ${supplyClass === 'critical' ? 'bg-red-500' :
+                                  supplyClass === 'warning' ? 'bg-orange-500' :
+                                    'bg-green-500'
+                                }`}
                               style={{ width: `${supply.healthPercent}%` }}
                             />
                           </div>
@@ -630,9 +629,20 @@ export function EquipmentStatusPanel({
                       )
                     })}
                   </div>
-                  
+
                   {/* Actions */}
                   <div className="flex gap-2 pt-2">
+                    {onBookEquipment && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => onBookEquipment(device)}
+                        className="flex-1"
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        Book Now
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -652,7 +662,7 @@ export function EquipmentStatusPanel({
                       Order Missing
                     </Button>
                   </div>
-                  
+
                   {/* Device Info */}
                   <div className="text-xs text-muted-foreground pt-2 border-t border-border">
                     <div><strong>Make:</strong> {device.make || 'N/A'}</div>
@@ -791,7 +801,7 @@ export function EquipmentStatusPanel({
             const device = devices.find(d => d.id === checkStockItem.deviceId)
             const supply = device?.supplies.find(s => s.id === checkStockItem.supplyId)
             if (!supply) return null
-            
+
             return (
               <div className="space-y-4">
                 <div>

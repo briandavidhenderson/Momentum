@@ -145,14 +145,21 @@ export async function createOrder(orderData: Omit<Order, 'id'> & {
     }
   }
 
-  await setDoc(orderRef, {
+  const orderToSave = {
     ...orderData,
     id: orderId,
     orderedDate: orderData.orderedDate ? Timestamp.fromDate(orderData.orderedDate) : null,
     receivedDate: orderData.receivedDate ? Timestamp.fromDate(orderData.receivedDate) : null,
     createdDate: Timestamp.fromDate(orderData.createdDate),
     createdAt: serverTimestamp(),
-  })
+  }
+
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedOrder = Object.fromEntries(
+    Object.entries(orderToSave).filter(([_, v]) => v !== undefined)
+  )
+
+  await setDoc(orderRef, cleanedOrder)
 
   return orderId
 }
@@ -168,8 +175,8 @@ export async function getOrders(): Promise<Order[]> {
     const data = doc.data() as FirestoreOrder
     return {
       ...data,
-      orderedDate: data.orderedDate ? data.orderedDate.toDate() : undefined,
-      receivedDate: data.receivedDate ? data.receivedDate.toDate() : undefined,
+      orderedDate: data.orderedDate?.toDate(),
+      receivedDate: data.receivedDate?.toDate(),
       createdDate: data.createdDate?.toDate() || new Date(),
     } as Order
   })
@@ -262,7 +269,15 @@ export async function updateOrder(orderId: string, updates: Partial<Order>): Pro
   if (updates.receivedDate) updateData.receivedDate = Timestamp.fromDate(updates.receivedDate)
   if (updates.createdDate) updateData.createdDate = Timestamp.fromDate(updates.createdDate)
 
-  await updateDoc(orderRef, updateData)
+  // Add updatedAt timestamp
+  updateData.updatedAt = serverTimestamp()
+
+  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
+  const cleanedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([_, v]) => v !== undefined)
+  )
+
+  await updateDoc(orderRef, cleanedUpdate)
 }
 
 /**
@@ -300,7 +315,7 @@ export function subscribeToOrders(
   const db = getFirebaseDb()
   let q: Query = collection(db, "orders")
 
-  if (filters?.labId) {
+  if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
     q = query(q, where("labId", "==", filters.labId))
   }
 
@@ -309,8 +324,8 @@ export function subscribeToOrders(
       const data = doc.data() as FirestoreOrder
       return {
         ...data,
-        orderedDate: data.orderedDate ? data.orderedDate.toDate() : undefined,
-        receivedDate: data.receivedDate ? data.receivedDate.toDate() : undefined,
+        orderedDate: data.orderedDate?.toDate(),
+        receivedDate: data.receivedDate?.toDate(),
         createdDate: data.createdDate?.toDate() || new Date(),
       } as Order
     })

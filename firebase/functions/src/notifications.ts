@@ -3,7 +3,7 @@
  * Proactive alerts for budget warnings and funding-related events
  */
 
-import * as functions from "firebase-functions"
+import * as functions from "firebase-functions/v1"
 import * as admin from "firebase-admin"
 
 const db = admin.firestore()
@@ -292,10 +292,25 @@ function formatCurrency(amount: number, currency: string = "EUR"): string {
 
 /**
  * Helper function to send emails
+ * 
+ * STATUS: INCOMPLETE - Email notifications are not yet implemented
+ * 
+ * Current behavior: Logs email details instead of sending actual emails
+ * 
  * TODO: Implement with email service (SendGrid, AWS SES, etc.)
+ * - Add email service provider configuration
+ * - Implement actual email sending logic
+ * - Add error handling and retry logic
+ * - Add email templates for different notification types
+ * 
+ * This function is called by:
+ * - checkFundingAlertNotifications() - Low balance warnings
+ * - notifyLargeOrder() - Large order notifications
+ * - notifyAllocationCreated() - New allocation notifications
+ * - notifyTransactionFinalized() - Transaction completion notifications
  */
 async function sendEmail(params: { to: string; subject: string; body: string }) {
-  // Placeholder for email sending
+  // Placeholder for email sending - currently only logs
   functions.logger.info(`Email would be sent to ${params.to}: ${params.subject}`)
   // In production, implement with actual email service
 }

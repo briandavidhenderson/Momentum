@@ -1,59 +1,52 @@
 /* Custom Gantt Chart Styling - Light Mode */
+
 /* 
- * WARNING: This file uses hashed/minified class names from gantt-task-react library.
- * These class names (e.g., ._3jLuT, ._2vQhZ) are brittle and may break if the library is updated.
- * 
- * Library Version: gantt-task-react@^0.3.9
- * 
- * These selectors target internal elements of the gantt-task-react component.
- * If the library updates and changes its class names, these styles will need to be updated.
- * 
- * Alternative approaches to consider:
- * 1. Use CSS-in-JS or styled-components to style the Gantt component
- * 2. Check if the library provides stable data attributes or class names
- * 3. Use CSS custom properties (CSS variables) that can be set via props
- * 4. Fork the library and add stable class names
- * 
- * Current approach uses !important flags to ensure styles override library defaults.
- * This is necessary because the library doesn't expose stable class names.
+ * NOTE: We are using !important to override the library's default styles.
+ * The library uses hashed class names which are brittle. 
+ * We are attempting to target elements by their structure where possible,
+ * but some hashed classes are still used as a last resort.
  */
 
-/* Override default table styles */
+/* Main Container */
 .gantt-container {
   border-radius: 16px;
   overflow: hidden;
+  background-color: hsl(var(--surface-2)); /* Ensure background is not transparent */
 }
 
-/* Style the grid to be less table-like */
-/* NOTE: ._3jLuT is the main gantt grid container - may change with library updates */
-._3jLuT {
+/* Grid Container */
+._3jLuT, 
+div[role="grid"] { 
   border-radius: 12px !important;
   overflow: hidden !important;
-  background: hsl(var(--surface-2)) !important;
+  background: hsl(var(--surface-2)) !important; /* Fix for black bar */
 }
 
-/* Task list styling */
-/* NOTE: ._2vQhZ targets the task list sidebar - may change with library updates */
-._2vQhZ {
+/* Task List Sidebar */
+._2vQhZ,
+div[class*="_2vQhZ"] {
   background: hsl(var(--surface-2)) !important;
   border-right: 2px solid hsl(var(--border)) !important;
   border-radius: 12px 0 0 12px !important;
 }
 
-/* Task list rows */
-/* NOTE: ._1xfOj targets individual task rows - may change with library updates */
-._1xfOj {
+/* Task Rows */
+._1xfOj,
+div[role="row"] {
   border-bottom: 1px solid hsl(var(--border)) !important;
   transition: background-color 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
   color: hsl(var(--foreground)) !important;
+  background-color: hsl(var(--surface-2)) !important; /* Ensure row background */
 }
 
-._1xfOj:hover {
+._1xfOj:hover,
+div[role="row"]:hover {
   background-color: hsl(var(--accent)) !important;
 }
 
-/* Project rows - bold and prominent */
-._1xfOj[style*="font-weight"] {
+/* Project Rows (Bold) */
+._1xfOj[style*="font-weight"],
+div[role="row"][style*="font-weight"] {
   background: hsl(var(--surface-2)) !important;
   font-weight: 600 !important;
   border-left: 4px solid hsl(var(--brand-500)) !important;
@@ -61,17 +54,18 @@
   color: hsl(var(--brand-700)) !important;
 }
 
-/* Task rows - indented */
-._1xfOj:not([style*="font-weight"]) {
+/* Task Rows (Indented) */
+._1xfOj:not([style*="font-weight"]),
+div[role="row"]:not([style*="font-weight"]) {
   padding-left: 32px !important;
-  background-color: hsl(var(--secondary)) !important;
+  background-color: hsl(var(--secondary)) !important; /* Slightly different bg for tasks */
   border-left: 2px solid hsl(var(--border)) !important;
   margin-left: 4px;
 }
 
-/* Calendar header */
-/* NOTE: ._1cK-_ targets the calendar date header - may change with library updates */
-._1cK-_ {
+/* Calendar Header */
+._1cK-_,
+div[class*="_1cK-_"] {
   background: hsl(var(--brand-500)) !important;
   color: white !important;
   border-radius: 0 12px 0 0 !important;
@@ -79,44 +73,38 @@
   padding: 12px 0 !important;
 }
 
-/* Calendar grid */
-/* NOTE: ._2AmPk targets the calendar grid area - may change with library updates */
-._2AmPk {
+/* Calendar Grid Area */
+._2AmPk,
+div[class*="_2AmPk"] {
   background-color: hsl(var(--gray-50)) !important;
   border-radius: 0 0 12px 0 !important;
 }
 
-/* Vertical grid lines */
-._2jDki {
-  border-left: 1px solid hsl(var(--border)) !important;
+/* Grid Lines */
+._2jDki, ._2gUUo {
+  border-color: hsl(var(--border)) !important;
 }
 
-/* Horizontal grid lines */
-._2gUUo {
-  border-bottom: 1px solid hsl(var(--border)) !important;
-}
-
-/* Task bars - rounded with text inside */
-._3lLk3 {
+/* Task Bars */
+._3lLk3,
+rect[class*="_3lLk3"] {
   border-radius: 8px !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
   background-clip: padding-box !important;
   opacity: 0.95 !important;
 }
 
-/* Add text inside task bars */
+/* Text inside bars */
 ._3lLk3 text {
   fill: white !important;
   font-weight: 700 !important;
   font-size: 13px !important;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8), 0 2px 6px rgba(0, 0, 0, 0.6) !important;
-  paint-order: stroke fill !important;
-  stroke: rgba(0, 0, 0, 0.4) !important;
-  stroke-width: 0.5px !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
 }
 
-/* Project bars - more prominent */
-._36T48 {
+/* Project Bars */
+._36T48,
+rect[class*="_36T48"] {
   border-radius: 10px !important;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5) !important;
   height: 32px !important;
@@ -127,30 +115,17 @@
   fill: white !important;
   font-weight: 800 !important;
   font-size: 14px !important;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 2px 8px rgba(0, 0, 0, 0.7) !important;
-  paint-order: stroke fill !important;
-  stroke: rgba(0, 0, 0, 0.5) !important;
-  stroke-width: 0.5px !important;
 }
 
-/* Progress bars */
-._1azpu {
-  border-radius: 6px !important;
-}
-
-/* Today line - vibrant */
-._16l16 {
+/* Today Line */
+._16l16,
+line[class*="_16l16"] {
   stroke: hsl(var(--danger-500)) !important;
   stroke-width: 3 !important;
   stroke-dasharray: 6 4 !important;
 }
 
-/* Remove harsh borders */
-._3jLuT * {
-  border-color: hsl(var(--border)) !important;
-}
-
-/* Smooth scrollbar */
+/* Scrollbars */
 ._3jLuT::-webkit-scrollbar {
   height: 10px;
   width: 10px;
@@ -166,25 +141,11 @@
   border-radius: 10px;
 }
 
-._3jLuT::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--foreground));
-}
+/* Text Colors */
+._39Qch { color: hsl(var(--foreground)) !important; }
+._2Hn12 { color: hsl(var(--brand-700)) !important; }
 
-/* Task text */
-._39Qch {
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  color: hsl(var(--foreground)) !important;
-}
-
-/* Project text */
-._2Hn12 {
-  font-size: 15px !important;
-  font-weight: 600 !important;
-  color: hsl(var(--brand-700)) !important;
-}
-
-/* Add spacing between projects and their tasks */
+/* Spacing */
 ._1xfOj._3yL8x {
   margin-top: 8px !important;
 }

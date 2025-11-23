@@ -4,7 +4,7 @@
  * Provides comprehensive audit trail for compliance and security monitoring
  */
 
-import * as functions from "firebase-functions"
+import * as functions from "firebase-functions/v1"
 import * as admin from "firebase-admin"
 
 const db = admin.firestore()

@@ -129,6 +129,15 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
     throw new Error("fundedBy must be an array")
   }
 
+  // Validate new dynamic membership arrays (optional fields)
+  if (profileData.researchGroupIds && !Array.isArray(profileData.researchGroupIds)) {
+    throw new Error("researchGroupIds must be an array")
+  }
+
+  if (profileData.workingLabIds && !Array.isArray(profileData.workingLabIds)) {
+    throw new Error("workingLabIds must be an array")
+  }
+
   try {
     // Check if user already has a profileId (e.g., from ORCID linking during onboarding)
     const userRef = doc(db, "users", userId)
@@ -340,7 +349,7 @@ export function subscribeToProfiles(
   try {
     let q: Query = collection(db, "personProfiles")
 
-    if (filters?.labId) {
+    if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
       q = query(q, where("labId", "==", filters.labId))
     }
 
@@ -375,5 +384,161 @@ export function subscribeToProfiles(
     // Return a no-op unsubscribe function that calls callback with empty array
     callback([])
     return () => {}
+  }
+}
+
+// ============================================================================
+// DYNAMIC GROUP MEMBERSHIP HELPERS
+// ============================================================================
+
+/**
+ * Add a research group to a person's profile
+ * Updates the researchGroupIds array in the profile
+ */
+export async function addResearchGroupToProfile(
+  profileId: string,
+  researchGroupId: string
+): Promise<void> {
+  const db = getFirebaseDb()
+  const profileRef = doc(db, "personProfiles", profileId)
+
+  try {
+    // Get current profile
+    const profileSnap = await getDoc(profileRef)
+    if (!profileSnap.exists()) {
+      throw new Error(`Profile ${profileId} not found`)
+    }
+
+    const profile = profileSnap.data() as PersonProfile
+    const currentGroups = profile.researchGroupIds || []
+
+    // Check if already a member
+    if (currentGroups.includes(researchGroupId)) {
+      logger.warn("Profile is already a member of this research group", { profileId, researchGroupId })
+      return
+    }
+
+    // Add the research group
+    await updateDoc(profileRef, {
+      researchGroupIds: [...currentGroups, researchGroupId],
+      updatedAt: new Date().toISOString(),
+    })
+
+    logger.info("Research group added to profile", { profileId, researchGroupId })
+  } catch (error) {
+    logger.error("Error adding research group to profile", error, { profileId, researchGroupId })
+    throw error
+  }
+}
+
+/**
+ * Remove a research group from a person's profile
+ * Updates the researchGroupIds array in the profile
+ */
+export async function removeResearchGroupFromProfile(
+  profileId: string,
+  researchGroupId: string
+): Promise<void> {
+  const db = getFirebaseDb()
+  const profileRef = doc(db, "personProfiles", profileId)
+
+  try {
+    // Get current profile
+    const profileSnap = await getDoc(profileRef)
+    if (!profileSnap.exists()) {
+      throw new Error(`Profile ${profileId} not found`)
+    }
+
+    const profile = profileSnap.data() as PersonProfile
+    const currentGroups = profile.researchGroupIds || []
+
+    // Remove the research group
+    const updatedGroups = currentGroups.filter(id => id !== researchGroupId)
+
+    await updateDoc(profileRef, {
+      researchGroupIds: updatedGroups,
+      updatedAt: new Date().toISOString(),
+    })
+
+    logger.info("Research group removed from profile", { profileId, researchGroupId })
+  } catch (error) {
+    logger.error("Error removing research group from profile", error, { profileId, researchGroupId })
+    throw error
+  }
+}
+
+/**
+ * Add a working lab to a person's profile
+ * Updates the workingLabIds array in the profile
+ */
+export async function addWorkingLabToProfile(
+  profileId: string,
+  workingLabId: string
+): Promise<void> {
+  const db = getFirebaseDb()
+  const profileRef = doc(db, "personProfiles", profileId)
+
+  try {
+    // Get current profile
+    const profileSnap = await getDoc(profileRef)
+    if (!profileSnap.exists()) {
+      throw new Error(`Profile ${profileId} not found`)
+    }
+
+    const profile = profileSnap.data() as PersonProfile
+    const currentLabs = profile.workingLabIds || []
+
+    // Check if already a member
+    if (currentLabs.includes(workingLabId)) {
+      logger.warn("Profile is already a member of this working lab", { profileId, workingLabId })
+      return
+    }
+
+    // Add the working lab
+    await updateDoc(profileRef, {
+      workingLabIds: [...currentLabs, workingLabId],
+      updatedAt: new Date().toISOString(),
+    })
+
+    logger.info("Working lab added to profile", { profileId, workingLabId })
+  } catch (error) {
+    logger.error("Error adding working lab to profile", error, { profileId, workingLabId })
+    throw error
+  }
+}
+
+/**
+ * Remove a working lab from a person's profile
+ * Updates the workingLabIds array in the profile
+ */
+export async function removeWorkingLabFromProfile(
+  profileId: string,
+  workingLabId: string
+): Promise<void> {
+  const db = getFirebaseDb()
+  const profileRef = doc(db, "personProfiles", profileId)
+
+  try {
+    // Get current profile
+    const profileSnap = await getDoc(profileRef)
+    if (!profileSnap.exists()) {
+      throw new Error(`Profile ${profileId} not found`)
+    }
+
+    const profile = profileSnap.data() as PersonProfile
+    const currentLabs = profile.workingLabIds || []
+
+    // Remove the working lab
+    const updatedLabs = currentLabs.filter(id => id !== workingLabId)
+
+    await updateDoc(profileRef, {
+      workingLabIds: updatedLabs,
+      updatedAt: new Date().toISOString(),
+    })
+
+    logger.info("Working lab removed from profile", { profileId, workingLabId })
+  } catch (error) {
+    logger.error("Error removing working lab from profile", error, { profileId, workingLabId })
+    throw error
   }
 }

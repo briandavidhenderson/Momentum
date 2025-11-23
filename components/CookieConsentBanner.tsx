@@ -57,10 +57,33 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
         const consentDoc = await getDoc(doc(db, "userConsents", user.uid))
 
         if (consentDoc.exists()) {
-          const consent = consentDoc.data() as UserConsent
+          const data = consentDoc.data()
+          
+          // Validate and sanitize consent data to handle any corrupted documents
+          if (!data || typeof data !== 'object') {
+            // Invalid data - show banner to get new consent
+            setShowBanner(true)
+            return
+          }
+
+          // Create a clean consent object, filtering out undefined values
+          const consent: UserConsent = {
+            id: data.id || user.uid,
+            userId: data.userId || user.uid,
+            ...(data.labId && typeof data.labId === 'string' && { labId: data.labId }),
+            functionalCookies: data.functionalCookies ?? true,
+            analyticsCookies: data.analyticsCookies ?? false,
+            dataProcessingConsent: data.dataProcessingConsent ?? false,
+            specialCategoryDataAcknowledged: data.specialCategoryDataAcknowledged ?? false,
+            consentGivenAt: data.consentGivenAt || new Date().toISOString(),
+            consentVersion: typeof data.consentVersion === 'string' ? data.consentVersion : '',
+            ...(data.userAgent && typeof data.userAgent === 'string' && { userAgent: data.userAgent }),
+          }
 
           // Check if consent is for current privacy policy version
-          if (consent.consentVersion === PRIVACY_POLICY_VERSION) {
+          // Handle case where consentVersion might be undefined or invalid
+          const consentVersion = consent.consentVersion
+          if (consentVersion && typeof consentVersion === 'string' && consentVersion === PRIVACY_POLICY_VERSION) {
             setShowBanner(false)
 
             // Apply consent settings
@@ -70,7 +93,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
 
             onConsentChange?.(consent)
           } else {
-            // Privacy policy updated - need new consent
+            // Privacy policy updated or invalid version - need new consent
             setShowBanner(true)
           }
         } else {
@@ -120,7 +143,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
       const consentData: UserConsent = {
         id: user.uid,
         userId: user.uid,
-        labId: userProfile?.labId,
+        ...(userProfile?.labId && { labId: userProfile.labId }), // Only include labId if defined
         functionalCookies: true, // Always required
         analyticsCookies: consent.analyticsCookies || false,
         dataProcessingConsent: consent.dataProcessingConsent || false,

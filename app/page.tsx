@@ -4,14 +4,14 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut, Users, Check, FileText, Edit, Package, Calendar, Wrench, Shield, DollarSign, Wallet, ListTodo } from "lucide-react"
+import { LogOut } from "lucide-react"
 import { DataClearDialog } from "@/components/DataClearDialog"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
 import { DayToDayBoard } from "@/components/views/DayToDayBoard"
 import { MyTasksView } from "@/components/views/MyTasksView"
 import { ElectronicLabNotebook } from "@/components/views/ElectronicLabNotebook"
-import { PersonalProfilePage } from "@/components/views/PersonalProfilePage"
+import { EnhancedProfilePage } from "@/components/profile/EnhancedProfilePage"
 import { ProfileManagement } from "@/components/views/ProfileManagement"
 import { OrdersInventory } from "@/components/views/OrdersInventory"
 import { EquipmentManagement } from "@/components/views/EquipmentManagement"
@@ -22,6 +22,10 @@ import { FundingAdmin } from "@/components/views/FundingAdmin"
 import { PersonalLedger } from "@/components/PersonalLedger"
 import { NotificationBell } from "@/components/NotificationBell"
 import { UserRole } from "@/lib/types"
+import { MyBookingsView } from "@/components/equipment/MyBookingsView"
+import WhiteboardPage from "@/app/whiteboard/page"
+import { TopModuleNavigation } from "@/components/TopModuleNavigation"
+import { HomeDashboard } from "@/components/views/dashboard/HomeDashboard"
 
 export default function Home() {
   // Get all state and handlers from context
@@ -92,228 +96,92 @@ export default function Home() {
     )
   }
 
+  // Check permissions
+  const isAdmin = currentUserProfile?.isAdministrator || currentUser?.isAdministrator || false
+  const hasRoleRestriction =
+    currentUserProfile?.userRole === UserRole.PI ||
+    currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
+    currentUserProfile?.userRole === UserRole.LAB_MANAGER
+
+  // Navigation handler with proper typing
+  const handleNavigationSelect = (moduleId: string) => {
+    setMainView(moduleId as typeof mainView)
+  }
+
   // Main application
   return (
-    <main className="min-h-screen bg-gray-50 p-4 pb-8">
-      <div className="max-w-[2000px] mx-auto space-y-6">
+    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="max-w-[2000px] mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-navigation p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h1 className="h1 text-foreground mb-2">
-                Momentum Lab Management
-              </h1>
-              <p className="text-base text-muted-foreground">
-                Comprehensive laboratory project and personnel management system
-              </p>
+        <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 sticky top-0 z-40">
+          <div className="px-6 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                  Momentum
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Laboratory Management System
+                </p>
+              </div>
+
+              {/* User Info, Notifications & Sign Out Button */}
+              <div className="flex items-center gap-3">
+                {currentUserProfile && (
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-slate-700">
+                      {currentUserProfile.firstName} {currentUserProfile.lastName}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {currentUserProfile.position || currentUser?.email}
+                    </p>
+                  </div>
+                )}
+                <NotificationBell />
+                <Button
+                  onClick={handleSignOut}
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-500 hover:text-red-600 hover:bg-red-50"
+                  aria-label="Sign out of your account"
+                >
+                  <LogOut className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                  Sign Out
+                </Button>
+              </div>
             </div>
 
-            {/* User Info, Notifications & Sign Out Button */}
-            <div className="flex items-center gap-3">
-              {currentUserProfile && (
-                <div className="text-right">
-                  <p className="text-sm font-medium text-foreground">
-                    {currentUserProfile.firstName} {currentUserProfile.lastName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {currentUserProfile.position || currentUser?.email}
-                  </p>
-                </div>
-              )}
-              <NotificationBell />
-              <Button
-                onClick={handleSignOut}
-                variant="outline"
-                size="lg"
-                className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
-                aria-label="Sign out of your account"
-              >
-                <LogOut className="h-4 w-4 mr-2" aria-hidden="true" />
-                Sign Out
-              </Button>
-            </div>
+            {/* New Modern Navigation */}
+            <TopModuleNavigation
+              activeModule={mainView}
+              onSelect={handleNavigationSelect}
+              isAdmin={isAdmin}
+              hasRoleRestriction={hasRoleRestriction}
+            />
           </div>
-
-          {/* Main Navigation Tabs */}
-          <nav aria-label="Main navigation" className="flex gap-2 flex-wrap">
-            <Button
-              onClick={() => setMainView('projects')}
-              variant={mainView === 'projects' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'projects' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'projects' ? 'page' : undefined}
-            >
-              Project Timeline
-            </Button>
-            <Button
-              onClick={() => setMainView('people')}
-              variant={mainView === 'people' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'people' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'people' ? 'page' : undefined}
-            >
-              <Users className="h-4 w-4 mr-2" aria-hidden="true" />
-              People
-            </Button>
-            <Button
-              onClick={() => setMainView('daytoday')}
-              variant={mainView === 'daytoday' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'daytoday' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'daytoday' ? 'page' : undefined}
-            >
-              <Check className="h-4 w-4 mr-2" aria-hidden="true" />
-              Day to Day
-            </Button>
-            <Button
-              onClick={() => setMainView('mytasks')}
-              variant={mainView === 'mytasks' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'mytasks' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'mytasks' ? 'page' : undefined}
-            >
-              <ListTodo className="h-4 w-4 mr-2" aria-hidden="true" />
-              My Tasks
-            </Button>
-            <Button
-              onClick={() => setMainView('eln')}
-              variant={mainView === 'eln' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'eln' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'eln' ? 'page' : undefined}
-            >
-              <FileText className="h-4 w-4 mr-2" aria-hidden="true" />
-              Lab Notebook
-            </Button>
-            <Button
-              onClick={() => setMainView('orders')}
-              variant={mainView === 'orders' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'orders' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'orders' ? 'page' : undefined}
-            >
-              <Package className="h-4 w-4 mr-2" aria-hidden="true" />
-              Orders
-            </Button>
-            <Button
-              onClick={() => setMainView('equipment')}
-              variant={mainView === 'equipment' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'equipment' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'equipment' ? 'page' : undefined}
-            >
-              <Wrench className="h-4 w-4 mr-2" aria-hidden="true" />
-              Equipment
-            </Button>
-            <Button
-              onClick={() => setMainView('calendar')}
-              variant={mainView === 'calendar' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'calendar' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'calendar' ? 'page' : undefined}
-            >
-              <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
-              Calendar
-            </Button>
-            {/* Funding Admin - Only for PIs, Finance Admins, and Lab Managers */}
-            {(currentUserProfile?.userRole === UserRole.PI ||
-              currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
-              currentUserProfile?.userRole === UserRole.LAB_MANAGER) && (
-              <Button
-                onClick={() => setMainView('funding')}
-                variant={mainView === 'funding' ? 'default' : 'outline'}
-                size="lg"
-                className={mainView === 'funding' ? 'bg-brand-500 text-white' : ''}
-                aria-current={mainView === 'funding' ? 'page' : undefined}
-              >
-                <DollarSign className="h-4 w-4 mr-2" aria-hidden="true" />
-                Funding
-              </Button>
-            )}
-            {/* Personal Ledger - Available to all users */}
-            <Button
-              onClick={() => setMainView('ledger')}
-              variant={mainView === 'ledger' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'ledger' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'ledger' ? 'page' : undefined}
-            >
-              <Wallet className="h-4 w-4 mr-2" aria-hidden="true" />
-              My Ledger
-            </Button>
-            <Button
-              onClick={() => setMainView('myprofile')}
-              variant={mainView === 'myprofile' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'myprofile' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'myprofile' ? 'page' : undefined}
-            >
-              <Edit className="h-4 w-4 mr-2" aria-hidden="true" />
-              My Profile
-            </Button>
-            <Button
-              onClick={() => setMainView('privacy')}
-              variant={mainView === 'privacy' ? 'default' : 'outline'}
-              size="lg"
-              className={mainView === 'privacy' ? 'bg-brand-500 text-white' : ''}
-              aria-current={mainView === 'privacy' ? 'page' : undefined}
-            >
-              <Shield className="h-4 w-4 mr-2" aria-hidden="true" />
-              Privacy
-            </Button>
-            {(currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
-              <Button
-                onClick={() => setMainView('profiles')}
-                variant={mainView === 'profiles' ? 'default' : 'outline'}
-                size="lg"
-                className={mainView === 'profiles' ? 'bg-brand-500 text-white' : ''}
-                aria-current={mainView === 'profiles' ? 'page' : undefined}
-              >
-                <Users className="h-4 w-4 mr-2" aria-hidden="true" />
-                All Profiles
-              </Button>
-            )}
-          </nav>
         </div>
 
         {/* Render selected view */}
-        {mainView === 'projects' && <ProjectDashboard />}
-        {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
-        {mainView === 'daytoday' && <DayToDayBoard />}
-        {mainView === 'mytasks' && <MyTasksView />}
-        {mainView === 'eln' && <ElectronicLabNotebook />}
-        {mainView === 'orders' && <OrdersInventory />}
-        {mainView === 'equipment' && <EquipmentManagement />}
-        {mainView === 'calendar' && <CalendarEvents />}
-        {mainView === 'funding' && (
-          currentUserProfile?.userRole === UserRole.PI ||
-          currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
-          currentUserProfile?.userRole === UserRole.LAB_MANAGER
-        ) && <FundingAdmin />}
-        {mainView === 'funding' && !(
-          currentUserProfile?.userRole === UserRole.PI ||
-          currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
-          currentUserProfile?.userRole === UserRole.LAB_MANAGER
-        ) && (
-          <div className="bg-white rounded-xl shadow-card p-8 text-center">
-            <DollarSign className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-2xl font-semibold mb-2">Access Restricted</h2>
-            <p className="text-muted-foreground">You need PI, Finance Admin, or Lab Manager privileges to access the Funding panel.</p>
-          </div>
-        )}
-        {mainView === 'ledger' && <PersonalLedger />}
-        {mainView === 'myprofile' && <PersonalProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
-        {mainView === 'privacy' && <PrivacyDashboard />}
-        {mainView === 'profiles' && (currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
-          <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />
-        )}
-        {mainView === 'profiles' && !(currentUserProfile?.isAdministrator || currentUser?.isAdministrator) && (
-          <div className="bg-white rounded-xl shadow-card p-8 text-center">
-            <Shield className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-2xl font-semibold mb-2">Access Restricted</h2>
-            <p className="text-muted-foreground">You need administrator privileges to access the Profile Management panel.</p>
-          </div>
-        )}
+        <div className="p-6">
+          {mainView === 'dashboard' && <HomeDashboard />}
+          {mainView === 'projects' && <ProjectDashboard />}
+          {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
+          {mainView === 'daytoday' && <DayToDayBoard />}
+          {mainView === 'mytasks' && <MyTasksView />}
+          {mainView === 'eln' && <ElectronicLabNotebook />}
+          {mainView === 'orders' && <OrdersInventory />}
+          {mainView === 'equipment' && <EquipmentManagement />}
+          {mainView === 'bookings' && <MyBookingsView />}
+          {mainView === 'calendar' && <CalendarEvents />}
+          {mainView === 'whiteboard' && <WhiteboardPage />}
+          {mainView === 'funding' && hasRoleRestriction && <FundingAdmin />}
+          {mainView === 'ledger' && <PersonalLedger />}
+          {mainView === 'myprofile' && currentUser && currentUserProfile && <EnhancedProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+          {mainView === 'privacy' && <PrivacyDashboard />}
+          {mainView === 'profiles' && isAdmin && (
+            <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />
+          )}
+        </div>
       </div>
 
       {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}

@@ -4,7 +4,7 @@
  * Admin-only operation with comprehensive logging
  */
 
-import * as functions from "firebase-functions"
+import * as functions from "firebase-functions/v1"
 import * as admin from "firebase-admin"
 import {
   storeTokens,
