@@ -81,7 +81,6 @@ export function exportProjectsToCSV(projects: Project[]) {
     { key: "status" as const, label: "Status" },
     { key: "health" as const, label: "Health" },
     { key: "totalBudget" as const, label: "Budget" },
-    { key: "notes" as const, label: "Notes" },
   ]
 
   const csv = arrayToCSV(projects, columns)
@@ -115,7 +114,6 @@ export function exportTasksToCSV(tasks: Task[]) {
     { key: "status" as const, label: "Status" },
     { key: "type" as const, label: "Type" },
     { key: "primaryOwner" as const, label: "Owner ID" },
-    { key: "notes" as const, label: "Notes" },
   ]
 
   const csv = arrayToCSV(tasks, columns)
@@ -169,7 +167,6 @@ export function exportInventoryToCSV(inventory: InventoryItem[]) {
     { key: "category" as const, label: "Category" },
     { key: "subcategory" as const, label: "Subcategory" },
     { key: "receivedDate" as const, label: "Received Date" },
-    { key: "notes" as const, label: "Notes" },
   ]
 
   const csv = arrayToCSV(inventory, columns)

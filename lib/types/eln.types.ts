@@ -58,21 +58,6 @@ export interface ELNItem {
 
   // Voice-specific
   duration?: number
-  transcript?: string
-
-  // Image/Photo-specific
-  stickyNotes?: ELNStickyNote[]
-
-  // Timestamps
-  createdAt: string
-  updatedAt?: string
-  createdBy?: string
-
-  // AI-Generated Content Tracking (NEW - EU AI Act)
-  isAIGenerated?: boolean              // Whether content was AI-generated
-  aiContentId?: string                 // Link to AIGeneratedContent record
-  aiDisclaimerShown?: boolean          // Whether AI disclaimer was shown
-  aiContentEdited?: boolean            // Whether user edited AI content
 }
 
 /**
@@ -122,6 +107,10 @@ export interface ELNExperiment {
   // Project Linking (NEW)
   masterProjectId: string         // ✅ REQUIRED: Which project this experiment belongs to
   masterProjectName: string       // Cached
+
+  // Matrix Structure
+  groupId?: string                // Research Group this experiment is shared with
+
   workpackageId?: string          // Optional: specific work package
   taskId?: string                 // Optional: specific task
 

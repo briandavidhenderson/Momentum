@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment } from "@/lib/types"
 import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { WorkpackageDialog } from "@/components/projects/WorkpackageDialog"
 import { WorkpackageCard } from "@/components/projects/WorkpackageCard"
 import { DeliverableDialog } from "@/components/DeliverableDialog"
@@ -38,6 +39,7 @@ import {
   Download,
   Upload,
   FlaskConical,
+  ListTodo,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/constants"
 import { useAppContext } from "@/lib/AppContext"
@@ -87,12 +89,12 @@ export function ProjectDetailPage({
   onViewExperiment,
   onViewEvent,
 }: ProjectDetailPageProps) {
-  const [activeTab, setActiveTab] = useState("overview")
+  const [activeTab, setActiveTab] = useState("execution")
   const [workpackageDialogOpen, setWorkpackageDialogOpen] = useState(false)
-  const [selectedWorkpackage, setSelectedWorkpackage] = useState<Workpackage | null>(null)
+  const [selectedWorkpackageDialog, setSelectedWorkpackageDialog] = useState<Workpackage | null>(null)
   const [workpackageDialogMode, setWorkpackageDialogMode] = useState<"create" | "edit" | "view">("view")
   const [deliverableDialogOpen, setDeliverableDialogOpen] = useState(false)
-  const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null)
+  const [selectedDeliverableDialog, setSelectedDeliverableDialog] = useState<Deliverable | null>(null)
   const [deliverableDialogMode, setDeliverableDialogMode] = useState<"create" | "edit" | "view">("view")
   const [selectedDeliverableForPanel, setSelectedDeliverableForPanel] = useState<Deliverable | null>(null)
   const [selectedWorkpackageForDeliverable, setSelectedWorkpackageForDeliverable] = useState<string | null>(null)
@@ -102,6 +104,8 @@ export function ProjectDetailPage({
   const [loadingExperiments, setLoadingExperiments] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [selectedWorkpackageId, setSelectedWorkpackageId] = useState<string | null>(null)
+  const [selectedDeliverableId, setSelectedDeliverableId] = useState<string | null>(null)
 
   // Get current user for import/export
   const { currentUser, currentUserProfile } = useAppContext()
@@ -210,6 +214,26 @@ export function ProjectDetailPage({
     }
   }, [orders])
 
+  // Default selections for the execution view
+  useEffect(() => {
+    if (workpackages.length > 0 && !selectedWorkpackageId) {
+      setSelectedWorkpackageId(workpackages[0].id)
+    }
+  }, [workpackages, selectedWorkpackageId])
+
+  useEffect(() => {
+    if (!selectedWorkpackageId) return
+    const deliverablesForWp = deliverables.filter(d => d.workpackageId === selectedWorkpackageId)
+    if (deliverablesForWp.length > 0) {
+      setSelectedDeliverableId((current) => {
+        if (current && deliverablesForWp.some(d => d.id === current)) return current
+        return deliverablesForWp[0].id
+      })
+    } else {
+      setSelectedDeliverableId(null)
+    }
+  }, [deliverables, selectedWorkpackageId])
+
   // Get project health status
   const getHealthStatus = () => {
     if (stats.atRiskWorkpackages > 0) return { label: "At Risk", color: "text-red-600", bg: "bg-red-50" }
@@ -234,19 +258,19 @@ export function ProjectDetailPage({
 
   // Workpackage dialog handlers
   const handleCreateWorkpackageClick = () => {
-    setSelectedWorkpackage(null)
+    setSelectedWorkpackageDialog(null)
     setWorkpackageDialogMode("create")
     setWorkpackageDialogOpen(true)
   }
 
   const handleViewWorkpackage = (wp: Workpackage) => {
-    setSelectedWorkpackage(wp)
+    setSelectedWorkpackageDialog(wp)
     setWorkpackageDialogMode("view")
     setWorkpackageDialogOpen(true)
   }
 
   const handleEditWorkpackage = (wp: Workpackage) => {
-    setSelectedWorkpackage(wp)
+    setSelectedWorkpackageDialog(wp)
     setWorkpackageDialogMode("edit")
     setWorkpackageDialogOpen(true)
   }
@@ -254,16 +278,16 @@ export function ProjectDetailPage({
   const handleSaveWorkpackage = (workpackageData: Partial<Workpackage>) => {
     if (workpackageDialogMode === "create" && onCreateWorkpackage) {
       onCreateWorkpackage(workpackageData)
-    } else if (workpackageDialogMode === "edit" && selectedWorkpackage && onUpdateWorkpackage) {
-      onUpdateWorkpackage(selectedWorkpackage.id, workpackageData)
+    } else if (workpackageDialogMode === "edit" && selectedWorkpackageDialog && onUpdateWorkpackage) {
+      onUpdateWorkpackage(selectedWorkpackageDialog.id, workpackageData)
     }
     setWorkpackageDialogOpen(false)
   }
 
   const handleDeleteWorkpackage = () => {
-    if (selectedWorkpackage && onDeleteWorkpackage) {
-      if (confirm(`Are you sure you want to delete "${selectedWorkpackage.name}"?`)) {
-        onDeleteWorkpackage(selectedWorkpackage.id)
+    if (selectedWorkpackageDialog && onDeleteWorkpackage) {
+      if (confirm(`Are you sure you want to delete "${selectedWorkpackageDialog.name}"?`)) {
+        onDeleteWorkpackage(selectedWorkpackageDialog.id)
         setWorkpackageDialogOpen(false)
       }
     }
@@ -272,7 +296,7 @@ export function ProjectDetailPage({
   // Deliverable dialog handlers
   const handleCreateDeliverableClick = (workpackageId: string) => {
     setSelectedWorkpackageForDeliverable(workpackageId)
-    setSelectedDeliverable(null)
+    setSelectedDeliverableDialog(null)
     setDeliverableDialogMode("create")
     setDeliverableDialogOpen(true)
   }
@@ -282,7 +306,7 @@ export function ProjectDetailPage({
   }
 
   const handleEditDeliverable = (deliverable: Deliverable) => {
-    setSelectedDeliverable(deliverable)
+    setSelectedDeliverableDialog(deliverable)
     setSelectedWorkpackageForDeliverable(deliverable.workpackageId)
     setDeliverableDialogMode("edit")
     setDeliverableDialogOpen(true)
@@ -291,8 +315,8 @@ export function ProjectDetailPage({
   const handleSaveDeliverable = (deliverableData: Partial<Deliverable>) => {
     if (deliverableDialogMode === "create" && onCreateDeliverable) {
       onCreateDeliverable(deliverableData)
-    } else if (deliverableDialogMode === "edit" && selectedDeliverable && onUpdateDeliverable) {
-      onUpdateDeliverable(selectedDeliverable.id, deliverableData)
+    } else if (deliverableDialogMode === "edit" && selectedDeliverableDialog && onUpdateDeliverable) {
+      onUpdateDeliverable(selectedDeliverableDialog.id, deliverableData)
     }
     setDeliverableDialogOpen(false)
   }
@@ -317,6 +341,64 @@ export function ProjectDetailPage({
     // Parent component should handle navigation to the new project
     // For now, just log success
     alert(`Project imported successfully! Refresh the page to see the new project.`)
+  }
+
+  const selectedWorkpackage = useMemo(
+    () => workpackages.find(wp => wp.id === selectedWorkpackageId) || null,
+    [selectedWorkpackageId, workpackages]
+  )
+
+  const deliverablesForSelectedWp = useMemo(
+    () => deliverables.filter(d => d.workpackageId === selectedWorkpackageId),
+    [deliverables, selectedWorkpackageId]
+  )
+
+  const selectedDeliverable = useMemo(
+    () => deliverablesForSelectedWp.find(d => d.id === selectedDeliverableId) || null,
+    [deliverablesForSelectedWp, selectedDeliverableId]
+  )
+
+  const getTasksForSelectedDeliverable = useCallback(() => {
+    const tasks = Array.isArray(selectedWorkpackage?.tasks) ? selectedWorkpackage?.tasks : []
+    if (!selectedDeliverable) return tasks || []
+
+    return (tasks || []).filter((task: any) => {
+      if (task?.deliverables && Array.isArray(task.deliverables)) {
+        return task.deliverables.some((d: any) => d === selectedDeliverable.id || d?.id === selectedDeliverable.id)
+      }
+      if (task?.deliverableId) return task.deliverableId === selectedDeliverable.id
+      // If no explicit mapping, include all tasks for the workpackage so users still see activity
+      return true
+    })
+  }, [selectedWorkpackage, selectedDeliverable])
+
+  const getTaskStatusMeta = (status?: string) => {
+    switch (status) {
+      case "completed":
+      case "done":
+        return { label: "Completed", color: "bg-green-100 text-green-800 border-green-200", bar: "bg-green-500" }
+      case "in-progress":
+      case "active":
+        return { label: "In Progress", color: "bg-blue-100 text-blue-800 border-blue-200", bar: "bg-blue-500" }
+      case "at-risk":
+      case "blocked":
+        return { label: "Blocked", color: "bg-red-100 text-red-800 border-red-200", bar: "bg-red-500" }
+      case "on-hold":
+        return { label: "On Hold", color: "bg-yellow-100 text-yellow-800 border-yellow-200", bar: "bg-yellow-500" }
+      default:
+        return { label: "Not Started", color: "bg-gray-100 text-gray-800 border-gray-200", bar: "bg-gray-300" }
+    }
+  }
+
+  const taskProblem = useMemo(() => {
+    const tasks = getTasksForSelectedDeliverable()
+    return tasks.some((t: any) => t?.status === "blocked" || t?.status === "at-risk")
+  }, [getTasksForSelectedDeliverable])
+
+  const getPersonById = (id?: string) => teamMembers.find(p => p.id === id)
+  const getInitials = (person?: PersonProfile, fallback = "?") => {
+    if (!person) return fallback
+    return `${person.firstName?.[0] || ""}${person.lastName?.[0] || ""}`.toUpperCase() || fallback
   }
 
   return (
@@ -394,6 +476,10 @@ export function ProjectDetailPage({
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
         <TabsList className="px-6 bg-surface-2 border-b border-border rounded-none w-full justify-start">
+          <TabsTrigger value="execution" className="gap-2">
+            <ListTodo className="h-4 w-4" />
+            Execution Board
+          </TabsTrigger>
           <TabsTrigger value="overview" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Overview
@@ -421,6 +507,192 @@ export function ProjectDetailPage({
         </TabsList>
 
         <div className="flex-1 overflow-y-auto">
+          {/* Execution Board Tab */}
+          <TabsContent value="execution" className="p-6 m-0">
+            <div className="grid gap-4 lg:grid-cols-[230px_260px_1fr] min-h-[420px]">
+              {/* Workpackage list */}
+              <Card className="bg-surface-2 border-border">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Work Packages</CardTitle>
+                  <CardDescription>Pick a package to see its deliverables</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {workpackages.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No work packages yet.</p>
+                  )}
+                  {workpackages.map((wp) => {
+                    const isSelected = wp.id === selectedWorkpackageId
+                    return (
+                      <button
+                        key={wp.id}
+                        onClick={() => setSelectedWorkpackageId(wp.id)}
+                        className={`w-full text-left px-3 py-2 rounded-md border transition-colors ${isSelected ? "border-brand-500 bg-brand-50 text-brand-900" : "border-border hover:bg-muted/50"
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{wp.name}</span>
+                          <Badge variant={wp.status === "completed" ? "default" : "outline"} className="text-[11px]">
+                            {wp.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {deliverables.filter(d => d.workpackageId === wp.id).length} deliverable{deliverables.filter(d => d.workpackageId === wp.id).length !== 1 ? "s" : ""}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* Deliverable list */}
+              <Card className="bg-surface-2 border-border">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Deliverables</CardTitle>
+                  <CardDescription>Choose a deliverable to view its tasks</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {deliverablesForSelectedWp.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No deliverables for this work package.</p>
+                  )}
+                  {deliverablesForSelectedWp.map((deliverable) => {
+                    const isSelected = deliverable.id === selectedDeliverableId
+                    return (
+                      <button
+                        key={deliverable.id}
+                        onClick={() => setSelectedDeliverableId(deliverable.id)}
+                        className={`w-full text-left px-3 py-2 rounded-md border transition-colors ${isSelected ? "border-brand-500 bg-brand-50 text-brand-900" : "border-border hover:bg-muted/50"
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold">{deliverable.name}</span>
+                          <Badge variant="outline" className="text-[11px]">
+                            {deliverable.status}
+                          </Badge>
+                        </div>
+                        <Progress value={deliverable.progress || 0} className="h-1.5 mt-2" />
+                      </button>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* Deliverable detail + tasks */}
+              <Card className="border-border">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-xl">
+                        {selectedDeliverable?.name || "Select a deliverable"}
+                      </CardTitle>
+                      {selectedWorkpackage && (
+                        <CardDescription>{selectedWorkpackage.name}</CardDescription>
+                      )}
+                    </div>
+                    {selectedDeliverable && (
+                      <Badge variant="outline" className="capitalize">
+                        {selectedDeliverable.status}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {selectedDeliverable ? (
+                    <>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Deliverable progress</span>
+                          <span className="font-medium">{selectedDeliverable.progress || 0}%</span>
+                        </div>
+                        <Progress value={selectedDeliverable.progress || 0} className="h-2" />
+                      </div>
+
+                      {selectedDeliverable.description && (
+                        <p className="text-sm text-muted-foreground">
+                          {selectedDeliverable.description}
+                        </p>
+                      )}
+
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <ListTodo className="h-4 w-4 text-muted-foreground" />
+                          <h4 className="font-semibold">To-do list</h4>
+                        </div>
+
+                        {getTasksForSelectedDeliverable().length === 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            No tasks captured yet. Add tasks to track progress on this deliverable.
+                          </p>
+                        )}
+
+                        <div className="space-y-2">
+                          {getTasksForSelectedDeliverable().map((task: any, idx: number) => {
+                            const meta = getTaskStatusMeta(task?.status)
+                            const owner = getPersonById(task?.primaryOwner)
+                            const progressValue = typeof task?.progress === "number" ? task.progress : 0
+                            return (
+                              <div
+                                key={task?.id || idx}
+                                className="flex items-center gap-3 rounded-md border px-3 py-2 bg-surface-2"
+                              >
+                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
+                                  {(idx + 1).toString().padStart(2, "0")}
+                                </div>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium truncate">{task?.name || "Untitled task"}</span>
+                                    <Badge variant="outline" className={`text-[11px] ${meta.color}`}>
+                                      {meta.label}
+                                    </Badge>
+                                  </div>
+                                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className={`${meta.bar} h-1.5 rounded-full`}
+                                      style={{ width: `${progressValue || 0}%` }}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8 border">
+                                    <AvatarFallback className="text-xs bg-muted">
+                                      {getInitials(owner, "??")}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">Overall status</span>
+                          <span className="text-muted-foreground">auto-updates from tasks</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <div className="flex-1 h-2 rounded-full overflow-hidden bg-muted">
+                            <div
+                              className="h-2 bg-green-500"
+                              style={{ width: `${Math.max(5, selectedDeliverable.progress || 0)}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-semibold">{selectedDeliverable.progress || 0}%</span>
+                        </div>
+                        {taskProblem && (
+                          <p className="text-sm text-red-600 mt-2">Problem detected in tasks �?� check blockers.</p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Select a deliverable to view its details and to-do list.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
           {/* Overview Tab */}
           <TabsContent value="overview" className="p-6 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -878,10 +1150,10 @@ export function ProjectDetailPage({
         <DeliverableDialog
           open={deliverableDialogOpen}
           onOpenChange={setDeliverableDialogOpen}
-          deliverable={selectedDeliverable}
+          deliverable={selectedDeliverableDialog}
           workpackageId={selectedWorkpackageForDeliverable}
           onSave={handleSaveDeliverable}
-          onDelete={deliverableDialogMode === "edit" ? () => selectedDeliverable && handleDeleteDeliverable(selectedDeliverable.id) : undefined}
+          onDelete={deliverableDialogMode === "edit" ? () => selectedDeliverableDialog && handleDeleteDeliverable(selectedDeliverableDialog.id) : undefined}
           mode={deliverableDialogMode}
           availableOwners={teamMembers}
         />

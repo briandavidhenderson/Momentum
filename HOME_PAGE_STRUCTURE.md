@@ -614,3 +614,11 @@ This is a separate page route, not a view component in the main app structure.
 - Authentication state determines what is shown
 - The navigation system uses hover/click dropdowns with permission filtering
 
+## Research Groups Flow (updated)
+
+- **Data model:** `ResearchGroup` now always carries `memberIds`, `adminIds`, `pendingMemberIds`, and `memberCount` defaults (see `lib/types/researchgroup.types.ts`); projects carry optional `groupIds`.
+- **Services:** `lib/services/groupService.ts` handles creation (creator auto admin/member), join/request, approve/reject, remove/leave, and `getUserGroups` normalization for hooks.
+- **UI entry points:** `components/groups/GroupList` + `GroupDetail` surface membership state and admin actions via `GroupMembershipPanel`/`JoinGroupButton`; creation dialog uses the corrected shape.
+- **Dashboards:** `components/GroupSelector` sits in `ProjectDashboard` to filter by `groupIds` while still showing unassigned projects; `ProjectCreationDialog` lets users assign one or more groups on create.
+- **Operational note:** After membership changes, refresh the selected group (handled inside `GroupDetail`) so counts/admin badges stay in sync.
+

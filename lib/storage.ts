@@ -92,3 +92,68 @@ export async function uploadELNFile(
 export async function deleteELNFile(storagePath: string): Promise<void> {
   return deleteFile(storagePath)
 }
+
+/**
+ * Upload research pin image to storage
+ * Path format: research/{labId}/{pinId}/{filename}
+ */
+export async function uploadResearchImage(
+  file: File,
+  labId: string,
+  pinId: string
+): Promise<{
+  url: string
+  storagePath: string
+  size: number
+  type: string
+}> {
+  // Sanitize filename
+  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+  const timestamp = Date.now()
+  const path = `research/${labId}/${pinId}/${timestamp}_${sanitizedFilename}`
+
+  const result = await uploadFile(file, path)
+
+  return {
+    url: result.url,
+    storagePath: result.path,
+    size: result.size,
+    type: result.type
+  }
+}
+
+/**
+ * Upload research pin PDF to storage
+ * Path format: research/{labId}/{pinId}/{filename}
+ */
+export async function uploadResearchPDF(
+  file: File,
+  labId: string,
+  pinId: string
+): Promise<{
+  url: string
+  storagePath: string
+  size: number
+  type: string
+}> {
+  // Sanitize filename
+  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+  const timestamp = Date.now()
+  const path = `research/${labId}/${pinId}/${timestamp}_${sanitizedFilename}`
+
+  const result = await uploadFile(file, path)
+
+  return {
+    url: result.url,
+    storagePath: result.path,
+    size: result.size,
+    type: result.type
+  }
+}
+
+/**
+ * Delete research pin file from storage
+ */
+export async function deleteResearchFile(storagePath: string): Promise<void> {
+  return deleteFile(storagePath)
+}

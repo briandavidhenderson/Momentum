@@ -13,7 +13,7 @@ import { Wallet, TrendingDown, Clock, AlertCircle } from "lucide-react"
 import { logger } from "@/lib/logger"
 
 export function PersonalLedger() {
-  const { currentUser, fundingAllocations, fundingAllocationsLoading } = useAppContext()
+  const { currentUser, fundingAllocations, fundingAllocationsLoading, fundingAccounts, fundingAccountsLoading } = useAppContext()
   const [transactions, setTransactions] = useState<FundingTransaction[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(true)
 
@@ -26,7 +26,7 @@ export function PersonalLedger() {
     }
 
     const loadTransactions = async () => {
-    const db = getFirebaseDb()
+      const db = getFirebaseDb()
       setTransactionsLoading(true)
       try {
         const allocationIds = fundingAllocations.map((a) => a.id)
@@ -56,24 +56,8 @@ export function PersonalLedger() {
     loadTransactions()
   }, [fundingAllocations])
 
-  if (fundingAllocationsLoading) {
+  if (fundingAllocationsLoading && fundingAccountsLoading) {
     return <div className="p-6">Loading your budget...</div>
-  }
-
-  if (!fundingAllocations || fundingAllocations.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Personal Budget</CardTitle>
-          <CardDescription>You currently have no funding allocations.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Contact your PI or lab manager to request funding allocation.
-          </p>
-        </CardContent>
-      </Card>
-    )
   }
 
   const totalAllocated = fundingAllocations.reduce((sum, a) => sum + (a.allocatedAmount || 0), 0)
@@ -82,7 +66,7 @@ export function PersonalLedger() {
   const totalRemaining = fundingAllocations.reduce((sum, a) => sum + (a.remainingBudget || 0), 0)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold">My Budget</h2>
         <p className="text-muted-foreground">View your funding allocations and spending history</p>
@@ -137,87 +121,125 @@ export function PersonalLedger() {
         </Card>
       </div>
 
+      {/* Project Funding Accounts (New Section) */}
+      {fundingAccounts && fundingAccounts.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Project Funding Accounts</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {fundingAccounts.map((account) => (
+              <Card key={account.id} className="border-l-4 border-l-indigo-500">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{account.accountName}</CardTitle>
+                  <CardDescription>{account.funderName}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Budget:</span>
+                      <span className="font-medium">{formatCurrency(account.totalBudget || 0, account.currency)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Remaining:</span>
+                      <span className="font-medium text-green-600">{formatCurrency(account.remainingBudget || 0, account.currency)}</span>
+                    </div>
+                    <Progress value={(((account.spentAmount || 0) + (account.committedAmount || 0)) / (account.totalBudget || 1)) * 100} className="h-1.5 mt-2" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Individual Allocations */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Funding Allocations</h3>
-        {fundingAllocations.map((allocation) => {
-          const percentUsed =
-            ((allocation.currentSpent + allocation.currentCommitted) / (allocation.allocatedAmount || 1)) *
-            100
-          const warningLevel = getLowBalanceWarningLevel(percentUsed)
+        <h3 className="text-lg font-semibold">My Allocations</h3>
+        {fundingAllocations.length === 0 ? (
+          <Card>
+            <CardContent className="pt-6 text-center text-muted-foreground">
+              You have no personal funding allocations.
+            </CardContent>
+          </Card>
+        ) : (
+          fundingAllocations.map((allocation) => {
+            const percentUsed =
+              ((allocation.currentSpent + allocation.currentCommitted) / (allocation.allocatedAmount || 1)) *
+              100
+            const warningLevel = getLowBalanceWarningLevel(percentUsed)
 
-          return (
-            <Card key={allocation.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle>{allocation.fundingAccountName}</CardTitle>
-                    <CardDescription>
-                      Allocated: {formatCurrency(allocation.allocatedAmount || 0, allocation.currency)}
-                    </CardDescription>
+            return (
+              <Card key={allocation.id}>
+                <CardHeader>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle>{allocation.fundingAccountName}</CardTitle>
+                      <CardDescription>
+                        Allocated: {formatCurrency(allocation.allocatedAmount || 0, allocation.currency)}
+                      </CardDescription>
+                    </div>
+                    <Badge
+                      variant={
+                        warningLevel === "critical"
+                          ? "destructive"
+                          : warningLevel === "high"
+                            ? "default"
+                            : "secondary"
+                      }
+                    >
+                      {allocation.status}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant={
-                      warningLevel === "critical"
-                        ? "destructive"
-                        : warningLevel === "high"
-                          ? "default"
-                          : "secondary"
-                    }
-                  >
-                    {allocation.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Progress Bar */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Budget Usage</span>
-                    <span className="font-medium">{percentUsed.toFixed(1)}%</span>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Progress Bar */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Budget Usage</span>
+                      <span className="font-medium">{percentUsed.toFixed(1)}%</span>
+                    </div>
+                    <Progress value={Math.min(percentUsed, 100)} className="h-2" />
                   </div>
-                  <Progress value={Math.min(percentUsed, 100)} className="h-2" />
-                </div>
 
-                {/* Budget Breakdown */}
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Spent</p>
-                    <p className="font-medium">
-                      {formatCurrency(allocation.currentSpent, allocation.currency)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Committed</p>
-                    <p className="font-medium">
-                      {formatCurrency(allocation.currentCommitted, allocation.currency)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Remaining</p>
-                    <p className="font-medium text-green-600">
-                      {formatCurrency(allocation.remainingBudget || 0, allocation.currency)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Warning */}
-                {warningLevel === "critical" && (
-                  <div className="flex items-start gap-2 p-3 bg-red-50 rounded">
-                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-red-600">Critical Budget Alert</p>
-                      <p className="text-red-700">
-                        You have used over 90% of your allocated budget. Please consult with your PI
-                        before placing additional orders.
+                  {/* Budget Breakdown */}
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Spent</p>
+                      <p className="font-medium">
+                        {formatCurrency(allocation.currentSpent, allocation.currency)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Committed</p>
+                      <p className="font-medium">
+                        {formatCurrency(allocation.currentCommitted, allocation.currency)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Remaining</p>
+                      <p className="font-medium text-green-600">
+                        {formatCurrency(allocation.remainingBudget || 0, allocation.currency)}
                       </p>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
+
+                  {/* Warning */}
+                  {warningLevel === "critical" && (
+                    <div className="flex items-start gap-2 p-3 bg-red-50 rounded">
+                      <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-red-600">Critical Budget Alert</p>
+                        <p className="text-red-700">
+                          You have used over 90% of your allocated budget. Please consult with your PI
+                          before placing additional orders.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })
+        )}
       </div>
 
       {/* Recent Transactions */}

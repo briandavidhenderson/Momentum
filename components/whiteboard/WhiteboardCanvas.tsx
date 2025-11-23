@@ -156,31 +156,48 @@ export function WhiteboardCanvas({
         let assetContent: any = null
         if (shape.type === 'asset') {
             if (shape.linkedEntityType === 'inventory') {
-                // Placeholder for now, will be enriched by parent or context if needed, 
-                // but for canvas rendering we might just use the stored data if we had it, 
-                // or just render a generic placeholder if we don't want to fetch inside the loop.
-                // Ideally, the shape should contain enough info to render, or we fetch data in the parent.
-                // For this refactor, I'll keep it simple and assume we might not have full live data 
-                // inside the canvas render loop without prop drilling everything.
-                // However, the original code used global constants. 
-                // We will use a simple fallback display.
                 assetContent = (
-                    <div className="w-full h-full flex flex-col justify-center gap-0.5 p-2">
-                        <div className="flex items-center gap-1"> <Beaker className="w-3 h-3 text-sky-600" /> <span className="text-[11px] font-semibold truncate"> {shape.text || "Reagent"} </span></div>
-                        <div className="flex justify-between text-[10px] text-slate-500"> <span>Inventory Item</span></div>
+                    <div className="w-full h-full flex flex-col justify-between p-3 text-slate-800">
+                        <div className="flex items-start gap-2">
+                            <Beaker className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-[12px] font-semibold leading-tight truncate">{shape.text || "Inventory item"}</div>
+                                <div className="text-[10px] text-slate-500 leading-tight truncate">Stocked resource</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">Inventory</span>
+                            <span className="text-[9px] uppercase tracking-wide text-slate-400">Drag to protocol</span>
+                        </div>
                     </div>
                 )
             } else if (shape.linkedEntityType === 'equipment') {
                 assetContent = (
-                    <div className="w-full h-full flex flex-col justify-center gap-0.5 p-2">
-                        <div className="flex items-center gap-1"> <Activity className="w-3 h-3 text-indigo-600" /> <span className="text-[11px] font-semibold truncate"> {shape.text || "Equipment"} </span></div>
-                        <div className="flex justify-between items-center text-[10px] text-slate-500 mt-0.5"> <span>Device</span></div>
+                    <div className="w-full h-full flex flex-col justify-between p-3 text-slate-800">
+                        <div className="flex items-start gap-2">
+                            <Activity className="w-4 h-4 text-indigo-700 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-[12px] font-semibold leading-tight truncate">{shape.text || "Equipment"}</div>
+                                <div className="text-[10px] text-slate-500 leading-tight truncate">Device</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700">Equipment</span>
+                            <span className="text-[9px] uppercase tracking-wide text-slate-400">Drag to protocol</span>
+                        </div>
                     </div>
                 )
             } else {
                 const asset = ASSETS.find(a => a.id === shape.assetType)
                 const Icon = asset?.Icon || Ban
-                assetContent = (<div className="w-full h-full flex flex-col items-center justify-center text-slate-500"> <Icon className="w-6 h-6" /> <span className="text-[10px] font-bold mt-1 uppercase"> {asset?.label ?? shape.assetType} </span></div>)
+                assetContent = (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 p-2 gap-1">
+                        <Icon className="w-6 h-6" />
+                        <span className="text-[10px] font-bold uppercase truncate max-w-[90%] text-center">
+                            {asset?.label ?? shape.assetType}
+                        </span>
+                    </div>
+                )
             }
         }
 

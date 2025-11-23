@@ -48,6 +48,19 @@ service firebase.storage {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isAdmin();
     }
+
+    // Research Board files - lab members can read, authenticated users can write
+    match /research/{labId}/{pinId}/{allPaths=**} {
+      // Allow read for authenticated users (lab filtering done client-side)
+      allow read: if isAuthenticated();
+      // Allow write for authenticated users (they can upload to their lab's research folder)
+      allow write: if isAuthenticated();
+    }
+
+    // ELN files - users can read/write their own
+    match /eln/{userId}/{allPaths=**} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
   }
 }
 

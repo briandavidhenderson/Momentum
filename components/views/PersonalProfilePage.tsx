@@ -297,26 +297,55 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                 disabled={!isEditing}
               />
             </div>
+            <div className="flex items-center space-x-2 py-2">
+              <input
+                type="checkbox"
+                id="isPrincipalInvestigator"
+                checked={formData.isPrincipalInvestigator || false}
+                onChange={(e) => {
+                  const isPI = e.target.checked
+                  setFormData({
+                    ...formData,
+                    isPrincipalInvestigator: isPI,
+                    // If becoming a PI, clear the reportsToId
+                    reportsToId: isPI ? null : formData.reportsToId
+                  })
+                }}
+                disabled={!isEditing}
+                className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+              />
+              <Label htmlFor="isPrincipalInvestigator" className="font-medium">
+                I am a Principal Investigator (PI)
+              </Label>
+            </div>
+
             <div>
-              <Label htmlFor="reportsTo">Reports To</Label>
+              <Label htmlFor="reportsTo">Reports To (Supervisor)</Label>
               <select
                 id="reportsTo"
                 value={formData.reportsToId || ""}
                 onChange={(e) => setFormData({ ...formData, reportsToId: e.target.value || null })}
-                disabled={!isEditing}
-                className="w-full px-3 py-2 rounded-md border border-border bg-background"
+                disabled={!isEditing || formData.isPrincipalInvestigator}
+                className="w-full px-3 py-2 rounded-md border border-border bg-background disabled:opacity-50"
               >
-                {/* Fix Bug #8: Show correct option based on PI status */}
-                {formData.isPrincipalInvestigator ? (
-                  <option value="">None (I&apos;m a PI)</option>
-                ) : (
-                  <option value="">Not set - Please select supervisor</option>
-                )}
-                {allProfiles.filter(p => p.id !== currentUserProfile.id).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.firstName} {p.lastName} - {p.labName}
-                  </option>
-                ))}
+                <option value="">
+                  {formData.isPrincipalInvestigator
+                    ? "None (I am a PI)"
+                    : "Select Supervisor"}
+                </option>
+                {allProfiles
+                  .filter(p => p.id !== currentUserProfile.id)
+                  .sort((a, b) => {
+                    // Sort PIs to top
+                    if (a.isPrincipalInvestigator && !b.isPrincipalInvestigator) return -1
+                    if (!a.isPrincipalInvestigator && b.isPrincipalInvestigator) return 1
+                    return a.lastName.localeCompare(b.lastName)
+                  })
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.firstName} {p.lastName} {p.isPrincipalInvestigator ? "(PI)" : ""} - {p.labName}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>

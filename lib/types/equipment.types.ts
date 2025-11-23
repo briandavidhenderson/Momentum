@@ -82,7 +82,9 @@ export interface EquipmentDevice {
   threshold: number // Maintenance threshold percentage (0-100)
   supplies: EquipmentSupply[]
   sops?: EquipmentSOP[] // Standard Operating Procedures
-  labId?: string // Associated lab ID
+  labId?: string // Associated lab ID (Department)
+  workingLabId?: string // Physical location (WorkingLab)
+  workingLabName?: string // Cached display name
   createdAt: string
   updatedAt?: string
 

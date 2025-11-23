@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, GripVertical, Trash2, Edit2, Clock, Loader2, AlertCircle, ListTodo, Calendar, CheckCircle2, User } from "lucide-react"
+import { Plus, GripVertical, Trash2, Edit2, Clock, Loader2, AlertCircle, ListTodo, Calendar, CheckCircle2, User, X } from "lucide-react"
 import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, DragOverEvent } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable"
@@ -584,6 +584,282 @@ function DayToDayTaskEditDialog({
   )
 }
 
+// --- Bulk Task Form Component ---
+
+interface PendingTask {
+  title: string
+  importance: ImportanceLevel
+  assigneeIds: string[]
+  linkedProjectId: string
+  dueDate: string
+  description: string
+}
+
+function BulkTaskForm({
+  people,
+  projects,
+  onCreateTask,
+  currentUserId,
+}: {
+  people: Person[]
+  projects: any[]
+  onCreateTask: (task: {
+    title: string
+    status: TaskStatus
+    importance: ImportanceLevel
+    createdBy: string
+    description?: string
+    assigneeIds?: string[]
+    linkedProjectId?: string
+    dueDate?: Date
+  }) => void | Promise<void>
+  currentUserId?: string
+}) {
+  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([
+    { title: '', importance: 'medium', assigneeIds: [], linkedProjectId: '', dueDate: '', description: '' }
+  ])
+
+  const handleAddRow = () => {
+    setPendingTasks([...pendingTasks, { title: '', importance: 'medium', assigneeIds: [], linkedProjectId: '', dueDate: '', description: '' }])
+  }
+
+  const handleRemoveRow = (index: number) => {
+    if (pendingTasks.length > 1) {
+      setPendingTasks(pendingTasks.filter((_, i) => i !== index))
+    } else {
+      // If deleting the last row, just clear it
+      setPendingTasks([{ title: '', importance: 'medium', assigneeIds: [], linkedProjectId: '', dueDate: '', description: '' }])
+    }
+  }
+
+  const handleChange = (index: number, field: keyof PendingTask, value: any) => {
+    const updated = [...pendingTasks]
+    updated[index] = { ...updated[index], [field]: value }
+    setPendingTasks(updated)
+  }
+
+  const handleAssigneeChange = (index: number, assigneeId: string, checked: boolean) => {
+    const updated = [...pendingTasks]
+    if (checked) {
+      if (!updated[index].assigneeIds.includes(assigneeId)) {
+        updated[index].assigneeIds = [...updated[index].assigneeIds, assigneeId]
+      }
+    } else {
+      updated[index].assigneeIds = updated[index].assigneeIds.filter(id => id !== assigneeId)
+    }
+    setPendingTasks(updated)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    // Filter out empty rows (at least need a title)
+    const tasksToSave = pendingTasks.filter(t => t.title.trim() !== '')
+    if (tasksToSave.length === 0) return
+
+    // Add all valid tasks
+    for (const task of tasksToSave) {
+      onCreateTask({
+        title: task.title.trim(),
+        description: task.description.trim() || undefined,
+        importance: task.importance,
+        assigneeIds: task.assigneeIds.length > 0 ? task.assigneeIds : undefined,
+        linkedProjectId: task.linkedProjectId || undefined,
+        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+        status: 'todo',
+        createdBy: currentUserId || '',
+      })
+    }
+
+    // Reset to one empty row
+    setPendingTasks([{ title: '', importance: 'medium', assigneeIds: [], linkedProjectId: '', dueDate: '', description: '' }])
+  }
+
+  const importanceOptions: { value: ImportanceLevel; label: string }[] = [
+    { value: 'low', label: 'Low' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'high', label: 'High' },
+    { value: 'critical', label: 'Critical' },
+  ]
+
+  return (
+    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm mb-6">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <Plus className="w-4 h-4" /> Bulk Create Tasks
+      </h2>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Header Row (Hidden on mobile, visible on desktop) */}
+        <div className="hidden md:grid md:grid-cols-12 gap-3 px-1 mb-2">
+          <div className="col-span-3 text-xs font-medium text-gray-500">Task Name</div>
+          <div className="col-span-1 text-xs font-medium text-gray-500">Importance</div>
+          <div className="col-span-2 text-xs font-medium text-gray-500">Assignees</div>
+          <div className="col-span-2 text-xs font-medium text-gray-500">Project</div>
+          <div className="col-span-2 text-xs font-medium text-gray-500">Due Date</div>
+          <div className="col-span-2 text-xs font-medium text-gray-500">Description</div>
+        </div>
+
+        {/* Input Rows */}
+        <div className="space-y-3">
+          {pendingTasks.map((task, index) => (
+            <div
+              key={index}
+              className="flex flex-col md:grid md:grid-cols-12 gap-3 items-start relative bg-white md:bg-transparent p-4 md:p-0 rounded-lg shadow-sm md:shadow-none border md:border-none border-gray-200"
+            >
+              {/* Task Title */}
+              <label className="md:hidden text-xs font-semibold text-gray-500 mb-1">Task Name</label>
+              <div className="col-span-3 w-full">
+                <Input
+                  type="text"
+                  placeholder="What needs to be done?"
+                  className="w-full"
+                  value={task.title}
+                  onChange={(e) => handleChange(index, 'title', e.target.value)}
+                  autoFocus={index === pendingTasks.length - 1 && index > 0}
+                />
+              </div>
+
+              {/* Importance */}
+              <div className="col-span-1 w-full">
+                <label className="md:hidden text-xs font-semibold text-gray-500 mb-1 block">Importance</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={task.importance}
+                  onChange={(e) => handleChange(index, 'importance', e.target.value as ImportanceLevel)}
+                >
+                  {importanceOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Assignees */}
+              <div className="col-span-2 w-full">
+                <label className="md:hidden text-xs font-semibold text-gray-500 mb-1 block">Assignees</label>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2 p-2 min-h-[40px] rounded-md border border-input bg-background">
+                    {task.assigneeIds.length === 0 ? (
+                      <span className="text-sm text-muted-foreground text-xs">None</span>
+                    ) : (
+                      task.assigneeIds.map((assigneeId) => {
+                        const assignee = people.find((p) => p.id === assigneeId)
+                        return assignee ? (
+                          <Badge key={assigneeId} variant="secondary" className="flex items-center gap-1 text-xs">
+                            <div
+                              className="w-3 h-3 rounded-full flex items-center justify-center text-white text-xs"
+                              style={{ backgroundColor: assignee.color }}
+                            >
+                              {assignee.name.charAt(0).toUpperCase()}
+                            </div>
+                            {assignee.name}
+                            <button
+                              type="button"
+                              onClick={() => handleAssigneeChange(index, assigneeId, false)}
+                              className="ml-1 hover:text-destructive text-xs"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ) : null
+                      })
+                    )}
+                  </div>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const selectedId = e.target.value
+                      if (selectedId && !task.assigneeIds.includes(selectedId)) {
+                        handleAssigneeChange(index, selectedId, true)
+                      }
+                      e.target.value = ''
+                    }}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">+ Add assignee</option>
+                    {people
+                      .filter((person) => !task.assigneeIds.includes(person.id))
+                      .map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Project */}
+              <div className="col-span-2 w-full">
+                <label className="md:hidden text-xs font-semibold text-gray-500 mb-1 block">Project</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={task.linkedProjectId}
+                  onChange={(e) => handleChange(index, 'linkedProjectId', e.target.value)}
+                >
+                  <option value="">None</option>
+                  {projects.map((project: any) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Due Date */}
+              <div className="col-span-2 w-full">
+                <label className="md:hidden text-xs font-semibold text-gray-500 mb-1 block">Due Date</label>
+                <Input
+                  type="date"
+                  className="w-full"
+                  value={task.dueDate}
+                  onChange={(e) => handleChange(index, 'dueDate', e.target.value)}
+                />
+              </div>
+
+              {/* Description */}
+              <div className="col-span-2 w-full relative">
+                <label className="md:hidden text-xs font-semibold text-gray-500 mb-1 block">Description</label>
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder="Optional description..."
+                    className="w-full min-h-[40px] text-sm"
+                    value={task.description}
+                    onChange={(e) => handleChange(index, 'description', e.target.value)}
+                    rows={2}
+                  />
+                  {/* Delete Row Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRow(index)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors self-start"
+                    title="Remove row"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between pt-4 border-t border-gray-200 mt-4">
+          <button
+            type="button"
+            onClick={handleAddRow}
+            className="px-4 py-2 text-sm font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> Add another task
+          </button>
+
+          <Button type="submit" className="bg-brand-600 hover:bg-brand-700">
+            <Plus className="w-4 h-4 mr-2" /> Add Tasks
+          </Button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export function DayToDayBoard() {
   const { currentUser, currentUserProfile } = useAuth()
   // Get state and handlers from context
@@ -616,9 +892,6 @@ export function DayToDayBoard() {
   const isLoading = !currentUserProfile
 
   const [activeTask, setActiveTask] = useState<DayToDayTask | null>(null)
-  const [newTaskTitle, setNewTaskTitle] = useState("")
-  const [newTaskImportance, setNewTaskImportance] = useState<ImportanceLevel>("medium")
-  const [showNewTaskInput, setShowNewTaskInput] = useState(false)
   const [editingTask, setEditingTask] = useState<DayToDayTask | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
@@ -722,21 +995,6 @@ export function DayToDayBoard() {
     })
   }
 
-  const handleCreateTask = () => {
-    if (!newTaskTitle.trim()) return
-
-    onCreateTask({
-      title: newTaskTitle,
-      status: "todo",
-      importance: newTaskImportance,
-      createdBy: currentUser?.uid || "",
-    })
-
-    setNewTaskTitle("")
-    setNewTaskImportance("medium")
-    setShowNewTaskInput(false)
-  }
-
   // Loading state
   if (isLoading) {
     return (
@@ -802,90 +1060,23 @@ export function DayToDayBoard() {
         </TabsList>
 
         <TabsContent value="tasks" className="flex-1 flex flex-col">
-          <div className="mb-4">
-            <Button onClick={() => setShowNewTaskInput(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Task
-            </Button>
-          </div>
-
-      {showNewTaskInput && (
-        <div className="mb-4 p-4 bg-card rounded-lg border border-border">
-          <Input
-            placeholder="Task title..."
-            value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreateTask()
-              if (e.key === "Escape") {
-                setShowNewTaskInput(false)
-                setNewTaskTitle("")
-                setNewTaskImportance("medium")
-              }
-            }}
-            autoFocus
-            className="mb-3"
+          {/* Bulk Task Creation Form */}
+          <BulkTaskForm
+            people={people || []}
+            projects={allProjects}
+            onCreateTask={(task) => onCreateTask(task as any)}
+            currentUserId={currentUser?.uid}
           />
-          <div className="mb-3">
-            <label className="text-sm font-medium mb-2 block">Importance</label>
-            <div className="flex gap-1 flex-wrap">
-              {(["low", "medium", "high", "critical"] as ImportanceLevel[]).map((level) => {
-                const colors: Record<ImportanceLevel, string> = {
-                  low: "bg-gray-600 hover:bg-gray-700",
-                  medium: "bg-blue-500 hover:bg-blue-600",
-                  high: "bg-orange-500 hover:bg-orange-600",
-                  critical: "bg-red-500 hover:bg-red-600",
-                }
-                const isSelected = newTaskImportance === level
-                return (
-                  <button
-                    key={level}
-                    onClick={() => setNewTaskImportance(level)}
-                    className={`px-3 py-1.5 rounded text-xs font-semibold transition-all ${
-                      isSelected
-                        ? `${colors[level]} text-white shadow-md`
-                        : "bg-muted text-muted-foreground hover:bg-accent"
-                    }`}
-                  >
-                    {level.charAt(0).toUpperCase() + level.slice(1)}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleCreateTask}>
-              Create
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setShowNewTaskInput(false)
-                setNewTaskTitle("")
-                setNewTaskImportance("medium")
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Empty state - when no tasks exist */}
-      {tasks.length === 0 && !showNewTaskInput && (
+      {tasks.length === 0 && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
             <ListTodo className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-30" />
             <h3 className="text-xl font-semibold mb-2">No Tasks Yet</h3>
-            <p className="text-muted-foreground mb-6">
-              Create your first day-to-day task to start tracking your work.
-              Tasks help you organize and prioritize your daily activities.
+            <p className="text-muted-foreground">
+              Use the bulk task creation form above to add your first tasks.
             </p>
-            <Button onClick={() => setShowNewTaskInput(true)} size="lg">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Your First Task
-            </Button>
           </div>
         </div>
       )}

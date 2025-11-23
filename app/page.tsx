@@ -20,20 +20,19 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner"
 import { PrivacyDashboard } from "@/components/views/PrivacyDashboard"
 import { FundingAdmin } from "@/components/views/FundingAdmin"
 import { PersonalLedger } from "@/components/PersonalLedger"
+import { HomeDashboard } from "@/components/views/dashboard/HomeDashboard"
 import { NotificationBell } from "@/components/NotificationBell"
-import { UserRole } from "@/lib/types"
+import TopModuleNavigation from "@/components/TopModuleNavigation"
 import { MyBookingsView } from "@/components/equipment/MyBookingsView"
 import WhiteboardPage from "@/app/whiteboard/page"
-import { TopModuleNavigation } from "@/components/TopModuleNavigation"
-import { HomeDashboard } from "@/components/views/dashboard/HomeDashboard"
+import ResearchBoard from "@/components/views/ResearchBoard"
+import { UserRole } from "@/lib/types"
 
-export default function Home() {
-  // Get all state and handlers from context
+export default function Page() {
   const {
-    // Auth state
-    authState,
-    currentUser,
     currentUserProfile,
+    currentUser,
+    authState,
     mounted,
     handleLogin,
     handleSignup,
@@ -49,143 +48,127 @@ export default function Home() {
 
   // Prevent hydration mismatch - don't render until mounted
   if (!mounted) {
-    return (
-      <main className="min-h-screen bg-background p-4 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="h1 text-foreground mb-2">Momentum Lab Management</h1>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </main>
-    )
-  }
-
-  // Show auth page
-  if (authState === 'auth') {
-    return (
-      <>
-        <AuthPage onLogin={handleLogin} onSignup={handleSignup} />
-        <div className="fixed bottom-4 right-4">
-          <Button
-            variant="outline"
-            onClick={() => setShowClearDialog(true)}
-            className="bg-red-50 hover:bg-red-100 text-red-600 border-red-300"
-          >
-            Clear All Data
-          </Button>
-        </div>
-        <DataClearDialog
-          open={showClearDialog}
-          onClose={() => setShowClearDialog(false)}
-          onConfirm={() => {
-            setShowClearDialog(false)
-            // Page will reload after clearing
-          }}
-        />
-      </>
-    )
-  }
-
-  // Show onboarding/setup
-  if (authState === 'setup' && currentUser) {
-    return (
-      <OnboardingFlow
-        user={currentUser}
-        onComplete={handleProfileSetupComplete}
-        onCancel={handleSignOut}
-      />
-    )
-  }
-
-  // Check permissions
-  const isAdmin = currentUserProfile?.isAdministrator || currentUser?.isAdministrator || false
-  const hasRoleRestriction =
-    currentUserProfile?.userRole === UserRole.PI ||
-    currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
-    currentUserProfile?.userRole === UserRole.LAB_MANAGER
-
-  // Navigation handler with proper typing
-  const handleNavigationSelect = (moduleId: string) => {
-    setMainView(moduleId as typeof mainView)
-  }
-
-  // Main application
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="max-w-[2000px] mx-auto">
-        {/* Header */}
-        <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 sticky top-0 z-40">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  Momentum
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Laboratory Management System
-                </p>
-              </div>
+    <main className="min-h-screen bg-background p-4 flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="h1 text-foreground mb-2">Momentum Lab Management</h1>
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    </main>
+  )
+}
 
-              {/* User Info, Notifications & Sign Out Button */}
-              <div className="flex items-center gap-3">
-                {currentUserProfile && (
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-slate-700">
-                      {currentUserProfile.firstName} {currentUserProfile.lastName}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {currentUserProfile.position || currentUser?.email}
-                    </p>
-                  </div>
-                )}
-                <NotificationBell />
-                <Button
-                  onClick={handleSignOut}
-                  variant="ghost"
-                  size="sm"
-                  className="text-slate-500 hover:text-red-600 hover:bg-red-50"
-                  aria-label="Sign out of your account"
-                >
-                  <LogOut className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                  Sign Out
-                </Button>
-              </div>
+// Show auth page
+if (authState === 'auth') {
+  return (
+    <>
+      <AuthPage onLogin={handleLogin} onSignup={handleSignup} />
+      <div className="fixed bottom-4 right-4">
+        <Button
+          variant="outline"
+          onClick={() => setShowClearDialog(true)}
+          className="bg-red-50 hover:bg-red-100 text-red-600 border-red-300"
+        >
+          Clear All Data
+        </Button>
+      </div>
+      <DataClearDialog
+        open={showClearDialog}
+        onClose={() => setShowClearDialog(false)}
+        onConfirm={() => {
+          setShowClearDialog(false)
+          // Page will reload after clearing
+        }}
+      />
+    </>
+  )
+}
+
+// Show onboarding/setup
+if (authState === 'setup' && currentUser) {
+  return (
+    <OnboardingFlow
+      user={currentUser}
+      onComplete={handleProfileSetupComplete}
+      onCancel={handleSignOut}
+    />
+  )
+}
+
+// Check permissions
+const isAdmin = currentUserProfile?.isAdministrator || currentUser?.isAdministrator || false
+const hasRoleRestriction =
+  currentUserProfile?.userRole === UserRole.PI ||
+  currentUserProfile?.userRole === UserRole.FINANCE_ADMIN ||
+  currentUserProfile?.userRole === UserRole.LAB_MANAGER
+
+// Navigation handler with proper typing
+const handleNavigationSelect = (moduleId: string) => {
+  setMainView(moduleId as typeof mainView)
+}
+
+// Main application
+return (
+  <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="max-w-[2000px] mx-auto">
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 sticky top-0 z-40">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+                Momentum {currentUserProfile?.position || currentUser?.email}
+              </h1>
             </div>
-
-            {/* New Modern Navigation */}
-            <TopModuleNavigation
-              activeModule={mainView}
-              onSelect={handleNavigationSelect}
-              isAdmin={isAdmin}
-              hasRoleRestriction={hasRoleRestriction}
-            />
+            <NotificationBell />
+            <Button
+              onClick={handleSignOut}
+              variant="ghost"
+              size="sm"
+              className="text-slate-500 hover:text-red-600 hover:bg-red-50"
+              aria-label="Sign out of your account"
+            >
+              <LogOut className="h-4 w-4 mr-1.5" aria-hidden="true" />
+              Sign Out
+            </Button>
           </div>
         </div>
 
-        {/* Render selected view */}
-        <div className="p-6">
-          {mainView === 'dashboard' && <HomeDashboard />}
-          {mainView === 'projects' && <ProjectDashboard />}
-          {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
-          {mainView === 'daytoday' && <DayToDayBoard />}
-          {mainView === 'mytasks' && <MyTasksView />}
-          {mainView === 'eln' && <ElectronicLabNotebook />}
-          {mainView === 'orders' && <OrdersInventory />}
-          {mainView === 'equipment' && <EquipmentManagement />}
-          {mainView === 'bookings' && <MyBookingsView />}
-          {mainView === 'calendar' && <CalendarEvents />}
-          {mainView === 'whiteboard' && <WhiteboardPage />}
-          {mainView === 'funding' && hasRoleRestriction && <FundingAdmin />}
-          {mainView === 'ledger' && <PersonalLedger />}
-          {mainView === 'myprofile' && currentUser && currentUserProfile && <EnhancedProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
-          {mainView === 'privacy' && <PrivacyDashboard />}
-          {mainView === 'profiles' && isAdmin && (
-            <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />
-          )}
-        </div>
+        {/* New Modern Navigation */}
+        <TopModuleNavigation
+          activeModule={mainView}
+          onSelect={handleNavigationSelect}
+          isAdmin={isAdmin}
+          hasRoleRestriction={hasRoleRestriction}
+        />
       </div>
 
-      {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}
-      <CookieConsentBanner />
-    </main>
+      {/* Render selected view */}
+      <div className="p-6">
+      {mainView === 'dashboard' && <HomeDashboard />}
+      {mainView === 'projects' && <ProjectDashboard />}
+      {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
+      {mainView === 'daytoday' && <DayToDayBoard />}
+      {mainView === 'mytasks' && <MyTasksView />}
+      {mainView === 'eln' && <ElectronicLabNotebook />}
+      {mainView === 'orders' && <OrdersInventory />}
+      {mainView === 'equipment' && <EquipmentManagement />}
+      {mainView === 'bookings' && <MyBookingsView />}
+      {mainView === 'calendar' && <CalendarEvents />}
+      {mainView === 'whiteboard' && <WhiteboardPage />}
+      {mainView === 'research' && <ResearchBoard />}
+      {mainView === 'funding' && hasRoleRestriction && <FundingAdmin />}
+      {mainView === 'ledger' && <PersonalLedger />}
+      {mainView === 'myprofile' && currentUser && currentUserProfile && <EnhancedProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}
+      {mainView === 'privacy' && <PrivacyDashboard />}
+      {mainView === 'profiles' && isAdmin && (
+        <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />
+      )}
+      </div>
+    </div>
+
+    {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}
+    <CookieConsentBanner />
+  </main>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react'
+import React, { useState } from 'react'
 import { useAppContext } from '@/lib/AppContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,10 +30,17 @@ export function HomeDashboard() {
         orders,
         equipment,
 
+        // ELN & Whiteboards
+        elnExperiments,
+        whiteboards,
+
         // Other
         userBookings,
         currentUserProfile
     } = useAppContext()
+
+    // State for selected project
+    const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null)
 
     // Filter for "Today" items (placeholder logic)
     const today = new Date()
@@ -98,8 +105,21 @@ export function HomeDashboard() {
                         <CardContent className="flex-1 overflow-hidden">
                             <ScrollArea className="h-full">
                                 <div className="space-y-2">
-                                    {/* Placeholder for experiments */}
-                                    <div className="text-sm text-muted-foreground text-center py-4">No active experiments</div>
+                                    {elnExperiments.length > 0 ? (
+                                        elnExperiments.slice(0, 5).map(experiment => (
+                                            <div key={experiment.id} className="p-2 border rounded-md text-sm hover:bg-accent transition-colors cursor-pointer">
+                                                <div className="font-medium truncate">{experiment.title}</div>
+                                                <div className="text-xs text-muted-foreground truncate">
+                                                    {experiment.description || 'No description'}
+                                                </div>
+                                                {experiment.status && (
+                                                    <Badge variant="outline" className="text-[10px] mt-1">{experiment.status}</Badge>
+                                                )}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-sm text-muted-foreground text-center py-4">No active experiments</div>
+                                    )}
                                 </div>
                             </ScrollArea>
                         </CardContent>
@@ -113,11 +133,23 @@ export function HomeDashboard() {
                                 Whiteboards
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-1">
-                            <div className="text-sm text-muted-foreground text-center py-4">
-                                Select a whiteboard to view
-                            </div>
-                            {/* Placeholder for whiteboard list */}
+                        <CardContent className="flex-1 overflow-hidden">
+                            <ScrollArea className="h-full">
+                                <div className="space-y-2">
+                                    {whiteboards.length > 0 ? (
+                                        whiteboards.slice(0, 3).map(whiteboard => (
+                                            <div key={whiteboard.id} className="p-2 border rounded-md text-sm hover:bg-accent transition-colors cursor-pointer">
+                                                <div className="font-medium truncate">{whiteboard.name}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {whiteboard.shapes?.length || 0} shapes
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-sm text-muted-foreground text-center py-4">No whiteboards</div>
+                                    )}
+                                </div>
+                            </ScrollArea>
                         </CardContent>
                     </Card>
                 </div>
@@ -135,7 +167,11 @@ export function HomeDashboard() {
                         <CardContent>
                             <div className="grid grid-cols-2 gap-4">
                                 {projects.slice(0, 4).map(project => (
-                                    <div key={project.id} className="p-3 border rounded-lg bg-card hover:shadow-sm transition-shadow cursor-pointer">
+                                    <div
+                                        key={project.id}
+                                        className="p-3 border rounded-lg bg-card hover:shadow-sm transition-shadow cursor-pointer"
+                                        onClick={() => setSelectedProject(project)}
+                                    >
                                         <div className="font-bold truncate">{project.name}</div>
                                         <div className="mt-2 h-2 bg-secondary rounded-full overflow-hidden">
                                             <div
@@ -185,9 +221,39 @@ export function HomeDashboard() {
                             <CardTitle className="text-sm font-medium">Project Details</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-sm text-muted-foreground text-center py-4">
-                                Select a project to view details
-                            </div>
+                            {selectedProject ? (
+                                <div className="space-y-4">
+                                    <div>
+                                        <h3 className="font-bold text-lg">{selectedProject.name}</h3>
+                                        {selectedProject.description && (
+                                            <p className="text-sm text-muted-foreground mt-1">{selectedProject.description}</p>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Status</div>
+                                            <Badge variant="outline" className="mt-1">{selectedProject.status || 'Active'}</Badge>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Progress</div>
+                                            <div className="font-medium mt-1">{selectedProject.progress || 0}%</div>
+                                        </div>
+                                    </div>
+                                    {selectedProject.startDate && (
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Start Date</div>
+                                            <div className="text-sm mt-1">{format(new Date(selectedProject.startDate), 'MMM d, yyyy')}</div>
+                                        </div>
+                                    )}
+                                    <Button variant="outline" size="sm" onClick={() => setSelectedProject(null)}>
+                                        Close
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="text-sm text-muted-foreground text-center py-4">
+                                    Select a project to view details
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

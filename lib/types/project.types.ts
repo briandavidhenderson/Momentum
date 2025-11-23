@@ -63,24 +63,14 @@ export interface Project {
   // Hierarchy - Projects contain ONLY workpackages
   workpackageIds: string[]      // Array of workpackage IDs in this project
 
+  // Matrix Structure
+  groupIds?: string[]           // Research Groups this project belongs to
+
   // Status & Health Tracking
   status: "planning" | "active" | "completed" | "on-hold" | "cancelled"
   health?: "good" | "warning" | "at-risk"  // Calculated from overdue deliverables, budget, etc.
   progress: number              // 0-100, calculated from workpackage/deliverable progress
 
-  // Access Control
-  visibility: "private" | "lab" | "institute" | "organisation"
-  visibleTo?: string[]          // Additional PersonProfile IDs for custom access
-
-  // Categorization & Discovery
-  researchArea?: string         // "Molecular Biology", "Drug Discovery", etc.
-  tags?: string[]               // Custom tags for filtering/search
-
-  // Metadata
-  notes?: string
-  createdAt: string
-  createdBy: string             // User ID
-  updatedAt?: string
   updatedBy?: string            // User ID
 
   // UI State
@@ -194,6 +184,7 @@ export interface MasterProject {
     [personProfileId: string]: ProjectRole
   }
   workpackageIds: string[]
+  groupIds?: string[]            // Research Groups this project belongs to
   status: "planning" | "active" | "completed" | "on-hold" | "cancelled"
   health?: "good" | "warning" | "at-risk"
   progress: number

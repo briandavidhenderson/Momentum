@@ -48,6 +48,8 @@ export function EquipmentEditorDialog({
     maintenanceDays: device.maintenanceDays,
     lastMaintained: device.lastMaintained,
     threshold: device.threshold,
+    workingLabId: device.workingLabId || "",
+    workingLabName: device.workingLabName || "",
   })
   const [supplies, setSupplies] = useState<EquipmentSupply[]>(device.supplies)
   const [newSupply, setNewSupply] = useState({
@@ -61,6 +63,25 @@ export function EquipmentEditorDialog({
   const [imagePreview, setImagePreview] = useState<string | null>(device.imageUrl || null)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [workingLabs, setWorkingLabs] = useState<any[]>([])
+
+  useEffect(() => {
+    async function loadLabs() {
+      // In a real app, we'd get the departmentId from context or the device
+      // For now, let's try to use the device's labId if available
+      if (device.labId) {
+        try {
+          // Dynamic import to avoid circular dependencies if any
+          const { getWorkingLabsByDepartment } = await import('@/lib/services/groupService')
+          const labs = await getWorkingLabsByDepartment(device.labId)
+          setWorkingLabs(labs)
+        } catch (err) {
+          console.error('Failed to load working labs:', err)
+        }
+      }
+    }
+    loadLabs()
+  }, [device.labId])
 
   // Update form data when device changes
   useEffect(() => {
@@ -74,6 +95,8 @@ export function EquipmentEditorDialog({
       maintenanceDays: device.maintenanceDays,
       lastMaintained: device.lastMaintained,
       threshold: device.threshold,
+      workingLabId: device.workingLabId || "",
+      workingLabName: device.workingLabName || "",
     })
     setSupplies(device.supplies)
     setImagePreview(device.imageUrl || null)
@@ -137,6 +160,8 @@ export function EquipmentEditorDialog({
         maintenanceDays: formData.maintenanceDays,
         lastMaintained: formData.lastMaintained,
         threshold: formData.threshold,
+        workingLabId: formData.workingLabId,
+        workingLabName: formData.workingLabName,
         supplies,
         sops: device.sops || [],
         updatedAt: new Date().toISOString(),
@@ -277,6 +302,28 @@ export function EquipmentEditorDialog({
               setFormData({ ...formData, threshold: parseInt(e.target.value) || 20 })
             }
           />
+        </div>
+        <div className="col-span-2">
+          <Label>Physical Location (Working Lab)</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            value={formData.workingLabId || ""}
+            onChange={(e) => {
+              const selectedLab = workingLabs.find(l => l.id === e.target.value)
+              setFormData({
+                ...formData,
+                workingLabId: e.target.value,
+                workingLabName: selectedLab?.name
+              })
+            }}
+          >
+            <option value="">Select a Lab...</option>
+            {workingLabs.map((lab) => (
+              <option key={lab.id} value={lab.id}>
+                {lab.name} ({lab.roomNumber})
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

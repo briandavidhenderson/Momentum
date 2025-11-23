@@ -376,15 +376,15 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         })
     }
 
-    const groupSelected = () => {
+    const groupSelected = useCallback(() => {
         if (selectedIds.size < 2) return
         const newGroupId = generateId()
         setShapes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, groupId: newGroupId } : s))
-    }
+    }, [selectedIds, setShapes])
 
-    const ungroupSelected = () => {
+    const ungroupSelected = useCallback(() => {
         setShapes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, groupId: undefined } : s))
-    }
+    }, [selectedIds, setShapes])
 
     const toggleLock = () => {
         setShapes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, locked: !s.locked } : s))
@@ -440,7 +440,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         }
         window.addEventListener("keydown", handleKeyDown)
         return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [selectedIds, editingId, duplicateSelected])
+    }, [selectedIds, editingId, duplicateSelected, groupSelected, ungroupSelected])
 
     // -- ASSET DRAG --
     const handleDragStart = (e: React.DragEvent, payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol', id: string, name?: string, operationType?: string }) => {
@@ -562,7 +562,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                 }
             } else if (payload.kind === 'inventory') {
                 shape = {
-                    id: newId, type: "asset", x: pos.x - 70, y: pos.y - 28, width: 140, height: 56,
+                    id: newId, type: "asset", x: pos.x - 90, y: pos.y - 32, width: 180, height: 72,
                     fill: "#ffffff", stroke: "#0f766e", strokeWidth: 1.5,
                     textAlign: 'left', textAlignVertical: 'middle', fontSize: 11,
                     linkedEntityType: 'inventory', linkedEntityId: payload.id,
@@ -570,7 +570,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                 }
             } else if (payload.kind === 'equipment') {
                 shape = {
-                    id: newId, type: "asset", x: pos.x - 80, y: pos.y - 28, width: 160, height: 56,
+                    id: newId, type: "asset", x: pos.x - 95, y: pos.y - 32, width: 190, height: 72,
                     fill: "#eef2ff", stroke: "#4f46e5", strokeWidth: 1.5,
                     textAlign: 'left', textAlignVertical: 'middle', fontSize: 11,
                     linkedEntityType: 'equipment', linkedEntityId: payload.id,

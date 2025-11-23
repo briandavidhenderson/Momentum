@@ -88,6 +88,7 @@ export function QuickBookingDialog({
     if (selectedEquipment && startTime && endTime) {
       checkForConflicts()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEquipment, startTime, endTime])
 
   const formatDateTimeLocal = (date: Date): string => {

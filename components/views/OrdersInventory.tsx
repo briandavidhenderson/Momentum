@@ -5,8 +5,9 @@ import { useOrders } from "@/lib/hooks/useOrders"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { Order, OrderStatus, InventoryItem, InventoryLevel } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { Plus, Package, ShoppingCart, CheckCircle, Clock, Archive, AlertCircle, Download, Upload, FileText } from "lucide-react"
+import { Plus, Package, ShoppingCart, CheckCircle, Clock, Archive, AlertCircle, Download, Upload, FileText, Beaker } from "lucide-react"
 import { OrderCard } from "@/components/orders/OrderCard"
+import ResearchBoard from "@/components/views/ResearchBoard"
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog"
 import { OrderFormDialog } from "@/components/orders/OrderFormDialog"
 import { AddInventoryDialog } from "@/components/dialogs/AddInventoryDialog"
@@ -77,7 +78,7 @@ export function OrdersInventory() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'orders' | 'inventory'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'research'>('orders')
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -382,6 +383,14 @@ export function OrdersInventory() {
         >
           <Package className="h-4 w-4 mr-2" />
           Inventory
+        </Button>
+        <Button
+          variant={activeTab === 'research' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('research')}
+          className={activeTab === 'research' ? 'bg-brand-500 text-white' : ''}
+        >
+          <Beaker className="h-4 w-4 mr-2" />
+          Research Board
         </Button>
       </div>
 
@@ -719,6 +728,13 @@ export function OrdersInventory() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Research Board Tab */}
+      {activeTab === 'research' && (
+        <div className="space-y-4">
+          <ResearchBoard />
         </div>
       )}
 

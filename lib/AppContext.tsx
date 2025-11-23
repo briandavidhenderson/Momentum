@@ -8,6 +8,7 @@ import { useOptimisticDayToDayTasks } from './hooks/useOptimisticDayToDayTasks';
 import { useEquipment } from './hooks/useEquipment';
 import { usePolls } from './hooks/usePolls';
 import { useELN } from './hooks/useELN';
+import { useWhiteboards } from './hooks/useWhiteboards';
 import { useCalendar } from './hooks/useCalendar';
 import { useInterface } from './hooks/useInterface';
 import { useUI } from './hooks/useUI';
@@ -17,6 +18,7 @@ import { useBookings } from './hooks/useBookings';
 import { useProfiles } from './useProfiles';
 import { personProfilesToPeople } from './personHelpers';
 import { PersonProfile, Person } from './types';
+import { GroupProvider } from './GroupContext';
 
 /**
  * AppContext Type Definition
@@ -29,6 +31,7 @@ type AppContextType = ReturnType<typeof useAuth> &
   ReturnType<typeof useEquipment> &
   ReturnType<typeof usePolls> &
   ReturnType<typeof useELN> &
+  ReturnType<typeof useWhiteboards> &
   ReturnType<typeof useCalendar> &
   ReturnType<typeof useInterface> &
   ReturnType<typeof useUI> &
@@ -49,6 +52,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
   const equipment = useEquipment();
   const polls = usePolls();
   const eln = useELN();
+  const whiteboardsState = useWhiteboards();
   const calendar = useCalendar();
   const interfaceState = useInterface();
   const uiState = useUI();
@@ -69,6 +73,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     ...equipment,
     ...polls,
     ...eln,
+    ...whiteboardsState,
     ...calendar,
     ...interfaceState,
     ...uiState,
@@ -80,7 +85,9 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={value}>
-      {children}
+      <GroupProvider>
+        {children}
+      </GroupProvider>
     </AppContext.Provider>
   );
 }
