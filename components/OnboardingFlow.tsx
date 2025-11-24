@@ -645,6 +645,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
           instituteName: state.selectedInstitute.name,
           organisationId: state.selectedOrganisation.id,
           organisationName: state.selectedOrganisation.name,
+          type: budgetValue > 0 ? "funded" : "unfunded",
 
           // Grant info
           grantName: state.grantName,

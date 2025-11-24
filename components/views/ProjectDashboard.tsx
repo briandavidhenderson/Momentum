@@ -148,20 +148,22 @@ export function ProjectDashboard() {
 
     // Filter by funding type
     if (fundingFilter === "funded") {
-      funded = filtered.filter(p => (p.type || "unfunded") === "funded")
+      filtered = filtered.filter(p => (p.type || "unfunded") === "funded")
     } else if (fundingFilter === "unfunded") {
-      unfunded = filtered.filter(p => (p.type || "unfunded") === "unfunded")
-    } else {
-      funded = filtered.filter(p => (p.type || "unfunded") === "funded")
-      unfunded = filtered.filter(p => (p.type || "unfunded") === "unfunded")
+      filtered = filtered.filter(p => (p.type || "unfunded") === "unfunded")
     }
 
     filtered.sort((a, b) => a.name.localeCompare(b.name))
     return filtered
-  }, [projects, searchTerm, statusFilter, healthFilter, fundingFilter, projectHealths, selectedGroupId, isProjectFunded])
+  }, [projects, searchTerm, statusFilter, healthFilter, fundingFilter, projectHealths, selectedGroupId])
 
   const fundedProjects = useMemo(() => filteredProjects.filter(isProjectFunded), [filteredProjects, isProjectFunded])
   const unfundedProjects = useMemo(() => filteredProjects.filter(project => !isProjectFunded(project)), [filteredProjects, isProjectFunded])
+
+  const projectLookup = useMemo(
+    () => new Map(filteredProjects.map(project => [project.id, project])),
+    [filteredProjects]
+  )
 
   const renderHealthBadge = (health?: ProjectHealth) => {
     if (!health) return null
@@ -268,7 +270,7 @@ export function ProjectDashboard() {
     return items
       .filter(item => item.projectId)
       .sort((a, b) => a.date.getTime() - b.date.getTime())
-  }, [filteredProjects, relevantDeliverables, relevantWorkpackages, projectLookup])
+  }, [filteredProjects, relevantDeliverables, relevantWorkpackages])
 
   const formatDate = (date: Date) =>
     date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
@@ -567,11 +569,6 @@ export function ProjectDashboard() {
   const totalPortfolioCount = projects?.length || 0
   const activeProjects = filteredProjects.filter(p => p.status === "active").length
 
-  const projectLookup = useMemo(
-    () => new Map(filteredProjects.map(project => [project.id, project])),
-    [filteredProjects]
-  )
-
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col gap-4 overflow-hidden">
       {/* Header */}
@@ -767,9 +764,9 @@ export function ProjectDashboard() {
                   </div>
                   <div
                     className={
-                      viewMode === "grid"
-                        ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-                        : "space-y-4"
+                      projectView === "list"
+                        ? "space-y-4"
+                        : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
                     }
                   >
                     {unfundedProjects.map(project => {

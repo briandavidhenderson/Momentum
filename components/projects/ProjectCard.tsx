@@ -297,8 +297,6 @@ export function ProjectCard({
                       onDeleteDeliverable={onDeleteDeliverable}
                       onDeliverableClick={onDeliverableClick}
                       onCreateTask={onCreateTask}
-                      onEditTask={onEditTask}
-                      onDeleteTask={onDeleteTask}
                     />
                   )
                 })}
