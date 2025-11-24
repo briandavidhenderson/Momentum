@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useCallback } from "react"
+import { z } from "zod"
 import { useAppContext } from "@/lib/AppContext"
 import { useGroupContext } from "@/lib/GroupContext"
 import { useAuth } from "@/lib/hooks/useAuth"
@@ -274,6 +275,35 @@ export function ProjectDashboard() {
   const formatDate = (date: Date) =>
     date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
 
+  const projectDialogSchema = z.object({
+    name: z.string().trim().min(1, "Project name is required"),
+    description: z.string().optional().default(""),
+    grantName: z.string().optional().default(""),
+    grantNumber: z.string().optional().default(""),
+    budget: z.coerce.number().nonnegative().optional().default(0),
+    startDate: z.preprocess(
+      value => (typeof value === "string" || value instanceof Date ? new Date(value) : value),
+      z.date()
+    ),
+    endDate: z.preprocess(
+      value => (typeof value === "string" || value instanceof Date ? new Date(value) : value),
+      z.date()
+    ),
+    funderId: z.string().optional().default(""),
+    fundedBy: z.array(z.string()).optional().default([]),
+    principalInvestigatorId: z.string().optional(),
+    status: z.string(),
+    groupIds: z.array(z.string()).optional().default([]),
+    visibility: z.string().optional().default("lab"),
+    visibleTo: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional().default([]),
+    notes: z.string().optional().default(""),
+    type: z.string().optional(),
+    legacyTypeLabel: z.string().optional(),
+  })
+
+  type ProjectDialogInput = z.infer<typeof projectDialogSchema>
+
   const handleCreateTask = useCallback(async (taskData: Partial<Task> & { workpackageId: string }) => {
     try {
       const workpackage = allWorkpackages.find(wp => wp.id === taskData.workpackageId)
@@ -355,13 +385,10 @@ export function ProjectDashboard() {
     }
   }, [allWorkpackages, handleUpdateWorkpackage])
 
-  const handleCreateMasterProjectFromDialog = async (projectData: any) => {
+  const handleCreateMasterProjectFromDialog = async (projectData: ProjectDialogInput) => {
     if (!profile || !user) return
 
-    if (!projectData.name || !projectData.name.trim()) {
-      alert("Project name is required. Please enter a project name.")
-      return
-    }
+    const parsedProject = projectDialogSchema.parse(projectData)
 
     const mapVisibility = (vis: string): "private" | "lab" | "institute" | "organisation" => {
       switch (vis) {
@@ -382,51 +409,51 @@ export function ProjectDashboard() {
     }
 
     const newProject: Omit<MasterProject, "id" | "createdAt"> = {
-      name: projectData.name.trim(),
-      description: projectData.description || "",
+      name: parsedProject.name,
+      description: parsedProject.description,
       labId: profile.labId,
       labName: profile.labName,
       instituteId: profile.instituteId,
       instituteName: profile.instituteName,
       organisationId: profile.organisationId,
       organisationName: profile.organisationName,
-      grantName: projectData.grantName || "",
-      grantNumber: projectData.grantNumber || "",
-      totalBudget: projectData.budget || 0,
+      grantName: parsedProject.grantName,
+      grantNumber: parsedProject.grantNumber,
+      totalBudget: parsedProject.budget,
       currency: "EUR",
-      startDate: projectData.startDate,
-      endDate: projectData.endDate,
-      funderId: projectData.funderId || "",
+      startDate: parsedProject.startDate,
+      endDate: parsedProject.endDate,
+      funderId: parsedProject.funderId,
       funderName: "",
-      accountIds: projectData.fundedBy || [],
-      principalInvestigatorIds: projectData.principalInvestigatorId
-        ? [projectData.principalInvestigatorId]
+      accountIds: parsedProject.fundedBy,
+      principalInvestigatorIds: parsedProject.principalInvestigatorId
+        ? [parsedProject.principalInvestigatorId]
         : profile.id
           ? [profile.id]
           : [],
       coPIIds: [],
-      teamMemberIds: projectData.principalInvestigatorId
-        ? [projectData.principalInvestigatorId]
+      teamMemberIds: parsedProject.principalInvestigatorId
+        ? [parsedProject.principalInvestigatorId]
         : profile.id
           ? [profile.id]
           : [],
-      teamRoles: projectData.principalInvestigatorId
-        ? { [projectData.principalInvestigatorId]: "PI" }
+      teamRoles: parsedProject.principalInvestigatorId
+        ? { [parsedProject.principalInvestigatorId]: "PI" }
         : profile.id
           ? { [profile.id]: "PI" }
           : {},
-      status: projectData.status,
+      status: parsedProject.status,
       progress: 0,
       workpackageIds: [],
-      groupIds: projectData.groupIds || (selectedGroupId ? [selectedGroupId] : []),
-      visibility: mapVisibility(projectData.visibility),
-      visibleTo: projectData.visibleTo,
-      tags: projectData.tags,
-      notes: projectData.notes,
+      groupIds: parsedProject.groupIds.length > 0 ? parsedProject.groupIds : selectedGroupId ? [selectedGroupId] : [],
+      visibility: mapVisibility(parsedProject.visibility),
+      visibleTo: parsedProject.visibleTo,
+      tags: parsedProject.tags,
+      notes: parsedProject.notes,
       createdBy: user.uid,
       isExpanded: true,
-      type: projectData.type || (projectData.funderId ? "funded" : "unfunded"),
-      legacyTypeLabel: projectData.legacyTypeLabel || projectData.type,
+      type: parsedProject.type || (parsedProject.funderId ? "funded" : "unfunded"),
+      legacyTypeLabel: parsedProject.legacyTypeLabel || parsedProject.type,
     }
 
     try {
