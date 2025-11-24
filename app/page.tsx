@@ -5,8 +5,8 @@ import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
+import { useRouter } from "next/navigation"
 
-import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import PeopleView from "@/components/views/PeopleView"
 import { DayToDayBoard } from "@/components/views/DayToDayBoard"
 import { MyTasksView } from "@/components/views/MyTasksView"
@@ -29,6 +29,7 @@ import ResearchBoard from "@/components/views/ResearchBoard"
 import { UserRole } from "@/lib/types"
 
 export default function Page() {
+  const router = useRouter()
   const {
     currentUserProfile,
     currentUser,
@@ -85,6 +86,11 @@ export default function Page() {
 
   // Navigation handler with proper typing
   const handleNavigationSelect = (moduleId: string) => {
+    if (moduleId === "projects") {
+      router.push("/projects")
+      return
+    }
+
     setMainView(moduleId as typeof mainView)
   }
 
@@ -127,7 +133,6 @@ export default function Page() {
         {/* Render selected view */}
         <div className="p-6">
           {mainView === 'dashboard' && <HomeDashboard />}
-          {mainView === 'projects' && <ProjectDashboard />}
           {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
           {mainView === 'daytoday' && <DayToDayBoard />}
           {mainView === 'mytasks' && <MyTasksView />}

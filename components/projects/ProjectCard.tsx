@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  Eye,
 } from "lucide-react"
 import { calculateProjectHealth, getHealthStatusColor, ProjectHealth } from "@/lib/utils/projectHealth"
 import { ProjectBudgetSummary, formatCurrency, getBudgetStatusColor } from "@/lib/utils/budgetCalculation"
@@ -31,7 +30,6 @@ interface ProjectCardProps {
   people: PersonProfile[]
   budgetSummary?: ProjectBudgetSummary
   health?: ProjectHealth
-  onViewProject?: (project: MasterProject) => void
   onCreateWorkpackage?: (projectId: string) => void
   onEditWorkpackage?: (workpackage: Workpackage) => void
   onDeleteWorkpackage?: (workpackageId: string) => void
@@ -51,7 +49,6 @@ export function ProjectCard({
   people,
   budgetSummary,
   health,
-  onViewProject,
   onCreateWorkpackage,
   onEditWorkpackage,
   onDeleteWorkpackage,
@@ -175,23 +172,6 @@ export function ProjectCard({
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-1 flex-shrink-0">
-              {onViewProject && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onViewProject(project)
-                  }}
-                  title="View project details"
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
           </div>
         </div>
 
