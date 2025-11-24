@@ -25,6 +25,43 @@ import { logger } from "../logger"
 import type { MasterProject, Project, Lab } from "../types"
 import { getProfileByUserId } from "./profileService"
 
+const LEGACY_TYPE_MAP: Record<string, Project["type"]> = {
+  master: "funded",
+  grant: "funded",
+  funded: "funded",
+  regular: "unfunded",
+  passive: "unfunded",
+  unfunded: "unfunded",
+}
+
+function normalizeProjectType(
+  projectData: Partial<MasterProject> & {
+    type?: string
+    legacyTypeLabel?: string
+    projectType?: string
+    fundingType?: string
+  }
+): { type: Project["type"]; legacyTypeLabel?: string } {
+  const rawLabel =
+    projectData.type ||
+    projectData.projectType ||
+    projectData.fundingType ||
+    projectData.legacyTypeLabel
+
+  if (rawLabel && typeof rawLabel === "string") {
+    const normalized = LEGACY_TYPE_MAP[rawLabel.toLowerCase()] || undefined
+    if (normalized) {
+      return { type: normalized, legacyTypeLabel: rawLabel }
+    }
+  }
+
+  if ((projectData.totalBudget ?? 0) > 0 || projectData.funderId || (projectData.accountIds?.length ?? 0) > 0) {
+    return { type: "funded" }
+  }
+
+  return { type: "unfunded" }
+}
+
 // ============================================================================
 // MASTER PROJECTS
 // ============================================================================
@@ -40,6 +77,8 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
     throw new Error("Project name is required")
   }
 
+  const { type, legacyTypeLabel } = normalizeProjectType(projectData)
+
   const projectRef = doc(collection(db, "masterProjects"))
   const projectId = projectRef.id
 
@@ -49,6 +88,8 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
     name: projectData.name.trim(), // Ensure name is trimmed and explicit
     id: projectId,
     createdAt: serverTimestamp(),
+    type,
+    legacyTypeLabel,
     spentAmount: 0,
     committedAmount: 0,
     remainingBudget: projectData.totalBudget || 0,
@@ -102,8 +143,11 @@ export async function getMasterProjects(filters?: {
   const querySnapshot = await getDocs(q)
   return querySnapshot.docs.map(doc => {
     const data = doc.data() as MasterProject
+    const { type, legacyTypeLabel } = normalizeProjectType(data)
     return {
       ...data,
+      type,
+      legacyTypeLabel,
       groupIds: data.groupIds || [],
       workpackageIds: data.workpackageIds || [],
     }
@@ -178,8 +222,11 @@ export function subscribeToMasterProjects(
   return onSnapshot(q, (snapshot) => {
     const projects = snapshot.docs.map(doc => {
       const data = doc.data() as MasterProject
+      const { type, legacyTypeLabel } = normalizeProjectType(data)
       return {
         ...data,
+        type,
+        legacyTypeLabel,
         groupIds: data.groupIds || [],
         workpackageIds: data.workpackageIds || [],
       }
@@ -219,6 +266,8 @@ export async function createProject(projectData: Omit<Project, 'id'> & {
   const projectRef = doc(collection(db, "projects"))
   const projectId = projectRef.id
 
+  const { type, legacyTypeLabel } = normalizeProjectType(projectData)
+
   // Get labId from user's profile if not provided
   let labId: string | undefined = projectData.labId
   if (!labId) {
@@ -230,6 +279,8 @@ export async function createProject(projectData: Omit<Project, 'id'> & {
     ...projectData,
     id: projectId,
     labId: labId,
+    type,
+    legacyTypeLabel,
     createdAt: serverTimestamp(),
   })
 
@@ -245,8 +296,11 @@ export async function getProjects(userId: string): Promise<Project[]> {
   const querySnapshot = await getDocs(collection(db, "projects"))
   const allProjects = querySnapshot.docs.map(doc => {
     const data = doc.data() as any
+    const { type, legacyTypeLabel } = normalizeProjectType(data)
     return {
       ...data,
+      type,
+      legacyTypeLabel,
       // Convert Firestore timestamps to ISO strings if they exist
       startDate: data.start ? data.start.toDate().toISOString() : data.startDate,
       endDate: data.end ? data.end.toDate().toISOString() : data.endDate,

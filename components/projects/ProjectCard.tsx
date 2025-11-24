@@ -69,7 +69,7 @@ export function ProjectCard({
   const projectWorkpackages = workpackages.filter(wp => project.workpackageIds.includes(wp.id))
 
   // Determine if project is funded
-  const isFunded = !!(project.funderId && project.totalBudget && project.totalBudget > 0)
+  const isFunded = (project.type || "unfunded") === "funded"
 
   // Get health icon
   const getHealthIcon = () => {
@@ -132,16 +132,13 @@ export function ProjectCard({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <CardTitle className="text-lg truncate">{project.name}</CardTitle>
-                {isFunded ? (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
-                    <DollarSign className="h-3 w-3 mr-1" />
-                    Funded
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-300">
-                    Internal
-                  </Badge>
-                )}
+                <Badge
+                  variant="outline"
+                  className={isFunded ? "bg-blue-50 text-blue-700 border-blue-300" : "bg-gray-50 text-gray-700 border-gray-300"}
+                >
+                  <DollarSign className="h-3 w-3 mr-1" />
+                  {isFunded ? "Funded" : "Unfunded"}
+                </Badge>
                 <Badge className={getStatusColor(project.status)}>
                   {project.status}
                 </Badge>

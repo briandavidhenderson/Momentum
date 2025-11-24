@@ -113,11 +113,21 @@ export function ProjectDetailPage({
   const [newDeliverableNames, setNewDeliverableNames] = useState<Record<string, string>>({})
   const [newTaskName, setNewTaskName] = useState("")
 
+  const isFundedProject = (project.type || "unfunded") === "funded"
+  const hasFundingLedger = (project.accountIds?.length ?? 0) > 0 || (fundingAccounts?.length ?? 0) > 0
+  const canAccessFunding = isFundedProject && hasFundingLedger
+
   // Get current user for import/export
   const { currentUser, currentUserProfile } = useAppContext()
 
   // Fetch project orders
   useEffect(() => {
+    if (!canAccessFunding) {
+      setOrders([])
+      setLoadingOrders(false)
+      return
+    }
+
     const fetchProjectOrders = async () => {
       const db = getFirebaseDb()
       setLoadingOrders(true)
@@ -145,7 +155,13 @@ export function ProjectDetailPage({
     }
 
     fetchProjectOrders()
-  }, [project.id])
+  }, [project.id, canAccessFunding])
+
+  useEffect(() => {
+    if (activeTab === "funding" && !canAccessFunding) {
+      setActiveTab("execution")
+    }
+  }, [activeTab, canAccessFunding])
 
   // Fetch project experiments
   useEffect(() => {
@@ -397,6 +413,13 @@ export function ProjectDetailPage({
                 <Badge variant="outline" className={`${healthStatus.bg} ${healthStatus.color} border-0`}>
                   {healthStatus.label}
                 </Badge>
+                <Badge
+                  variant="outline"
+                  className={isFundedProject ? "bg-blue-50 text-blue-700 border-blue-300" : "bg-gray-50 text-gray-700 border-gray-300"}
+                >
+                  <DollarSign className="h-3 w-3 mr-1" />
+                  {isFundedProject ? "Funded" : "Unfunded"}
+                </Badge>
                 <Badge variant="secondary">{project.status}</Badge>
               </div>
 
@@ -486,8 +509,14 @@ export function ProjectDetailPage({
           <Button variant="ghost" size="sm" onClick={() => toggleDrawer("files")} className="gap-2">
             <FileText className="h-4 w-4" />
             Files
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => toggleDrawer("activity")} className="gap-2">
+          </TabsTrigger>
+          {canAccessFunding && (
+            <TabsTrigger value="funding" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Funding
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="activity" className="gap-2">
             <Activity className="h-4 w-4" />
             Activity
           </Button>
@@ -593,43 +622,52 @@ export function ProjectDetailPage({
                   </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </TabsContent>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Funding Accounts</CardTitle>
-              <CardDescription>
-                {fundingAccounts.length} account{fundingAccounts.length !== 1 ? "s" : ""} linked
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {fundingAccounts.length === 0 ? (
-                <div className="text-center py-8">
-                  <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No funding accounts linked</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Link funding accounts to track project expenses
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {fundingAccounts.map((account) => (
-                    <div key={account.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{account.accountName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {account.accountNumber} • {account.funderName}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">
-                          {formatCurrency(account.totalBudget || 0, account.currency)}
-                        </p>
-                        <Badge variant="outline" className="text-xs">
-                          {account.status}
-                        </Badge>
-                      </div>
+          {/* Resources Tab */}
+          <TabsContent value="resources" className="p-0 m-0">
+            <ProjectResources
+              project={project}
+              orders={orders}
+              events={events}
+              experiments={experiments}
+              onViewOrder={(order) => onViewOrder?.(order.id)}
+              onViewExperiment={(experiment) => onViewExperiment?.(experiment.id)}
+              onViewEvent={(event) => onViewEvent?.(event.id)}
+            />
+          </TabsContent>
+
+          {/* Files Tab */}
+          <TabsContent value="files" className="p-6 m-0">
+            <Card>
+              <CardContent className="pt-6 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">File management coming soon</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Upload and manage project documents, deliverables, and reports
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {canAccessFunding && (
+            <>
+              {/* Funding Tab */}
+              <TabsContent value="funding" className="p-6 m-0">
+            <div className="space-y-6">
+              {/* Budget Overview */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Budget Overview</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Total Budget</label>
+                      <p className="text-2xl font-bold mt-1">
+                        {formatCurrency(project.totalBudget || 0, project.currency)}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -870,27 +908,14 @@ export function ProjectDetailPage({
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
-            </CardContent>
-          </Card>
-
-          <div className="space-y-4 overflow-hidden">
-            {selectedWorkpackage && (
-              <WorkpackageCard
-                workpackage={selectedWorkpackage}
-                deliverables={getWorkpackageDeliverables(selectedWorkpackage.id)}
-                people={teamMembers}
-                onViewWorkpackage={handleViewWorkpackage}
-                onEditWorkpackage={onUpdateWorkpackage ? handleEditWorkpackage : undefined}
-                onCreateDeliverable={onCreateDeliverable ? handleCreateDeliverableClick : undefined}
-                onEditDeliverable={onUpdateDeliverable ? handleEditDeliverable : undefined}
-                onDeleteDeliverable={onDeleteDeliverable ? handleDeleteDeliverable : undefined}
-                onDeliverableClick={handleViewDeliverable}
-              />
-            )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+            </>
+          )}
 
             <Card className="border-border h-full">
               <CardHeader className="pb-3">
