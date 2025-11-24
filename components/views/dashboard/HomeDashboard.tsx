@@ -17,6 +17,7 @@ import {
     Wrench
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { DashboardTile } from './DashboardTile'
 
 export function HomeDashboard() {
     const {
@@ -107,15 +108,22 @@ export function HomeDashboard() {
                                 <div className="space-y-2">
                                     {elnExperiments.length > 0 ? (
                                         elnExperiments.slice(0, 5).map(experiment => (
-                                            <div key={experiment.id} className="p-2 border rounded-md text-sm hover:bg-accent transition-colors cursor-pointer">
-                                                <div className="font-medium truncate">{experiment.title}</div>
+                                            <DashboardTile
+                                                key={experiment.id}
+                                                href={`/eln?experimentId=${experiment.id}`}
+                                                aria-label={`Open experiment ${experiment.title}`}
+                                                className="p-2 text-sm"
+                                            >
+                                                <div className="font-medium truncate group-hover:text-primary transition-colors">
+                                                    {experiment.title}
+                                                </div>
                                                 <div className="text-xs text-muted-foreground truncate">
                                                     {experiment.description || 'No description'}
                                                 </div>
                                                 {experiment.status && (
                                                     <Badge variant="outline" className="text-[10px] mt-1">{experiment.status}</Badge>
                                                 )}
-                                            </div>
+                                            </DashboardTile>
                                         ))
                                     ) : (
                                         <div className="text-sm text-muted-foreground text-center py-4">No active experiments</div>
@@ -138,12 +146,19 @@ export function HomeDashboard() {
                                 <div className="space-y-2">
                                     {whiteboards.length > 0 ? (
                                         whiteboards.slice(0, 3).map(whiteboard => (
-                                            <div key={whiteboard.id} className="p-2 border rounded-md text-sm hover:bg-accent transition-colors cursor-pointer">
-                                                <div className="font-medium truncate">{whiteboard.name}</div>
+                                            <DashboardTile
+                                                key={whiteboard.id}
+                                                href={`/whiteboard?whiteboardId=${whiteboard.id}`}
+                                                aria-label={`Open whiteboard ${whiteboard.name}`}
+                                                className="p-2 text-sm"
+                                            >
+                                                <div className="font-medium truncate group-hover:text-primary transition-colors">
+                                                    {whiteboard.name}
+                                                </div>
                                                 <div className="text-xs text-muted-foreground">
                                                     {whiteboard.shapes?.length || 0} shapes
                                                 </div>
-                                            </div>
+                                            </DashboardTile>
                                         ))
                                     ) : (
                                         <div className="text-sm text-muted-foreground text-center py-4">No whiteboards</div>
