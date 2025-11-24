@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Package, Edit, Trash2, Calendar, DollarSign, User, GripVertical, MoreVertical, Target } from "lucide-react"
+import { Package, Edit, Trash2, Calendar, DollarSign, GripVertical, MoreVertical, Target } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -60,19 +60,25 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="bg-white rounded-lg border-2 border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow"
+      className="order-card relative overflow-hidden"
     >
+      <div
+        className="absolute inset-x-5 top-0 h-1 rounded-full"
+        style={{ background: "var(--accent-gradient)" }}
+      />
       {/* Header with Title and Menu */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className="flex items-start justify-between pb-3 mb-3 border-b border-border/70">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div
             {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded flex-shrink-0"
+            className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-accent rounded-md flex-shrink-0"
           >
             <GripVertical className="h-5 w-5 text-gray-400" />
           </div>
-          <Package className="h-5 w-5 text-gray-500 flex-shrink-0" />
-          <h3 className="font-semibold text-foreground text-sm truncate">
+          <div className="h-9 w-9 rounded-xl bg-accent text-brand-700 grid place-items-center shadow-subtle flex-shrink-0">
+            <Package className="h-5 w-5" />
+          </div>
+          <h3 className="font-semibold text-foreground text-base truncate">
             {order.productName || 'Unnamed Product'}
           </h3>
           <span className={getStatusPillClass(order.status || 'to-order')}>
@@ -84,7 +90,7 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 ml-2 flex-shrink-0 hover:bg-gray-100"
+              className="h-8 w-8 p-0 ml-2 flex-shrink-0 hover:bg-secondary"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-4 w-4 text-gray-600" />
@@ -116,34 +122,36 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
       </div>
 
       {/* Metadata Section - Cleaner grouped layout */}
-      <div className="space-y-3 mb-3">
+      <div className="space-y-4 mb-3">
         {/* Supplier and Catalog */}
-        <div className="space-y-1.5 text-sm">
+        <div className="space-y-1.5 text-sm text-gray-600">
           {order.supplier && (
             <div className="flex justify-between items-center">
-              <span className="text-gray-500">Supplier</span>
-              <span className="font-medium text-gray-900 truncate ml-2">{order.supplier}</span>
+              <span>Supplier</span>
+              <span className="font-semibold text-gray-900 truncate ml-2">{order.supplier}</span>
             </div>
           )}
           {order.catNum && (
             <div className="flex justify-between items-center">
-              <span className="text-gray-500">Cat#</span>
-              <span className="font-medium text-gray-900 truncate ml-2">{order.catNum}</span>
+              <span>Cat#</span>
+              <span className="font-semibold text-gray-900 truncate ml-2">{order.catNum}</span>
             </div>
           )}
         </div>
 
         {/* Price */}
-        <div className="flex items-center gap-1.5 text-lg font-semibold text-gray-900">
-          <DollarSign className="h-4 w-4 text-gray-500" />
-          {order.currency || 'GBP'} {order.priceExVAT?.toFixed(2) || '0.00'}
+        <div className="flex items-center gap-1.5 text-xl font-semibold text-gray-900">
+          <DollarSign className="h-5 w-5 text-brand-600" />
+          <span className="tabular-nums">
+            {order.currency || 'GBP'} {order.priceExVAT?.toFixed(2) || '0.00'}
+          </span>
         </div>
 
         {/* Dates */}
         <div className="space-y-1.5 text-xs text-gray-600">
           {order.expectedDeliveryDate && (
             <div className="flex items-center gap-1.5">
-              <Calendar className="h-3 w-3 text-blue-500" />
+              <Calendar className="h-3 w-3 text-brand-600" />
               <span>Due: {new Date(order.expectedDeliveryDate).toLocaleDateString()}</span>
             </div>
           )}
@@ -151,20 +159,20 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
 
         {/* Account Info */}
         {order.accountName && (
-          <div className="pt-2 border-t border-gray-100">
-            <div className="text-xs text-gray-500 mb-1">Account</div>
-            <div className="text-sm font-medium text-gray-700 truncate">{order.accountName}</div>
+          <div className="pt-3 border-t border-border/70 space-y-1">
+            <div className="text-xs text-gray-500">Account</div>
+            <div className="text-sm font-semibold text-gray-800 truncate">{order.accountName}</div>
           </div>
         )}
 
         {/* Linked Deliverable */}
         {deliverableName && (
-          <div className="pt-2 border-t border-gray-100">
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-              <Target className="h-3 w-3 text-blue-600" />
+          <div className="pt-3 border-t border-border/70 space-y-1">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <Target className="h-3 w-3 text-brand-600" />
               <span>Linked Deliverable</span>
             </div>
-            <div className="text-sm font-medium text-blue-700 truncate">{deliverableName}</div>
+            <div className="text-sm font-semibold text-brand-700 truncate">{deliverableName}</div>
           </div>
         )}
       </div>
