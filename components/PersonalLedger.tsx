@@ -19,6 +19,12 @@ export function PersonalLedger() {
 
   // Load transaction history when allocations change
   useEffect(() => {
+    if (!currentUser) {
+      setTransactions([])
+      setTransactionsLoading(false)
+      return
+    }
+
     if (!fundingAllocations || fundingAllocations.length === 0) {
       setTransactions([])
       setTransactionsLoading(false)
@@ -29,7 +35,10 @@ export function PersonalLedger() {
       const db = getFirebaseDb()
       setTransactionsLoading(true)
       try {
-        const allocationIds = fundingAllocations.map((a) => a.id)
+        const allocationIds = fundingAllocations
+          .map((a) => a.id)
+          .filter((id): id is string => Boolean(id))
+
         if (allocationIds.length > 0) {
           // Firestore has a limit of 10 items in 'in' queries, so we'll need to handle this
           const transactionsSnapshot = await getDocs(
@@ -54,7 +63,7 @@ export function PersonalLedger() {
     }
 
     loadTransactions()
-  }, [fundingAllocations])
+  }, [fundingAllocations, currentUser])
 
   if (fundingAllocationsLoading && fundingAccountsLoading) {
     return <div className="p-6">Loading your budget...</div>

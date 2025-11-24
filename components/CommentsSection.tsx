@@ -58,7 +58,11 @@ export function CommentsSection({
 
   // Subscribe to comments
   useEffect(() => {
-    if (!entityId) return
+    if (!entityId || !currentUser) {
+      setComments([])
+      setLoading(false)
+      return
+    }
 
     const db = getFirebaseDb()
     const q = query(
@@ -86,7 +90,7 @@ export function CommentsSection({
     })
 
     return () => unsubscribe()
-  }, [entityType, entityId])
+  }, [entityType, entityId, currentUser?.uid])
 
   // Organize comments into threads
   const commentThreads = useMemo(() => {

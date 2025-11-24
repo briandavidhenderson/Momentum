@@ -19,6 +19,7 @@ import {
     Wrench
 } from 'lucide-react'
 import { format } from 'date-fns'
+import Link from 'next/link'
 import { DashboardTile } from './DashboardTile'
 
 export function HomeDashboard() {
@@ -43,8 +44,7 @@ export function HomeDashboard() {
         // Other
         userBookings,
         currentUserProfile,
-        setMainView,
-        allProfiles
+        setMainView
     } = useAppContext()
 
     const researchBoards = whiteboards

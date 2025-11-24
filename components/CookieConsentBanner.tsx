@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
-import { getFirebaseDb } from "@/lib/firebase"
+import { getFirebaseDb, sanitizeForFirestore } from "@/lib/firebase"
 import type { UserConsent } from "@/lib/types"
 import { PRIVACY_POLICY_VERSION } from "@/lib/constants"
 import { logger } from "@/lib/logger"
@@ -57,7 +57,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
         const consentDoc = await getDoc(doc(db, "userConsents", user.uid))
 
         if (consentDoc.exists()) {
-          const data = consentDoc.data()
+          const data = sanitizeForFirestore(consentDoc.data())
           
           // Validate and sanitize consent data to handle any corrupted documents
           if (!data || typeof data !== 'object') {
@@ -140,21 +140,21 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
     try {
       const userAgent = typeof window !== "undefined" ? window.navigator.userAgent : ""
 
-      const consentData: UserConsent = {
+          const consentPayload = sanitizeForFirestore({
         id: user.uid,
         userId: user.uid,
         ...(userProfile?.labId && { labId: userProfile.labId }), // Only include labId if defined
         functionalCookies: true, // Always required
-        analyticsCookies: consent.analyticsCookies || false,
-        dataProcessingConsent: consent.dataProcessingConsent || false,
+            analyticsCookies: Boolean(consent.analyticsCookies),
+            dataProcessingConsent: Boolean(consent.dataProcessingConsent),
         specialCategoryDataAcknowledged: false, // Separate ELN workflow
         consentGivenAt: new Date().toISOString(),
         consentVersion: PRIVACY_POLICY_VERSION,
         userAgent,
-      }
+          }) as UserConsent
 
       // Save to Firestore
-      await setDoc(doc(db, "userConsents", user.uid), consentData)
+      await setDoc(doc(db, "userConsents", user.uid), consentPayload)
 
       // Update user's consent flag
       await setDoc(
@@ -167,13 +167,13 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
       )
 
       // Apply analytics settings
-      if (consentData.analyticsCookies) {
+      if (consentPayload.analyticsCookies) {
         enableAnalytics()
       } else {
         disableAnalytics()
       }
 
-      onConsentChange?.(consentData)
+      onConsentChange?.(consentPayload)
       setShowBanner(false)
     } catch (error) {
       logger.error("Error saving consent", error)

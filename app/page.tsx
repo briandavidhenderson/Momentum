@@ -24,7 +24,7 @@ import { HomeDashboard } from "@/components/views/dashboard/HomeDashboard"
 import { NotificationBell } from "@/components/NotificationBell"
 import TopModuleNavigation from "@/components/TopModuleNavigation"
 import { MyBookingsView } from "@/components/equipment/MyBookingsView"
-import WhiteboardPage from "@/app/whiteboard/page"
+import { WhiteboardView } from "@/components/views/WhiteboardView"
 import ResearchBoard from "@/components/views/ResearchBoard"
 import { UserRole } from "@/lib/types"
 
@@ -136,7 +136,7 @@ export default function Page() {
           {mainView === 'equipment' && <EquipmentManagement />}
           {mainView === 'bookings' && <MyBookingsView />}
           {mainView === 'calendar' && <CalendarEvents />}
-          {mainView === 'whiteboard' && <WhiteboardPage />}
+          {mainView === 'whiteboard' && <WhiteboardView />}
           {mainView === 'research' && <ResearchBoard />}
           {mainView === 'funding' && hasRoleRestriction && <FundingAdmin />}
           {mainView === 'ledger' && <PersonalLedger />}

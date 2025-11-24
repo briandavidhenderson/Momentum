@@ -95,7 +95,6 @@ export function WorkpackageDialog({
       setEndDate(new Date(workpackage.end).toISOString().split("T")[0])
       setImportance(workpackage.importance)
       setStatus(normalizeWorkpackageStatus(workpackage.status))
-      setTasks(workpackage.tasks || [])
       setOwnerId(workpackage.ownerId)  // Feature #5: Load workpackage lead
       setStartDateError(null)
       setEndDateError(null)
@@ -172,7 +171,6 @@ export function WorkpackageDialog({
         end: new Date(endDate),
         importance,
         status: normalizeWorkpackageStatus(status),
-        tasks,
         ownerId,  // Feature #5: Save workpackage lead
       }
 

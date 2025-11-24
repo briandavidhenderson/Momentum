@@ -45,7 +45,7 @@ export function calculateProjectHealth(
   const overdueDeliverables = projectDeliverables.filter(deliverable => {
     if (!deliverable.dueDate) return false
     const dueDate = new Date(deliverable.dueDate)
-    return dueDate < today && deliverable.status !== "completed"
+    return dueDate < today && deliverable.status !== "done"
   })
   if (overdueDeliverables.length > 0) {
     score += Math.min(3, overdueDeliverables.length)

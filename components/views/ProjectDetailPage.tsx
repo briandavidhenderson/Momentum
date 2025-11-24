@@ -11,7 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { WorkpackageDialog } from "@/components/projects/WorkpackageDialog"
-import { WorkpackageCard } from "@/components/projects/WorkpackageCard"
 import { DeliverableDialog } from "@/components/DeliverableDialog"
 import { DeliverableDetailsPanel } from "@/components/projects/DeliverableDetailsPanel"
 import { CommentsSection } from "@/components/CommentsSection"
@@ -119,7 +118,20 @@ export function ProjectDetailPage({
     activity: false,
   })
   const [newDeliverableNames, setNewDeliverableNames] = useState<Record<string, string>>({})
-  const [newTaskName, setNewTaskName] = useState("")
+
+  const toggleDrawer = (drawer: keyof typeof drawerVisibility) => {
+    setDrawerVisibility((current) => ({
+      ...current,
+      [drawer]: !current[drawer],
+    }))
+  }
+
+  const toggleWorkpackageExpand = (workpackageId: string) => {
+    setExpandedWorkpackages((current) => ({
+      ...current,
+      [workpackageId]: !current[workpackageId],
+    }))
+  }
 
   const isFundedProject = (project.type || "unfunded") === "funded"
   const hasFundingLedger = (project.accountIds?.length ?? 0) > 0 || (fundingAccounts?.length ?? 0) > 0
@@ -130,7 +142,7 @@ export function ProjectDetailPage({
 
   // Fetch project orders
   useEffect(() => {
-    if (!canAccessFunding) {
+    if (!canAccessFunding || !currentUser) {
       setOrders([])
       setLoadingOrders(false)
       return
@@ -163,16 +175,15 @@ export function ProjectDetailPage({
     }
 
     fetchProjectOrders()
-  }, [project.id, canAccessFunding])
-
-  useEffect(() => {
-    if (activeTab === "funding" && !canAccessFunding) {
-      setActiveTab("execution")
-    }
-  }, [activeTab, canAccessFunding])
+  }, [project.id, canAccessFunding, currentUser?.uid])
 
   // Fetch project experiments
   useEffect(() => {
+    if (!currentUser) {
+      setExperiments([])
+      setLoadingExperiments(false)
+      return
+    }
     const fetchProjectExperiments = async () => {
       const db = getFirebaseDb()
       setLoadingExperiments(true)
@@ -197,7 +208,7 @@ export function ProjectDetailPage({
     }
 
     fetchProjectExperiments()
-  }, [project.id])
+  }, [project.id, currentUser?.uid])
 
   // Calculate project statistics
   const stats = useMemo(() => {
@@ -276,15 +287,10 @@ export function ProjectDetailPage({
     })
   }, [workpackages])
 
-  // Get project health status
-  const getHealthStatus = () => {
-    if (stats.atRiskWorkpackages > 0) return { label: "At Risk", color: "text-red-600", bg: "bg-red-50" }
-    if (project.progress >= 75) return { label: "On Track", color: "text-green-600", bg: "bg-green-50" }
-    if (project.progress >= 50) return { label: "Good", color: "text-blue-600", bg: "bg-blue-50" }
-    return { label: "Starting", color: "text-gray-600", bg: "bg-gray-50" }
-  }
-
-  const healthStatus = getHealthStatus()
+  const computedHealth = useMemo<ProjectHealth>(() => {
+    if (health) return health
+    return calculateProjectHealth(project, deliverables, workpackages)
+  }, [health, project, deliverables, workpackages])
 
   // Get project PIs
   const principalInvestigators = teamMembers.filter(member =>
@@ -479,7 +485,73 @@ export function ProjectDetailPage({
     const tasks = Array.isArray(selectedWorkpackage?.tasks) ? selectedWorkpackage?.tasks : []
     if (!selectedDeliverable) return tasks || []
 
-  
+    return tasks.filter(task => task.deliverableId === selectedDeliverable.id)
+  }, [selectedWorkpackage?.tasks, selectedDeliverable])
+
+  const handleQuickAddDeliverable = (workpackageId: string) => {
+    if (!onCreateDeliverable) return
+    const name = newDeliverableNames[workpackageId]?.trim()
+    if (!name) return
+
+    onCreateDeliverable({
+      name,
+      workpackageId,
+      status: "not-started",
+      progress: 0,
+    })
+
+    setNewDeliverableNames((current) => ({ ...current, [workpackageId]: "" }))
+  }
+
+  const handleQuickAddTask = () => {
+    if (!selectedWorkpackage || !onUpdateWorkpackage) return
+    const name = newTaskName.trim()
+    if (!name) return
+
+    const generateId = () =>
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+    const newTask: Task = {
+      id: generateId(),
+      name,
+      start: new Date(),
+      end: new Date(),
+      progress: 0,
+      primaryOwner: selectedDeliverable?.ownerId,
+      helpers: [],
+      workpackageId: selectedWorkpackage.id,
+      importance: "medium" as ImportanceLevel,
+      deliverables: selectedDeliverable ? [selectedDeliverable.id] : [],
+      status: "not-started",
+      notes: "",
+    }
+
+    const nextTasks = [...(selectedWorkpackage.tasks || []), newTask]
+    onUpdateWorkpackage(selectedWorkpackage.id, { tasks: nextTasks })
+    setNewTaskName("")
+  }
+
+  const getPersonById = (personId?: string | null) =>
+    teamMembers.find(member => member.id === personId) || null
+
+  const getTaskStatusMeta = (status?: string) => {
+    switch (status) {
+      case "done":
+      case "completed":
+        return { label: "Completed", color: "bg-green-50 text-green-700 border-green-200", bar: "bg-green-500" }
+      case "in-progress":
+      case "working":
+        return { label: "In progress", color: "bg-blue-50 text-blue-700 border-blue-200", bar: "bg-blue-500" }
+      case "blocked":
+      case "at-risk":
+        return { label: "Blocked", color: "bg-red-50 text-red-700 border-red-200", bar: "bg-red-500" }
+      default:
+        return { label: "Planned", color: "bg-muted text-slate-700 border-border", bar: "bg-muted-foreground" }
+    }
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="border-b border-border bg-surface-2 px-6 py-4">
@@ -559,7 +631,10 @@ export function ProjectDetailPage({
 
       <div className="border-b border-border bg-background px-6 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground overflow-hidden">
-          <span className="flex items-center gap-1"><Folder className="h-4 w-4" />Projects</span>
+          <span className="flex items-center gap-1">
+            <Folder className="h-4 w-4" />
+            Projects
+          </span>
           <ChevronRight className="h-3 w-3" />
           <span className="text-foreground truncate">{project.name}</span>
           {selectedWorkpackage && (
@@ -577,29 +652,49 @@ export function ProjectDetailPage({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <Button variant="ghost" size="sm" onClick={() => toggleDrawer("stats")} className="gap-2">
+          <Button
+            variant={drawerVisibility.stats ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => toggleDrawer("stats")}
+            className="gap-2"
+          >
             <LayoutDashboard className="h-4 w-4" />
             Stats
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => toggleDrawer("funding")} className="gap-2">
+          <Button
+            variant={drawerVisibility.funding ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => canAccessFunding && toggleDrawer("funding")}
+            disabled={!canAccessFunding}
+            className="gap-2"
+          >
             <DollarSign className="h-4 w-4" />
             Funding
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => toggleDrawer("resources")} className="gap-2">
+          <Button
+            variant={drawerVisibility.resources ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => toggleDrawer("resources")}
+            className="gap-2"
+          >
             <FlaskConical className="h-4 w-4" />
             Resources
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => toggleDrawer("files")} className="gap-2">
+          <Button
+            variant={drawerVisibility.files ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => toggleDrawer("files")}
+            className="gap-2"
+          >
             <FileText className="h-4 w-4" />
             Files
-          </TabsTrigger>
-          {canAccessFunding && (
-            <TabsTrigger value="funding" className="gap-2">
-              <DollarSign className="h-4 w-4" />
-              Funding
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="activity" className="gap-2">
+          </Button>
+          <Button
+            variant={drawerVisibility.activity ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => toggleDrawer("activity")}
+            className="gap-2"
+          >
             <Activity className="h-4 w-4" />
             Activity
           </Button>
@@ -621,24 +716,18 @@ export function ProjectDetailPage({
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.totalWorkpackages}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats.completedWorkpackages} completed
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.completedWorkpackages} completed</p>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Total Tasks</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.totalTasks}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats.taskCompletionRate}% complete
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.taskCompletionRate}% complete</p>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Budget</CardTitle>
@@ -652,7 +741,6 @@ export function ProjectDetailPage({
                 </p>
               </CardContent>
             </Card>
-
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Timeline</CardTitle>
@@ -675,182 +763,139 @@ export function ProjectDetailPage({
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Total Budget</label>
+                  <p className="text-sm font-medium text-muted-foreground">Total Budget</p>
                   <p className="text-2xl font-bold mt-1">
                     {formatCurrency(project.totalBudget || 0, project.currency)}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Spent</label>
+                  <p className="text-sm font-medium text-muted-foreground">Spent</p>
                   <p className="text-2xl font-bold mt-1">
                     {formatCurrency(project.spentAmount || 0, project.currency)}
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Remaining</label>
+                  <p className="text-sm font-medium text-muted-foreground">Remaining</p>
                   <p className="text-2xl font-bold mt-1">
                     {formatCurrency(project.remainingBudget || 0, project.currency)}
                   </p>
                 </div>
               </div>
-
               {project.totalBudget && project.totalBudget > 0 && (
                 <div className="mt-4">
-                  <Progress
-                    value={((project.spentAmount || 0) / project.totalBudget) * 100}
-                    className="h-2"
-                  />
+                  <Progress value={((project.spentAmount || 0) / project.totalBudget) * 100} className="h-2" />
                   <p className="text-xs text-muted-foreground mt-2">
                     {Math.round(((project.spentAmount || 0) / project.totalBudget) * 100)}% of budget used
                   </p>
                 </div>
               )}
-            </div>
-          </TabsContent>
-
-          {/* Resources Tab */}
-          <TabsContent value="resources" className="p-0 m-0">
-            <ProjectResources
-              project={project}
-              orders={orders}
-              events={events}
-              experiments={experiments}
-              onViewOrder={(order) => onViewOrder?.(order.id)}
-              onViewExperiment={(experiment) => onViewExperiment?.(experiment.id)}
-              onViewEvent={(event) => onViewEvent?.(event.id)}
-            />
-          </TabsContent>
-
-          {/* Files Tab */}
-          <TabsContent value="files" className="p-6 m-0">
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">File management coming soon</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Upload and manage project documents, deliverables, and reports
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
+            </CardContent>
+          </Card>
 
           {canAccessFunding && (
-            <>
-              {/* Funding Tab */}
-              <TabsContent value="funding" className="p-6 m-0">
-            <div className="space-y-6">
-              {/* Budget Overview */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Budget Overview</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Total Budget</label>
-                      <p className="text-2xl font-bold mt-1">
-                        {formatCurrency(project.totalBudget || 0, project.currency)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Project Orders
-              </CardTitle>
-              <CardDescription>
-                {orderStats.totalOrders} order{orderStats.totalOrders !== 1 ? "s" : ""} • {formatCurrency(orderStats.totalSpent, project.currency)} spent, {formatCurrency(orderStats.totalCommitted, project.currency)} committed
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingOrders ? (
-                <div className="text-center py-8 text-muted-foreground">Loading orders...</div>
-              ) : orders.length === 0 ? (
-                <div className="text-center py-8">
-                  <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No orders linked to this project</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Orders will appear here when created through project funding accounts
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-surface-2 rounded-lg">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-yellow-600">{orderStats.toOrderCount}</div>
-                      <div className="text-xs text-muted-foreground mt-1">To Order</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{orderStats.orderedCount}</div>
-                      <div className="text-xs text-muted-foreground mt-1">Ordered</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{orderStats.receivedCount}</div>
-                      <div className="text-xs text-muted-foreground mt-1">Received</div>
-                    </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  Project Orders
+                </CardTitle>
+                <CardDescription>
+                  {orderStats.totalOrders} order{orderStats.totalOrders !== 1 ? "s" : ""} •{" "}
+                  {formatCurrency(orderStats.totalSpent, project.currency)} spent,{" "}
+                  {formatCurrency(orderStats.totalCommitted, project.currency)} committed
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingOrders ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading orders...</div>
+                ) : orders.length === 0 ? (
+                  <div className="text-center py-8">
+                    <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No orders linked to this project</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Orders will appear here when created through project funding accounts
+                    </p>
                   </div>
-
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium mb-3">Recent Orders</h4>
-                    {orders.slice(0, 10).map((order) => (
-                      <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-surface-2 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{order.productName}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs text-muted-foreground">{order.catNum}</p>
-                            {order.supplier && (
-                              <>
-                                <span className="text-xs text-muted-foreground">•</span>
-                                <p className="text-xs text-muted-foreground">{order.supplier}</p>
-                              </>
-                            )}
-                            {order.allocationName && (
-                              <>
-                                <span className="text-xs text-muted-foreground">•</span>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {order.allocationName}
-                                </p>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 ml-4">
-                          <div className="text-right">
-                            <p className="font-medium">{formatCurrency(order.priceExVAT, order.currency)}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(order.createdDate).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs ${order.status === "received" ? "bg-green-50 text-green-700 border-green-200" :
-                              order.status === "ordered" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                "bg-yellow-50 text-yellow-700 border-yellow-200"}
-                            `}
-                          >
-                            {order.status === "to-order" ? "To Order" :
-                              order.status === "ordered" ? "Ordered" :
-                                "Received"}
-                          </Badge>
-                        </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-4 mb-4 p-4 bg-surface-2 rounded-lg">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-yellow-600">{orderStats.toOrderCount}</div>
+                        <div className="text-xs text-muted-foreground mt-1">To Order</div>
                       </div>
-                    ))}
-                    {orders.length > 10 && (
-                      <p className="text-xs text-muted-foreground text-center mt-2">
-                        Showing 10 of {orders.length} orders
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">{orderStats.orderedCount}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Ordered</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">{orderStats.receivedCount}</div>
+                        <div className="text-xs text-muted-foreground mt-1">Received</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium mb-3">Recent Orders</h4>
+                      {orders.slice(0, 10).map((order) => (
+                        <div
+                          key={order.id}
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-surface-2 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{order.productName}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <p className="text-xs text-muted-foreground">{order.catNum}</p>
+                              {order.supplier && (
+                                <>
+                                  <span className="text-xs text-muted-foreground">•</span>
+                                  <p className="text-xs text-muted-foreground">{order.supplier}</p>
+                                </>
+                              )}
+                              {order.allocationName && (
+                                <>
+                                  <span className="text-xs text-muted-foreground">•</span>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {order.allocationName}
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 ml-4">
+                            <div className="text-right">
+                              <p className="font-medium">{formatCurrency(order.priceExVAT, order.currency)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(order.createdDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${order.status === "received"
+                                  ? "bg-green-50 text-green-700 border-green-200"
+                                  : order.status === "ordered"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                }`}
+                            >
+                              {order.status === "to-order"
+                                ? "To Order"
+                                : order.status === "ordered"
+                                  ? "Ordered"
+                                  : "Received"}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                      {orders.length > 10 && (
+                        <p className="text-xs text-muted-foreground text-center mt-2">
+                          Showing 10 of {orders.length} orders
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -910,7 +955,8 @@ export function ProjectDetailPage({
           <Card className="bg-surface-2 border-border overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <PanelLeft className="h-4 w-4" /> Structure
+                <PanelLeft className="h-4 w-4" />
+                Structure
               </CardTitle>
               <CardDescription>Workpackages → Deliverables</CardDescription>
             </CardHeader>
@@ -922,8 +968,12 @@ export function ProjectDetailPage({
                 const deliverablesForWp = getWorkpackageDeliverables(wp.id)
                 const isSelected = wp.id === selectedWorkpackageId
                 const isExpanded = expandedWorkpackages[wp.id]
+
                 return (
-                  <div key={wp.id} className={`rounded-lg border ${isSelected ? "border-brand-500 bg-brand-50/40" : "border-border"}`}>
+                  <div
+                    key={wp.id}
+                    className={`rounded-lg border ${isSelected ? "border-brand-500 bg-brand-50/40" : "border-border"}`}
+                  >
                     <button
                       onClick={() => {
                         setSelectedWorkpackageId(wp.id)
@@ -935,8 +985,8 @@ export function ProjectDetailPage({
                         <div className="flex items-center gap-2 min-w-0">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
+                            onClick={(event) => {
+                              event.stopPropagation()
                               toggleWorkpackageExpand(wp.id)
                             }}
                             className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-muted"
@@ -955,6 +1005,7 @@ export function ProjectDetailPage({
                         </Badge>
                       </div>
                     </button>
+
                     {isExpanded && (
                       <div className="border-t border-border bg-background px-3 py-2 space-y-2">
                         {deliverablesForWp.length === 0 && (
@@ -967,11 +1018,14 @@ export function ProjectDetailPage({
                               setSelectedWorkpackageId(wp.id)
                               setSelectedDeliverableId(deliverable.id)
                             }}
-                            className={`w-full text-left px-2 py-1 rounded-md transition-colors ${deliverable.id === selectedDeliverableId ? "bg-brand-50 text-brand-900" : "hover:bg-muted/60"}`}
+                            className={`w-full text-left px-2 py-1 rounded-md transition-colors ${deliverable.id === selectedDeliverableId ? "bg-brand-50 text-brand-900" : "hover:bg-muted/60"
+                              }`}
                           >
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-medium truncate">{deliverable.name}</span>
-                              <Badge variant="outline" className="text-[11px]">{deliverable.status}</Badge>
+                              <Badge variant="outline" className="text-[11px]">
+                                {deliverable.status}
+                              </Badge>
                             </div>
                             <Progress value={deliverable.progress || 0} className="h-1 mt-2" />
                           </button>
@@ -982,89 +1036,87 @@ export function ProjectDetailPage({
                             <Input
                               placeholder="Quick add deliverable"
                               value={newDeliverableNames[wp.id] || ""}
-                              onChange={(e) => setNewDeliverableNames((prev) => ({ ...prev, [wp.id]: e.target.value }))}
+                              onChange={(event) =>
+                                setNewDeliverableNames((prev) => ({ ...prev, [wp.id]: event.target.value }))
+                              }
                               className="h-9"
                             />
-                            <Button size="sm" onClick={() => handleQuickAddDeliverable(wp.id)} disabled={!newDeliverableNames[wp.id]?.trim()}>
+                            <Button
+                              size="sm"
+                              onClick={() => handleQuickAddDeliverable(wp.id)}
+                              disabled={!newDeliverableNames[wp.id]?.trim()}
+                            >
                               <Plus className="h-4 w-4" />
                             </Button>
                           </div>
                         )}
                       </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-            </>
-          )}
-
-            <Card className="border-border h-full">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-xl">
-                      {selectedDeliverable?.name || "Select a deliverable"}
-                    </CardTitle>
-                    {selectedWorkpackage && (
-                      <CardDescription>{selectedWorkpackage.name}</CardDescription>
                     )}
                   </div>
-                  {selectedDeliverable && (
-                    <Badge variant="outline" className="capitalize">
-                      {selectedDeliverable.status}
-                    </Badge>
-                  )}
+                )
+              })}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border h-full">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-xl">{selectedDeliverable?.name || "Select a deliverable"}</CardTitle>
+                  {selectedWorkpackage && <CardDescription>{selectedWorkpackage.name}</CardDescription>}
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {selectedDeliverable ? (
-                  <>
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Deliverable progress</span>
-                        <span className="font-medium">{selectedDeliverable.progress || 0}%</span>
-                      </div>
-                      <Progress value={selectedDeliverable.progress || 0} className="h-2" />
-                    </div>
-
-                    {selectedDeliverable.description && (
-                      <p className="text-sm text-muted-foreground">
-                        {selectedDeliverable.description}
-                      </p>
-                    )}
-
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        {selectedDeliverable.importance || "unspecified"}
-                      </Badge>
-                      <Badge variant="outline" className="text-xs">
-                        Owner: {teamMembers.find(p => p.id === selectedDeliverable.ownerId)?.firstName || "Unassigned"}
-                      </Badge>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <ListTodo className="h-4 w-4" />
-                        <span>Open the detailed drawer for metrics, blockers, and links.</span>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => setSelectedDeliverableForPanel(selectedDeliverable)}>
-                        Open Details
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Select a deliverable to view details.</p>
+                {selectedDeliverable && (
+                  <Badge variant="outline" className="capitalize">
+                    {selectedDeliverable.status}
+                  </Badge>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {selectedDeliverable ? (
+                <>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Deliverable progress</span>
+                      <span className="font-medium">{selectedDeliverable.progress || 0}%</span>
+                    </div>
+                    <Progress value={selectedDeliverable.progress || 0} className="h-2" />
+                  </div>
+
+                  {selectedDeliverable.description && (
+                    <p className="text-sm text-muted-foreground">{selectedDeliverable.description}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {selectedDeliverable.importance || "unspecified"}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      Owner: {teamMembers.find((p) => p.id === selectedDeliverable.ownerId)?.firstName || "Unassigned"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <ListTodo className="h-4 w-4" />
+                      <span>Open the detailed drawer for metrics, blockers, and links.</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setSelectedDeliverableForPanel(selectedDeliverable)}>
+                      Open Details
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Select a deliverable to view details.</p>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className="bg-surface-2 border-border overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <PanelRight className="h-4 w-4" /> Task execution
+                <PanelRight className="h-4 w-4" />
+                Task execution
               </CardTitle>
               <CardDescription>Tasks linked to the selected deliverable</CardDescription>
             </CardHeader>
@@ -1073,7 +1125,7 @@ export function ProjectDetailPage({
                 <Input
                   placeholder="Quick add task"
                   value={newTaskName}
-                  onChange={(e) => setNewTaskName(e.target.value)}
+                  onChange={(event) => setNewTaskName(event.target.value)}
                   className="h-9"
                 />
                 <Button size="sm" onClick={handleQuickAddTask} disabled={!newTaskName.trim() || !onUpdateWorkpackage}>
@@ -1090,11 +1142,15 @@ export function ProjectDetailPage({
                   const meta = getTaskStatusMeta(task?.status)
                   const owner = getPersonById(task?.primaryOwner)
                   const progressValue = typeof task?.progress === "number" ? task.progress : 0
+                  const taskProblem = isTaskBlocked(task) || isTaskOverdue(task)
+
                   return (
                     <div key={task?.id || idx} className="p-3 rounded-lg border bg-background space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xs font-semibold px-2 py-1 rounded bg-muted">{(idx + 1).toString().padStart(2, "0")}</span>
+                          <span className="text-xs font-semibold px-2 py-1 rounded bg-muted">
+                            {(idx + 1).toString().padStart(2, "0")}
+                          </span>
                           <p className="font-medium truncate">{task?.name || "Untitled task"}</p>
                         </div>
                         <Badge variant="outline" className={`text-[11px] ${meta.color}`}>
@@ -1106,9 +1162,7 @@ export function ProjectDetailPage({
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{owner ? `${owner.firstName} ${owner.lastName}` : "Unassigned"}</span>
-                        {taskProblem && (
-                          <span className="text-red-600 font-medium">At risk</span>
-                        )}
+                        {taskProblem && <span className="text-red-600 font-medium">At risk</span>}
                       </div>
                     </div>
                   )
@@ -1118,7 +1172,7 @@ export function ProjectDetailPage({
           </Card>
         </div>
       </div>
-      {/* Workpackage Dialog */}
+
       <WorkpackageDialog
         open={workpackageDialogOpen}
         onOpenChange={setWorkpackageDialogOpen}
@@ -1130,7 +1184,6 @@ export function ProjectDetailPage({
         availableLeads={teamMembers}
       />
 
-      {/* Deliverable Dialog */}
       {selectedWorkpackageForDeliverable && (
         <DeliverableDialog
           open={deliverableDialogOpen}
@@ -1138,13 +1191,16 @@ export function ProjectDetailPage({
           deliverable={selectedDeliverableDialog}
           workpackageId={selectedWorkpackageForDeliverable}
           onSave={handleSaveDeliverable}
-          onDelete={deliverableDialogMode === "edit" ? () => selectedDeliverableDialog && handleDeleteDeliverable(selectedDeliverableDialog.id) : undefined}
+          onDelete={
+            deliverableDialogMode === "edit"
+              ? () => selectedDeliverableDialog && handleDeleteDeliverable(selectedDeliverableDialog.id)
+              : undefined
+          }
           mode={deliverableDialogMode}
           availableOwners={teamMembers}
         />
       )}
 
-      {/* Deliverable Details Panel */}
       {selectedDeliverableForPanel && (
         <DeliverableDetailsPanel
           deliverable={selectedDeliverableForPanel}
@@ -1157,22 +1213,20 @@ export function ProjectDetailPage({
         />
       )}
 
-      {/* Export Dialog */}
       <ProjectExportDialog
         open={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
         projectId={project.id}
         projectName={project.name}
-        userId={currentUser?.uid || ''}
+        userId={currentUser?.uid || ""}
       />
 
-      {/* Import Dialog */}
       <ProjectImportDialog
         open={importDialogOpen}
         onClose={() => setImportDialogOpen(false)}
         onImportSuccess={handleImportSuccess}
-        labId={currentUserProfile?.labId || ''}
-        userId={currentUser?.uid || ''}
+        labId={currentUserProfile?.labId || ""}
+        userId={currentUser?.uid || ""}
       />
     </div>
   )

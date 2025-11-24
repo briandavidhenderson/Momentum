@@ -140,6 +140,7 @@ export interface ProfileProject {
   endDate: string
   grantName?: string
   grantNumber?: string
+  type?: "funded" | "unfunded"
   fundedBy: string[]
   budget?: number
   status: "planning" | "active" | "completed" | "on-hold"
