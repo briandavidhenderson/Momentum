@@ -100,9 +100,9 @@ export function ResearchPinDialog({ open, onClose, editingPin }: ResearchPinDial
       // Dynamically import pdfjs-dist to avoid SSR issues
       const pdfjsLib = await import('pdfjs-dist');
 
-      // Configure worker
+      // Configure worker to use locally hosted file
       if (typeof window !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
       }
 
       const arrayBuffer = await file.arrayBuffer();
