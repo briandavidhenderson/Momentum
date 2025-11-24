@@ -439,6 +439,42 @@ export function ProjectDetailPage({
     [deliverablesForSelectedWp, selectedDeliverableId]
   )
 
+  const getTaskDueDate = (task: any) => {
+    if (!task) return null
+    const rawDate = task.dueDate || task.end || task.due
+    if (!rawDate) return null
+    const due = rawDate.toDate ? rawDate.toDate() : new Date(rawDate)
+    return isNaN(due.getTime()) ? null : due
+  }
+
+  const wasTaskUpdatedThisWeek = (task: any) => {
+    const referenceDate = task?.updatedAt || task?.modifiedAt || task?.createdAt || task?.start
+    if (!referenceDate) return false
+    const date = referenceDate.toDate ? referenceDate.toDate() : new Date(referenceDate)
+    if (isNaN(date.getTime())) return false
+    const now = new Date()
+    const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+    return diffDays <= 7
+  }
+
+  const hasTaskDependencies = (task: any) => Array.isArray(task?.dependencies) && task.dependencies.length > 0
+
+  const isTaskBlocked = (task: any) => task?.status === "blocked" || task?.status === "at-risk"
+
+  const isTaskOverdue = (task: any) => {
+    const due = getTaskDueDate(task)
+    if (!due) return false
+    return due.getTime() < Date.now() && task?.status !== "done" && task?.status !== "completed"
+  }
+
+  const isTaskDueSoon = (task: any) => {
+    const due = getTaskDueDate(task)
+    if (!due) return false
+    const now = new Date()
+    const diffDays = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    return diffDays >= 0 && diffDays <= 7
+  }
+
   const getTasksForSelectedDeliverable = useCallback(() => {
     const tasks = Array.isArray(selectedWorkpackage?.tasks) ? selectedWorkpackage?.tasks : []
     if (!selectedDeliverable) return tasks || []
