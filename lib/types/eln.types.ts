@@ -58,6 +58,16 @@ export interface ELNItem {
 
   // Voice-specific
   duration?: number
+
+  // Resource Links (NEW - for integrated research environment)
+  linkedResources?: {
+    equipmentIds?: string[]        // Equipment used in this cell
+    inventoryIds?: string[]         // Inventory items referenced
+    whiteboardIds?: string[]        // Related whiteboards
+    researchPinIds?: string[]       // Research board topics
+    bookingIds?: string[]           // Equipment bookings
+    protocolIds?: string[]          // Standard protocols
+  }
 }
 
 /**
@@ -146,4 +156,25 @@ export interface ELNExperiment {
   specialCategoryDataAcknowledged?: boolean // User acknowledged legal basis
   specialCategoryDataAcknowledgedBy?: string // User ID who acknowledged
   specialCategoryDataAcknowledgedAt?: string // When acknowledged
+
+  // Experiment Resources (NEW - integrated research environment)
+  equipmentUsed?: Array<{
+    equipmentId: string
+    equipmentName: string
+    bookingId?: string
+    usageNotes?: string
+    dateUsed?: string
+  }>
+
+  consumedInventory?: Array<{
+    inventoryId: string
+    itemName: string
+    quantityUsed: number
+    unit: string
+    batchNumber?: string
+    dateUsed?: string
+  }>
+
+  relatedWhiteboards?: string[]      // Whiteboard IDs
+  researchTopics?: string[]          // Research board pin IDs
 }
