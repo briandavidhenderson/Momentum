@@ -27,6 +27,7 @@ import { enrichSupply, enrichDeviceSupplies, updateInventoryQuantity, EnrichedSu
 import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
 import { CheckStockDialog } from "@/components/dialogs/CheckStockDialog"
 import { EquipmentEditorDialog } from "@/components/dialogs/EquipmentEditorDialog"
+import { AssignInventoryToEquipmentDialog } from "@/components/dialogs/AssignInventoryToEquipmentDialog"
 import { logger } from "@/lib/logger"
 
 interface EquipmentStatusPanelProps {
@@ -65,6 +66,7 @@ export function EquipmentStatusPanel({
   const [checkStockItem, setCheckStockItem] = useState<{ deviceId: string; supplyId: string; currentQty: number } | null>(null)
   const [tempStockQty, setTempStockQty] = useState<string>("")
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
+  const [assigningDevice, setAssigningDevice] = useState<EquipmentDevice | null>(null)
   const [newDeviceForm, setNewDeviceForm] = useState<{
     name: string
     make: string
@@ -468,6 +470,7 @@ export function EquipmentStatusPanel({
     setDismissedSuggestions(prev => new Set(prev).add(suggestionId))
   }
 
+  // Render component
   return (
     <div className="card-monday mt-6">
       <div className="flex items-center justify-between mb-6">
@@ -528,8 +531,18 @@ export function EquipmentStatusPanel({
                         Last: {device.lastMaintained}
                       </Badge>
                       <Button
-                        size="sm"
                         variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setAssigningDevice(device)}
+                        title="Manage Inventory"
+                      >
+                        <Package className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
                         onClick={() => handleEditDevice(device)}
                       >
                         <Edit2 className="h-4 w-4" />
@@ -548,8 +561,8 @@ export function EquipmentStatusPanel({
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className={`h-full rounded-full transition-all ${mClass === 'critical' ? 'bg-red-500' :
-                            mClass === 'warning' ? 'bg-orange-500' :
-                              'bg-blue-500'
+                          mClass === 'warning' ? 'bg-orange-500' :
+                            'bg-blue-500'
                           }`}
                         style={{ width: `${mh}%` }}
                       />
@@ -567,8 +580,8 @@ export function EquipmentStatusPanel({
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className={`h-full rounded-full transition-all ${sClass === 'critical' ? 'bg-red-500' :
-                            sClass === 'warning' ? 'bg-orange-500' :
-                              'bg-green-500'
+                          sClass === 'warning' ? 'bg-orange-500' :
+                            'bg-green-500'
                           }`}
                         style={{ width: `${sh}%` }}
                       />
@@ -595,8 +608,8 @@ export function EquipmentStatusPanel({
                           <div className={`absolute left-3 right-3 bottom-1 h-0.5 bg-gray-200 rounded-full overflow-hidden`}>
                             <div
                               className={`h-full ${supplyClass === 'critical' ? 'bg-red-500' :
-                                  supplyClass === 'warning' ? 'bg-orange-500' :
-                                    'bg-green-500'
+                                supplyClass === 'warning' ? 'bg-orange-500' :
+                                  'bg-green-500'
                                 }`}
                               style={{ width: `${supply.healthPercent}%` }}
                             />
@@ -851,6 +864,72 @@ export function EquipmentStatusPanel({
           />
         )}
       </Dialog>
+
+      {/* Inventory Assignment Dialog */}
+      {assigningDevice && (
+        <AssignInventoryToEquipmentDialog
+          open={!!assigningDevice}
+          onClose={() => setAssigningDevice(null)}
+          equipment={assigningDevice}
+          allInventory={inventory}
+          onAssign={(equipmentId, inventoryItemId, settings) => {
+            const device = devices.find(d => d.id === equipmentId)
+            if (!device) return
+
+            // Create new supply
+            const newSupply: EquipmentSupply = {
+              id: generateId('supply'),
+              inventoryItemId,
+              minQty: settings.minQty,
+              burnPerWeek: settings.burnPerWeek,
+            }
+
+            // Update device
+            const updatedSupplies = [...(device.supplies || []), newSupply]
+            onEquipmentUpdate(equipmentId, { supplies: updatedSupplies })
+
+            // Update inventory item (add device ID)
+            const inventoryItem = inventory.find(i => i.id === inventoryItemId)
+            if (inventoryItem) {
+              const deviceIds = inventoryItem.equipmentDeviceIds || []
+              if (!deviceIds.includes(equipmentId)) {
+                const updatedInventory = inventory.map(i =>
+                  i.id === inventoryItemId
+                    ? { ...i, equipmentDeviceIds: [...deviceIds, equipmentId] }
+                    : i
+                )
+                onInventoryUpdate(updatedInventory)
+              }
+            }
+          }}
+          onRemove={(equipmentId, supplyId) => {
+            const device = devices.find(d => d.id === equipmentId)
+            if (!device) return
+
+            const supply = device.supplies?.find(s => s.id === supplyId)
+            if (!supply) return
+
+            // Update device
+            const updatedSupplies = device.supplies.filter(s => s.id !== supplyId)
+            onEquipmentUpdate(equipmentId, { supplies: updatedSupplies })
+
+            // Update inventory item (remove device ID)
+            if (supply.inventoryItemId) {
+              const inventoryItem = inventory.find(i => i.id === supply.inventoryItemId)
+              if (inventoryItem) {
+                const deviceIds = inventoryItem.equipmentDeviceIds || []
+                const updatedDeviceIds = deviceIds.filter(id => id !== equipmentId)
+                const updatedInventory = inventory.map(i =>
+                  i.id === supply.inventoryItemId
+                    ? { ...i, equipmentDeviceIds: updatedDeviceIds }
+                    : i
+                )
+                onInventoryUpdate(updatedInventory)
+              }
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

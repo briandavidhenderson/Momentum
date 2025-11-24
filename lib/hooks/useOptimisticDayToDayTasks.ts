@@ -28,7 +28,7 @@ export function useOptimisticDayToDayTasks() {
 
   // Subscribe to Firestore tasks
   useEffect(() => {
-    const labId = profile?.labId || profile?.lab
+    const labId = profile?.labId
     if (!labId) return
 
     const unsubscribe = subscribeToDayToDayTasks({ labId }, (tasks) => {
@@ -113,7 +113,7 @@ export function useOptimisticDayToDayTasks() {
       return
     }
 
-    const labId = profile?.labId || profile?.lab
+    const labId = profile?.labId
     if (!labId) {
       logger.error('No labId found on profile', new Error('Profile missing labId'), {
         profileId: profile?.id,
