@@ -80,6 +80,10 @@ export default app
  * This function recursively removes keys with undefined values.
  */
 export function sanitizeForFirestore(data: any): any {
+  return sanitizeForFirestoreInternal(data, new WeakSet())
+}
+
+function sanitizeForFirestoreInternal(data: any, visited: WeakSet<object>): any {
   // Handle primitives and null
   if (data === null || typeof data !== 'object') {
     return data
@@ -90,9 +94,15 @@ export function sanitizeForFirestore(data: any): any {
     return data
   }
 
+  if (visited.has(data)) {
+    throw new Error("sanitizeForFirestore encountered a circular reference")
+  }
+
+  visited.add(data)
+
   // Handle Arrays
   if (Array.isArray(data)) {
-    return data.map(item => sanitizeForFirestore(item))
+    return data.map(item => sanitizeForFirestoreInternal(item, visited))
   }
 
   // Handle Objects
@@ -100,7 +110,7 @@ export function sanitizeForFirestore(data: any): any {
   for (const key in data) {
     const value = data[key]
     if (value !== undefined) {
-      sanitized[key] = sanitizeForFirestore(value)
+      sanitized[key] = sanitizeForFirestoreInternal(value, visited)
     }
   }
   return sanitized
