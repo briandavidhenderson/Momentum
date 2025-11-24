@@ -351,15 +351,13 @@ export function QuickBookingDialog({
                 <ul className="mt-2 space-y-1">
                   {conflicts.map((conflict) => (
                     <li key={conflict.id} className="text-sm">
-                      {conflict.title} ({new Date(conflict.startTime).toLocaleString()} - {new Date(conflict.endTime).toLocaleString()})
+                      {conflict.title} by <strong>{conflict.bookedByName || "Unknown"}</strong> ({new Date(conflict.startTime).toLocaleTimeString()} - {new Date(conflict.endTime).toLocaleTimeString()})
                     </li>
                   ))}
                 </ul>
               </AlertDescription>
             </Alert>
           )}
-
-          {/* Error Display */}
           {error && !conflicts.length && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />

@@ -8,8 +8,11 @@ import { EquipmentAvailabilityTimeline } from "@/components/equipment/EquipmentA
 import { QuickBookingDialog } from "@/components/equipment/QuickBookingDialog"
 import { EnableBookingButton } from "@/components/admin/EnableBookingButton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { EquipmentDevice } from "@/lib/types/equipment.types"
+import { Calendar } from "lucide-react"
+import { format } from "date-fns"
 
 export function EquipmentManagement() {
   const {
@@ -102,7 +105,43 @@ export function EquipmentManagement() {
         <p className="text-muted-foreground mt-1">
           Monitor and manage lab equipment status, bookings, and maintenance
         </p>
+
       </div>
+
+      {/* My Bookings Summary Card */}
+      {userBookings && userBookings.length > 0 && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-100 p-2 rounded-xl">
+              <Calendar className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-indigo-900">You have {userBookings.filter(b => b.status === 'confirmed' || b.status === 'pending').length} upcoming bookings</h3>
+              {(() => {
+                const nextBooking = userBookings
+                  .filter(b => new Date(b.startTime) > new Date() && b.status !== 'cancelled')
+                  .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0]
+
+                if (nextBooking) {
+                  return (
+                    <p className="text-sm text-indigo-700">
+                      Next: {nextBooking.equipmentName} at {format(new Date(nextBooking.startTime), "h:mm a, MMM d")}
+                    </p>
+                  )
+                }
+                return <p className="text-sm text-indigo-700">No upcoming bookings scheduled.</p>
+              })()}
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            className="text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100"
+            onClick={() => setActiveTab("bookings")}
+          >
+            View All
+          </Button>
+        </div>
+      )}
 
       {/* Admin: Enable Booking Migration */}
       <EnableBookingButton />

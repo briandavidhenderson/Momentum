@@ -41,13 +41,7 @@ export async function createFunder(funderData: Omit<Funder, 'id' | 'createdAt'>)
     createdAt: new Date().toISOString(),
   }
 
-  // Convert Date fields to Timestamps for Firestore
-  if (funderData.startDate) {
-    dataToSave.startDate = Timestamp.fromDate(funderData.startDate)
-  }
-  if (funderData.endDate) {
-    dataToSave.endDate = Timestamp.fromDate(funderData.endDate)
-  }
+
 
   // Remove undefined values - Firestore doesn't allow them
   Object.keys(dataToSave).forEach(key => {
@@ -79,8 +73,7 @@ export async function getFunders(orgId?: string): Promise<Funder[]> {
     // Convert Timestamps back to Dates
     return {
       ...data,
-      startDate: data.startDate?.toDate(),
-      endDate: data.endDate?.toDate(),
+
     } as Funder
   })
 }
@@ -102,8 +95,7 @@ export function subscribeToFunders(callback: (funders: Funder[]) => void, orgId?
       const data = doc.data()
       return {
         ...data,
-        startDate: data.startDate?.toDate(),
-        endDate: data.endDate?.toDate(),
+
       } as Funder
     })
     callback(funders)

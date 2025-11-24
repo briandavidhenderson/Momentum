@@ -200,7 +200,17 @@ export async function linkOrcidToCurrentUser() {
   } catch (error: any) {
     logger.error("ORCID linking error", error)
 
-    // Handle specific errors
+    // Normalize common Firebase Functions errors to clearer user messages
+    const code = error?.code || error?.message
+    if (code?.includes("functions/unauthenticated") || code === "unauthenticated") {
+      throw new Error("You must be signed in before linking your ORCID iD.")
+    }
+    if (code === "failed-precondition" || code?.includes("failed-precondition")) {
+      throw new Error("ORCID is not configured on the server. Please contact an administrator.")
+    }
+    if (code === "invalid-argument" || code?.includes("invalid-argument")) {
+      throw new Error("Invalid ORCID request. Please try again.")
+    }
     if (error.message?.includes("already linked")) {
       throw new Error("This ORCID iD is already linked to another account.")
     }

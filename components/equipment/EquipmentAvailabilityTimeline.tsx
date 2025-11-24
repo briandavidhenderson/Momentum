@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { EquipmentDevice, AvailabilitySlot } from "@/lib/types"
 import { getAvailability } from "@/lib/services/equipmentBookingService"
 import { logger } from "@/lib/logger"
-import { Calendar, AlertTriangle, Wrench } from "lucide-react"
+import { Calendar, AlertTriangle, Wrench, UserCircle } from "lucide-react"
 import { addDays, format, startOfDay, endOfDay, differenceInHours } from "date-fns"
 
 interface EquipmentAvailabilityTimelineProps {
@@ -111,55 +111,6 @@ export function EquipmentAvailabilityTimeline({
         </div>
       )
     }
-
-    return (
-      <div className="space-y-1">
-        {daySlots.map((slot, idx) => {
-          const duration = differenceInHours(slot.end, slot.start)
-          const isClickable = slot.type === "available" && onSlotClick
-
-          return (
-            <div
-              key={idx}
-              className={`
-                p-2 rounded border text-xs
-                ${getSlotColor(slot.type)}
-                ${isClickable ? "cursor-pointer" : ""}
-                transition-colors
-              `}
-              onClick={() => {
-                if (isClickable) {
-                  onSlotClick(slot.start, slot.end)
-                }
-              }}
-              title={`${getSlotLabel(slot.type)} - ${format(slot.start, "HH:mm")} to ${format(slot.end, "HH:mm")} (${duration}h)`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{getSlotLabel(slot.type)}</span>
-                <span className="text-muted-foreground">
-                  {format(slot.start, "HH:mm")} - {format(slot.end, "HH:mm")}
-                </span>
-              </div>
-              {duration >= 2 && (
-                <div className="text-muted-foreground mt-1">
-                  {duration} hour{duration !== 1 ? "s" : ""}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Loading availability...
-        </CardContent>
-      </Card>
-    )
   }
 
   return (

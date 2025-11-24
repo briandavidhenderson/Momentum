@@ -116,8 +116,7 @@ export interface Funder {
 
   // Financial details
   currency?: string           // ISO currency code (e.g., "GBP", "USD", "EUR")
-  startDate?: Date           // Funding start date
-  endDate?: Date             // Funding end date
+
 
   // Additional metadata
   abbreviation?: string
