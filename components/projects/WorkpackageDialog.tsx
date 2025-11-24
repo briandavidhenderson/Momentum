@@ -68,6 +68,8 @@ export function WorkpackageDialog({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)  // Feature #5: Delete confirmation
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [startDateError, setStartDateError] = useState<string | null>(null)
+  const [endDateError, setEndDateError] = useState<string | null>(null)
 
   useEffect(() => {
     if (workpackage && open) {
@@ -79,6 +81,8 @@ export function WorkpackageDialog({
       setStatus(workpackage.status || "planning")
       setTasks(workpackage.tasks || [])
       setOwnerId(workpackage.ownerId)  // Feature #5: Load workpackage lead
+      setStartDateError(null)
+      setEndDateError(null)
     } else if (!workpackage && open) {
       // Reset for new workpackage
       setName("")
@@ -90,12 +94,55 @@ export function WorkpackageDialog({
       setTasks([])
       setOwnerId(undefined)  // Feature #5: Reset lead
       setError(null)
+      setStartDateError(null)
+      setEndDateError(null)
     }
   }, [workpackage, open])
+
+  const validateDateRange = (startValue: string, endValue: string) => {
+    let hasError = false
+
+    if (!startValue) {
+      setStartDateError("Start date is required")
+      hasError = true
+    } else if (isNaN(new Date(startValue).getTime())) {
+      setStartDateError("Start date is invalid")
+      hasError = true
+    } else {
+      setStartDateError(null)
+    }
+
+    if (!endValue) {
+      setEndDateError("End date is required")
+      hasError = true
+    } else if (isNaN(new Date(endValue).getTime())) {
+      setEndDateError("End date is invalid")
+      hasError = true
+    } else {
+      setEndDateError(null)
+    }
+
+    if (!hasError) {
+      const start = new Date(startValue)
+      const end = new Date(endValue)
+
+      if (start > end) {
+        setEndDateError("End date must be on or after the start date")
+        hasError = true
+      }
+    }
+
+    return !hasError
+  }
 
   const handleSave = async () => {
     if (!name.trim()) {
       setError('Please enter a work package name')
+      return
+    }
+
+    if (!validateDateRange(startDate, endDate)) {
+      setError("Please fix the date errors before saving")
       return
     }
 
@@ -195,6 +242,14 @@ export function WorkpackageDialog({
   const isReadOnly = mode === "view"
   const isEditing = mode === "edit"
 
+  const isSubmitDisabled =
+    isSaving ||
+    !name.trim() ||
+    !startDate ||
+    !endDate ||
+    startDateError !== null ||
+    endDateError !== null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
@@ -232,9 +287,19 @@ export function WorkpackageDialog({
                   id="wp-start"
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setStartDate(value)
+                    validateDateRange(value, endDate)
+                  }}
                   disabled={isReadOnly}
                 />
+                <p className="text-xs text-muted-foreground">Format: YYYY-MM-DD</p>
+                {startDateError && (
+                  <p className="text-xs text-red-600" role="alert">
+                    {startDateError}
+                  </p>
+                )}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="wp-end">End Date</Label>
@@ -242,9 +307,19 @@ export function WorkpackageDialog({
                   id="wp-end"
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setEndDate(value)
+                    validateDateRange(startDate, value)
+                  }}
                   disabled={isReadOnly}
                 />
+                <p className="text-xs text-muted-foreground">Format: YYYY-MM-DD</p>
+                {endDateError && (
+                  <p className="text-xs text-red-600" role="alert">
+                    {endDateError}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -429,7 +504,7 @@ export function WorkpackageDialog({
               {isReadOnly ? "Close" : "Cancel"}
             </Button>
             {!isReadOnly && (
-              <Button onClick={handleSave} disabled={!name.trim() || isSaving}>
+              <Button onClick={handleSave} disabled={isSubmitDisabled}>
                 {isSaving ? 'Saving...' : mode === "create" ? "Create" : "Save Changes"}
               </Button>
             )}
