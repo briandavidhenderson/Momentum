@@ -407,9 +407,13 @@ service cloud.firestore {
     // ORDERS COLLECTION
     // ============================================================================
     match /orders/{orderId} {
-      // All authenticated users can read orders
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can read orders in their lab. During onboarding (no lab yet), allow
+      // users to read records they created so they can complete setup without
+      // exposing the entire collection.
+      allow read: if isAuthenticated() && (
+        (getUserLab() != null && resource.data.labId == getUserLab()) ||
+        (getUserLab() == null && resource.data.createdBy == request.auth.uid)
+      );
 
       // Users can create orders
       allow create: if isAuthenticated();
@@ -428,9 +432,13 @@ service cloud.firestore {
     // INVENTORY COLLECTION
     // ============================================================================
     match /inventory/{itemId} {
-      // All authenticated users can read inventory
-      // (Client-side filtering by lab; avoids null getUserLab() issues during profile setup)
-      allow read: if isAuthenticated();
+      // Users can read inventory in their lab. During onboarding (no lab yet),
+      // allow users to read records they created so they can complete setup
+      // without exposing the entire collection.
+      allow read: if isAuthenticated() && (
+        (getUserLab() != null && resource.data.labId == getUserLab()) ||
+        (getUserLab() == null && resource.data.createdBy == request.auth.uid)
+      );
 
       // Users can create inventory items
       allow create: if isAuthenticated();
