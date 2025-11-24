@@ -1,11 +1,12 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useAppContext } from '@/lib/AppContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
     Activity,
     Calendar as CalendarIcon,
@@ -31,6 +32,9 @@ export function HomeDashboard() {
         // Lab
         orders,
         equipment,
+
+        // People
+        allProfiles,
 
         // ELN & Whiteboards
         elnExperiments,
@@ -68,12 +72,43 @@ export function HomeDashboard() {
     // State for selected project
     const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null)
 
+    const labProfiles = useMemo(() => {
+        const profiles = allProfiles || []
+        if (!currentUserProfile?.labId) return profiles.slice(0, 5)
+        return profiles.filter(p => p.labId === currentUserProfile.labId).slice(0, 5)
+    }, [allProfiles, currentUserProfile?.labId])
+
     // Filter for "Today" items (placeholder logic)
     const today = new Date()
     const todaysBookings = userBookings.filter(b => {
         const bookingDate = new Date(b.startTime)
         return bookingDate.toDateString() === today.toDateString()
     })
+
+    const getMemberTasks = (profileId: string) =>
+        dayToDayTasks.filter(task => {
+            const assignees = task.assigneeIds?.length ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : []
+            return assignees.includes(profileId) && task.status !== 'done'
+        })
+
+    const getPresenceStatus = (profileId: string) => {
+        const tasks = getMemberTasks(profileId)
+        if (tasks.some(task => task.status === 'working')) {
+            return { label: 'In lab', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+        }
+        if (tasks.some(task => task.status === 'todo')) {
+            return { label: 'Available', className: 'bg-sky-100 text-sky-700 border-sky-200' }
+        }
+        return { label: 'Offline', className: 'bg-slate-100 text-slate-600 border-slate-200' }
+    }
+
+    const getCurrentAssignment = (profileId: string) => {
+        const tasks = getMemberTasks(profileId)
+        const priorityTask = tasks.find(task => task.status === 'working') || tasks[0]
+        return priorityTask?.title || 'No active assignments'
+    }
+
+    const getInitials = (firstName?: string, lastName?: string) => `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.trim() || 'TM'
 
     return (
         <div className="space-y-6">
@@ -300,6 +335,86 @@ export function HomeDashboard() {
 
                 {/* Right Column: Bookings, Inventory & Research Boards (3 cols) */}
                 <div className="md:col-span-3 space-y-6">
+                    {/* Team Widget */}
+                    <Card className="h-[360px] flex flex-col">
+                        <CardHeader className="pb-2 flex flex-col gap-2">
+                            <div className="flex items-start justify-between gap-2">
+                                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-amber-500" />
+                                    Team
+                                </CardTitle>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-xs"
+                                        onClick={() => setMainView('profiles')}
+                                    >
+                                        Manage
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="text-xs" asChild>
+                                        <Link href="/profile">My profile</Link>
+                                    </Button>
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Key teammates, their status, and what they are on.</p>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-hidden">
+                            <ScrollArea className="h-full pr-2">
+                                <div className="space-y-3">
+                                    {labProfiles.length > 0 ? (
+                                        labProfiles.map(profile => {
+                                            const presence = getPresenceStatus(profile.id)
+                                            const assignment = getCurrentAssignment(profile.id)
+                                            return (
+                                                <div
+                                                    key={profile.id}
+                                                    className="p-3 border rounded-lg bg-card/60 flex items-center gap-3"
+                                                >
+                                                    <Avatar className="h-10 w-10">
+                                                        <AvatarFallback>{getInitials(profile.firstName, profile.lastName)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0 space-y-1">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div className="font-semibold truncate">
+                                                                {profile.firstName} {profile.lastName}
+                                                            </div>
+                                                            <Badge variant="outline" className={`text-[10px] ${presence.className}`}>
+                                                                {presence.label}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground truncate">
+                                                            {profile.positionDisplayName || profile.position || 'Team member'}
+                                                        </p>
+                                                        <p className="text-xs truncate">
+                                                            <span className="text-muted-foreground">Assignment:</span> {assignment}
+                                                        </p>
+                                                    </div>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-xs"
+                                                        onClick={() => setMainView('people')}
+                                                    >
+                                                        View
+                                                    </Button>
+                                                </div>
+                                            )
+                                        })
+                                    ) : (
+                                        <div className="text-sm text-muted-foreground text-center py-4">
+                                            Team members will appear here once profiles are set up.
+                                        </div>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                        <div className="px-6 pb-4">
+                            <Button className="w-full" onClick={() => setMainView('people')}>
+                                View full team
+                            </Button>
+                        </div>
+                    </Card>
                     {/* Bookings Widget */}
                     <Card className="h-[300px] flex flex-col">
                         <CardHeader className="pb-2">
