@@ -10,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { TaskCard } from "./TaskCard"
 import {
   Target,
   Edit,
@@ -22,8 +21,6 @@ import {
   ListTodo,
   FlaskConical,
   AlertCircle,
-  ChevronDown,
-  ChevronRight,
   Plus,
 } from "lucide-react"
 import { formatStatusLabel, getStatusPillClass } from "@/lib/utils/statusStyles"
@@ -31,29 +28,20 @@ import { formatStatusLabel, getStatusPillClass } from "@/lib/utils/statusStyles"
 interface DeliverableCardProps {
   deliverable: Deliverable
   owner?: PersonProfile
-  tasks?: Task[] // Legacy tasks from workpackage
-  allPeople?: PersonProfile[] // For displaying task owners/helpers
   onEdit: (deliverable: Deliverable) => void
   onDelete: (deliverableId: string) => void
   onClick?: (deliverable: Deliverable) => void
   onCreateTask?: (deliverableId: string) => void
-  onEditTask?: (task: Task) => void
-  onDeleteTask?: (taskId: string) => void
   enableDrag?: boolean // Make drag optional
 }
 
 export function DeliverableCard({
   deliverable,
   owner,
-  tasks = [],
-  allPeople = [],
   onEdit,
   onDelete,
   onClick,
   onCreateTask,
-  onEditTask,
-  onDeleteTask,
-  enableDrag = false,
 }: DeliverableCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -98,11 +86,6 @@ export function DeliverableCard({
     }
   }
 
-  const handleExpandClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setIsExpanded(!isExpanded)
-  }
-
   // Calculate linked entity counts
   const linkedOrdersCount = deliverable.linkedOrderIds?.length || 0
   const linkedTasksCount = deliverable.linkedDayToDayTaskIds?.length || 0
@@ -123,24 +106,9 @@ export function DeliverableCard({
       {/* Header with Title, Status, and Menu */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {/* Expand/Collapse for tasks */}
-          {deliverableTasks.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 flex-shrink-0"
-              onClick={handleExpandClick}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </Button>
-          )}
           <Target className="h-5 w-5 text-blue-600 flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <h3 
+            <h3
               className="font-semibold text-foreground text-sm truncate cursor-pointer"
               onClick={handleCardClick}
             >
@@ -204,6 +172,33 @@ export function DeliverableCard({
         </div>
       </div>
 
+      {onCreateTask && (
+        <div className="flex items-center justify-between mb-2 text-xs text-gray-600">
+          <div className="flex items-center gap-1">
+            <ListTodo className="h-3.5 w-3.5" />
+            <span>{projectTasksCount} project task{projectTasksCount === 1 ? "" : "s"}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={(e) => {
+              e.stopPropagation()
+              try {
+                if (deliverable?.id) {
+                  onCreateTask(deliverable.id)
+                }
+              } catch (error) {
+                console.error("Error creating project task:", error)
+              }
+            }}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Add Project Task
+          </Button>
+        </div>
+      )}
+
       {/* Progress Bar */}
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
@@ -264,12 +259,10 @@ export function DeliverableCard({
             <span>{linkedOrdersCount}</span>
           </div>
         )}
-        {projectTasksCount > 0 && (
-          <div className="flex items-center gap-1" title="Project Tasks">
-            <ListTodo className="h-3.5 w-3.5" />
-            <span>{projectTasksCount}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-1" title="Project Tasks">
+          <ListTodo className="h-3.5 w-3.5" />
+          <span>{projectTasksCount}</span>
+        </div>
         {linkedTasksCount > 0 && (
           <div className="flex items-center gap-1" title="Day-to-Day Tasks">
             <ListTodo className="h-3.5 w-3.5 text-blue-500" />
@@ -302,93 +295,6 @@ export function DeliverableCard({
             <Badge variant="secondary" className="text-xs px-2 py-0">
               +{deliverable.tags.length - 3}
             </Badge>
-          )}
-        </div>
-      )}
-
-      {/* Expanded Tasks Section */}
-      {isExpanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-xs font-semibold text-foreground">Tasks</h4>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">
-                {deliverableTasks.length}
-              </Badge>
-              {onCreateTask && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    try {
-                      if (onCreateTask && deliverable?.id) {
-                        onCreateTask(deliverable.id)
-                      }
-                    } catch (error) {
-                      console.error("Error creating task:", error)
-                    }
-                  }}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add Task
-                </Button>
-              )}
-            </div>
-          </div>
-          {deliverableTasks.length === 0 ? (
-            <div className="text-center py-6 bg-gray-50 rounded-md border border-dashed border-gray-300">
-              <ListTodo className="h-6 w-6 text-gray-400 mx-auto mb-2" />
-              <p className="text-xs text-gray-500">No tasks yet</p>
-              {onCreateTask && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 h-7 text-xs"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    try {
-                      if (onCreateTask && deliverable?.id) {
-                        onCreateTask(deliverable.id)
-                      }
-                    } catch (error) {
-                      console.error("Error creating task:", error)
-                    }
-                  }}
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add First Task
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {deliverableTasks.map((task) => {
-                if (!task || !task.id) {
-                  console.warn("Invalid task found:", task)
-                  return null
-                }
-                try {
-                  const taskOwner = task.primaryOwner ? getPersonById(task.primaryOwner) : undefined
-                  const taskHelpers = task.helpers?.map(id => getPersonById(id)).filter((p): p is PersonProfile => p !== undefined) || []
-                  return (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    owner={taskOwner}
-                    helpers={taskHelpers}
-                    onEdit={onEditTask}
-                    onDelete={onDeleteTask}
-                    onClick={onEditTask}
-                  />
-                  )
-                } catch (error) {
-                  console.error("Error rendering task:", error, task)
-                  return null
-                }
-              })}
-            </div>
           )}
         </div>
       )}
