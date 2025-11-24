@@ -86,9 +86,15 @@ service cloud.firestore {
     match /users/{userId} {
       // All authenticated users can read all user profiles (for collaboration)
       allow read: if isAuthenticated();
-      
+
       // Users can update their own profile (limited fields)
-      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() &&
+        request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isAdministrator',
+          'userRole',
+          'labId'
+        ]);
       
       // User creation handled by Auth triggers
       allow create: if isAuthenticated() && request.auth.uid == userId;
