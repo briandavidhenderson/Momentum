@@ -140,6 +140,7 @@ export function ProjectCreationDialog({
       ...(formData as ProfileProject),
       funderId: selectedFunderId,
       groupIds: formData.groupIds,
+      type: selectedFunderId ? "funded" : "unfunded",
     })
     onClose()
   }

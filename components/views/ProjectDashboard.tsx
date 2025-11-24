@@ -145,13 +145,12 @@ export function ProjectDashboard() {
     let unfunded: MasterProject[] = []
 
     if (fundingFilter === "funded") {
-      funded = filtered.filter(p => p.funderId && p.totalBudget && p.totalBudget > 0)
+      funded = filtered.filter(p => (p.type || "unfunded") === "funded")
     } else if (fundingFilter === "unfunded") {
-      unfunded = filtered.filter(p => !p.funderId || !p.totalBudget || p.totalBudget === 0)
+      unfunded = filtered.filter(p => (p.type || "unfunded") === "unfunded")
     } else {
-      // All projects - separate into funded and unfunded
-      funded = filtered.filter(p => p.funderId && p.totalBudget && p.totalBudget > 0)
-      unfunded = filtered.filter(p => !p.funderId || !p.totalBudget || p.totalBudget === 0)
+      funded = filtered.filter(p => (p.type || "unfunded") === "funded")
+      unfunded = filtered.filter(p => (p.type || "unfunded") === "unfunded")
     }
 
     // Sort by name
@@ -312,6 +311,8 @@ export function ProjectDashboard() {
       notes: projectData.notes,
       createdBy: user.uid,
       isExpanded: true,
+      type: projectData.type || (projectData.funderId ? "funded" : "unfunded"),
+      legacyTypeLabel: projectData.legacyTypeLabel || projectData.type,
     }
 
     try {
@@ -666,7 +667,7 @@ export function ProjectDashboard() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <FolderKanban className="h-5 w-5 text-gray-600" />
-                    <h2 className="text-lg font-semibold">Internal/Unfunded Projects</h2>
+                    <h2 className="text-lg font-semibold">Unfunded Projects</h2>
                     <Badge variant="secondary">{unfundedProjects.length}</Badge>
                   </div>
                   <div
