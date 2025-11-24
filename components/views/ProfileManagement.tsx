@@ -301,6 +301,8 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       visibility: "lab",
       createdBy: currentUser?.uid || "",
       isExpanded: true,
+      type: (project.budget && project.budget > 0) || (project.fundedBy?.length || 0) > 0 ? "funded" : "unfunded",
+      legacyTypeLabel: project.grantName ? "grant" : undefined,
     }
     handleCreateMasterProject(newProject)
     setProjectDialogOpen(false)

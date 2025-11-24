@@ -149,9 +149,12 @@ export function ProjectDashboard() {
 
     // Filter by funding type
     if (fundingFilter === "funded") {
-      filtered = filtered.filter(isProjectFunded)
+      funded = filtered.filter(p => (p.type || "unfunded") === "funded")
     } else if (fundingFilter === "unfunded") {
-      filtered = filtered.filter(project => !isProjectFunded(project))
+      unfunded = filtered.filter(p => (p.type || "unfunded") === "unfunded")
+    } else {
+      funded = filtered.filter(p => (p.type || "unfunded") === "funded")
+      unfunded = filtered.filter(p => (p.type || "unfunded") === "unfunded")
     }
 
     filtered.sort((a, b) => a.name.localeCompare(b.name))
@@ -422,6 +425,8 @@ export function ProjectDashboard() {
       notes: projectData.notes,
       createdBy: user.uid,
       isExpanded: true,
+      type: projectData.type || (projectData.funderId ? "funded" : "unfunded"),
+      legacyTypeLabel: projectData.legacyTypeLabel || projectData.type,
     }
 
     try {
@@ -892,77 +897,118 @@ export function ProjectDashboard() {
                 </div>
               )}
 
-              {projectView === "kanban" && (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-                  {statusColumns.map(column => {
-                    const projectsForStatus = filteredProjects.filter(project => project.status === column.value)
-                    return (
-                      <div key={column.value} className="border rounded-lg bg-white shadow-sm p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold capitalize">{column.label}</span>
-                            <Badge variant="secondary">{projectsForStatus.length}</Badge>
-                          </div>
-                          <FolderKanban className="h-4 w-4 text-muted-foreground" />
-                        </div>
+              {/* Unfunded Projects Section */}
+              {(fundingFilter === "all" || fundingFilter === "unfunded") && unfundedProjects.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <FolderKanban className="h-5 w-5 text-gray-600" />
+                    <h2 className="text-lg font-semibold">Unfunded Projects</h2>
+                    <Badge variant="secondary">{unfundedProjects.length}</Badge>
+                  </div>
+                  <div
+                    className={
+                      viewMode === "grid"
+                        ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                        : "space-y-4"
+                    }
+                  >
+                    {unfundedProjects.map(project => {
+                      const health = projectHealths.get(project.id)
+                      return (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          workpackages={allWorkpackages}
+                          deliverables={deliverables}
+                          people={allProfiles}
+                          health={health}
+                          onViewProject={setSelectedProjectForDetail}
+                          onCreateWorkpackage={async (projectId) => {
+                            const workpackageId = await createWorkpackage({
+                              name: "New Work Package",
+                              projectId,
+                              start: new Date(),
+                              end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                              status: "planning",
+                              progress: 0,
+                              tasks: [],
+                              deliverableIds: [],
+                              isExpanded: true,
+                              importance: "medium",
+                              createdBy: user?.uid || "",
+                            } as any)
 
-                        <div className="space-y-3">
-                          {projectsForStatus.length === 0 && (
-                            <p className="text-xs text-muted-foreground">Nothing here yet</p>
-                          )}
-
-                          {projectsForStatus.map(project => {
-                            const health = projectHealths.get(project.id)
-                            const budgetSummary = budgetSummaries.get(project.id)
-                            return (
-                              <div key={project.id} className="border rounded-md p-3 bg-surface-2 space-y-2">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div>
-                                    <p className="text-sm font-semibold leading-tight">{project.name}</p>
-                                    {project.grantName && (
-                                      <p className="text-xs text-muted-foreground truncate">{project.grantName}</p>
-                                    )}
-                                  </div>
-                                  {renderStatusBadge(project.status)}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {renderHealthBadge(health)}
-                                  {renderBudgetChip(budgetSummary)}
-                                </div>
-                                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                  <span>{project.workpackageIds?.length || 0} workpackages</span>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2"
-                                    onClick={() => setSelectedProjectForDetail(project)}
-                                  >
-                                    Open
-                                  </Button>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {projectView === "gantt" && (
-                <div className="space-y-4">
-                  <ProjectGanttChart
-                    projects={filteredProjects}
-                    workpackages={relevantWorkpackages}
-                    people={people}
-                    onDoubleClick={(item) => {
-                      if ((item as MasterProject)?.id) {
-                        const project = filteredProjects.find(p => p.id === (item as MasterProject).id)
-                        if (project) setSelectedProjectForDetail(project)
-                      }
-                    }}
-                  />
+                            if (workpackageId) {
+                              await handleUpdateMasterProject(projectId, {
+                                workpackageIds: [...(project.workpackageIds || []), workpackageId],
+                              })
+                            }
+                          }}
+                          onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
+                          onDeleteWorkpackage={async (workpackageId) => {
+                            await handleUpdateMasterProject(project.id, {
+                              workpackageIds: (project.workpackageIds || []).filter(
+                                id => id !== workpackageId
+                              ),
+                            })
+                          }}
+                          onCreateDeliverable={(workpackageId) => {
+                            setDeliverableParentId(workpackageId)
+                            setSelectedDeliverable(null)
+                            setDeliverableMode("create")
+                            setShowDeliverableDialog(true)
+                          }}
+                          onEditDeliverable={(deliverable) => {
+                            try {
+                              if (deliverable && deliverable.id) {
+                                setSelectedDeliverable(deliverable)
+                                setDeliverableMode("edit")
+                                setShowDeliverableDialog(true)
+                              }
+                            } catch (error) {
+                              logger.error("Error editing deliverable", error)
+                            }
+                          }}
+                          onDeleteDeliverable={handleDeleteDeliverable}
+                          onDeliverableClick={(deliverable) => {
+                            try {
+                              if (deliverable && deliverable.id) {
+                                setSelectedDeliverable(deliverable)
+                                setDeliverableMode("view")
+                                setShowDeliverableDialog(true)
+                              }
+                            } catch (error) {
+                              logger.error("Error opening deliverable dialog", error)
+                            }
+                          }}
+                          onCreateTask={(deliverableId) => {
+                            // Find workpackage for this deliverable
+                            const deliverable = deliverables.find(d => d.id === deliverableId)
+                            if (deliverable) {
+                              setTaskDeliverableId(deliverableId)
+                              setTaskWorkpackageId(deliverable.workpackageId)
+                              setShowTaskDialog(true)
+                            }
+                          }}
+                          onEditTask={(task) => {
+                            // Find workpackage for this task
+                            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === task.id))
+                            if (workpackage) {
+                              // For now, just log - could open edit dialog later
+                              logger.info("Edit task", { taskId: task.id })
+                            }
+                          }}
+                          onDeleteTask={(taskId) => {
+                            // Find workpackage for this task
+                            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
+                            if (workpackage) {
+                              handleDeleteTask(workpackage.id, taskId)
+                            }
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 
