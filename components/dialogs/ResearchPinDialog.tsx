@@ -49,7 +49,8 @@ export function ResearchPinDialog({ open, onClose, editingPin }: ResearchPinDial
         setContent(editingPin.content || '');
         setUrl(editingPin.url || '');
         setTags(editingPin.tags.join(', '));
-        setIsPrivate(editingPin.isPrivate || false);
+        const pinVisibility = editingPin.visibility || (editingPin.isPrivate ? 'private' : 'lab');
+        setIsPrivate(pinVisibility === 'private');
         setFilePreview(editingPin.imageUrl || editingPin.fileUrl || null);
         setSelectedFile(null);
       } else {
@@ -160,6 +161,7 @@ export function ResearchPinDialog({ open, onClose, editingPin }: ResearchPinDial
           labId: currentUserProfile.labId,
           tags: tags.split(',').map(t => t.trim()).filter(Boolean),
           isPrivate,
+          visibility: isPrivate ? 'private' : 'lab',
         };
 
         pinId = await createPin(initialPinData) || '';
@@ -198,6 +200,7 @@ export function ResearchPinDialog({ open, onClose, editingPin }: ResearchPinDial
         pdfText,
         tags: tags.split(',').map(t => t.trim()).filter(Boolean),
         isPrivate,
+        visibility: isPrivate ? 'private' : 'lab',
       };
 
       if (editingPin) {
