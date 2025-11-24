@@ -61,6 +61,7 @@ export interface CalendarEvent {
     subtaskId?: string
     deliverableId?: string
     equipmentId?: string
+    equipmentBookingId?: string
   }
   type?: "meeting" | "deadline" | "milestone" | "training" | "equipment" | "other"
   notes?: string

@@ -163,6 +163,7 @@ export interface AvailabilitySlot {
   end: Date
   type: 'available' | 'booked' | 'maintenance'
   bookingId?: string  // If type is 'booked', reference to the booking
+  bookedByName?: string // Name of the person who booked it
 }
 
 /**

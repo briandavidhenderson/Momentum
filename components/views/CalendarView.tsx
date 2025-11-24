@@ -43,6 +43,7 @@ import {
   MapPin,
   Plus,
   Timer,
+  Microscope,
 } from "lucide-react"
 import { CalendarEvent } from "@/lib/types"
 import { useAppContext } from "@/lib/AppContext"
@@ -58,7 +59,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
  */
 
 // Event type mapping from CalendarEvent to component format
-type ComponentEventType = "meeting" | "deadline" | "training" | "event" | "focus"
+type ComponentEventType = "meeting" | "deadline" | "training" | "event" | "focus" | "equipment_mine" | "equipment_others"
 
 interface ComponentEvent {
   id: string
@@ -76,6 +77,8 @@ const CATEGORY_META: Record<ComponentEventType, { label: string; color: string }
   training: { label: "Training", color: "bg-emerald-100 text-emerald-900 border-emerald-200" },
   event: { label: "Event", color: "bg-amber-100 text-amber-900 border-amber-200" },
   focus: { label: "Focus", color: "bg-violet-100 text-violet-900 border-violet-200" },
+  equipment_mine: { label: "My Equipment", color: "bg-indigo-100 text-indigo-900 border-indigo-300 ring-1 ring-indigo-300" },
+  equipment_others: { label: "Other Bookings", color: "bg-slate-100 text-slate-600 border-slate-200 opacity-80" },
 }
 
 const VIEW_TABS = [
@@ -94,18 +97,24 @@ function classNames(...xs: (string | boolean | undefined)[]): string {
 function transformEvent(event: CalendarEvent): ComponentEvent {
   // Map event types
   let type: ComponentEventType = "event"
-  if (event.type === "meeting") type = "meeting"
+
+  if (event.type === "equipment" || event.relatedIds?.equipmentBookingId) {
+    // Check ownership if currentUserId is available (will be handled in the component via useMemo)
+    // For now, default to generic event, but we'll override this in the component
+    type = "equipment_others"
+  }
+  else if (event.type === "meeting") type = "meeting"
   else if (event.type === "deadline") type = "deadline"
   else if (event.type === "training") type = "training"
-  else if (event.type === "milestone" || event.type === "equipment" || event.type === "other") type = "event"
+  else if (event.type === "milestone" || event.type === "other") type = "event"
   // Check for focus tag
   else if (event.tags?.includes("focus")) type = "focus"
 
   // Determine important flag
-  const important = 
-    event.type === "deadline" || 
-    (event.reminders && event.reminders.length > 0) || 
-    (event.tags && event.tags.includes("important")) || 
+  const important =
+    event.type === "deadline" ||
+    (event.reminders && event.reminders.length > 0) ||
+    (event.tags && event.tags.includes("important")) ||
     false
 
   return {
@@ -123,10 +132,10 @@ function transformEvent(event: CalendarEvent): ComponentEvent {
  * Parse event for component use
  */
 function parseEvent(e: ComponentEvent) {
-  return { 
-    ...e, 
-    startDate: parseISO(e.start), 
-    endDate: parseISO(e.end) 
+  return {
+    ...e,
+    startDate: parseISO(e.start),
+    endDate: parseISO(e.end)
   }
 }
 
@@ -171,19 +180,42 @@ export function CalendarView({ onEventClick }: CalendarViewProps) {
     training: true,
     event: true,
     focus: true,
+    equipment_mine: true,
+    equipment_others: true,
   })
+  const [showEquipment, setShowEquipment] = useState(true)
   const [showEventDialog, setShowEventDialog] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
 
   // Transform events to component format
   const componentEvents = useMemo(() => {
     if (!events) return []
-    return events.map(transformEvent)
-  }, [events])
+    return events.map(event => {
+      const transformed = transformEvent(event)
+
+      // Handle equipment ownership logic here where we have access to profile
+      if (event.type === "equipment" || event.relatedIds?.equipmentBookingId) {
+        const isMine = event.attendees?.some(a => a.personId === profile?.id) || event.createdBy === profile?.userId || event.ownerId === profile?.id
+        transformed.type = isMine ? "equipment_mine" : "equipment_others"
+      }
+
+      return transformed
+    })
+  }, [events, profile])
 
   const filteredEvents = useMemo(
-    () => componentEvents.filter((e) => filters[e.type]),
-    [componentEvents, filters]
+    () => componentEvents.filter((e) => {
+      // Filter out equipment if toggle is off
+      if (!showEquipment && (e.type === "equipment_mine" || e.type === "equipment_others")) {
+        return false
+      }
+      // Otherwise use category filters
+      // Note: We need to make sure new types are in filters or handled gracefully
+      if (e.type === "equipment_mine" || e.type === "equipment_others") return true
+
+      return filters[e.type]
+    }),
+    [componentEvents, filters, showEquipment]
   )
 
   const parsedEvents = useMemo(
@@ -317,6 +349,20 @@ export function CalendarView({ onEventClick }: CalendarViewProps) {
                   ))}
                 </TabsList>
               </Tabs>
+
+              <motion.div whileTap={{ scale: 0.96 }}>
+                <Button
+                  variant={showEquipment ? "secondary" : "outline"}
+                  className={classNames(
+                    "rounded-2xl gap-2 transition-colors",
+                    showEquipment ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "text-slate-500"
+                  )}
+                  onClick={() => setShowEquipment(!showEquipment)}
+                >
+                  <Microscope className="w-4 h-4" />
+                  {showEquipment ? "Hide Equipment" : "Show Equipment"}
+                </Button>
+              </motion.div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

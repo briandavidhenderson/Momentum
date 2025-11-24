@@ -661,6 +661,14 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
 
   const { authCode, redirectUri } = data
 
+  // Validate inputs early so we fail with a useful error instead of a 500
+  if (!redirectUri) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "redirect_uri is required"
+    )
+  }
+
   if (!authCode) {
     throw new functions.https.HttpsError(
       "invalid-argument",
@@ -669,6 +677,14 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
   }
 
   const config = getOrcidConfig()
+
+  if (!config.clientId || !config.clientSecret) {
+    console.error("ORCID credentials missing in config/environment")
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "ORCID is not configured. Please contact an administrator."
+    )
+  }
 
   try {
     // Exchange authorization code for access token
@@ -693,7 +709,7 @@ export const orcidLinkAccount = functions.https.onCall(async (data, context) => 
       console.error("Response body:", errorText)
       throw new functions.https.HttpsError(
         "internal",
-        `Failed to exchange authorization code: ${tokenResponse.status} ${tokenResponse.statusText}`
+        `Failed to exchange authorization code: ${tokenResponse.status} ${tokenResponse.statusText} - ${errorText.substring(0, 200)}`
       )
     }
 

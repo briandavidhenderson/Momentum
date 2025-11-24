@@ -32,8 +32,6 @@ export function FunderCreationDialog({
     programme: "",
     reference: "",
     currency: "GBP",
-    startDate: "",
-    endDate: "",
     notes: "",
   })
 
@@ -82,8 +80,6 @@ export function FunderCreationDialog({
         programme: formData.programme.trim() || undefined,
         reference: formData.reference.trim() || undefined,
         currency: formData.currency || undefined,
-        startDate: formData.startDate ? new Date(formData.startDate) : undefined,
-        endDate: formData.endDate ? new Date(formData.endDate) : undefined,
         notes: formData.notes.trim() || undefined,
         createdBy: currentUserId,
         organisationId,
@@ -98,8 +94,6 @@ export function FunderCreationDialog({
         programme: "",
         reference: "",
         currency: "GBP",
-        startDate: "",
-        endDate: "",
         notes: "",
       })
 
@@ -143,11 +137,10 @@ export function FunderCreationDialog({
               name="name"
               value={formData.name}
               onChange={handleChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                errors.name
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${errors.name
                   ? "border-red-500 focus:ring-red-500"
                   : "border-gray-300 focus:ring-blue-500"
-              }`}
+                }`}
               placeholder="e.g., UK Research and Innovation"
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
@@ -230,35 +223,7 @@ export function FunderCreationDialog({
             </select>
           </div>
 
-          {/* Date Range */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Start Date
-              </label>
-              <input
-                type="date"
-                id="startDate"
-                name="startDate"
-                value={formData.startDate}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">
-                End Date
-              </label>
-              <input
-                type="date"
-                id="endDate"
-                name="endDate"
-                value={formData.endDate}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
+
 
           {/* Notes */}
           <div>

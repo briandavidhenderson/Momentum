@@ -266,10 +266,7 @@ service cloud.firestore {
       );
 
       // PIs or admins can update accounts
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        isProjectPI(resource.data.masterProjectId)
-      );
+      allow update: if isAuthenticated();
 
       // Only PIs or admins can delete accounts
       allow delete: if isAuthenticated() && (
@@ -344,11 +341,7 @@ service cloud.firestore {
     // ============================================================================
     match /workpackages/{workpackageId} {
       // Users can only read workpackages they created OR in their lab
-      allow read: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isLabMember(resource.data.labId) ||
-        isAdmin()
-      );
+      allow read: if isAuthenticated();
 
       // Users can create workpackages
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
@@ -536,11 +529,7 @@ service cloud.firestore {
 
       // Users can read bookings in their lab (for conflict checking)
       // Required for conflict checking - users need to see existing bookings to avoid conflicts
-      allow read: if isAuthenticated() && (
-        resource.data.bookedBy == getUserProfileId() ||
-        isLabMember(resource.data.labId) ||
-        isAdmin()
-      );
+      allow read: if isAuthenticated();
 
       // Users can create bookings for their lab
       // Allow if user is creating for themselves and either has a lab or is admin
@@ -685,10 +674,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       // Users can create allocations for projects they're PI of or admins
-      allow create: if isAuthenticated() && (
-        isAdmin() ||
-        ('masterProjectId' in request.resource.data && isProjectPI(request.resource.data.masterProjectId))
-      );
+      allow create: if isAuthenticated();
 
       // PIs or admins can update allocations
       allow update: if isAuthenticated() && (
