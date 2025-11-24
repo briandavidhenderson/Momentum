@@ -32,6 +32,8 @@ export interface Project {
   organisationName: string      // Cached for display
 
   // Grant & Funding Information
+  type: "funded" | "unfunded"      // Unified funding classification
+  legacyTypeLabel?: string           // Preserves legacy labels during migration
   grantName?: string
   grantNumber?: string
   grantReference?: string      // Funder's reference number
@@ -164,6 +166,8 @@ export interface MasterProject {
   instituteName: string
   organisationId: string
   organisationName: string
+  type: "funded" | "unfunded"
+  legacyTypeLabel?: string
   grantName?: string
   grantNumber?: string
   grantReference?: string

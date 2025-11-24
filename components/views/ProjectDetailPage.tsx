@@ -107,11 +107,21 @@ export function ProjectDetailPage({
   const [selectedWorkpackageId, setSelectedWorkpackageId] = useState<string | null>(null)
   const [selectedDeliverableId, setSelectedDeliverableId] = useState<string | null>(null)
 
+  const isFundedProject = (project.type || "unfunded") === "funded"
+  const hasFundingLedger = (project.accountIds?.length ?? 0) > 0 || (fundingAccounts?.length ?? 0) > 0
+  const canAccessFunding = isFundedProject && hasFundingLedger
+
   // Get current user for import/export
   const { currentUser, currentUserProfile } = useAppContext()
 
   // Fetch project orders
   useEffect(() => {
+    if (!canAccessFunding) {
+      setOrders([])
+      setLoadingOrders(false)
+      return
+    }
+
     const fetchProjectOrders = async () => {
       const db = getFirebaseDb()
       setLoadingOrders(true)
@@ -139,7 +149,13 @@ export function ProjectDetailPage({
     }
 
     fetchProjectOrders()
-  }, [project.id])
+  }, [project.id, canAccessFunding])
+
+  useEffect(() => {
+    if (activeTab === "funding" && !canAccessFunding) {
+      setActiveTab("execution")
+    }
+  }, [activeTab, canAccessFunding])
 
   // Fetch project experiments
   useEffect(() => {
@@ -418,6 +434,13 @@ export function ProjectDetailPage({
                 <Badge variant="outline" className={`${healthStatus.bg} ${healthStatus.color} border-0`}>
                   {healthStatus.label}
                 </Badge>
+                <Badge
+                  variant="outline"
+                  className={isFundedProject ? "bg-blue-50 text-blue-700 border-blue-300" : "bg-gray-50 text-gray-700 border-gray-300"}
+                >
+                  <DollarSign className="h-3 w-3 mr-1" />
+                  {isFundedProject ? "Funded" : "Unfunded"}
+                </Badge>
                 <Badge variant="secondary">{project.status}</Badge>
               </div>
 
@@ -496,10 +519,12 @@ export function ProjectDetailPage({
             <FileText className="h-4 w-4" />
             Files
           </TabsTrigger>
-          <TabsTrigger value="funding" className="gap-2">
-            <DollarSign className="h-4 w-4" />
-            Funding
-          </TabsTrigger>
+          {canAccessFunding && (
+            <TabsTrigger value="funding" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Funding
+            </TabsTrigger>
+          )}
           <TabsTrigger value="activity" className="gap-2">
             <Activity className="h-4 w-4" />
             Activity
@@ -924,8 +949,10 @@ export function ProjectDetailPage({
             </Card>
           </TabsContent>
 
-          {/* Funding Tab */}
-          <TabsContent value="funding" className="p-6 m-0">
+          {canAccessFunding && (
+            <>
+              {/* Funding Tab */}
+              <TabsContent value="funding" className="p-6 m-0">
             <div className="space-y-6">
               {/* Budget Overview */}
               <Card>
@@ -1108,6 +1135,8 @@ export function ProjectDetailPage({
               </Card>
             </div>
           </TabsContent>
+            </>
+          )}
 
           {/* Activity Tab */}
           <TabsContent value="activity" className="p-6 m-0">
