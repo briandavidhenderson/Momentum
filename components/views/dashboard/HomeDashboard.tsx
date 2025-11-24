@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
     Activity,
     Calendar as CalendarIcon,
+    BrainCircuit,
     FlaskConical,
     Layout,
     Package,
@@ -36,8 +37,32 @@ export function HomeDashboard() {
 
         // Other
         userBookings,
-        currentUserProfile
+        currentUserProfile,
+        setMainView,
+        allProfiles
     } = useAppContext()
+
+    const researchBoards = whiteboards
+        .map(board => {
+            const owner = allProfiles.find(profile => profile.id === board.createdBy)
+            const updatedAt = board.updatedAt?.toDate
+                ? board.updatedAt.toDate()
+                : board.updatedAt instanceof Date
+                    ? board.updatedAt
+                    : board.createdAt?.toDate
+                        ? board.createdAt.toDate()
+                        : board.createdAt instanceof Date
+                            ? board.createdAt
+                            : new Date()
+
+            return {
+                ...board,
+                ownerName: owner ? `${owner.firstName} ${owner.lastName}` : 'Unknown owner',
+                status: (board.shapes?.length || 0) > 8 ? 'Active' : (board.shapes?.length || 0) > 0 ? 'Draft' : 'New',
+                updatedAt
+            }
+        })
+        .sort((a, b) => (b.updatedAt?.getTime?.() || 0) - (a.updatedAt?.getTime?.() || 0))
 
     // State for selected project
     const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null)
@@ -258,7 +283,7 @@ export function HomeDashboard() {
                     </Card>
                 </div>
 
-                {/* Right Column: Bookings & Inventory (3 cols) */}
+                {/* Right Column: Bookings, Inventory & Research Boards (3 cols) */}
                 <div className="md:col-span-3 space-y-6">
                     {/* Bookings Widget */}
                     <Card className="h-[300px] flex flex-col">
@@ -309,6 +334,50 @@ export function HomeDashboard() {
                                         ))}
                                     {orders.length === 0 && (
                                         <div className="text-sm text-muted-foreground text-center py-4">No pending orders</div>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+
+                    {/* Research Boards Snapshot */}
+                    <Card className="h-[260px] flex flex-col">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                            <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                <BrainCircuit className="h-4 w-4 text-indigo-500" />
+                                Research Boards
+                            </CardTitle>
+                            <Button variant="link" className="h-auto px-0 text-xs" onClick={() => setMainView('research')}>
+                                Open boards
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-hidden">
+                            <ScrollArea className="h-full">
+                                <div className="space-y-2">
+                                    {researchBoards.slice(0, 5).map(board => (
+                                        <button
+                                            key={board.id}
+                                            onClick={() => setMainView('research')}
+                                            className="w-full text-left p-2 border rounded-md text-sm hover:bg-accent transition-colors"
+                                        >
+                                            <div className="font-medium truncate">{board.name}</div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Badge variant="outline" className="text-[10px] capitalize">
+                                                    {board.status}
+                                                </Badge>
+                                                <Badge variant="secondary" className="text-[10px]">
+                                                    {board.ownerName}
+                                                </Badge>
+                                            </div>
+                                            <div className="text-[11px] text-muted-foreground mt-1">
+                                                Updated {format(board.updatedAt, 'MMM d')}
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {researchBoards.length === 0 && (
+                                        <div className="text-sm text-muted-foreground text-center py-4">
+                                            No research boards yet
+                                        </div>
                                     )}
                                 </div>
                             </ScrollArea>
