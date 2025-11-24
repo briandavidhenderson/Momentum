@@ -92,6 +92,11 @@ export default function ResearchBoard() {
     }
   };
 
+  const isPrivatePin = (pin: ResearchPin) => {
+    const visibility = pin.visibility || (pin.isPrivate ? 'private' : 'lab');
+    return visibility === 'private';
+  };
+
   const canEditPin = (pin: ResearchPin) => {
     return currentUser?.uid === pin.author.userId;
   };
@@ -221,7 +226,7 @@ export default function ResearchBoard() {
                         <h3 className="font-semibold text-slate-900 leading-snug flex-1">{pin.title}</h3>
                       )}
                       <div className="flex items-center gap-1">
-                        {pin.isPrivate && (
+                        {isPrivatePin(pin) && (
                           <Lock className="h-3 w-3 text-slate-400" />
                         )}
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${getTypeColor(pin.type)}`}>

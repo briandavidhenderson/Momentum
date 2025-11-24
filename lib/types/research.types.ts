@@ -12,6 +12,11 @@
 export type ResearchPinType = 'paper' | 'figure' | 'video' | 'course' | 'note';
 
 /**
+ * Visibility of the research pin
+ */
+export type ResearchPinVisibility = 'private' | 'lab' | 'public';
+
+/**
  * Author information for a research pin
  */
 export interface ResearchPinAuthor {
@@ -40,7 +45,8 @@ export interface ResearchPin {
   author: ResearchPinAuthor;
   labId: string;
   tags: string[];
-  
+  visibility?: ResearchPinVisibility; // Access control for pin visibility
+
   // AI analysis
   aiAnalysis?: string; // Detailed analysis
   aiSummary?: string; // Brief summary

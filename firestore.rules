@@ -850,6 +850,7 @@ service cloud.firestore {
         resource.data.author.userId == request.auth.uid ||
         (resource.data.visibility == 'public') ||
         (resource.data.visibility == 'lab' && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
+        (!('visibility' in resource.data) && resource.data.isPrivate != true && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
         isAdmin()
       );
 
