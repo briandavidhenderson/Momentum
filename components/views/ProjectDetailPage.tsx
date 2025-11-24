@@ -32,6 +32,8 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Link2,
+  History,
   Plus,
   Eye,
   Edit2,
@@ -106,6 +108,7 @@ export function ProjectDetailPage({
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [selectedWorkpackageId, setSelectedWorkpackageId] = useState<string | null>(null)
   const [selectedDeliverableId, setSelectedDeliverableId] = useState<string | null>(null)
+  const [taskFilters, setTaskFilters] = useState<string[]>([])
 
   // Get current user for import/export
   const { currentUser, currentUserProfile } = useAppContext()
@@ -358,6 +361,42 @@ export function ProjectDetailPage({
     [deliverablesForSelectedWp, selectedDeliverableId]
   )
 
+  const getTaskDueDate = (task: any) => {
+    if (!task) return null
+    const rawDate = task.dueDate || task.end || task.due
+    if (!rawDate) return null
+    const due = rawDate.toDate ? rawDate.toDate() : new Date(rawDate)
+    return isNaN(due.getTime()) ? null : due
+  }
+
+  const wasTaskUpdatedThisWeek = (task: any) => {
+    const referenceDate = task?.updatedAt || task?.modifiedAt || task?.createdAt || task?.start
+    if (!referenceDate) return false
+    const date = referenceDate.toDate ? referenceDate.toDate() : new Date(referenceDate)
+    if (isNaN(date.getTime())) return false
+    const now = new Date()
+    const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+    return diffDays <= 7
+  }
+
+  const hasTaskDependencies = (task: any) => Array.isArray(task?.dependencies) && task.dependencies.length > 0
+
+  const isTaskBlocked = (task: any) => task?.status === "blocked" || task?.status === "at-risk"
+
+  const isTaskOverdue = (task: any) => {
+    const due = getTaskDueDate(task)
+    if (!due) return false
+    return due.getTime() < Date.now() && task?.status !== "done" && task?.status !== "completed"
+  }
+
+  const isTaskDueSoon = (task: any) => {
+    const due = getTaskDueDate(task)
+    if (!due) return false
+    const now = new Date()
+    const diffDays = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    return diffDays >= 0 && diffDays <= 7
+  }
+
   const getTasksForSelectedDeliverable = useCallback(() => {
     const tasks = Array.isArray(selectedWorkpackage?.tasks) ? selectedWorkpackage?.tasks : []
     if (!selectedDeliverable) return tasks || []
@@ -371,6 +410,128 @@ export function ProjectDetailPage({
       return true
     })
   }, [selectedWorkpackage, selectedDeliverable])
+
+  const getTasksForDeliverable = useCallback(
+    (deliverableId: string, workpackageId?: string | null) => {
+      const wp = workpackages.find((workpackage) => workpackage.id === (workpackageId || selectedWorkpackageId))
+      const tasks = Array.isArray(wp?.tasks) ? wp?.tasks : []
+      return tasks.filter((task: any) => {
+        if (task?.deliverables && Array.isArray(task.deliverables)) {
+          return task.deliverables.some((d: any) => d === deliverableId || d?.id === deliverableId)
+        }
+        if (task?.deliverableId) return task.deliverableId === deliverableId
+        return true
+      })
+    },
+    [selectedWorkpackageId, workpackages]
+  )
+
+  const filteredTasks = useMemo(() => {
+    const tasks = getTasksForSelectedDeliverable()
+    return tasks.filter((task: any) => {
+      if (taskFilters.includes("blocked") && !(isTaskBlocked(task) || hasTaskDependencies(task))) return false
+      if (taskFilters.includes("due-soon") && !isTaskDueSoon(task)) return false
+      if (taskFilters.includes("changed-week") && !wasTaskUpdatedThisWeek(task)) return false
+      return true
+    })
+  }, [getTasksForSelectedDeliverable, taskFilters])
+
+  const getDeliverableStatusFlags = (deliverable: Deliverable) => {
+    const tasks = getTasksForDeliverable(deliverable.id, deliverable.workpackageId)
+    const hasBlocked = tasks.some(isTaskBlocked)
+    const hasOverdue = tasks.some(isTaskOverdue)
+    const hasDeps = tasks.some(hasTaskDependencies)
+    const dueDate = deliverable.dueDate ? new Date(deliverable.dueDate) : null
+    const dueSoon = dueDate ? (dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 7 && dueDate.getTime() >= Date.now() : false
+    const isOverdue = dueDate ? dueDate.getTime() < Date.now() : false
+    return {
+      hasBlocked,
+      hasOverdue: hasOverdue || isOverdue,
+      hasDependencies: hasDeps,
+      dueSoon,
+    }
+  }
+
+  const getWorkpackageStatusFlags = (workpackage: Workpackage) => {
+    const tasks = Array.isArray(workpackage?.tasks) ? workpackage.tasks : []
+    const hasBlocked = tasks.some(isTaskBlocked)
+    const hasOverdue = tasks.some(isTaskOverdue)
+    const hasDeps = tasks.some(hasTaskDependencies)
+    const dueDate = workpackage?.end ? new Date(workpackage.end) : null
+    const dueSoon = dueDate ? (dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 7 && dueDate.getTime() >= Date.now() : false
+    const isOverdue = dueDate ? dueDate.getTime() < Date.now() : false
+    return {
+      hasBlocked,
+      hasOverdue: hasOverdue || isOverdue,
+      hasDependencies: hasDeps,
+      dueSoon,
+    }
+  }
+
+  const formatRelativeDate = (date?: Date | null) => {
+    if (!date) return ""
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    if (diffDays === 0) return "Today"
+    if (diffDays === 1) return "Yesterday"
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
+  }
+
+  const toggleTaskFilter = (filter: string) => {
+    setTaskFilters((prev) =>
+      prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+    )
+  }
+
+  const activityFeed = useMemo(() => {
+    const updates: { date: Date; type: string; title: string; detail?: string }[] = []
+    if (selectedDeliverable) {
+      getTasksForDeliverable(selectedDeliverable.id, selectedDeliverable.workpackageId).forEach((task: any) => {
+        const date =
+          (task?.updatedAt?.toDate?.() ||
+            (task?.updatedAt ? new Date(task.updatedAt) : null) ||
+            getTaskDueDate(task) ||
+            (task?.start ? new Date(task.start) : null))
+        if (date && !isNaN(date.getTime())) {
+          updates.push({ date, type: "Task", title: task?.name || "Task updated", detail: task?.status })
+        }
+      })
+
+      orders
+        .filter((order) =>
+          order.linkedDeliverableId === selectedDeliverable.id || order.linkedWorkpackageId === selectedDeliverable.workpackageId
+        )
+        .forEach((order) => {
+          const date = order.createdDate || order.orderedDate || order.receivedDate || order.expectedDeliveryDate
+          if (date) {
+            updates.push({
+              date: date instanceof Date ? date : new Date(date),
+              type: "Order",
+              title: order.productName,
+              detail: order.status,
+            })
+          }
+        })
+    }
+
+    if (selectedWorkpackageId) {
+      experiments
+        .filter((exp) => exp.workpackageId === selectedWorkpackageId)
+        .forEach((exp) => {
+          const date = exp.updatedAt ? new Date(exp.updatedAt) : new Date(exp.createdAt)
+          if (date) {
+            updates.push({ date, type: "Experiment", title: exp.title, detail: exp.status || "updated" })
+          }
+        })
+    }
+
+    return updates
+      .filter((item) => item.date && !isNaN(item.date.getTime()))
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .slice(0, 5)
+  }, [experiments, getTasksForDeliverable, orders, selectedDeliverable, selectedWorkpackageId])
 
   const getTaskStatusMeta = (status?: string) => {
     switch (status) {
@@ -522,6 +683,7 @@ export function ProjectDetailPage({
                   )}
                   {workpackages.map((wp) => {
                     const isSelected = wp.id === selectedWorkpackageId
+                    const wpFlags = getWorkpackageStatusFlags(wp)
                     return (
                       <button
                         key={wp.id}
@@ -529,15 +691,31 @@ export function ProjectDetailPage({
                         className={`w-full text-left px-3 py-2 rounded-md border transition-colors ${isSelected ? "border-brand-500 bg-brand-50 text-brand-900" : "border-border hover:bg-muted/50"
                           }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{wp.name}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{wp.name}</span>
+                            {wpFlags.hasDependencies && (
+                              <Badge variant="secondary" className="text-[11px] flex items-center gap-1">
+                                <Link2 className="h-3 w-3" />
+                                Deps
+                              </Badge>
+                            )}
+                          </div>
                           <Badge variant={wp.status === "completed" ? "default" : "outline"} className="text-[11px]">
                             {wp.status}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {deliverables.filter(d => d.workpackageId === wp.id).length} deliverable{deliverables.filter(d => d.workpackageId === wp.id).length !== 1 ? "s" : ""}
-                        </p>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
+                          <span>
+                            {deliverables.filter(d => d.workpackageId === wp.id).length} deliverable{deliverables.filter(d => d.workpackageId === wp.id).length !== 1 ? "s" : ""}
+                          </span>
+                          {wp.end && (
+                            <Badge variant="outline" className={`text-[11px] ${wpFlags.hasOverdue ? "border-red-200 bg-red-50 text-red-700" : wpFlags.dueSoon ? "border-amber-200 bg-amber-50 text-amber-700" : ""}`}>
+                              <Clock className="h-3 w-3 mr-1" />
+                              {new Date(wp.end).toLocaleDateString()}
+                            </Badge>
+                          )}
+                        </div>
                       </button>
                     )
                   })}
@@ -556,6 +734,7 @@ export function ProjectDetailPage({
                   )}
                   {deliverablesForSelectedWp.map((deliverable) => {
                     const isSelected = deliverable.id === selectedDeliverableId
+                    const flags = getDeliverableStatusFlags(deliverable)
                     return (
                       <button
                         key={deliverable.id}
@@ -563,13 +742,43 @@ export function ProjectDetailPage({
                         className={`w-full text-left px-3 py-2 rounded-md border transition-colors ${isSelected ? "border-brand-500 bg-brand-50 text-brand-900" : "border-border hover:bg-muted/50"
                           }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{deliverable.name}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{deliverable.name}</span>
+                            {flags.hasDependencies && (
+                              <Badge variant="secondary" className="text-[11px] flex items-center gap-1">
+                                <Link2 className="h-3 w-3" />
+                                Deps
+                              </Badge>
+                            )}
+                          </div>
                           <Badge variant="outline" className="text-[11px]">
                             {deliverable.status}
                           </Badge>
                         </div>
-                        <Progress value={deliverable.progress || 0} className="h-1.5 mt-2" />
+                        <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
+                          <span className="flex items-center gap-1">
+                            <ListTodo className="h-3 w-3" />
+                            {getTasksForDeliverable(deliverable.id, deliverable.workpackageId).length} tasks
+                          </span>
+                          {deliverable.dueDate && (
+                            <Badge
+                              variant="outline"
+                              className={`text-[11px] ${flags.hasOverdue ? "border-red-200 bg-red-50 text-red-700" : flags.dueSoon ? "border-amber-200 bg-amber-50 text-amber-700" : ""}`}
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              {new Date(deliverable.dueDate).toLocaleDateString()}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Progress value={deliverable.progress || 0} className="h-1.5 flex-1" />
+                          {(flags.hasBlocked || flags.hasOverdue) && (
+                            <Badge variant="secondary" className={`text-[11px] ${flags.hasBlocked ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
+                              {flags.hasBlocked ? "Blocked" : "At risk"}
+                            </Badge>
+                          )}
+                        </div>
                       </button>
                     )
                   })}
@@ -594,6 +803,29 @@ export function ProjectDetailPage({
                       </Badge>
                     )}
                   </div>
+                  {activityFeed.length > 0 && (
+                    <div className="mt-3 w-full rounded-md border bg-muted/50 p-3">
+                      <div className="flex items-center justify-between text-sm font-semibold mb-2">
+                        <div className="flex items-center gap-2">
+                          <History className="h-4 w-4" />
+                          <span>What changed</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">Recent</span>
+                      </div>
+                      <div className="space-y-1">
+                        {activityFeed.map((item, idx) => (
+                          <div key={`${item.type}-${idx}`} className="flex items-center gap-2 text-sm">
+                            <Badge variant="secondary" className="text-[11px] uppercase">
+                              {item.type}
+                            </Badge>
+                            <span className="font-medium truncate">{item.title}</span>
+                            {item.detail && <span className="text-xs text-muted-foreground truncate">{item.detail}</span>}
+                            <span className="text-xs text-muted-foreground ml-auto">{formatRelativeDate(item.date)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {selectedDeliverable ? (
@@ -601,7 +833,15 @@ export function ProjectDetailPage({
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Deliverable progress</span>
-                          <span className="font-medium">{selectedDeliverable.progress || 0}%</span>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const flags = getDeliverableStatusFlags(selectedDeliverable)
+                              if (flags.hasBlocked) return <Badge variant="secondary" className="text-[11px] bg-red-100 text-red-800">Blocked</Badge>
+                              if (flags.hasOverdue) return <Badge variant="secondary" className="text-[11px] bg-amber-100 text-amber-800">At risk</Badge>
+                              return null
+                            })()}
+                            <span className="font-medium">{selectedDeliverable.progress || 0}%</span>
+                          </div>
                         </div>
                         <Progress value={selectedDeliverable.progress || 0} className="h-2" />
                       </div>
@@ -618,14 +858,38 @@ export function ProjectDetailPage({
                           <h4 className="font-semibold">To-do list</h4>
                         </div>
 
-                        {getTasksForSelectedDeliverable().length === 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant={taskFilters.includes("due-soon") ? "secondary" : "outline"}
+                            size="xs"
+                            onClick={() => toggleTaskFilter("due-soon")}
+                          >
+                            Due soon
+                          </Button>
+                          <Button
+                            variant={taskFilters.includes("blocked") ? "secondary" : "outline"}
+                            size="xs"
+                            onClick={() => toggleTaskFilter("blocked")}
+                          >
+                            Blocked
+                          </Button>
+                          <Button
+                            variant={taskFilters.includes("changed-week") ? "secondary" : "outline"}
+                            size="xs"
+                            onClick={() => toggleTaskFilter("changed-week")}
+                          >
+                            Changed this week
+                          </Button>
+                        </div>
+
+                        {filteredTasks.length === 0 && (
                           <p className="text-sm text-muted-foreground">
                             No tasks captured yet. Add tasks to track progress on this deliverable.
                           </p>
                         )}
 
                         <div className="space-y-2">
-                          {getTasksForSelectedDeliverable().map((task: any, idx: number) => {
+                          {filteredTasks.map((task: any, idx: number) => {
                             const meta = getTaskStatusMeta(task?.status)
                             const owner = getPersonById(task?.primaryOwner)
                             const progressValue = typeof task?.progress === "number" ? task.progress : 0
@@ -643,6 +907,17 @@ export function ProjectDetailPage({
                                     <Badge variant="outline" className={`text-[11px] ${meta.color}`}>
                                       {meta.label}
                                     </Badge>
+                                    {hasTaskDependencies(task) && (
+                                      <Badge variant="secondary" className="text-[11px] flex items-center gap-1">
+                                        <Link2 className="h-3 w-3" />
+                                        Dependencies
+                                      </Badge>
+                                    )}
+                                    {isTaskOverdue(task) && (
+                                      <Badge variant="secondary" className="text-[11px] bg-red-100 text-red-800">
+                                        Overdue
+                                      </Badge>
+                                    )}
                                   </div>
                                   <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                                     <div
