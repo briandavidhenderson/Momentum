@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment } from "@/lib/types"
+import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment, Task, ImportanceLevel } from "@/lib/types"
 import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 import { logger } from "@/lib/logger"
@@ -94,6 +94,9 @@ export function ProjectDetailPage({
   const [deliverableDialogMode, setDeliverableDialogMode] = useState<"create" | "edit" | "view">("view")
   const [selectedDeliverableForPanel, setSelectedDeliverableForPanel] = useState<Deliverable | null>(null)
   const [selectedWorkpackageForDeliverable, setSelectedWorkpackageForDeliverable] = useState<string | null>(null)
+  const [newTaskName, setNewTaskName] = useState("")
+  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
+  const [draggedOwnerId, setDraggedOwnerId] = useState<string | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [experiments, setExperiments] = useState<ELNExperiment[]>([])
