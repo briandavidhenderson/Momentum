@@ -16,7 +16,7 @@ import { ELNReportGenerator } from "@/components/ELNReportGenerator"
 import { deleteELNFile } from "@/lib/storage"
 import { logger } from "@/lib/logger"
 
-export function ElectronicLabNotebook() {
+export function ElectronicLabNotebook({ initialExperimentId }: { initialExperimentId?: string }) {
   const {
     elnExperiments,
     currentUserProfile,
@@ -45,10 +45,20 @@ export function ElectronicLabNotebook() {
 
   // Initialize with first experiment if available
   useEffect(() => {
-    if (experiments.length > 0 && !selectedExperiment) {
+    if (experiments.length === 0) return
+
+    if (initialExperimentId) {
+      const matchingExperiment = experiments.find((exp) => exp.id === initialExperimentId)
+      if (matchingExperiment && matchingExperiment.id !== selectedExperiment?.id) {
+        setSelectedExperiment(matchingExperiment)
+        return
+      }
+    }
+
+    if (!selectedExperiment) {
       setSelectedExperiment(experiments[0])
     }
-  }, [experiments, selectedExperiment])
+  }, [experiments, initialExperimentId, selectedExperiment])
 
   const createNewExperiment = async () => {
     if (!newExperimentTitle.trim()) {

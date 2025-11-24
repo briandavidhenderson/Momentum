@@ -10,7 +10,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { useToast } from "@/components/ui/toast"
 import { formatDistanceToNow } from "date-fns"
 
-export default function WhiteboardPage() {
+export default function WhiteboardPage({ searchParams }: { searchParams: { whiteboardId?: string } }) {
     const { currentUser, currentUserProfile } = useAuth()
     const { success, error } = useToast()
     const [whiteboards, setWhiteboards] = useState<WhiteboardData[]>([])
@@ -36,6 +36,16 @@ export default function WhiteboardPage() {
             loadWhiteboards(currentUserProfile.labId)
         }
     }, [currentUserProfile, loadWhiteboards])
+
+    useEffect(() => {
+        const whiteboardId = searchParams?.whiteboardId
+        if (!whiteboardId || whiteboards.length === 0) return
+
+        const matchingBoard = whiteboards.find((board) => board.id === whiteboardId)
+        if (matchingBoard && matchingBoard.id !== selectedWhiteboard?.id) {
+            setSelectedWhiteboard(matchingBoard)
+        }
+    }, [searchParams?.whiteboardId, selectedWhiteboard, whiteboards])
 
     const handleCreate = async () => {
         if (!currentUserProfile?.labId || !currentUser) return

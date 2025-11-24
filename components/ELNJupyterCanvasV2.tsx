@@ -20,12 +20,16 @@ import {
   X,
   Edit3,
   Upload,
+  Link,
+  Microscope,
+  Package,
 } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { extractItemStructure } from "@/lib/ai/router"
 import { uploadELNFile } from "@/lib/storage"
 import { useAppContext } from "@/lib/AppContext"
 import { logger } from "@/lib/logger"
+import { ResourceLinkingDialog } from "@/components/eln/ResourceLinkingDialog"
 
 interface ELNJupyterCanvasV2Props {
   items: ELNItem[]
@@ -41,12 +45,12 @@ const CELL_TYPES: Array<{
   icon: typeof FileText
   accept?: string
 }> = [
-  { type: "note", label: "Text Note", icon: FileText },
-  { type: "photo", label: "Image", icon: ImageIcon, accept: "image/*" },
-  { type: "voice", label: "Audio", icon: Mic, accept: "audio/*" },
-  { type: "data", label: "Data", icon: Database, accept: ".csv,.xlsx,.json,.txt" },
-  { type: "video", label: "Video", icon: Video, accept: "video/*" },
-]
+    { type: "note", label: "Text Note", icon: FileText },
+    { type: "photo", label: "Image", icon: ImageIcon, accept: "image/*" },
+    { type: "voice", label: "Audio", icon: Mic, accept: "audio/*" },
+    { type: "data", label: "Data", icon: Database, accept: ".csv,.xlsx,.json,.txt" },
+    { type: "video", label: "Video", icon: Video, accept: "video/*" },
+  ]
 
 export function ELNJupyterCanvasV2({
   items,
@@ -64,6 +68,7 @@ export function ELNJupyterCanvasV2({
   const [showTypeMenu, setShowTypeMenu] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [selectedType, setSelectedType] = useState<ELNItemType | null>(null)
+  const [linkingItemId, setLinkingItemId] = useState<string | null>(null)
   const toast = useToast()
 
   // Sort items by order
@@ -190,6 +195,18 @@ export function ELNJupyterCanvasV2({
     }
   }
 
+  const handleLinkResources = (itemId: string, resources: {
+    equipmentIds?: string[]
+    inventoryIds?: string[]
+    whiteboardIds?: string[]
+    researchPinIds?: string[]
+  }) => {
+    onUpdateItem(itemId, {
+      linkedResources: resources
+    })
+    toast.success("Resources linked successfully")
+  }
+
   const renderCell = (item: ELNItem, index: number) => {
     const isEditing = editingCell === item.id
     const isExtracting = extractingItem === item.id
@@ -229,6 +246,19 @@ export function ELNJupyterCanvasV2({
                   Extracted
                 </Badge>
               )}
+              {/* Resource Link Badges */}
+              {item.linkedResources?.equipmentIds && item.linkedResources.equipmentIds.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  <Microscope className="h-3 w-3 mr-1" />
+                  {item.linkedResources.equipmentIds.length}
+                </Badge>
+              )}
+              {item.linkedResources?.inventoryIds && item.linkedResources.inventoryIds.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  <Package className="h-3 w-3 mr-1" />
+                  {item.linkedResources.inventoryIds.length}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-1">
               {item.type === "note" && !isEditing && (
@@ -262,6 +292,15 @@ export function ELNJupyterCanvasV2({
                   )}
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={() => setLinkingItemId(item.id)}
+              >
+                <Link className="h-3 w-3 mr-1" />
+                Link
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"
@@ -511,6 +550,19 @@ export function ELNJupyterCanvasV2({
           </div>
         </div>
       )}
+
+      {/* Resource Linking Dialog */}
+      {linkingItemId && (() => {
+        const linkingItem = sortedItems.find(i => i.id === linkingItemId)
+        return linkingItem ? (
+          <ResourceLinkingDialog
+            open={true}
+            onClose={() => setLinkingItemId(null)}
+            onLink={(resources) => handleLinkResources(linkingItemId, resources)}
+            initialLinks={linkingItem.linkedResources}
+          />
+        ) : null
+      })()}
     </div>
   )
 }
