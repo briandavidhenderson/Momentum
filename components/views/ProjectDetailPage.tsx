@@ -40,8 +40,12 @@ import {
   Upload,
   FlaskConical,
   ListTodo,
+  ChevronDown,
+  ChevronUp,
+  CalendarDays,
 } from "lucide-react"
-import { formatCurrency } from "@/lib/constants"
+import { calculateProjectHealth, getHealthStatusColor, ProjectHealth } from "@/lib/utils/projectHealth"
+import { formatCurrency, getBudgetStatusColor, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
 import { useAppContext } from "@/lib/AppContext"
 
 interface ProjectDetailPageProps {
@@ -51,6 +55,8 @@ interface ProjectDetailPageProps {
   teamMembers: PersonProfile[]
   fundingAccounts: FundingAccount[]
   events?: CalendarEvent[]
+  health?: ProjectHealth
+  budgetSummary?: ProjectBudgetSummary
   onBack: () => void
   onEdit?: () => void
   onCreateWorkpackage?: (workpackageData: Partial<Workpackage>) => void
@@ -74,6 +80,8 @@ export function ProjectDetailPage({
   teamMembers,
   fundingAccounts,
   events = [],
+  health,
+  budgetSummary,
   onBack,
   onEdit,
   onCreateWorkpackage,
@@ -106,6 +114,7 @@ export function ProjectDetailPage({
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [selectedWorkpackageId, setSelectedWorkpackageId] = useState<string | null>(null)
   const [selectedDeliverableId, setSelectedDeliverableId] = useState<string | null>(null)
+  const [timelineCollapsed, setTimelineCollapsed] = useState(false)
 
   // Get current user for import/export
   const { currentUser, currentUserProfile } = useAppContext()
@@ -234,15 +243,10 @@ export function ProjectDetailPage({
     }
   }, [deliverables, selectedWorkpackageId])
 
-  // Get project health status
-  const getHealthStatus = () => {
-    if (stats.atRiskWorkpackages > 0) return { label: "At Risk", color: "text-red-600", bg: "bg-red-50" }
-    if (project.progress >= 75) return { label: "On Track", color: "text-green-600", bg: "bg-green-50" }
-    if (project.progress >= 50) return { label: "Good", color: "text-blue-600", bg: "bg-blue-50" }
-    return { label: "Starting", color: "text-gray-600", bg: "bg-gray-50" }
-  }
-
-  const healthStatus = getHealthStatus()
+  const computedHealth: ProjectHealth = useMemo(
+    () => health || calculateProjectHealth(project, deliverables, workpackages),
+    [health, project, deliverables, workpackages]
+  )
 
   // Get project PIs
   const principalInvestigators = teamMembers.filter(member =>
@@ -254,6 +258,45 @@ export function ProjectDetailPage({
   const endDate = new Date(project.endDate).toLocaleDateString()
   const daysRemaining = Math.ceil(
     (new Date(project.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+  )
+
+  const timelineRange = useMemo(() => {
+    const dates: Date[] = [new Date(project.startDate), new Date(project.endDate)]
+
+    workpackages.forEach(wp => {
+      dates.push(wp.start instanceof Date ? wp.start : new Date(wp.start))
+      dates.push(wp.end instanceof Date ? wp.end : new Date(wp.end))
+    })
+
+    deliverables.forEach(deliverable => {
+      if (deliverable.dueDate) dates.push(new Date(deliverable.dueDate))
+      if (deliverable.startDate) dates.push(new Date(deliverable.startDate))
+    })
+
+    events.forEach(event => {
+      if (event.start) dates.push(new Date(event.start))
+      if (event.end) dates.push(new Date(event.end))
+    })
+
+    const start = new Date(Math.min(...dates.map(d => d.getTime())))
+    const end = new Date(Math.max(...dates.map(d => d.getTime())))
+
+    return { start, end }
+  }, [project.startDate, project.endDate, workpackages, deliverables, events])
+
+  const getTimelinePosition = useCallback(
+    (date: Date) => {
+      const total = timelineRange.end.getTime() - timelineRange.start.getTime()
+      if (total <= 0) return 0
+      const offset = date.getTime() - timelineRange.start.getTime()
+      return Math.min(100, Math.max(0, (offset / total) * 100))
+    },
+    [timelineRange.end, timelineRange.start]
+  )
+
+  const getTimelineWidth = useCallback(
+    (start: Date, end: Date) => Math.max(2, getTimelinePosition(end) - getTimelinePosition(start)),
+    [getTimelinePosition]
   )
 
   // Workpackage dialog handlers
@@ -415,10 +458,15 @@ export function ProjectDetailPage({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold text-foreground truncate">{project.name}</h1>
-                <Badge variant="outline" className={`${healthStatus.bg} ${healthStatus.color} border-0`}>
-                  {healthStatus.label}
+                <Badge className={`${getHealthStatusColor(computedHealth.status)} border-0`}>
+                  <span className="capitalize">{computedHealth.status.replace("-", " ")}</span>
                 </Badge>
-                <Badge variant="secondary">{project.status}</Badge>
+                <Badge variant="secondary" className="capitalize">{project.status}</Badge>
+                {budgetSummary && budgetSummary.totalBudget > 0 && (
+                  <Badge className={`${getBudgetStatusColor(budgetSummary.utilizationPercentage)} text-white border-0`}>
+                    {budgetSummary.utilizationPercentage}% budget used
+                  </Badge>
+                )}
               </div>
 
               {project.description && (
@@ -471,6 +519,95 @@ export function ProjectDetailPage({
           </div>
           <Progress value={project.progress} className="h-2" />
         </div>
+      </div>
+
+      {/* Timeline ribbon */}
+      <div className="border-b border-border bg-surface-2 px-6 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => setTimelineCollapsed(!timelineCollapsed)}
+            >
+              {timelineCollapsed ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronUp className="h-4 w-4 mr-1" />}
+              Timeline preview
+            </Button>
+            <span>Workpackages, deliverables, and key events</span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {new Date(timelineRange.start).toLocaleDateString()} - {new Date(timelineRange.end).toLocaleDateString()}
+          </div>
+        </div>
+        {!timelineCollapsed && (
+          <div className="relative h-16 rounded-md bg-white border border-border overflow-hidden px-3 flex items-center">
+            <div className="absolute inset-x-3 top-1/2 h-px bg-border" />
+            {workpackages.map(wp => {
+              const wpStart = wp.start instanceof Date ? wp.start : new Date(wp.start)
+              const wpEnd = wp.end instanceof Date ? wp.end : new Date(wp.end)
+              return (
+                <button
+                  key={wp.id}
+                  className="absolute text-[10px] px-2 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200 hover:shadow-sm"
+                  style={{
+                    left: `${getTimelinePosition(wpStart)}%`,
+                    width: `${getTimelineWidth(wpStart, wpEnd)}%`,
+                  }}
+                  onClick={() => {
+                    setSelectedWorkpackageId(wp.id)
+                    setActiveTab("execution")
+                  }}
+                  title={`Workpackage ${wp.name}`}
+                >
+                  {wp.name}
+                </button>
+              )
+            })}
+
+            {deliverables.map(deliverable => {
+              const dueDate = deliverable.dueDate || deliverable.startDate
+              if (!dueDate) return null
+              const deliverableDate = new Date(dueDate)
+              return (
+                <button
+                  key={deliverable.id}
+                  className="absolute -translate-x-1/2 flex flex-col items-center"
+                  style={{ left: `${getTimelinePosition(deliverableDate)}%` }}
+                  onClick={() => {
+                    setSelectedWorkpackageId(deliverable.workpackageId)
+                    setSelectedDeliverableId(deliverable.id)
+                    setActiveTab("execution")
+                  }}
+                  title={`Deliverable ${deliverable.name}`}
+                >
+                  <div className="h-2 w-2 rounded-full bg-emerald-600 border border-white" />
+                  <span className="text-[10px] text-muted-foreground mt-1 bg-white px-1 rounded-sm shadow-sm">
+                    {deliverable.name}
+                  </span>
+                </button>
+              )
+            })}
+
+            {events.map(event => {
+              const eventDate = event.start instanceof Date ? event.start : new Date(event.start)
+              return (
+                <button
+                  key={event.id}
+                  className="absolute -translate-x-1/2 flex flex-col items-center"
+                  style={{ left: `${getTimelinePosition(eventDate)}%` }}
+                  onClick={() => onViewEvent?.(event.id)}
+                  title={event.title}
+                >
+                  <CalendarDays className="h-4 w-4 text-amber-600 bg-white rounded-full shadow-sm" />
+                  <span className="text-[10px] text-muted-foreground mt-1 bg-white px-1 rounded-sm shadow-sm">
+                    {event.title}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
