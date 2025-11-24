@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Workpackage, Deliverable, PersonProfile, Task } from "@/lib/types"
+import { Workpackage, Deliverable, PersonProfile } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -30,8 +30,6 @@ interface WorkpackageCardProps {
   onDeleteDeliverable?: (deliverableId: string) => void
   onDeliverableClick?: (deliverable: Deliverable) => void
   onCreateTask?: (deliverableId: string) => void
-  onEditTask?: (task: Task) => void
-  onDeleteTask?: (taskId: string) => void
 }
 
 export function WorkpackageCard({
@@ -45,8 +43,6 @@ export function WorkpackageCard({
   onDeleteDeliverable,
   onDeliverableClick,
   onCreateTask,
-  onEditTask,
-  onDeleteTask,
 }: WorkpackageCardProps) {
   const [isExpanded, setIsExpanded] = useState(workpackage.isExpanded ?? false)
 
@@ -275,21 +271,15 @@ export function WorkpackageCard({
                   }
                   try {
                     const deliverableOwner = people?.find(p => p?.id === deliverable.ownerId)
-                    // Pass tasks from workpackage to deliverable card
-                    const deliverableTasks = Array.isArray(workpackage.tasks) ? workpackage.tasks : []
                     return (
                       <DeliverableCard
                         key={deliverable.id}
                         deliverable={deliverable}
                         owner={deliverableOwner}
-                        tasks={deliverableTasks}
-                        allPeople={people || []}
                         onEdit={onEditDeliverable || (() => { })}
                         onDelete={onDeleteDeliverable || (() => { })}
                         onClick={onDeliverableClick}
                         onCreateTask={onCreateTask}
-                        onEditTask={onEditTask}
-                        onDeleteTask={onDeleteTask}
                         enableDrag={false}
                       />
                     )
