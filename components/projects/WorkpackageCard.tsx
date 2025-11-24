@@ -1,8 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Workpackage, Deliverable, PersonProfile } from "@/lib/types"
-import { Badge } from "@/components/ui/badge"
+import { Workpackage, Deliverable, PersonProfile, Task } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -18,6 +17,7 @@ import {
   Target,
   AlertCircle,
 } from "lucide-react"
+import { formatStatusLabel, getStatusPillClass } from "@/lib/utils/statusStyles"
 
 interface WorkpackageCardProps {
   workpackage: Workpackage
@@ -67,21 +67,6 @@ export function WorkpackageCard({
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-700 border-green-300"
-      case "at-risk":
-        return "bg-red-100 text-red-700 border-red-300"
-      case "active":
-        return "bg-blue-100 text-blue-700 border-blue-300"
-      case "on-hold":
-        return "bg-yellow-100 text-yellow-700 border-yellow-300"
-      default:
-        return "bg-gray-100 text-gray-700 border-gray-300"
-    }
-  }
-
   const toggleExpanded = () => {
     setIsExpanded(!isExpanded)
   }
@@ -118,9 +103,9 @@ export function WorkpackageCard({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <CardTitle className="text-lg truncate">{workpackage.name}</CardTitle>
-                <Badge className={getStatusColor(workpackage.status)}>
-                  {workpackage.status || "planning"}
-                </Badge>
+                <span className={getStatusPillClass(workpackage.status)}>
+                  {formatStatusLabel(workpackage.status || "planning")}
+                </span>
               </div>
               <CardDescription className="flex items-center gap-4 text-sm">
                 <span className="flex items-center gap-1">

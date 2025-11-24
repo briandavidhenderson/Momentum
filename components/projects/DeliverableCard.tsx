@@ -1,7 +1,7 @@
 "use client"
 
-import { Deliverable, PersonProfile } from "@/lib/types"
-import { Badge } from "@/components/ui/badge"
+import { useState } from "react"
+import { Deliverable, PersonProfile, Task } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Plus,
 } from "lucide-react"
+import { formatStatusLabel, getStatusPillClass } from "@/lib/utils/statusStyles"
 
 interface DeliverableCardProps {
   deliverable: Deliverable
@@ -42,32 +43,18 @@ export function DeliverableCard({
   onClick,
   onCreateTask,
 }: DeliverableCardProps) {
-  const getStatusPillClass = (status: string) => {
-    switch (status) {
-      case "not-started":
-        return "status-pill bg-gray-100 text-gray-700 border-gray-300"
-      case "in-progress":
-        return "status-pill bg-blue-100 text-blue-700 border-blue-300"
-      case "at-risk":
-        return "status-pill bg-orange-100 text-orange-700 border-orange-300"
-      case "completed":
-      case "done":
-        return "status-pill bg-green-100 text-green-700 border-green-300"
-      case "on-hold":
-        return "status-pill bg-yellow-100 text-yellow-700 border-yellow-300"
-      case "blocked":
-        return "status-pill bg-red-100 text-red-700 border-red-300"
-      default:
-        return "status-pill"
-    }
-  }
+  const [isExpanded, setIsExpanded] = useState(false)
 
-  const formatStatusLabel = (status: string) => {
-    if (!status || typeof status !== 'string') return "Not Started"
-    return status
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ")
+  // Filter tasks that might be related to this deliverable
+  // In legacy structure, tasks are in workpackages, so we show all tasks if provided
+  const deliverableTasks = Array.isArray(tasks) 
+    ? tasks.filter(task => task && task.id && typeof task.id === 'string')
+    : []
+  
+  // Get people for task owners/helpers
+  const getPersonById = (id?: string): PersonProfile | undefined => {
+    if (!id || !allPeople || allPeople.length === 0) return undefined
+    return allPeople.find(p => p?.id === id)
   }
 
   const getImportanceBadgeColor = (importance: string) => {
