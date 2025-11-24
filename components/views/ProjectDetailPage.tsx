@@ -38,7 +38,8 @@ import {
   PanelRight,
   LayoutDashboard,
 } from "lucide-react"
-import { formatCurrency } from "@/lib/constants"
+import { calculateProjectHealth, getHealthStatusColor, ProjectHealth } from "@/lib/utils/projectHealth"
+import { formatCurrency, getBudgetStatusColor, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
 import { useAppContext } from "@/lib/AppContext"
 
 interface ProjectDetailPageProps {
@@ -48,6 +49,8 @@ interface ProjectDetailPageProps {
   teamMembers: PersonProfile[]
   fundingAccounts: FundingAccount[]
   events?: CalendarEvent[]
+  health?: ProjectHealth
+  budgetSummary?: ProjectBudgetSummary
   onBack: () => void
   onEdit?: () => void
   onCreateWorkpackage?: (workpackageData: Partial<Workpackage>) => void
@@ -71,6 +74,8 @@ export function ProjectDetailPage({
   teamMembers,
   fundingAccounts,
   events = [],
+  health,
+  budgetSummary,
   onBack,
   onEdit,
   onCreateWorkpackage,
@@ -293,6 +298,45 @@ export function ProjectDetailPage({
     (new Date(project.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
   )
 
+  const timelineRange = useMemo(() => {
+    const dates: Date[] = [new Date(project.startDate), new Date(project.endDate)]
+
+    workpackages.forEach(wp => {
+      dates.push(wp.start instanceof Date ? wp.start : new Date(wp.start))
+      dates.push(wp.end instanceof Date ? wp.end : new Date(wp.end))
+    })
+
+    deliverables.forEach(deliverable => {
+      if (deliverable.dueDate) dates.push(new Date(deliverable.dueDate))
+      if (deliverable.startDate) dates.push(new Date(deliverable.startDate))
+    })
+
+    events.forEach(event => {
+      if (event.start) dates.push(new Date(event.start))
+      if (event.end) dates.push(new Date(event.end))
+    })
+
+    const start = new Date(Math.min(...dates.map(d => d.getTime())))
+    const end = new Date(Math.max(...dates.map(d => d.getTime())))
+
+    return { start, end }
+  }, [project.startDate, project.endDate, workpackages, deliverables, events])
+
+  const getTimelinePosition = useCallback(
+    (date: Date) => {
+      const total = timelineRange.end.getTime() - timelineRange.start.getTime()
+      if (total <= 0) return 0
+      const offset = date.getTime() - timelineRange.start.getTime()
+      return Math.min(100, Math.max(0, (offset / total) * 100))
+    },
+    [timelineRange.end, timelineRange.start]
+  )
+
+  const getTimelineWidth = useCallback(
+    (start: Date, end: Date) => Math.max(2, getTimelinePosition(end) - getTimelinePosition(start)),
+    [getTimelinePosition]
+  )
+
   // Workpackage dialog handlers
   const handleCreateWorkpackageClick = () => {
     setSelectedWorkpackageDialog(null)
@@ -413,8 +457,8 @@ export function ProjectDetailPage({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold text-foreground truncate">{project.name}</h1>
-                <Badge variant="outline" className={`${healthStatus.bg} ${healthStatus.color} border-0`}>
-                  {healthStatus.label}
+                <Badge className={`${getHealthStatusColor(computedHealth.status)} border-0`}>
+                  <span className="capitalize">{computedHealth.status.replace("-", " ")}</span>
                 </Badge>
                 <Badge
                   variant="outline"

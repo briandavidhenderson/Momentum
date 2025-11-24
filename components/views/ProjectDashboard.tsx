@@ -25,13 +25,15 @@ import {
   Search,
   Filter,
   DollarSign,
-  Grid3x3,
-  List,
-  BarChart3,
+  CalendarDays,
+  GanttChart as GanttChartIcon,
+  KanbanSquare,
+  ListTree,
 } from "lucide-react"
 import { logger } from "@/lib/logger"
-import { calculateProjectHealth, ProjectHealth } from "@/lib/utils/projectHealth"
-import { calculateBudgetsForProjects, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
+import { calculateProjectHealth, getHealthStatusColor, ProjectHealth } from "@/lib/utils/projectHealth"
+import { calculateBudgetsForProjects, getBudgetStatusColor, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
+import { GanttChart as ProjectGanttChart } from "@/components/GanttChart"
 import {
   Select,
   SelectContent,
@@ -83,13 +85,18 @@ export function ProjectDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [fundingFilter, setFundingFilter] = useState<string>("all")
   const [healthFilter, setHealthFilter] = useState<string>("all")
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [projectView, setProjectView] = useState<"list" | "kanban" | "gantt" | "calendar">("list")
 
   // Calculate budget summaries for all projects
   const budgetSummaries = useMemo(() => {
     if (!projects || !orders) return new Map<string, ProjectBudgetSummary>()
     return calculateBudgetsForProjects(projects, orders)
   }, [projects, orders])
+
+  const isProjectFunded = useCallback(
+    (project: MasterProject) => !!(project.funderId && project.totalBudget && project.totalBudget > 0),
+    []
+  )
 
   // Calculate health for all projects
   const projectHealths = useMemo(() => {
@@ -104,8 +111,8 @@ export function ProjectDashboard() {
   }, [projects, allWorkpackages, deliverables])
 
   // Filter and group projects
-  const { fundedProjects, unfundedProjects } = useMemo(() => {
-    if (!projects) return { fundedProjects: [], unfundedProjects: [] }
+  const filteredProjects = useMemo(() => {
+    if (!projects) return []
 
     let filtered = [...projects]
 
@@ -141,9 +148,6 @@ export function ProjectDashboard() {
     }
 
     // Filter by funding type
-    let funded: MasterProject[] = []
-    let unfunded: MasterProject[] = []
-
     if (fundingFilter === "funded") {
       funded = filtered.filter(p => (p.type || "unfunded") === "funded")
     } else if (fundingFilter === "unfunded") {
@@ -153,12 +157,122 @@ export function ProjectDashboard() {
       unfunded = filtered.filter(p => (p.type || "unfunded") === "unfunded")
     }
 
-    // Sort by name
-    funded.sort((a, b) => a.name.localeCompare(b.name))
-    unfunded.sort((a, b) => a.name.localeCompare(b.name))
+    filtered.sort((a, b) => a.name.localeCompare(b.name))
+    return filtered
+  }, [projects, searchTerm, statusFilter, healthFilter, fundingFilter, projectHealths, selectedGroupId, isProjectFunded])
 
-    return { fundedProjects: funded, unfundedProjects: unfunded }
-  }, [projects, searchTerm, statusFilter, healthFilter, fundingFilter, projectHealths, selectedGroupId])
+  const fundedProjects = useMemo(() => filteredProjects.filter(isProjectFunded), [filteredProjects, isProjectFunded])
+  const unfundedProjects = useMemo(() => filteredProjects.filter(project => !isProjectFunded(project)), [filteredProjects, isProjectFunded])
+
+  const renderHealthBadge = (health?: ProjectHealth) => {
+    if (!health) return null
+    return (
+      <Badge className={getHealthStatusColor(health.status)}>
+        <span className="capitalize">{health.status.replace("-", " ")}</span>
+      </Badge>
+    )
+  }
+
+  const renderBudgetChip = (budgetSummary?: ProjectBudgetSummary) => {
+    if (!budgetSummary || !budgetSummary.totalBudget) return null
+    return (
+      <Badge className={`${getBudgetStatusColor(budgetSummary.utilizationPercentage)} text-white`}>
+        Budget {budgetSummary.utilizationPercentage}%
+      </Badge>
+    )
+  }
+
+  const renderStatusBadge = (status: string) => (
+    <Badge variant="secondary" className="capitalize">
+      {status.replace("-", " ")}
+    </Badge>
+  )
+
+  const statusColumns = [
+    { value: "planning", label: "Planning" },
+    { value: "active", label: "Active" },
+    { value: "completed", label: "Completed" },
+    { value: "on-hold", label: "On Hold" },
+    { value: "cancelled", label: "Cancelled" },
+  ]
+
+  const relevantWorkpackages = useMemo(
+    () => allWorkpackages.filter(wp => filteredProjects.some(project => project.workpackageIds.includes(wp.id))),
+    [allWorkpackages, filteredProjects]
+  )
+
+  const relevantDeliverables = useMemo(
+    () => deliverables.filter(deliverable => relevantWorkpackages.some(wp => wp.id === deliverable.workpackageId)),
+    [deliverables, relevantWorkpackages]
+  )
+
+  interface CalendarViewItem {
+    id: string
+    date: Date
+    label: string
+    description?: string
+    projectId: string
+  }
+
+  const calendarItems = useMemo<CalendarViewItem[]>(() => {
+    const items: CalendarViewItem[] = []
+
+    filteredProjects.forEach(project => {
+      items.push({
+        id: `${project.id}-start`,
+        date: new Date(project.startDate),
+        label: `${project.name} kickoff`,
+        description: "Project start",
+        projectId: project.id,
+      })
+
+      items.push({
+        id: `${project.id}-end`,
+        date: new Date(project.endDate),
+        label: `${project.name} finish`,
+        description: "Project end",
+        projectId: project.id,
+      })
+    })
+
+    relevantWorkpackages.forEach(workpackage => {
+      items.push({
+        id: `${workpackage.id}-start`,
+        date: workpackage.start instanceof Date ? workpackage.start : new Date(workpackage.start),
+        label: `${workpackage.name} starts`,
+        description: "Workpackage start",
+        projectId: workpackage.projectId,
+      })
+      items.push({
+        id: `${workpackage.id}-end`,
+        date: workpackage.end instanceof Date ? workpackage.end : new Date(workpackage.end),
+        label: `${workpackage.name} ends`,
+        description: "Workpackage end",
+        projectId: workpackage.projectId,
+      })
+    })
+
+    relevantDeliverables.forEach(deliverable => {
+      if (deliverable.dueDate || deliverable.startDate) {
+        const dueDate = deliverable.dueDate || deliverable.startDate
+        const deliverableProjectId = relevantWorkpackages.find(wp => wp.id === deliverable.workpackageId)?.projectId
+        items.push({
+          id: deliverable.id,
+          date: new Date(dueDate as string),
+          label: `${deliverable.name} due`,
+          description: "Deliverable milestone",
+          projectId: deliverableProjectId || "",
+        })
+      }
+    })
+
+    return items
+      .filter(item => item.projectId)
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+  }, [filteredProjects, relevantDeliverables, relevantWorkpackages, projectLookup])
+
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
 
   const handleCreateTask = useCallback(async (taskData: Partial<Task> & { workpackageId: string }) => {
     try {
@@ -343,6 +457,8 @@ export function ProjectDashboard() {
         deliverables={projectDeliverables}
         teamMembers={projectTeamMembers}
         fundingAccounts={[]}
+        health={projectHealths.get(selectedProjectForDetail.id)}
+        budgetSummary={budgetSummaries.get(selectedProjectForDetail.id)}
         onBack={() => setSelectedProjectForDetail(null)}
         onEdit={() => {
           alert("Edit functionality coming soon")
@@ -399,8 +515,14 @@ export function ProjectDashboard() {
     )
   }
 
-  const totalProjects = (fundedProjects.length + unfundedProjects.length)
-  const activeProjects = projects?.filter(p => p.status === 'active').length || 0
+  const totalProjects = filteredProjects.length
+  const totalPortfolioCount = projects?.length || 0
+  const activeProjects = filteredProjects.filter(p => p.status === "active").length
+
+  const projectLookup = useMemo(
+    () => new Map(filteredProjects.map(project => [project.id, project])),
+    [filteredProjects]
+  )
 
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col gap-4 overflow-hidden">
@@ -494,24 +616,30 @@ export function ProjectDashboard() {
           </SelectContent>
         </Select>
 
-        <div className="flex items-center gap-1 border rounded-lg p-1">
-          <Button
-            variant={viewMode === "grid" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("grid")}
-            className="h-8"
-          >
-            <Grid3x3 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === "list" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setViewMode("list")}
-            className="h-8"
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
+        <Tabs
+          value={projectView}
+          onValueChange={(value) => setProjectView(value as typeof projectView)}
+          className="w-full md:w-auto"
+        >
+          <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full md:w-auto">
+            <TabsTrigger value="list" className="gap-2">
+              <ListTree className="h-4 w-4" />
+              List / Tree
+            </TabsTrigger>
+            <TabsTrigger value="kanban" className="gap-2">
+              <KanbanSquare className="h-4 w-4" />
+              Kanban
+            </TabsTrigger>
+            <TabsTrigger value="gantt" className="gap-2">
+              <GanttChartIcon className="h-4 w-4" />
+              Gantt
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Calendar
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Main Content Area */}
@@ -523,7 +651,7 @@ export function ProjectDashboard() {
 
         {/* Projects Grid/List */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          {totalProjects === 0 ? (
+          {totalPortfolioCount === 0 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-md">
                 <FolderKanban className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-30" />
@@ -543,122 +671,229 @@ export function ProjectDashboard() {
                 </div>
               </div>
             </div>
+          ) : totalProjects === 0 ? (
+            <div className="text-center py-12">
+              <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
+              <h3 className="text-lg font-semibold mb-2">No projects match your filters</h3>
+              <p className="text-sm text-muted-foreground">Try adjusting your search or filter criteria</p>
+            </div>
           ) : (
             <div className="space-y-6">
-              {/* Funded Projects Section */}
-              {(fundingFilter === "all" || fundingFilter === "funded") && fundedProjects.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <DollarSign className="h-5 w-5 text-blue-600" />
-                    <h2 className="text-lg font-semibold">Funded Projects</h2>
-                    <Badge variant="secondary">{fundedProjects.length}</Badge>
-                  </div>
-                  <div
-                    className={
-                      viewMode === "grid"
-                        ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-                        : "space-y-4"
-                    }
-                  >
-                    {fundedProjects.map(project => {
-                      const budgetSummary = budgetSummaries.get(project.id)
-                      const health = projectHealths.get(project.id)
-                      return (
-                        <ProjectCard
-                          key={project.id}
-                          project={project}
-                          workpackages={allWorkpackages}
-                          deliverables={deliverables}
-                          people={allProfiles}
-                          budgetSummary={budgetSummary}
-                          health={health}
-                          onViewProject={setSelectedProjectForDetail}
-                          onCreateWorkpackage={async (projectId) => {
-                            const workpackageId = await createWorkpackage({
-                              name: "New Work Package",
-                              projectId,
-                              start: new Date(),
-                              end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                              status: "planning",
-                              progress: 0,
-                              tasks: [],
-                              deliverableIds: [],
-                              isExpanded: true,
-                              importance: "medium",
-                              createdBy: user?.uid || "",
-                            } as any)
+              {projectView === "list" && (
+                <div className="space-y-6">
+                  {(fundingFilter === "all" || fundingFilter === "funded") && fundedProjects.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <DollarSign className="h-5 w-5 text-blue-600" />
+                        <h2 className="text-lg font-semibold">Funded Projects</h2>
+                        <Badge variant="secondary">{fundedProjects.length}</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {fundedProjects.map(project => {
+                          const budgetSummary = budgetSummaries.get(project.id)
+                          const health = projectHealths.get(project.id)
+                          return (
+                            <ProjectCard
+                              key={project.id}
+                              project={project}
+                              workpackages={allWorkpackages}
+                              deliverables={deliverables}
+                              people={allProfiles}
+                              budgetSummary={budgetSummary}
+                              health={health}
+                              onViewProject={setSelectedProjectForDetail}
+                              onCreateWorkpackage={async (projectId) => {
+                                const workpackageId = await createWorkpackage({
+                                  name: "New Work Package",
+                                  projectId,
+                                  start: new Date(),
+                                  end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                                  status: "planning",
+                                  progress: 0,
+                                  tasks: [],
+                                  deliverableIds: [],
+                                  isExpanded: true,
+                                  importance: "medium",
+                                  createdBy: user?.uid || "",
+                                } as any)
 
-                            if (workpackageId) {
-                              await handleUpdateMasterProject(projectId, {
-                                workpackageIds: [...(project.workpackageIds || []), workpackageId],
-                              })
-                            }
-                          }}
-                          onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
-                          onDeleteWorkpackage={async (workpackageId) => {
-                            await handleUpdateMasterProject(project.id, {
-                              workpackageIds: (project.workpackageIds || []).filter(
-                                id => id !== workpackageId
-                              ),
-                            })
-                          }}
-                          onCreateDeliverable={(workpackageId) => {
-                            setDeliverableParentId(workpackageId)
-                            setSelectedDeliverable(null)
-                            setDeliverableMode("create")
-                            setShowDeliverableDialog(true)
-                          }}
-                          onEditDeliverable={(deliverable) => {
-                            try {
-                              if (deliverable && deliverable.id) {
-                                setSelectedDeliverable(deliverable)
-                                setDeliverableMode("edit")
+                                if (workpackageId) {
+                                  await handleUpdateMasterProject(projectId, {
+                                    workpackageIds: [...(project.workpackageIds || []), workpackageId],
+                                  })
+                                }
+                              }}
+                              onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
+                              onDeleteWorkpackage={async (workpackageId) => {
+                                await handleUpdateMasterProject(project.id, {
+                                  workpackageIds: (project.workpackageIds || []).filter(
+                                    id => id !== workpackageId
+                                  ),
+                                })
+                              }}
+                              onCreateDeliverable={(workpackageId) => {
+                                setDeliverableParentId(workpackageId)
+                                setSelectedDeliverable(null)
+                                setDeliverableMode("create")
                                 setShowDeliverableDialog(true)
-                              }
-                            } catch (error) {
-                              logger.error("Error editing deliverable", error)
-                            }
-                          }}
-                          onDeleteDeliverable={handleDeleteDeliverable}
-                          onDeliverableClick={(deliverable) => {
-                            try {
-                              if (deliverable && deliverable.id) {
-                                setSelectedDeliverable(deliverable)
-                                setDeliverableMode("view")
+                              }}
+                              onEditDeliverable={(deliverable) => {
+                                try {
+                                  if (deliverable && deliverable.id) {
+                                    setSelectedDeliverable(deliverable)
+                                    setDeliverableMode("edit")
+                                    setShowDeliverableDialog(true)
+                                  }
+                                } catch (error) {
+                                  logger.error("Error editing deliverable", error)
+                                }
+                              }}
+                              onDeleteDeliverable={handleDeleteDeliverable}
+                              onDeliverableClick={(deliverable) => {
+                                try {
+                                  if (deliverable && deliverable.id) {
+                                    setSelectedDeliverable(deliverable)
+                                    setDeliverableMode("view")
+                                    setShowDeliverableDialog(true)
+                                  }
+                                } catch (error) {
+                                  logger.error("Error opening deliverable dialog", error)
+                                }
+                              }}
+                              onCreateTask={(deliverableId) => {
+                                const deliverable = deliverables.find(d => d.id === deliverableId)
+                                if (deliverable) {
+                                  setTaskDeliverableId(deliverableId)
+                                  setTaskWorkpackageId(deliverable.workpackageId)
+                                  setShowTaskDialog(true)
+                                }
+                              }}
+                              onEditTask={(task) => {
+                                try {
+                                  if (task && task.id) {
+                                    setSelectedTask(task)
+                                    setShowTaskEditDialog(true)
+                                  }
+                                } catch (error) {
+                                  logger.error("Error opening task edit dialog", error)
+                                }
+                              }}
+                              onDeleteTask={(taskId) => {
+                                const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
+                                if (workpackage) {
+                                  handleDeleteTask(workpackage.id, taskId)
+                                }
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {(fundingFilter === "all" || fundingFilter === "unfunded") && unfundedProjects.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <FolderKanban className="h-5 w-5 text-gray-600" />
+                        <h2 className="text-lg font-semibold">Internal/Unfunded Projects</h2>
+                        <Badge variant="secondary">{unfundedProjects.length}</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {unfundedProjects.map(project => {
+                          const health = projectHealths.get(project.id)
+                          return (
+                            <ProjectCard
+                              key={project.id}
+                              project={project}
+                              workpackages={allWorkpackages}
+                              deliverables={deliverables}
+                              people={allProfiles}
+                              health={health}
+                              onViewProject={setSelectedProjectForDetail}
+                              onCreateWorkpackage={async (projectId) => {
+                                const workpackageId = await createWorkpackage({
+                                  name: "New Work Package",
+                                  projectId,
+                                  start: new Date(),
+                                  end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                                  status: "planning",
+                                  progress: 0,
+                                  tasks: [],
+                                  deliverableIds: [],
+                                  isExpanded: true,
+                                  importance: "medium",
+                                  createdBy: user?.uid || "",
+                                } as any)
+
+                                if (workpackageId) {
+                                  await handleUpdateMasterProject(projectId, {
+                                    workpackageIds: [...(project.workpackageIds || []), workpackageId],
+                                  })
+                                }
+                              }}
+                              onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
+                              onDeleteWorkpackage={async (workpackageId) => {
+                                await handleUpdateMasterProject(project.id, {
+                                  workpackageIds: (project.workpackageIds || []).filter(
+                                    id => id !== workpackageId
+                                  ),
+                                })
+                              }}
+                              onCreateDeliverable={(workpackageId) => {
+                                setDeliverableParentId(workpackageId)
+                                setSelectedDeliverable(null)
+                                setDeliverableMode("create")
                                 setShowDeliverableDialog(true)
-                              }
-                            } catch (error) {
-                              logger.error("Error opening deliverable dialog", error)
-                            }
-                          }}
-                          onCreateTask={(deliverableId) => {
-                            const deliverable = deliverables.find(d => d.id === deliverableId)
-                            if (deliverable) {
-                              setTaskDeliverableId(deliverableId)
-                              setTaskWorkpackageId(deliverable.workpackageId)
-                              setShowTaskDialog(true)
-                            }
-                          }}
-                          onEditTask={(task) => {
-                            try {
-                              if (task && task.id) {
-                                setSelectedTask(task)
-                                setShowTaskEditDialog(true)
-                              }
-                            } catch (error) {
-                              logger.error("Error opening task edit dialog", error)
-                            }
-                          }}
-                          onDeleteTask={(taskId) => {
-                            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
-                            if (workpackage) {
-                              handleDeleteTask(workpackage.id, taskId)
-                            }
-                          }}
-                        />
-                      )
-                    })}
-                  </div>
+                              }}
+                              onEditDeliverable={(deliverable) => {
+                                try {
+                                  if (deliverable && deliverable.id) {
+                                    setSelectedDeliverable(deliverable)
+                                    setDeliverableMode("edit")
+                                    setShowDeliverableDialog(true)
+                                  }
+                                } catch (error) {
+                                  logger.error("Error editing deliverable", error)
+                                }
+                              }}
+                              onDeleteDeliverable={handleDeleteDeliverable}
+                              onDeliverableClick={(deliverable) => {
+                                try {
+                                  if (deliverable && deliverable.id) {
+                                    setSelectedDeliverable(deliverable)
+                                    setDeliverableMode("view")
+                                    setShowDeliverableDialog(true)
+                                  }
+                                } catch (error) {
+                                  logger.error("Error opening deliverable dialog", error)
+                                }
+                              }}
+                              onCreateTask={(deliverableId) => {
+                                const deliverable = deliverables.find(d => d.id === deliverableId)
+                                if (deliverable) {
+                                  setTaskDeliverableId(deliverableId)
+                                  setTaskWorkpackageId(deliverable.workpackageId)
+                                  setShowTaskDialog(true)
+                                }
+                              }}
+                              onEditTask={(task) => {
+                                const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === task.id))
+                                if (workpackage) {
+                                  logger.info("Edit task", { taskId: task.id })
+                                }
+                              }}
+                              onDeleteTask={(taskId) => {
+                                const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
+                                if (workpackage) {
+                                  handleDeleteTask(workpackage.id, taskId)
+                                }
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -777,14 +1012,42 @@ export function ProjectDashboard() {
                 </div>
               )}
 
-              {/* No results message */}
-              {totalProjects > 0 && fundedProjects.length === 0 && unfundedProjects.length === 0 && (
-                <div className="text-center py-12">
-                  <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
-                  <h3 className="text-lg font-semibold mb-2">No projects match your filters</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Try adjusting your search or filter criteria
-                  </p>
+              {projectView === "calendar" && (
+                <div className="space-y-3">
+                  {calendarItems.map(item => {
+                    const project = projectLookup.get(item.projectId)
+                    const health = project ? projectHealths.get(project.id) : undefined
+                    const budgetSummary = project ? budgetSummaries.get(project.id) : undefined
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-4 border rounded-lg p-3 bg-white shadow-sm"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold">{item.label}</p>
+                          <p className="text-xs text-muted-foreground">{item.description}</p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {project && renderStatusBadge(project.status)}
+                            {renderHealthBadge(health)}
+                            {renderBudgetChip(budgetSummary)}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium">{formatDate(item.date)}</p>
+                          {project && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-1"
+                              onClick={() => setSelectedProjectForDetail(project)}
+                            >
+                              View project
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
