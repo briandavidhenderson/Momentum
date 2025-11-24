@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment } from "@/lib/types"
+import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment, Task, ImportanceLevel } from "@/lib/types"
 import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 import { logger } from "@/lib/logger"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -35,6 +36,10 @@ import {
   Plus,
   Eye,
   Edit2,
+  Sparkles,
+  CalendarClock,
+  Flame,
+  X,
   ShoppingCart,
   Download,
   Upload,
@@ -98,6 +103,9 @@ export function ProjectDetailPage({
   const [deliverableDialogMode, setDeliverableDialogMode] = useState<"create" | "edit" | "view">("view")
   const [selectedDeliverableForPanel, setSelectedDeliverableForPanel] = useState<Deliverable | null>(null)
   const [selectedWorkpackageForDeliverable, setSelectedWorkpackageForDeliverable] = useState<string | null>(null)
+  const [newTaskName, setNewTaskName] = useState("")
+  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null)
+  const [draggedOwnerId, setDraggedOwnerId] = useState<string | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [experiments, setExperiments] = useState<ELNExperiment[]>([])
@@ -401,6 +409,89 @@ export function ProjectDetailPage({
     return `${person.firstName?.[0] || ""}${person.lastName?.[0] || ""}`.toUpperCase() || fallback
   }
 
+  const selectedWorkpackageTasks = useMemo(() => (
+    Array.isArray(selectedWorkpackage?.tasks) ? selectedWorkpackage?.tasks : []
+  ), [selectedWorkpackage])
+
+  const addTaskTemplates = [
+    "Draft experiment protocol",
+    "Schedule kickoff review",
+    "Validate latest dataset",
+  ]
+
+  const handleInlineTaskUpdate = async (taskId: string, updates: Partial<Task>) => {
+    if (!selectedWorkpackage || !onUpdateWorkpackage) return
+
+    const updatedTasks = selectedWorkpackageTasks.map(task =>
+      task.id === taskId ? { ...task, ...updates } : task
+    )
+
+    await onUpdateWorkpackage(selectedWorkpackage.id, { tasks: updatedTasks })
+  }
+
+  const handleAddInlineTask = async (nameOverride?: string) => {
+    const taskName = (nameOverride ?? newTaskName).trim()
+    if (!selectedWorkpackage || !onUpdateWorkpackage || !taskName) return
+
+    const newTask: Task = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+      name: taskName,
+      start: new Date(),
+      end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      progress: 0,
+      primaryOwner: undefined,
+      helpers: [],
+      workpackageId: selectedWorkpackage.id,
+      importance: "medium",
+      notes: "",
+      deliverables: selectedDeliverable ? [selectedDeliverable.id] : [],
+      status: "not-started",
+      subtasks: [],
+    }
+
+    await onUpdateWorkpackage(selectedWorkpackage.id, {
+      tasks: [newTask, ...selectedWorkpackageTasks],
+    })
+    setNewTaskName("")
+  }
+
+  const handleTaskInputChange = (value: string) => {
+    if (value.startsWith("/task")) {
+      const cleaned = value.replace("/task", "").trimStart()
+      setNewTaskName(cleaned)
+      return
+    }
+    setNewTaskName(value)
+  }
+
+  const cyclePriority = (current?: ImportanceLevel) => {
+    const order: ImportanceLevel[] = ["low", "medium", "high", "critical"]
+    const currentIndex = order.indexOf(current || "medium")
+    const nextIndex = (currentIndex + 1) % order.length
+    return order[nextIndex]
+  }
+
+  const toggleDueDate = (task: Task) => {
+    const hasDueDate = !!task.end
+    if (!hasDueDate) return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    const cleared = new Date(task.end)
+    if (!isNaN(cleared.getTime())) return undefined
+    return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+  }
+
+  const handleAssigneeDrop = async (task: Task, ownerId?: string | null) => {
+    if (!selectedWorkpackage || !onUpdateWorkpackage) return
+    const nextOwner = ownerId === task.primaryOwner ? undefined : ownerId
+    await handleInlineTaskUpdate(task.id, { primaryOwner: nextOwner || undefined })
+  }
+
+  const formatDueDateLabel = (task: Task) => {
+    if (!task.end) return "Set due date"
+    const endDate = new Date(task.end)
+    if (isNaN(endDate.getTime())) return "Set due date"
+    return endDate.toLocaleDateString()
+  }
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
@@ -618,6 +709,71 @@ export function ProjectDetailPage({
                           <h4 className="font-semibold">To-do list</h4>
                         </div>
 
+                        <div className="flex flex-wrap items-center gap-2">
+                          {teamMembers.map((member) => (
+                            <button
+                              key={member.id}
+                              draggable
+                              onDragStart={(e) => {
+                                setDraggedOwnerId(member.id)
+                                e.dataTransfer.setData("ownerId", member.id)
+                              }}
+                              onDragEnd={() => setDraggedOwnerId(null)}
+                              className="flex items-center gap-2 px-2 py-1 rounded-full border text-xs hover:border-brand-500 hover:bg-brand-50 transition-colors"
+                              title={`Drag to assign ${member.firstName} ${member.lastName}`}
+                            >
+                              <Avatar className="h-7 w-7">
+                                <AvatarFallback className="text-[11px] bg-muted">{getInitials(member, "")}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-muted-foreground">{member.firstName}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Input
+                            placeholder="Add task"
+                            value={newTaskName}
+                            onChange={(e) => handleTaskInputChange(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                handleAddInlineTask()
+                              }
+                            }}
+                          />
+                          <Button size="sm" onClick={handleAddInlineTask} className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            Add task
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-9 w-9"
+                            onClick={() => {
+                              const template = addTaskTemplates[0]
+                              setNewTaskName(template)
+                            }}
+                            title="Use a starter template"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {addTaskTemplates.map(template => (
+                          <Button
+                            key={template}
+                            size="sm"
+                            variant="secondary"
+                            className="text-xs"
+                            onClick={() => handleAddInlineTask(template)}
+                          >
+                            {template}
+                          </Button>
+                        ))}
+                      </div>
+
                         {getTasksForSelectedDeliverable().length === 0 && (
                           <p className="text-sm text-muted-foreground">
                             No tasks captured yet. Add tasks to track progress on this deliverable.
@@ -629,10 +785,25 @@ export function ProjectDetailPage({
                             const meta = getTaskStatusMeta(task?.status)
                             const owner = getPersonById(task?.primaryOwner)
                             const progressValue = typeof task?.progress === "number" ? task.progress : 0
+                            const dueDateLabel = formatDueDateLabel(task)
+                            const isHovered = hoveredTaskId === task?.id
                             return (
                               <div
                                 key={task?.id || idx}
-                                className="flex items-center gap-3 rounded-md border px-3 py-2 bg-surface-2"
+                                className={`flex items-center gap-3 rounded-md border px-3 py-2 bg-surface-2 transition-all ${isHovered ? "ring-2 ring-brand-500 bg-brand-50" : ""}`}
+                                onDragOver={(e) => {
+                                  if (draggedOwnerId) {
+                                    e.preventDefault()
+                                  }
+                                  setHoveredTaskId(task?.id || null)
+                                }}
+                                onDragLeave={() => setHoveredTaskId(null)}
+                                onDrop={(e) => {
+                                  e.preventDefault()
+                                  const ownerId = e.dataTransfer.getData("ownerId") || draggedOwnerId
+                                  setHoveredTaskId(null)
+                                  handleAssigneeDrop(task, ownerId)
+                                }}
                               >
                                 <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">
                                   {(idx + 1).toString().padStart(2, "0")}
@@ -643,6 +814,24 @@ export function ProjectDetailPage({
                                     <Badge variant="outline" className={`text-[11px] ${meta.color}`}>
                                       {meta.label}
                                     </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() => handleInlineTaskUpdate(task.id, { importance: cyclePriority(task.importance as ImportanceLevel) })}
+                                    >
+                                      <Flame className="h-3 w-3 mr-1" />
+                                      {task?.importance || "medium"}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() => handleInlineTaskUpdate(task.id, { end: toggleDueDate(task) })}
+                                    >
+                                      <CalendarClock className="h-3 w-3 mr-1" />
+                                      {dueDateLabel}
+                                    </Button>
                                   </div>
                                   <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                                     <div
@@ -657,6 +846,15 @@ export function ProjectDetailPage({
                                       {getInitials(owner, "??")}
                                     </AvatarFallback>
                                   </Avatar>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    title="Unassign owner"
+                                    onClick={() => handleAssigneeDrop(task, null)}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
                                 </div>
                               </div>
                             )
