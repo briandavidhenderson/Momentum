@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Static export for Firebase Hosting deployment
-  output: 'export',
   images: {
     unoptimized: true,
   },

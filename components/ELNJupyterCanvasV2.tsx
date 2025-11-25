@@ -23,6 +23,9 @@ import {
   Link,
   Microscope,
   Package,
+  File as FileIcon,
+  Presentation,
+  Lightbulb,
 } from "lucide-react"
 import { useToast } from "@/components/ui/toast"
 import { extractItemStructure } from "@/lib/ai/router"
@@ -49,7 +52,9 @@ const CELL_TYPES: Array<{
     { type: "photo", label: "Image", icon: ImageIcon, accept: "image/*" },
     { type: "voice", label: "Audio", icon: Mic, accept: "audio/*" },
     { type: "data", label: "Data", icon: Database, accept: ".csv,.xlsx,.json,.txt" },
+    { type: "data", label: "Data", icon: Database, accept: ".csv,.xlsx,.json,.txt" },
     { type: "video", label: "Video", icon: Video, accept: "video/*" },
+    { type: "file", label: "File / PDF", icon: FileIcon, accept: "*" },
   ]
 
 export function ELNJupyterCanvasV2({
@@ -259,6 +264,18 @@ export function ELNJupyterCanvasV2({
                   {item.linkedResources.inventoryIds.length}
                 </Badge>
               )}
+              {item.linkedResources?.whiteboardIds && item.linkedResources.whiteboardIds.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  <Presentation className="h-3 w-3 mr-1" />
+                  {item.linkedResources.whiteboardIds.length}
+                </Badge>
+              )}
+              {item.linkedResources?.researchPinIds && item.linkedResources.researchPinIds.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  <Lightbulb className="h-3 w-3 mr-1" />
+                  {item.linkedResources.researchPinIds.length}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-1">
               {item.type === "note" && !isEditing && (
@@ -387,6 +404,21 @@ export function ELNJupyterCanvasV2({
                     {item.description}
                   </p>
                 )}
+              </div>
+            ) : item.type === "file" && item.fileUrl ? (
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-border">
+                <FileIcon className="h-8 w-8 text-slate-500" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{item.title || item.fileName}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {item.fileName} • {(item.fileSize ? (item.fileSize / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size')}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={item.fileUrl} target="_blank" rel="noopener noreferrer">
+                    Download / View
+                  </a>
+                </Button>
               </div>
             ) : (
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">

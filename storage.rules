@@ -57,10 +57,24 @@ service firebase.storage {
       allow write: if isAuthenticated();
     }
 
-    // ELN files - users can read/write their own
-    match /eln/{userId}/{allPaths=**} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    // Helper: get user's profileId and labId
+    function getUserProfileId() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.profileId;
+    }
+
+    function getUserLab() {
+      let profileId = getUserProfileId();
+      return profileId == null ? null : firestore.get(/databases/(default)/documents/personProfiles/$(profileId)).data.labId;
+    }
+
+    function isLabMember(labId) {
+      return getUserLab() != null && getUserLab() == labId;
+    }
+
+    // ELN files - allow lab members to read/write within their lab's folder
+    // Path: eln/{labId}/{experimentId}/{itemId}/...
+    match /eln/{labId}/{allPaths=**} {
+      allow read, write: if isAuthenticated() && (isAdmin() || isLabMember(labId));
     }
   }
 }
-

@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Microscope, Package, Presentation, Lightbulb, Search, Check } from "lucide-react"
+import { Microscope, Package, Presentation, Lightbulb, Search, Check, Layout, FileText } from "lucide-react"
 import { useAppContext } from "@/lib/AppContext"
+import { ResearchPin } from "@/lib/types"
+import { subscribeToResearchPins } from "@/lib/services/researchService"
 
 interface ResourceLinkingDialogProps {
     open: boolean
@@ -28,7 +30,7 @@ interface ResourceLinkingDialogProps {
 }
 
 export function ResourceLinkingDialog({ open, onClose, onLink, initialLinks }: ResourceLinkingDialogProps) {
-    const { equipment, inventory } = useAppContext()
+    const { equipment, inventory, whiteboards, currentUserProfile, currentUser } = useAppContext()
 
     const [selectedEquipment, setSelectedEquipment] = useState<string[]>(initialLinks?.equipmentIds || [])
     const [selectedInventory, setSelectedInventory] = useState<string[]>(initialLinks?.inventoryIds || [])
@@ -37,6 +39,20 @@ export function ResourceLinkingDialog({ open, onClose, onLink, initialLinks }: R
 
     const [equipmentSearch, setEquipmentSearch] = useState("")
     const [inventorySearch, setInventorySearch] = useState("")
+    const [whiteboardSearch, setWhiteboardSearch] = useState("")
+    const [pinSearch, setPinSearch] = useState("")
+
+    const [pins, setPins] = useState<ResearchPin[]>([])
+
+    useEffect(() => {
+        if (!currentUserProfile?.labId || !currentUser?.uid) return
+
+        const unsubscribe = subscribeToResearchPins(
+            { labId: currentUserProfile.labId, userId: currentUser.uid },
+            (fetchedPins) => setPins(fetchedPins)
+        )
+        return () => unsubscribe()
+    }, [currentUserProfile?.labId, currentUser?.uid])
 
     useEffect(() => {
         if (open) {
@@ -53,6 +69,14 @@ export function ResourceLinkingDialog({ open, onClose, onLink, initialLinks }: R
 
     const toggleInventory = (id: string) => {
         setSelectedInventory(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    }
+
+    const toggleWhiteboard = (id: string) => {
+        setSelectedWhiteboards(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+    }
+
+    const togglePin = (id: string) => {
+        setSelectedPins(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
     }
 
     const handleSave = () => {
@@ -73,6 +97,15 @@ export function ResourceLinkingDialog({ open, onClose, onLink, initialLinks }: R
     const filteredInventory = inventory?.filter(i =>
         i.productName.toLowerCase().includes(inventorySearch.toLowerCase()) ||
         i.catNum?.toLowerCase().includes(inventorySearch.toLowerCase())
+    ) || []
+
+    const filteredWhiteboards = whiteboards?.filter(w =>
+        w.id && w.name.toLowerCase().includes(whiteboardSearch.toLowerCase())
+    ) || []
+
+    const filteredPins = pins?.filter(p =>
+    (p.title?.toLowerCase().includes(pinSearch.toLowerCase()) ||
+        p.content?.toLowerCase().includes(pinSearch.toLowerCase()))
     ) || []
 
     const totalSelected = selectedEquipment.length + selectedInventory.length +
@@ -193,19 +226,85 @@ export function ResourceLinkingDialog({ open, onClose, onLink, initialLinks }: R
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="whiteboards" className="flex-1 overflow-y-auto mt-4">
-                        <div className="text-center py-12 text-muted-foreground">
-                            <Presentation className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                            <p>Whiteboard linking coming soon</p>
-                            <p className="text-sm mt-1">Link collaborative whiteboards to experiments</p>
+                    <TabsContent value="whiteboards" className="flex-1 overflow-y-auto mt-4 space-y-3">
+                        <div className="sticky top-0 bg-white pb-3 z-10">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search whiteboards..."
+                                    value={whiteboardSearch}
+                                    onChange={(e) => setWhiteboardSearch(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {filteredWhiteboards.map(wb => (
+                                <div
+                                    key={wb.id}
+                                    className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                                    onClick={() => toggleWhiteboard(wb.id!)}
+                                >
+                                    <Checkbox
+                                        checked={selectedWhiteboards.includes(wb.id!)}
+                                        onCheckedChange={() => toggleWhiteboard(wb.id!)}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium truncate">{wb.name}</p>
+                                        <p className="text-sm text-muted-foreground truncate">
+                                            {wb.shapes?.length || 0} items • Last updated {new Date(wb.updatedAt || wb.createdAt).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                    <Badge variant="secondary">
+                                        <Layout className="h-3 w-3 mr-1" />
+                                        Whiteboard
+                                    </Badge>
+                                </div>
+                            ))}
+                            {filteredWhiteboards.length === 0 && (
+                                <p className="text-center text-muted-foreground py-8">No whiteboards found</p>
+                            )}
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="topics" className="flex-1 overflow-y-auto mt-4">
-                        <div className="text-center py-12 text-muted-foreground">
-                            <Lightbulb className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                            <p>Research topic linking coming soon</p>
-                            <p className="text-sm mt-1">Tag experiments with research board topics</p>
+                    <TabsContent value="topics" className="flex-1 overflow-y-auto mt-4 space-y-3">
+                        <div className="sticky top-0 bg-white pb-3 z-10">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search research topics..."
+                                    value={pinSearch}
+                                    onChange={(e) => setPinSearch(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {filteredPins.map(pin => (
+                                <div
+                                    key={pin.id}
+                                    className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                                    onClick={() => togglePin(pin.id)}
+                                >
+                                    <Checkbox
+                                        checked={selectedPins.includes(pin.id)}
+                                        onCheckedChange={() => togglePin(pin.id)}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium truncate">{pin.title || "Untitled Pin"}</p>
+                                        <p className="text-sm text-muted-foreground truncate">
+                                            {pin.type} • {pin.author?.name || "Unknown Author"}
+                                        </p>
+                                    </div>
+                                    <Badge variant="secondary">
+                                        <Lightbulb className="h-3 w-3 mr-1" />
+                                        {pin.type}
+                                    </Badge>
+                                </div>
+                            ))}
+                            {filteredPins.length === 0 && (
+                                <p className="text-center text-muted-foreground py-8">No research topics found</p>
+                            )}
                         </div>
                     </TabsContent>
                 </Tabs>

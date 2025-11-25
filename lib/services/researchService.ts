@@ -90,22 +90,37 @@ export async function deleteResearchPin(pinId: string): Promise<void> {
 }
 
 export function subscribeToResearchPins(
-  { labId, userId }: SubscribeToResearchPinsParams,
+  { labId, userId, boardId }: SubscribeToResearchPinsParams & { boardId?: string },
   onPins: (pins: ResearchPin[]) => void,
 ): Unsubscribe {
   const db = getFirebaseDb()
   const pinsRef = collection(db, 'researchPins')
 
-  const pinsQuery = query(pinsRef, where('labId', '==', labId), orderBy('createdAt', 'desc'))
+  let pinsQuery;
+
+  if (boardId) {
+    // If boardId is provided, we filter by boardId.
+    // We might need an index for boardId + createdAt
+    pinsQuery = query(
+      pinsRef,
+      where('boardId', '==', boardId),
+      orderBy('createdAt', 'desc')
+    );
+  } else {
+    // Fallback to labId query for backward compatibility or "All Pins" view
+    pinsQuery = query(pinsRef, where('labId', '==', labId), orderBy('createdAt', 'desc'))
+  }
 
   return onSnapshot(pinsQuery, (snapshot) => {
     const pins = snapshot.docs
       .map(mapResearchPin)
       .filter((pin) => {
+        // If filtering by board, we assume board members have access.
+        // But we still check private pins just in case.
         if (pin.visibility === 'private') {
           return pin.author?.userId === userId
         }
-        return pin.visibility === 'lab' || pin.visibility === 'public'
+        return true; // Lab/Public pins are visible to board members
       })
 
     onPins(pins)

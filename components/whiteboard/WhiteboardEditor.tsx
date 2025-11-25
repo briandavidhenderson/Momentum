@@ -17,6 +17,8 @@ import { WhiteboardSidebar } from "./WhiteboardSidebar"
 import { ProtocolPropertiesPanel } from "./ProtocolPropertiesPanel"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useToast } from "@/components/ui/toast"
+import { useWhiteboardHistory } from "@/lib/hooks/useWhiteboardHistory"
+import { useWhiteboardHotkeys } from "@/lib/hooks/useWhiteboardHotkeys"
 import { PROTOCOL_SCHEMA_VERSION, ProtocolExport, UnitOperation } from "@/lib/protocol/types"
 import { getOperationDefinition } from "./protocolConfig"
 import {
@@ -100,6 +102,10 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
     const canvasRef = useRef<HTMLDivElement>(null)
     const svgRef = useRef<SVGSVGElement>(null)
     const textInputRef = useRef<HTMLTextAreaElement>(null)
+
+    // Clipboard & advanced movement state
+    const [clipboard, setClipboard] = useState<Shape[]>([])
+    const [isDuplicating, setIsDuplicating] = useState(false)
     const importInputRef = useRef<HTMLInputElement>(null)
 
     const isLineSelected = Array.from(selectedIds).some(id => {
@@ -243,6 +249,33 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
             let dx = rawCanvasPos.x - lastMousePos.x
             let dy = rawCanvasPos.y - lastMousePos.y
 
+            // Constrained movement (Shift+Drag)
+            if (e.shiftKey) {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    dy = 0 // Horizontal only
+                } else {
+                    dx = 0 // Vertical only
+                }
+            }
+
+            // Duplicate while dragging (Ctrl+Drag)
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+            const mod = isMac ? e.metaKey : e.ctrlKey
+            if (mod && !isDuplicating) {
+                setIsDuplicating(true)
+                const newSelection = new Set<string>()
+                setShapes(prev => {
+                    const clones = prev.filter(s => selectedIds.has(s.id)).map(shape => {
+                        const newId = generateId()
+                        newSelection.add(newId)
+                        return { ...shape, id: newId, groupId: undefined }
+                    })
+                    return [...prev, ...clones]
+                })
+                setSelectedIds(newSelection)
+                return
+            }
+
             if (snapToGrid && selectedIds.size > 0) {
                 const leader = shapes.find(s => s.id === Array.from(selectedIds)[0])
                 if (leader) {
@@ -323,6 +356,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         setDragStart(null)
         setLastMousePos(null)
         setResizeHandle(null)
+        setIsDuplicating(false) // Reset duplication flag
         if (tool !== "select" && tool !== "hand") setTool("select")
     }
 
@@ -405,42 +439,186 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         }
     }
 
-    // -- KEYBOARD --
+    // -- HOTKEY HANDLERS --
+    const { pushHistory, undo, redo, canUndo, canRedo } = useWhiteboardHistory()
+
+    // Push to history when shapes change
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (editingId) return
-
-            // Nudging
-            if (selectedIds.size > 0 && (e.key.startsWith("Arrow"))) {
-                e.preventDefault()
-                const delta = e.shiftKey ? 10 : 1
-                const dx = e.key === "ArrowLeft" ? -delta : e.key === "ArrowRight" ? delta : 0
-                const dy = e.key === "ArrowUp" ? -delta : e.key === "ArrowDown" ? delta : 0
-                setShapes(prev => prev.map(s => selectedIds.has(s.id) && !s.locked ? { ...s, x: s.x + dx, y: s.y + dy } : s))
-                return
-            }
-
-            if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.size > 0) {
-                setShapes(prev => prev.filter(s => !selectedIds.has(s.id)))
-                setSelectedIds(new Set())
-            }
-
-            // Shortcuts
-            if (e.metaKey || e.ctrlKey) {
-                if (e.key === 'g') {
-                    e.preventDefault()
-                    if (e.shiftKey) ungroupSelected()
-                    else groupSelected()
-                }
-                if (e.key === 'd') {
-                    e.preventDefault()
-                    duplicateSelected()
-                }
-            }
+        if (shapes.length > 0) {
+            pushHistory(shapes, selectedIds)
         }
-        window.addEventListener("keydown", handleKeyDown)
-        return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [selectedIds, editingId, duplicateSelected, groupSelected, ungroupSelected])
+    }, [shapes, selectedIds, pushHistory])
+
+    // Clipboard handlers
+    const handleCopy = useCallback(() => {
+        if (selectedIds.size === 0) return
+        const selected = shapes.filter(s => selectedIds.has(s.id))
+        setClipboard(JSON.parse(JSON.stringify(selected)))
+    }, [shapes, selectedIds])
+
+    const handleCut = useCallback(() => {
+        handleCopy()
+        setShapes(prev => prev.filter(s => !selectedIds.has(s.id)))
+        setSelectedIds(new Set())
+    }, [handleCopy, selectedIds])
+
+    const handlePaste = useCallback(() => {
+        if (clipboard.length === 0) return
+        const newSelection = new Set<string>()
+        setShapes(prev => {
+            const clones = clipboard.map(shape => {
+                const newId = generateId()
+                newSelection.add(newId)
+                return { ...shape, id: newId, x: shape.x + 20, y: shape.y + 20, groupId: undefined }
+            })
+            return [...prev, ...clones]
+        })
+        setSelectedIds(newSelection)
+    }, [clipboard])
+
+    const handleDelete = useCallback(() => {
+        if (selectedIds.size === 0) return
+        setShapes(prev => prev.filter(s => !selectedIds.has(s.id)))
+        setSelectedIds(new Set())
+    }, [selectedIds])
+
+    // Selection handlers
+    const handleSelectAll = useCallback(() => {
+        setSelectedIds(new Set(shapes.map(s => s.id)))
+    }, [shapes])
+
+    const handleClearSelection = useCallback(() => {
+        setSelectedIds(new Set())
+        setTool('select')
+    }, [])
+
+    // Nudge handler
+    const handleNudge = useCallback((dx: number, dy: number) => {
+        if (selectedIds.size === 0) return
+        setShapes(prev => prev.map(s =>
+            selectedIds.has(s.id) && !s.locked ? { ...s, x: s.x + dx, y: s.y + dy } : s
+        ))
+    }, [selectedIds])
+
+    // Undo/Redo handlers
+    const handleUndo = useCallback(() => {
+        const state = undo()
+        if (state) {
+            setShapes(state.shapes)
+            setSelectedIds(state.selectedIds)
+        }
+    }, [undo])
+
+    const handleRedo = useCallback(() => {
+        const state = redo()
+        if (state) {
+            setShapes(state.shapes)
+            setSelectedIds(state.selectedIds)
+        }
+    }, [redo])
+
+    // Layering handlers
+    const handleBringForward = useCallback(() => {
+        if (selectedIds.size === 0) return
+        setShapes(prev => {
+            const result = [...prev]
+            const indices = result.map((s, i) => selectedIds.has(s.id) ? i : -1).filter(i => i !== -1).sort((a, b) => b - a)
+            indices.forEach(i => {
+                if (i < result.length - 1) [result[i], result[i + 1]] = [result[i + 1], result[i]]
+            })
+            return result
+        })
+    }, [selectedIds])
+
+    const handleSendBackward = useCallback(() => {
+        if (selectedIds.size === 0) return
+        setShapes(prev => {
+            const result = [...prev]
+            const indices = result.map((s, i) => selectedIds.has(s.id) ? i : -1).filter(i => i !== -1).sort((a, b) => a - b)
+            indices.forEach(i => {
+                if (i > 0) [result[i], result[i - 1]] = [result[i - 1], result[i]]
+            })
+            return result
+        })
+    }, [selectedIds])
+
+    const handleBringToFront = useCallback(() => {
+        if (selectedIds.size === 0) return
+        setShapes(prev => {
+            const moving = prev.filter(s => selectedIds.has(s.id))
+            const others = prev.filter(s => !selectedIds.has(s.id))
+            return [...others, ...moving]
+        })
+    }, [selectedIds])
+
+    const handleSendToBack = useCallback(() => {
+        if (selectedIds.size === 0) return
+        setShapes(prev => {
+            const moving = prev.filter(s => selectedIds.has(s.id))
+            const others = prev.filter(s => !selectedIds.has(s.id))
+            return [...moving, ...others]
+        })
+    }, [selectedIds])
+
+    // Zoom handlers
+    const handleZoomIn = useCallback(() => setScale(prev => Math.min(prev * 1.2, 5)), [])
+    const handleZoomOut = useCallback(() => setScale(prev => Math.max(prev / 1.2, 0.1)), [])
+    const handleZoomReset = useCallback(() => { setScale(1); setPan({ x: 0, y: 0 }) }, [])
+    const handleZoomToFit = useCallback(() => {
+        if (shapes.length === 0 || !canvasRef.current) return
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        shapes.forEach(s => {
+            const x = s.width >= 0 ? s.x : s.x + s.width
+            const y = s.height >= 0 ? s.y : s.y + s.height
+            minX = Math.min(minX, x); minY = Math.min(minY, y)
+            maxX = Math.max(maxX, x + Math.abs(s.width)); maxY = Math.max(maxY, y + Math.abs(s.height))
+        })
+        const rect = canvasRef.current.getBoundingClientRect()
+        const padding = 50
+        const scaleX = (rect.width - padding * 2) / (maxX - minX)
+        const scaleY = (rect.height - padding * 2) / (maxY - minY)
+        const newScale = Math.min(scaleX, scaleY, 1)
+        setScale(newScale)
+        setPan({ x: (rect.width - (maxX - minX) * newScale) / 2 - minX * newScale, y: (rect.height - (maxY - minY) * newScale) / 2 - minY * newScale })
+    }, [shapes])
+
+    // Tool switching
+    const handleSwitchTool = useCallback((newTool: ToolType) => setTool(newTool), [])
+
+    // Integrate hotkeys
+    useWhiteboardHotkeys({
+        onSelectAll: handleSelectAll,
+        onClearSelection: handleClearSelection,
+        onCopy: handleCopy,
+        onCut: handleCut,
+        onPaste: handlePaste,
+        onDuplicate: duplicateSelected,
+        onDelete: handleDelete,
+        onUndo: handleUndo,
+        onRedo: handleRedo,
+        onSwitchTool: handleSwitchTool,
+        onGroup: groupSelected,
+        onUngroup: ungroupSelected,
+        onLock: toggleLock,
+        onBringForward: handleBringForward,
+        onSendBackward: handleSendBackward,
+        onBringToFront: handleBringToFront,
+        onSendToBack: handleSendToBack,
+        onZoomIn: handleZoomIn,
+        onZoomOut: handleZoomOut,
+        onZoomToFit: handleZoomToFit,
+        onZoomReset: handleZoomReset,
+        onNudge: handleNudge,
+    }, {
+        enabled: true,
+        isTextEditing: !!editingId
+    })
+
+    // Debug: confirm hotkeys are wired
+    useEffect(() => {
+        // Logs once per mount or when text-editing state flips
+        console.log("Whiteboard hotkeys active", { enabled: true, isTextEditing: !!editingId })
+    }, [editingId])
 
     // -- ASSET DRAG --
     const handleDragStart = (e: React.DragEvent, payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol', id: string, name?: string, operationType?: string }) => {

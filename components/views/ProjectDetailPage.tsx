@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment, Task, ImportanceLevel } from "@/lib/types"
 import { getFirebaseDb } from "@/lib/firebase"
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore"
 import { logger } from "@/lib/logger"
+import { uploadFile, deleteFile } from "@/lib/storage"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,7 +17,6 @@ import { DeliverableDetailsPanel } from "@/components/projects/DeliverableDetail
 import { CommentsSection } from "@/components/CommentsSection"
 import { ProjectExportDialog } from "@/components/ProjectExportDialog"
 import { ProjectImportDialog } from "@/components/projects/ProjectImportDialog"
-import { ProjectResources } from "@/components/ProjectResources"
 import {
   ArrowLeft,
   Calendar,
@@ -28,6 +28,7 @@ import {
   Plus,
   ShoppingCart,
   Download,
+  Upload,
   FlaskConical,
   ListTodo,
   ChevronDown,
@@ -40,6 +41,20 @@ import {
 import { calculateProjectHealth, getHealthStatusColor, ProjectHealth } from "@/lib/utils/projectHealth"
 import { formatCurrency, getBudgetStatusColor, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
 import { useAppContext } from "@/lib/AppContext"
+
+interface ProjectFile {
+  id: string
+  projectId: string
+  labId?: string
+  name: string
+  url: string
+  storagePath: string
+  size: number
+  type: string
+  uploadedBy: string
+  uploadedByName?: string
+  uploadedAt: Date
+}
 
 interface ProjectDetailPageProps {
   project: MasterProject
@@ -118,6 +133,11 @@ export function ProjectDetailPage({
     activity: false,
   })
   const [newDeliverableNames, setNewDeliverableNames] = useState<Record<string, string>>({})
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([])
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [fileUploadError, setFileUploadError] = useState<string | null>(null)
+  const [equipmentItems, setEquipmentItems] = useState<any[]>([])
+  const [inventoryItems, setInventoryItems] = useState<any[]>([])
 
   const toggleDrawer = (drawer: keyof typeof drawerVisibility) => {
     setDrawerVisibility((current) => ({
@@ -175,7 +195,7 @@ export function ProjectDetailPage({
     }
 
     fetchProjectOrders()
-  }, [project.id, canAccessFunding, currentUser?.uid])
+  }, [project.id, canAccessFunding, currentUser?.uid, currentUser])
 
   // Fetch project experiments
   useEffect(() => {
@@ -208,7 +228,65 @@ export function ProjectDetailPage({
     }
 
     fetchProjectExperiments()
-  }, [project.id, currentUser?.uid])
+  }, [project.id, currentUser?.uid, currentUser])
+
+  // Fetch equipment and inventory for the project's lab
+  useEffect(() => {
+    const loadLabResources = async () => {
+      if (!project.labId) {
+        setEquipmentItems([])
+        setInventoryItems([])
+        return
+      }
+      const db = getFirebaseDb()
+      try {
+        const equipmentSnap = await getDocs(
+          query(collection(db, "equipment"), where("labId", "==", project.labId))
+        )
+        const inventorySnap = await getDocs(
+          query(collection(db, "inventory"), where("labId", "==", project.labId))
+        )
+        setEquipmentItems(equipmentSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+        setInventoryItems(inventorySnap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+      } catch (error) {
+        logger.error("Error loading lab resources", error)
+      }
+    }
+    loadLabResources()
+  }, [project.labId])
+
+  // Fetch project files stored in Storage
+  useEffect(() => {
+    const loadFiles = async () => {
+      const db = getFirebaseDb()
+      try {
+        const filesSnap = await getDocs(
+          query(collection(db, "projectFiles"), where("projectId", "==", project.id), orderBy("uploadedAt", "desc"))
+        )
+        const files = filesSnap.docs.map((docSnapshot) => {
+          const data = docSnapshot.data() as any
+          return {
+            id: docSnapshot.id,
+            projectId: data.projectId,
+            labId: data.labId,
+            name: data.name,
+            url: data.url,
+            storagePath: data.storagePath,
+            size: data.size,
+            type: data.type,
+            uploadedBy: data.uploadedBy,
+            uploadedByName: data.uploadedByName,
+            uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(data.uploadedAt || Date.now()),
+          } as ProjectFile
+        })
+        setProjectFiles(files)
+      } catch (error) {
+        logger.error("Error loading project files", error)
+      }
+    }
+
+    loadFiles()
+  }, [project.id])
 
   // Calculate project statistics
   const stats = useMemo(() => {
@@ -254,6 +332,87 @@ export function ProjectDetailPage({
       totalCommitted,
     }
   }, [orders])
+
+  const deliverableStats = useMemo(() => {
+    const statusBuckets = deliverables.reduce<Record<string, number>>((acc, d) => {
+      const status = d.status || "not-started"
+      acc[status] = (acc[status] || 0) + 1
+      return acc
+    }, {})
+
+    return {
+      total: deliverables.length,
+      statusBuckets,
+      completed: statusBuckets["completed"] || 0,
+      inProgress: (statusBuckets["in-progress"] || 0) + (statusBuckets["working"] || 0),
+      notStarted: statusBuckets["not-started"] || 0,
+    }
+  }, [deliverables])
+
+  const peopleActive = useMemo(() => {
+    const ids = new Set<string>()
+    workpackages.forEach(wp => {
+      wp.tasks?.forEach(task => {
+        if (task.primaryOwner) ids.add(task.primaryOwner)
+        task.helpers?.forEach((h: string) => h && ids.add(h))
+      })
+    })
+    deliverables.forEach(d => d.ownerId && ids.add(d.ownerId))
+    return teamMembers.filter(p => ids.has(p.id))
+  }, [workpackages, deliverables, teamMembers])
+
+  const fundingByFunder = useMemo(() => {
+    const map = new Map<string, { funderName: string; committed: number; spent: number }>()
+    orders.forEach(order => {
+      const funderId = order.funderId || "unknown"
+      const entry = map.get(funderId) || { funderName: order.funderName || "Unknown funder", committed: 0, spent: 0 }
+      if (order.status === "received") {
+        entry.spent += order.priceExVAT || 0
+      } else {
+        entry.committed += order.priceExVAT || 0
+      }
+      map.set(funderId, entry)
+    })
+    return Array.from(map.values())
+  }, [orders])
+
+  const activityFeed = useMemo(() => {
+    const events: Array<{ label: string; meta?: string; timestamp: Date; type: string }> = []
+
+    orders.slice(0, 20).forEach(order => {
+      events.push({
+        type: "order",
+        label: `Order ${order.status || "updated"}: ${order.productName}`,
+        meta: order.supplier,
+        timestamp: order.updatedAt ? new Date(order.updatedAt as any) : new Date(order.createdDate || Date.now()),
+      })
+    })
+
+    deliverables.slice(0, 30).forEach(d => {
+      events.push({
+        type: "deliverable",
+        label: `Deliverable ${d.status || "updated"}: ${d.name}`,
+        meta: teamMembers.find(p => p.id === d.ownerId)?.firstName || "Owner pending",
+        timestamp: d.updatedAt ? new Date(d.updatedAt as any) : new Date(d.startDate || Date.now()),
+      })
+    })
+
+    workpackages.forEach(wp => {
+      wp.tasks?.slice(0, 10).forEach(task => {
+        events.push({
+          type: "task",
+          label: `Task ${task.status || "updated"}: ${task.name}`,
+          meta: teamMembers.find(p => p.id === task.primaryOwner)?.firstName || "Unassigned",
+          timestamp: task.updatedAt ? new Date(task.updatedAt as any) : new Date(task.start || Date.now()),
+        })
+      })
+    })
+
+    return events
+      .filter(e => !Number.isNaN(e.timestamp.getTime()))
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, 25)
+  }, [orders, deliverables, workpackages, teamMembers])
 
   // Default selections for the execution view
   useEffect(() => {
@@ -533,6 +692,89 @@ export function ProjectDetailPage({
     setNewTaskName("")
   }
 
+  const updateTaskStatus = (taskId: string, status: string) => {
+    if (!selectedWorkpackage || !onUpdateWorkpackage) return
+    const nextTasks = (selectedWorkpackage.tasks || []).map(task =>
+      task.id === taskId
+        ? {
+            ...task,
+            status,
+            progress: status === "done" || status === "completed" ? 100 : task.progress || 0,
+            updatedAt: new Date(),
+          }
+        : task
+    )
+    onUpdateWorkpackage(selectedWorkpackage.id, { tasks: nextTasks })
+  }
+
+  const handleFileUpload = async (file?: File | null) => {
+    if (!file || !currentUser) return
+    setUploadingFile(true)
+    setFileUploadError(null)
+    try {
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_")
+      const path = `projects/${project.id}/${Date.now()}_${sanitizedName}`
+      const uploadResult = await uploadFile(file, path)
+
+      const db = getFirebaseDb()
+      await addDoc(collection(db, "projectFiles"), {
+        projectId: project.id,
+        labId: project.labId,
+        name: file.name,
+        url: uploadResult.url,
+        storagePath: uploadResult.path,
+        size: uploadResult.size,
+        type: uploadResult.type,
+        uploadedBy: currentUser.uid,
+        uploadedByName: currentUserProfile ? `${currentUserProfile.firstName} ${currentUserProfile.lastName}` : undefined,
+        uploadedAt: serverTimestamp(),
+      })
+
+      setProjectFiles((prev) => [
+        {
+          id: `${Date.now()}`,
+          projectId: project.id,
+          labId: project.labId,
+          name: file.name,
+          url: uploadResult.url,
+          storagePath: uploadResult.path,
+          size: uploadResult.size,
+          type: uploadResult.type,
+          uploadedBy: currentUser.uid,
+          uploadedByName: currentUserProfile
+            ? `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
+            : undefined,
+          uploadedAt: new Date(),
+        },
+        ...prev,
+      ])
+    } catch (error) {
+      logger.error("Failed to upload file", error)
+      setFileUploadError("Upload failed. Please try again.")
+    } finally {
+      setUploadingFile(false)
+    }
+  }
+
+  const handleDeleteProjectFile = async (file: ProjectFile) => {
+    try {
+      await deleteFile(file.storagePath)
+      const db = getFirebaseDb()
+      await deleteDoc(doc(db, "projectFiles", file.id))
+      setProjectFiles((prev) => prev.filter((f) => f.id !== file.id))
+    } catch (error) {
+      logger.error("Failed to delete file", error)
+      alert("Unable to delete file. Please try again.")
+    }
+  }
+
+  const formatBytes = (bytes: number) => {
+    if (!bytes) return "0 B"
+    const sizes = ["B", "KB", "MB", "GB"]
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1)
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`
+  }
+
   const getPersonById = (personId?: string | null) =>
     teamMembers.find(member => member.id === personId) || null
 
@@ -751,10 +993,91 @@ export function ProjectDetailPage({
               </CardContent>
             </Card>
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Deliverable Status</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Completed</span>
+                  <Badge variant="secondary">{deliverableStats.completed}</Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>In progress</span>
+                  <Badge variant="secondary">{deliverableStats.inProgress}</Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>Not started</span>
+                  <Badge variant="secondary">{deliverableStats.notStarted}</Badge>
+                </div>
+                <Progress
+                  value={
+                    deliverableStats.total > 0
+                      ? (deliverableStats.completed / deliverableStats.total) * 100
+                      : 0
+                  }
+                  className="h-2 mt-2"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {deliverableStats.total} deliverables total
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Burndown</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Tasks remaining</span>
+                  <Badge variant="outline">
+                    {Math.max(stats.totalTasks - stats.completedTasks, 0)}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span>Tasks completed</span>
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                    {stats.completedTasks}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Stay on track by closing {Math.ceil(Math.max(stats.totalTasks - stats.completedTasks, 0) / Math.max(daysRemaining, 1))}
+                  {" "}tasks/day to finish on time.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">People working</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {peopleActive.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active task owners yet.</p>
+                ) : (
+                  peopleActive.slice(0, 6).map((person) => (
+                    <div key={person.id} className="flex items-center justify-between text-sm">
+                      <span className="truncate">{person.firstName} {person.lastName}</span>
+                      <Badge variant="outline" className="text-[11px]">
+                        {person.position || "Team member"}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+                {peopleActive.length > 6 && (
+                  <p className="text-xs text-muted-foreground">
+                    +{peopleActive.length - 6} more contributors
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
-      {drawerVisibility.funding && (
+            {drawerVisibility.funding && (
         <div className="border-b border-border bg-surface-2 px-6 py-4 space-y-4">
           <Card>
             <CardHeader>
@@ -792,6 +1115,56 @@ export function ProjectDetailPage({
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>Funding accounts</CardTitle>
+              <CardDescription>Ledger view across accounts and funders</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {fundingAccounts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No linked funding accounts yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {fundingAccounts.map((account) => (
+                    <div
+                      key={account.id}
+                      className="flex items-center justify-between p-3 border rounded-lg bg-background"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{account.accountName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{account.funderName}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">
+                          {formatCurrency(account.totalBudget || 0, account.currency || project.currency)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(account.remainingBudget || 0, account.currency || project.currency)} remaining
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {fundingByFunder.length > 0 && (
+                <div className="pt-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">By funder</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {fundingByFunder.map((entry, idx) => (
+                      <div key={`${entry.funderName}-${idx}`} className="p-3 rounded-lg border bg-surface-2">
+                        <p className="text-sm font-medium truncate">{entry.funderName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(entry.spent, project.currency)} spent - {formatCurrency(entry.committed, project.currency)} committed
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {canAccessFunding && (
             <Card>
               <CardHeader>
@@ -800,8 +1173,8 @@ export function ProjectDetailPage({
                   Project Orders
                 </CardTitle>
                 <CardDescription>
-                  {orderStats.totalOrders} order{orderStats.totalOrders !== 1 ? "s" : ""} •{" "}
-                  {formatCurrency(orderStats.totalSpent, project.currency)} spent,{" "}
+                  {orderStats.totalOrders} order{orderStats.totalOrders !== 1 ? "s" : ""} -{" "}
+                  {formatCurrency(orderStats.totalSpent, project.currency)} spent -{" "}
                   {formatCurrency(orderStats.totalCommitted, project.currency)} committed
                 </CardDescription>
               </CardHeader>
@@ -846,13 +1219,13 @@ export function ProjectDetailPage({
                               <p className="text-xs text-muted-foreground">{order.catNum}</p>
                               {order.supplier && (
                                 <>
-                                  <span className="text-xs text-muted-foreground">•</span>
+                                  <span className="text-xs text-muted-foreground">-</span>
                                   <p className="text-xs text-muted-foreground">{order.supplier}</p>
                                 </>
                               )}
                               {order.allocationName && (
                                 <>
-                                  <span className="text-xs text-muted-foreground">•</span>
+                                  <span className="text-xs text-muted-foreground">-</span>
                                   <p className="text-xs text-muted-foreground truncate">
                                     {order.allocationName}
                                   </p>
@@ -898,30 +1271,173 @@ export function ProjectDetailPage({
           )}
         </div>
       )}
-
       {drawerVisibility.resources && (
-        <div className="border-b border-border bg-surface-2">
-          <ProjectResources
-            project={project}
-            orders={orders}
-            events={events}
-            experiments={experiments}
-            onViewOrder={(order) => onViewOrder?.(order.id)}
-            onViewExperiment={(experiment) => onViewExperiment?.(experiment.id)}
-            onViewEvent={(event) => onViewEvent?.(event.id)}
-          />
+        <div className="border-b border-border bg-surface-2 px-6 py-4 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>People</CardTitle>
+                <CardDescription>Team members contributing to this project</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {teamMembers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No people linked yet.</p>
+                ) : (
+                  teamMembers.map(member => (
+                    <div key={member.id} className="flex items-center justify-between p-2 rounded-md border bg-background">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{member.firstName} {member.lastName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{member.position || "Team member"}</p>
+                      </div>
+                      <Badge variant="outline" className="text-[11px]">{member.labName || "Lab"}</Badge>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Equipment & Inventory</CardTitle>
+                <CardDescription>Items available in the project lab</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Equipment</p>
+                  {equipmentItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No equipment linked.</p>
+                  ) : (
+                    equipmentItems.slice(0, 5).map(item => (
+                      <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-background">
+                        <span className="text-sm font-medium truncate">{item.name || item.equipmentName || "Equipment"}</span>
+                        <Badge variant="outline" className="text-[11px]">{item.status || "active"}</Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Inventory</p>
+                  {inventoryItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No inventory linked.</p>
+                  ) : (
+                    inventoryItems.slice(0, 5).map(item => (
+                      <div key={item.id} className="flex items-center justify-between p-2 rounded-md border bg-background">
+                        <span className="text-sm font-medium truncate">{item.name || "Inventory item"}</span>
+                        <Badge variant="secondary" className="text-[11px]">{item.category || "General"}</Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Events & Experiments</CardTitle>
+                <CardDescription>Upcoming milestones and ELN work</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Upcoming events</p>
+                  {events.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No events scheduled.</p>
+                  ) : (
+                    events.slice(0, 3).map(event => (
+                      <div
+                        key={event.id}
+                        className="flex items-center justify-between p-2 rounded-md border bg-background cursor-pointer"
+                        onClick={() => onViewEvent?.(event.id)}
+                      >
+                        <span className="text-sm font-medium truncate">{event.title}</span>
+                        <Badge variant="outline" className="text-[11px]">{new Date(event.start).toLocaleDateString()}</Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Experiments</p>
+                  {experiments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No linked experiments.</p>
+                  ) : (
+                    experiments.slice(0, 3).map(exp => (
+                      <div
+                        key={exp.id}
+                        className="flex items-center justify-between p-2 rounded-md border bg-background cursor-pointer"
+                        onClick={() => onViewExperiment?.(exp.id)}
+                      >
+                        <span className="text-sm font-medium truncate">{exp.title}</span>
+                        <Badge variant="outline" className="text-[11px]">{exp.status || "in-progress"}</Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
       {drawerVisibility.files && (
         <div className="border-b border-border bg-surface-2 px-6 py-4">
           <Card>
-            <CardContent className="pt-6 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">File management coming soon</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Upload and manage project documents, deliverables, and reports
-              </p>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Project files</CardTitle>
+                <CardDescription>Upload and manage documents linked to this project</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={uploadingFile}
+                  onClick={() => document.getElementById("project-file-input")?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {uploadingFile ? "Uploading..." : "Upload"}
+                </Button>
+                <input
+                  id="project-file-input"
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      handleFileUpload(file)
+                      e.target.value = ""
+                    }
+                  }}
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {fileUploadError && <p className="text-sm text-red-600">{fileUploadError}</p>}
+              {projectFiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No files uploaded yet.</p>
+              ) : (
+                projectFiles.map((file) => (
+                  <div key={file.id} className="flex items-center justify-between p-3 rounded-lg border bg-background">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">
+                        <a href={file.url} target="_blank" rel="noreferrer" className="hover:underline">
+                          {file.name}
+                        </a>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatBytes(file.size)} · {file.type || "file"} ·{" "}
+                        {file.uploadedAt.toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button asChild variant="ghost" size="sm">
+                        <a href={file.url} target="_blank" rel="noreferrer">Open</a>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteProjectFile(file)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -933,18 +1449,37 @@ export function ProjectDetailPage({
             <CardHeader>
               <CardTitle>Project Activity</CardTitle>
               <CardDescription>
-                Discuss progress, ask questions, and collaborate with your team
+                Orders, deliverables, tasks, and comments in one place
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <CommentsSection
-                entityType="project"
-                entityId={project.id}
-                teamMembers={teamMembers.map(m => ({
-                  id: m.id,
-                  name: `${m.firstName} ${m.lastName}`
-                }))}
-              />
+              <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
+                <div className="space-y-3">
+                  {activityFeed.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No recent activity yet.</p>
+                  ) : (
+                    activityFeed.map((event, idx) => (
+                      <div key={idx} className="p-3 rounded-lg border bg-background flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{event.label}</p>
+                          {event.meta && <p className="text-xs text-muted-foreground truncate">{event.meta}</p>}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {event.timestamp.toLocaleDateString()}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <CommentsSection
+                  entityType="project"
+                  entityId={project.id}
+                  teamMembers={teamMembers.map(m => ({
+                    id: m.id,
+                    name: `${m.firstName} ${m.lastName}`
+                  }))}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1163,6 +1698,21 @@ export function ProjectDetailPage({
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{owner ? `${owner.firstName} ${owner.lastName}` : "Unassigned"}</span>
                         {taskProblem && <span className="text-red-600 font-medium">At risk</span>}
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => task?.id && updateTaskStatus(task.id, "in-progress")}
+                        >
+                          Start
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => task?.id && updateTaskStatus(task.id, "done")}
+                        >
+                          Complete
+                        </Button>
                       </div>
                     </div>
                   )
