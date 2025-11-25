@@ -213,60 +213,8 @@ export function ResearchPinDialog({ open, onClose, editingPin, boardId }: Resear
         await updatePin(pinId, pinUpdateData);
       }
 
-      // Trigger AI analysis
-      try {
-        let analysis: string | undefined;
-        let summary: string | undefined;
-
-        if (type === 'figure' && (selectedFile || editingPin?.imageUrl)) {
-          // Analyze image
-          const imageFile = selectedFile || (editingPin?.imageUrl ? await fetch(editingPin.imageUrl).then(r => r.blob()).then(b => new File([b], 'image.jpg')) : null);
-          if (imageFile) {
-            analysis = await analyzeScientificContent({
-              content: imageFile,
-              contentType: 'image',
-              context: title || content,
-            });
-            summary = await generateSummary(analysis, 'text');
-          }
-        } else if (type === 'paper' && pdfText) {
-          // Analyze PDF
-          analysis = await analyzeScientificContent({
-            content: pdfText,
-            contentType: 'pdf',
-            context: title,
-          });
-          summary = await generateSummary(analysis, 'pdf');
-        } else if (type === 'video' && url) {
-          // Analyze YouTube video (metadata)
-          analysis = await analyzeScientificContent({
-            content: `YouTube video: ${url}\n${title ? `Title: ${title}` : ''}\n${content || ''}`,
-            contentType: 'text',
-            context: 'YouTube video analysis',
-          });
-          summary = await generateSummary(analysis, 'text');
-        } else if (content) {
-          // Analyze text content
-          analysis = await analyzeScientificContent({
-            content,
-            contentType: 'text',
-            context: title,
-          });
-          summary = await generateSummary(analysis, 'text');
-        }
-
-        // Update pin with AI analysis
-        if (analysis || summary) {
-          await updateResearchPin(pinId, {
-            aiAnalysis: analysis,
-            aiSummary: summary,
-            isThinking: false,
-          });
-        }
-      } catch (error) {
-        logger.error('Error during AI analysis', error);
-        // Don't fail the whole operation if AI analysis fails
-      }
+      // AI analysis removed from auto-trigger
+      // Users can manually trigger analysis via "Analyze with AI" button in ResearchBoardDetail
 
       setAnalyzing(false);
       setLoading(false);
