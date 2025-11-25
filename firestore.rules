@@ -260,6 +260,16 @@ service cloud.firestore {
       );
     }
 
+    function isProjectTeamMember(projectId) {
+      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      let profileId = getUserProfileId();
+      return profileId != null && project != null && project.data != null && (
+        (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
+        (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
+        (project.data.coPIIds != null && profileId in project.data.coPIIds)
+      );
+    }
+
     match /accounts/{accountId} {
       // Users can read accounts for projects they're a member of
       // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
@@ -573,11 +583,12 @@ service cloud.firestore {
     // ELN EXPERIMENTS
     // ============================================================================
     match /elnExperiments/{experimentId} {
-      // Users can only read experiments they created OR in their lab
+      // Users can read experiments they created, in their lab, or linked to their projects
       allow read: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isLabMember(resource.data.labId) ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId))
       );
 
       // Users can create their own experiments
@@ -593,6 +604,29 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // PROJECT FILES (Storage metadata)
+    // ============================================================================
+    match /projectFiles/{fileId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
+        (resource.data.labId != null && isLabMember(resource.data.labId))
+      );
+
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (request.resource.data.projectId != null && isProjectTeamMember(request.resource.data.projectId)) ||
+        (request.resource.data.labId != null && isLabMember(request.resource.data.labId))
+      );
+
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
+        (resource.data.labId != null && isLabMember(resource.data.labId))
       );
     }
 
@@ -838,6 +872,52 @@ service cloud.firestore {
         isAdmin() ||
         resource.data.createdBy == request.auth.uid
       );
+    }
+
+    // ============================================================================
+    // RESEARCH BOARDS
+    // ============================================================================
+    match /researchBoards/{boardId} {
+      // Users can read boards in their lab
+      allow read: if isAuthenticated() && (
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create boards
+      allow create: if isAuthenticated() && (
+        request.resource.data.creatorId == request.auth.uid &&
+        isLabMember(request.resource.data.labId)
+      );
+
+      // Members can update boards
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.members != null && resource.data.members.hasAny([request.auth.uid]))
+      );
+
+      // Only creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.creatorId == request.auth.uid
+      );
+
+      // ============================================================================
+      // BOARD MESSAGES (Subcollection)
+      // ============================================================================
+      match /messages/{messageId} {
+        // Users can read messages if they can read the board
+        allow read: if isAuthenticated() && (
+          isLabMember(get(/databases/$(database)/documents/researchBoards/$(boardId)).data.labId) ||
+          isAdmin()
+        );
+
+        // Users can create messages if they can read the board
+        allow create: if isAuthenticated() && (
+          isLabMember(get(/databases/$(database)/documents/researchBoards/$(boardId)).data.labId) ||
+          isAdmin()
+        );
+      }
     }
 
     // ============================================================================

@@ -10,7 +10,7 @@ import {
   updateResearchPin,
 } from '../services/researchService'
 
-export function useResearchBoard() {
+export function useResearchBoard(boardId?: string) {
   const { currentUser, currentUserProfile } = useAuth()
   const { error } = useToast()
   const [pins, setPins] = useState<ResearchPin[]>([])
@@ -21,7 +21,7 @@ export function useResearchBoard() {
     if (!currentUserProfile?.labId || !currentUser?.uid) return
 
     const unsubscribe = subscribeToResearchPins(
-      { labId: currentUserProfile.labId, userId: currentUser.uid },
+      { labId: currentUserProfile.labId, userId: currentUser.uid, boardId },
       (nextPins) => {
         setPins(nextPins)
         setLoading(false)
@@ -29,7 +29,7 @@ export function useResearchBoard() {
     )
 
     return () => unsubscribe()
-  }, [currentUser?.uid, currentUserProfile?.labId])
+  }, [currentUser?.uid, currentUserProfile?.labId, boardId])
 
   const filteredPins = useMemo(() => {
     if (!searchQuery.trim()) return pins

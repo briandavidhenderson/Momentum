@@ -1,0 +1,298 @@
+{
+    "metadata": {
+        "schemaVersion": "1.0.0",
+        "exportedAt": "2025-11-24T12:00:00Z",
+        "name": "Cell-SELEX for DNA Aptamers (nprot.2010.66)"
+    },
+    "nodes": [
+        {
+            "id": "op-buffer-prep",
+            "type": "mix",
+            "label": "Prepare Binding Buffer",
+            "x": 50,
+            "y": 50,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "time": "5",
+                "speed": "gentle"
+            },
+            "objects": [
+                "DPBS",
+                "Glucose (4.5g/L)",
+                "MgCl2 (5mM)",
+                "tRNA",
+                "BSA"
+            ],
+            "metadata": {
+                "notes": "Prepare 1L of binding buffer. Store at 4°C."
+            }
+        },
+        {
+            "id": "op-lib-denature",
+            "type": "heat",
+            "label": "Denature Library",
+            "x": 350,
+            "y": 50,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "temperature": "95",
+                "temperatureUnit": "°C",
+                "time": "5",
+                "timeUnit": "min"
+            },
+            "objects": [
+                "ssDNA Library (10 nmol)",
+                "Binding Buffer (350 µl)"
+            ],
+            "metadata": {
+                "notes": "Heat to unfold DNA, then snap-cool to form secondary structures."
+            }
+        },
+        {
+            "id": "op-lib-cool",
+            "type": "cool",
+            "label": "Snap Cool",
+            "x": 350,
+            "y": 250,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "temperature": "4",
+                "temperatureUnit": "°C",
+                "time": "10",
+                "timeUnit": "min"
+            },
+            "objects": [
+                "Denatured Library"
+            ],
+            "metadata": {
+                "notes": "Keep on ice until ready to use."
+            }
+        },
+        {
+            "id": "op-cell-wash",
+            "type": "centrifuge",
+            "label": "Wash Target Cells",
+            "x": 650,
+            "y": 50,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "speed": "150",
+                "speedUnit": "g",
+                "time": "3",
+                "timeUnit": "min",
+                "temperature": "4",
+                "temperatureUnit": "°C"
+            },
+            "objects": [
+                "Target Cells (CCRF-CEM)",
+                "Washing Buffer"
+            ],
+            "metadata": {
+                "notes": "Wash twice to remove media. Ensure >95% viability."
+            }
+        },
+        {
+            "id": "op-cell-resuspend",
+            "type": "pipette",
+            "label": "Resuspend Cells",
+            "x": 650,
+            "y": 250,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "volume": "330",
+                "volumeUnit": "µL",
+                "to": "Binding Buffer"
+            },
+            "objects": [
+                "Washed Cell Pellet"
+            ],
+            "metadata": {
+                "notes": "Resuspend approx 5-10 million cells."
+            }
+        },
+        {
+            "id": "op-incubation",
+            "type": "incubate",
+            "label": "Selection Incubation",
+            "x": 500,
+            "y": 450,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "temperature": "4",
+                "temperatureUnit": "°C",
+                "time": "60",
+                "timeUnit": "min",
+                "atmosphere": "Rotary Shaker"
+            },
+            "objects": [
+                "Folded Library",
+                "Target Cells"
+            ],
+            "metadata": {
+                "notes": "Mix 370µl library + 330µl cells. Incubate with gentle shaking."
+            }
+        },
+        {
+            "id": "op-wash-remove",
+            "type": "centrifuge",
+            "label": "Remove Unbound",
+            "x": 500,
+            "y": 650,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "speed": "150",
+                "speedUnit": "g",
+                "time": "3",
+                "timeUnit": "min"
+            },
+            "objects": [
+                "Cell-DNA Complex"
+            ],
+            "metadata": {
+                "notes": "Discard supernatant (unbound sequences). Wash pellet 3 times with 3ml buffer."
+            }
+        },
+        {
+            "id": "op-elution",
+            "type": "heat",
+            "label": "Elute Bound DNA",
+            "x": 500,
+            "y": 850,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "temperature": "95",
+                "temperatureUnit": "°C",
+                "time": "10",
+                "timeUnit": "min"
+            },
+            "objects": [
+                "Washed Cells",
+                "DNase-free water (500µl)"
+            ],
+            "metadata": {
+                "notes": "Heat disrupts cell surface and denatures proteins to release DNA."
+            }
+        },
+        {
+            "id": "op-pcr",
+            "type": "thermocycle",
+            "label": "PCR Amplification",
+            "x": 200,
+            "y": 1050,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "cycleCount": "10",
+                "denatureTemp": "95",
+                "denatureTime": "30",
+                "annealTemp": "56.3",
+                "annealTime": "30",
+                "extensionTemp": "72",
+                "extensionTime": "30",
+                "holdTemp": "4"
+            },
+            "objects": [
+                "Eluted DNA",
+                "FITC-Primer",
+                "Biotin-Primer",
+                "Taq Polymerase"
+            ],
+            "metadata": {
+                "notes": "Amplify the eluted pool. Use Biotin/FITC primers for subsequent strand separation."
+            }
+        },
+        {
+            "id": "op-ssdna-gen",
+            "type": "custom",
+            "label": "ssDNA Generation",
+            "x": 500,
+            "y": 1050,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "time": "30 min",
+                "temperature": "Room Temp",
+                "details": "Pass PCR product through Streptavidin Sepharose column. Elute sense strand with 200mM NaOH."
+            },
+            "objects": [
+                "PCR Product",
+                "Streptavidin Column",
+                "NaOH"
+            ],
+            "metadata": {
+                "notes": "Recover FITC-labeled ssDNA for next round."
+            }
+        },
+        {
+            "id": "op-neg-selection",
+            "type": "incubate",
+            "label": "Negative Selection",
+            "x": 800,
+            "y": 1050,
+            "width": 240,
+            "height": 140,
+            "parameters": {
+                "time": "60",
+                "temperature": "4",
+                "atmosphere": "Shaking"
+            },
+            "objects": [
+                "Enriched Pool",
+                "Control Cells (Ramos)"
+            ],
+            "metadata": {
+                "notes": "Performed after Round 2. Incubate with negative control cells to remove non-specific binders."
+            }
+        }
+    ],
+    "connections": [
+        {
+            "from": "op-buffer-prep",
+            "to": "op-lib-denature"
+        },
+        {
+            "from": "op-lib-denature",
+            "to": "op-lib-cool"
+        },
+        {
+            "from": "op-lib-cool",
+            "to": "op-incubation"
+        },
+        {
+            "from": "op-cell-wash",
+            "to": "op-cell-resuspend"
+        },
+        {
+            "from": "op-cell-resuspend",
+            "to": "op-incubation"
+        },
+        {
+            "from": "op-incubation",
+            "to": "op-wash-remove"
+        },
+        {
+            "from": "op-wash-remove",
+            "to": "op-elution"
+        },
+        {
+            "from": "op-elution",
+            "to": "op-pcr"
+        },
+        {
+            "from": "op-pcr",
+            "to": "op-ssdna-gen"
+        },
+        {
+            "from": "op-ssdna-gen",
+            "to": "op-neg-selection"
+        }
+    ]
+}

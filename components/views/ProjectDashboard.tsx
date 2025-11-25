@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useCallback, MouseEvent } from "react"
+import { z } from "zod"
 import Link from "next/link"
 import { useAppContext } from "@/lib/AppContext"
 import { useGroupContext } from "@/lib/GroupContext"
@@ -15,7 +16,7 @@ import { ProjectCard } from "@/components/projects/ProjectCard"
 import { PersonalTasksWidget } from "@/components/projects/PersonalTasksWidget"
 import { TaskCreationDialog } from "@/components/projects/TaskCreationDialog"
 import { TaskEditDialog } from "@/components/projects/TaskEditDialog"
-import { MasterProject, Workpackage, Deliverable, PersonProfile, Task } from "@/lib/types"
+import { MasterProject, Workpackage, Deliverable, PersonProfile, Task, ProfileProject } from "@/lib/types"
 import {
   Plus,
   FolderKanban,
@@ -275,6 +276,35 @@ export function ProjectDashboard() {
   const formatDate = (date: Date) =>
     date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
 
+  const projectDialogSchema = z.object({
+    name: z.string().trim().min(1, "Project name is required"),
+    description: z.string().optional().default(""),
+    grantName: z.string().optional().default(""),
+    grantNumber: z.string().optional().default(""),
+    budget: z.coerce.number().nonnegative().optional().default(0),
+    startDate: z
+      .string()
+      .refine(value => !!value && !Number.isNaN(Date.parse(value)), {
+        message: "Please provide a valid start date",
+      }),
+    endDate: z
+      .string()
+      .refine(value => !!value && !Number.isNaN(Date.parse(value)), {
+        message: "Please provide a valid end date",
+      }),
+    funderId: z.string().optional().default(""),
+    fundedBy: z.array(z.string()).optional().default([]),
+    principalInvestigatorId: z.string().optional(),
+    status: z.enum(["planning", "active", "completed", "on-hold", "cancelled"]),
+    groupIds: z.array(z.string()).optional().default([]),
+    visibility: z.string().optional().default("lab"),
+    visibleTo: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional().default([]),
+    notes: z.string().optional().default(""),
+    type: z.enum(["funded", "unfunded"]).optional(),
+    legacyTypeLabel: z.string().optional(),
+  })
+
   const handleCardLinkClick = (event: MouseEvent<HTMLAnchorElement>) => {
     const target = event.target as HTMLElement
     if (
@@ -472,7 +502,9 @@ export function ProjectDashboard() {
     }
   }, [allWorkpackages, handleUpdateWorkpackage])
 
-  const handleCreateMasterProjectFromDialog = async (projectData: ProjectDialogInput) => {
+  const handleCreateMasterProjectFromDialog = async (
+    projectData: ProfileProject & { funderId?: string; groupIds?: string[] }
+  ) => {
     if (!profile || !user) return
 
     const parsedProject = projectDialogSchema.parse(projectData)
@@ -881,13 +913,14 @@ export function ProjectDashboard() {
         availableOwners={allProfiles}
       />
 
+
       {/* Task Creation Dialog */}
       <TaskCreationDialog
         open={showTaskDialog}
         onOpenChange={setShowTaskDialog}
         deliverableId={taskDeliverableId}
         workpackageId={taskWorkpackageId}
-        onSave={handleCreateTask}
+        onCreateTask={handleCreateTask}
         availablePeople={allProfiles}
       />
 

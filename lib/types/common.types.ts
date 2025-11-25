@@ -72,6 +72,7 @@ export type ELNItemType =
   | "document"
   | "data"
   | "video"
+  | "file"
 
 /**
  * Equipment task types

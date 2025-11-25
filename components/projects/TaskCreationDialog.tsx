@@ -28,10 +28,11 @@ import { Badge } from "@/components/ui/badge"
 interface TaskCreationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  deliverableId: string
+  deliverableId?: string
   workpackageId: string
-  onSave: (taskData: Partial<Task> & { workpackageId: string }) => void
+  onCreateTask: (taskData: Partial<Task> & { workpackageId: string }) => void
   availablePeople?: PersonProfile[]
+  initialTaskName?: string
 }
 
 export function TaskCreationDialog({
@@ -39,8 +40,9 @@ export function TaskCreationDialog({
   onOpenChange,
   deliverableId,
   workpackageId,
-  onSave,
+  onCreateTask,
   availablePeople = [],
+  initialTaskName = "",
 }: TaskCreationDialogProps) {
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
@@ -55,7 +57,7 @@ export function TaskCreationDialog({
   useEffect(() => {
     if (open) {
       // Reset form
-      setName("")
+      setName(initialTaskName || "")
       setNotes("")
       const today = new Date()
       setStartDate(today.toISOString().split("T")[0])
@@ -66,7 +68,7 @@ export function TaskCreationDialog({
       setHelpers([])
       setError(null)
     }
-  }, [open])
+  }, [open, initialTaskName])
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -93,7 +95,7 @@ export function TaskCreationDialog({
       subtasks: [],
     }
 
-    onSave(taskData)
+    onCreateTask(taskData)
     onOpenChange(false)
   }
 

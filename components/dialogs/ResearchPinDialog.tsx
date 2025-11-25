@@ -22,11 +22,12 @@ interface ResearchPinDialogProps {
   open: boolean;
   onClose: () => void;
   editingPin?: ResearchPin | null;
+  boardId?: string;
 }
 
-export function ResearchPinDialog({ open, onClose, editingPin }: ResearchPinDialogProps) {
+export function ResearchPinDialog({ open, onClose, editingPin, boardId }: ResearchPinDialogProps) {
   const { currentUser, currentUserProfile } = useAuth();
-  const { createPin, updatePin } = useResearchBoard();
+  const { createPin, updatePin } = useResearchBoard(boardId);
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -159,6 +160,7 @@ export function ResearchPinDialog({ open, onClose, editingPin }: ResearchPinDial
             avatar: currentUserProfile.avatarUrl,
           },
           labId: currentUserProfile.labId,
+          boardId, // Add boardId here
           tags: tags.split(',').map(t => t.trim()).filter(Boolean),
           isPrivate,
           visibility: isPrivate ? 'private' : 'lab',
