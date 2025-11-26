@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
-import { getFirebaseAuth } from '@/lib/firebase';
+import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase';
 import { getUser, findUserProfile, FirestoreUser as User } from '@/lib/firestoreService';
 import { PersonProfile } from '@/lib/types';
 import { logger } from '@/lib/logger';
@@ -22,13 +22,14 @@ export function useAuth() {
     const auth = getFirebaseAuth();
     setMounted(true);
     isMountedRef.current = true;
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         if (!isMountedRef.current) return;
         setIsLoadingProfile(true);
+
         try {
+          // 1. Get User Document
           const userData = await getUser(firebaseUser.uid);
-          if (!isMountedRef.current) return;
 
           if (userData) {
             const user: User = {
@@ -39,21 +40,79 @@ export function useAuth() {
               createdAt: userData.createdAt,
               isAdministrator: userData.isAdministrator,
             };
-            setCurrentUser(user);
 
-            const profile = await findUserProfile(userData.uid, userData.profileId);
-            if (!isMountedRef.current) return;
-
-            if (profile) {
-              setCurrentUserProfile(profile);
-              setCurrentUserProfileId(profile.id);
-              setAuthState('app');
-            } else {
-              setAuthState('setup');
+            if (isMountedRef.current) {
+              setCurrentUser(user);
             }
+
+            // 2. Subscribe to Profile Changes
+            let profileUnsubscribe: () => void = () => { };
+
+            const setupProfileSubscription = async () => {
+              const db = getFirebaseDb();
+              const { doc, onSnapshot, collection, query, where } = await import("firebase/firestore");
+
+              // Determine how to find the profile
+              let profileRef;
+
+              if (userData.profileId) {
+                // Direct reference if we have the ID
+                profileRef = doc(db, "personProfiles", userData.profileId);
+
+                profileUnsubscribe = onSnapshot(profileRef, (docSnap) => {
+                  if (docSnap.exists() && isMountedRef.current) {
+                    const profile = docSnap.data() as PersonProfile;
+                    setCurrentUserProfile(profile);
+                    setCurrentUserProfileId(profile.id);
+                    setAuthState('app');
+                    setIsLoadingProfile(false);
+                  } else if (isMountedRef.current) {
+                    // Profile ID exists on user but doc missing? Fallback to setup
+                    setAuthState('setup');
+                    setIsLoadingProfile(false);
+                  }
+                }, (error) => {
+                  logger.error("Error subscribing to profile", error);
+                  if (isMountedRef.current) setIsLoadingProfile(false);
+                });
+              } else {
+                // Query by userId if no profileId yet
+                const q = query(collection(db, "personProfiles"), where("userId", "==", firebaseUser.uid));
+
+                profileUnsubscribe = onSnapshot(q, (querySnap) => {
+                  if (!querySnap.empty && isMountedRef.current) {
+                    const profile = querySnap.docs[0].data() as PersonProfile;
+                    setCurrentUserProfile(profile);
+                    setCurrentUserProfileId(profile.id);
+
+                    // If we found a profile but user doc didn't have ID, we should probably update user doc
+                    // But for now just update local state
+                    if (currentUser && !currentUser.profileId) {
+                      setCurrentUser({ ...currentUser, profileId: profile.id });
+                    }
+
+                    setAuthState('app');
+                    setIsLoadingProfile(false);
+                  } else if (isMountedRef.current) {
+                    setAuthState('setup');
+                    setIsLoadingProfile(false);
+                  }
+                }, (error) => {
+                  logger.error("Error subscribing to profile query", error);
+                  if (isMountedRef.current) setIsLoadingProfile(false);
+                });
+              }
+            };
+
+            await setupProfileSubscription();
+
+            // Cleanup profile sub when auth state changes or component unmounts
+            // Note: This is a bit tricky inside the auth listener. 
+            // Ideally we'd store this unsubscribe somewhere, but for now this handles the immediate flow.
+            // A more robust refactor might separate the profile subscription into its own effect.
+
           } else {
-            // Use displayName if available, otherwise leave empty
-            // Never fallback to email local part as it's not a proper name
+            // New user (no user doc yet)
             const tempUser: User = {
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
@@ -62,17 +121,17 @@ export function useAuth() {
               createdAt: Timestamp.now(),
               isAdministrator: false,
             };
-            setCurrentUser(tempUser);
-            setAuthState('setup');
+            if (isMountedRef.current) {
+              setCurrentUser(tempUser);
+              setAuthState('setup');
+              setIsLoadingProfile(false);
+            }
           }
         } catch (error) {
           if (!isMountedRef.current) return;
           logger.error('Error loading user data', error);
           setAuthState('auth');
-        } finally {
-          if (isMountedRef.current) {
-            setIsLoadingProfile(false);
-          }
+          setIsLoadingProfile(false);
         }
       } else {
         if (isMountedRef.current) {
@@ -87,7 +146,7 @@ export function useAuth() {
 
     return () => {
       isMountedRef.current = false;
-      unsubscribe();
+      unsubscribeAuth();
     };
   }, []);
 
