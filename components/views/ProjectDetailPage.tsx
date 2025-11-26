@@ -209,7 +209,7 @@ export function ProjectDetailPage({
       setLoadingExperiments(true)
       try {
         const experimentsQuery = query(
-          collection(db, "experiments"),
+          collection(db, "elnExperiments"),
           where("masterProjectId", "==", project.id),
           orderBy("createdAt", "desc")
         )
@@ -217,7 +217,7 @@ export function ProjectDetailPage({
         const experimentsData = experimentsSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-          createdAt: doc.data().createdAt || new Date().toISOString(),
+          createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt || new Date().toISOString(),
         })) as ELNExperiment[]
         setExperiments(experimentsData)
       } catch (error) {
