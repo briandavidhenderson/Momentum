@@ -115,7 +115,7 @@ function BoardCard({ board, onClick }: { board: ResearchBoard; onClick: () => vo
                     </div>
                     <div className="flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" />
-                        {board.updatedAt ? formatDistanceToNow(board.updatedAt, { addSuffix: true }) : 'Just now'}
+                        {board.updatedAt && !isNaN(new Date(board.updatedAt).getTime()) ? formatDistanceToNow(board.updatedAt, { addSuffix: true }) : 'Just now'}
                     </div>
                 </div>
             </CardContent>

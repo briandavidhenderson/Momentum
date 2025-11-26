@@ -33,7 +33,7 @@ function deriveVisibility(pin: { visibility?: ResearchPinVisibility; isPrivate?:
 
 function mapResearchPin(docSnap: any): ResearchPin {
   const data = docSnap.data()
-  const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt
+  const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt || new Date())
   const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt
 
   const visibility = deriveVisibility(data)
@@ -96,33 +96,90 @@ export function subscribeToResearchPins(
   const db = getFirebaseDb()
   const pinsRef = collection(db, 'researchPins')
 
-  let pinsQuery;
+  // We need two queries to satisfy security rules:
+  // 1. Shared pins (lab/public) in this lab/board
+  // 2. My private pins in this lab/board
 
+  // Helper to merge and sort pins
+  const mergePins = (shared: ResearchPin[], mine: ResearchPin[]) => {
+    const all = new Map<string, ResearchPin>();
+    shared.forEach(p => all.set(p.id, p));
+    mine.forEach(p => all.set(p.id, p));
+
+    return Array.from(all.values()).sort((a, b) => {
+      const tA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+      const tB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+      return tB - tA;
+    });
+  };
+
+  let sharedPins: ResearchPin[] = [];
+  let myPins: ResearchPin[] = [];
+
+  // Query 1: Shared Pins
+  // We filter by labId (required by rules) and exclude private pins
+  // Note: Firestore doesn't support != easily with other filters, so we use 'in' or just rely on 'labId' 
+  // IF the rules allowed reading all lab pins. But the rules restrict private pins.
+  // So we must query for pins that are NOT private.
+  // Since 'visibility' might be missing on old data, we rely on the fact that 
+  // createResearchPin sets it. For legacy data, we might miss some if we strictly filter.
+  // However, the safest query that works with the rules is:
+  // where('labId', '==', labId) AND where('visibility', 'in', ['lab', 'public'])
+
+  let sharedQuery;
   if (boardId) {
-    // If boardId is provided, we filter by boardId.
-    // We might need an index for boardId + createdAt
-    pinsQuery = query(
+    sharedQuery = query(
       pinsRef,
       where('boardId', '==', boardId),
+      where('labId', '==', labId),
+      where('visibility', 'in', ['lab', 'public']),
       orderBy('createdAt', 'desc')
     );
   } else {
-    // Fallback to labId query for backward compatibility or "All Pins" view
-    pinsQuery = query(pinsRef, where('labId', '==', labId), orderBy('createdAt', 'desc'))
+    sharedQuery = query(
+      pinsRef,
+      where('labId', '==', labId),
+      where('visibility', 'in', ['lab', 'public']),
+      orderBy('createdAt', 'desc')
+    );
   }
 
-  return onSnapshot(pinsQuery, (snapshot) => {
-    const pins = snapshot.docs
-      .map(mapResearchPin)
-      .filter((pin) => {
-        // If filtering by board, we assume board members have access.
-        // But we still check private pins just in case.
-        if (pin.visibility === 'private') {
-          return pin.author?.userId === userId
-        }
-        return true; // Lab/Public pins are visible to board members
-      })
+  const unsubShared = onSnapshot(sharedQuery, (snapshot) => {
+    sharedPins = snapshot.docs.map(mapResearchPin);
+    onPins(mergePins(sharedPins, myPins));
+  }, (error) => {
+    logger.warn("Error fetching shared pins", error);
+    // Don't fail completely, just log. The user might only have private pins.
+  });
 
-    onPins(pins)
-  })
+  // Query 2: My Pins (Private and Public - but mainly to get the private ones)
+  // We query by author.userId which is allowed by rules regardless of visibility
+  let myQuery;
+  if (boardId) {
+    myQuery = query(
+      pinsRef,
+      where('boardId', '==', boardId),
+      where('author.userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+  } else {
+    myQuery = query(
+      pinsRef,
+      where('labId', '==', labId),
+      where('author.userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+  }
+
+  const unsubMine = onSnapshot(myQuery, (snapshot) => {
+    myPins = snapshot.docs.map(mapResearchPin);
+    onPins(mergePins(sharedPins, myPins));
+  }, (error) => {
+    logger.warn("Error fetching my pins", error);
+  });
+
+  return () => {
+    unsubShared();
+    unsubMine();
+  };
 }

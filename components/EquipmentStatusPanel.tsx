@@ -94,10 +94,12 @@ export function EquipmentStatusPanel({
 
   // Use imported calculation functions (now testable and safe)
   const maintenanceHealth = (device: EquipmentDevice): number => {
+    if (!device) return 100
     return calculateMaintenanceHealth(device.lastMaintained, device.maintenanceDays)
   }
 
   const suppliesHealth = (device: EquipmentDevice): number => {
+    if (!device || !device.supplies) return 100
     return calculateSuppliesHealth(device.supplies)
   }
 

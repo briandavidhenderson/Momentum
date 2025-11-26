@@ -147,10 +147,11 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
       return
     }
 
-    if (!formData.accountId) {
-      setError('Please select a funding account')
-      return
-    }
+    // Account is now optional
+    // if (!formData.accountId) {
+    //   setError('Please select a funding account')
+    //   return
+    // }
 
     if (!hasSufficientFunds) {
       if (!confirm('The selected allocation has insufficient funds. Do you want to proceed anyway?')) {
@@ -244,7 +245,10 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
             <>
               {/* Funding Account Selection */}
               <div className="grid gap-2">
-                <Label htmlFor="accountId">Funding Account *</Label>
+                <Label htmlFor="accountId">
+                  Funding Account
+                  <span className="text-xs text-muted-foreground ml-2">(Optional)</span>
+                </Label>
                 <select
                   id="accountId"
                   value={formData.accountId || ''}
@@ -254,7 +258,6 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
                     fundingAllocationId: '' // Reset allocation when account changes
                   })}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  required
                   disabled={isReadOnly}
                 >
                   <option value="">Select funding account...</option>

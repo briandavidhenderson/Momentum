@@ -27,6 +27,7 @@ import { MyBookingsView } from "@/components/equipment/MyBookingsView"
 import { WhiteboardView } from "@/components/views/WhiteboardView"
 import ResearchBoard from "@/components/views/ResearchBoard"
 import { UserRole } from "@/lib/types"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 
 export default function Page() {
   const router = useRouter()
@@ -138,7 +139,11 @@ export default function Page() {
           {mainView === 'mytasks' && <MyTasksView />}
           {mainView === 'eln' && <ElectronicLabNotebook />}
           {mainView === 'orders' && <OrdersInventory />}
-          {mainView === 'equipment' && <EquipmentManagement />}
+          {mainView === 'equipment' && (
+            <ErrorBoundary>
+              <EquipmentManagement />
+            </ErrorBoundary>
+          )}
           {mainView === 'bookings' && <MyBookingsView />}
           {mainView === 'calendar' && <CalendarEvents />}
           {mainView === 'whiteboard' && <WhiteboardView />}
