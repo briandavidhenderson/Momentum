@@ -14,6 +14,16 @@ import { InventoryItem, FundingAllocation, PersonProfile } from './types'
 import { getBudgetNotificationPriority } from './equipmentConfig'
 import { logger } from './logger'
 
+function normalizeDate(value: any): Date | null {
+  if (!value) return null
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    const d = value.toDate()
+    return isNaN(d?.getTime?.() ?? NaN) ? null : d
+  }
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? null : d
+}
+
 export interface NotificationPayload {
   userId: string
   type: string
@@ -218,12 +228,14 @@ export async function notifyTaskAssigned(
   // Note: projectAssignmentNotifications property removed, notifications now sent to all users
 
   const priority = task.priority === 'high' ? 'high' : 'medium'
+  const dueDate = normalizeDate(task.dueDate)
+  const dueLabel = dueDate ? ` (due ${dueDate.toLocaleDateString()})` : ''
 
   await createNotification({
     userId: assignee.id,
     type: 'TASK_ASSIGNED',
     title: 'New Task Assigned',
-    message: `${assigner.firstName} ${assigner.lastName} assigned you: "${task.title}"${task.dueDate ? ` (due ${new Date(task.dueDate).toLocaleDateString()})` : ''}`,
+    message: `${assigner.firstName} ${assigner.lastName} assigned you: "${task.title}"${dueLabel}`,
     priority,
     relatedEntityType: 'task',
     relatedEntityId: task.id,

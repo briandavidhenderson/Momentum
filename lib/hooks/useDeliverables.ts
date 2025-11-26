@@ -55,7 +55,7 @@ export function useDeliverables(currentUser: PersonProfile | null) {
     // Subscribe to all deliverables (no filtering for now)
     // In production, you might want to filter by lab or project
     const unsubscribe = subscribeToDeliverables(
-      null, // No filters for now - gets all deliverables
+      { labId: currentUser.labId },
       (firestoreDeliverables) => {
         setDeliverables(firestoreDeliverables);
         setIsLoading(false);
