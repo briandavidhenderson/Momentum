@@ -1,10 +1,11 @@
 "use client"
 
 import React, { useState } from "react"
-import { Beaker, AlertTriangle, FileText, Activity, Ban, Search, Users, FolderKanban } from "lucide-react"
+import { Beaker, AlertTriangle, FileText, Activity, Ban, Search, Users, FolderKanban, TestTube2 } from "lucide-react"
 import { LucideIcon } from "lucide-react"
 import { useAppContext } from "@/lib/AppContext"
 import { useProjects, usePeople } from "@/lib/store"
+import { useBuffers } from "@/lib/hooks/useBuffers"
 import { PROTOCOL_OPERATIONS } from "./protocolConfig"
 
 export interface AssetDef {
@@ -20,7 +21,7 @@ export const ASSETS: AssetDef[] = [
 ]
 
 type DragPayload = {
-    kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol'
+    kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer'
     id: string
     name?: string
     operationType?: string
@@ -31,15 +32,17 @@ interface WhiteboardSidebarProps {
 }
 
 export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
-    const [assetTab, setAssetTab] = useState<'protocol' | 'assets' | 'inventory' | 'equipment' | 'projects' | 'people'>('assets')
+    const [assetTab, setAssetTab] = useState<'protocol' | 'assets' | 'inventory' | 'equipment' | 'buffers' | 'projects' | 'people'>('assets')
     const [assetSearch, setAssetSearch] = useState("")
 
     const { inventory, equipment } = useAppContext()
     const projects = useProjects()
     const people = usePeople()
+    const { buffers } = useBuffers()
 
     const filteredInventory = (inventory || []).filter(item => item.productName.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredEquipment = (equipment || []).filter(eq => eq.name.toLowerCase().includes(assetSearch.toLowerCase()))
+    const filteredBuffers = buffers.filter(b => b.name.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredPeople = people.filter(p => p.name.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredProtocolOps = PROTOCOL_OPERATIONS.filter(op => op.label.toLowerCase().includes(assetSearch.toLowerCase()) || op.description.toLowerCase().includes(assetSearch.toLowerCase()))
@@ -55,6 +58,7 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
                             { id: "assets", label: "Icons" },
                             { id: "inventory", label: "Inv" },
                             { id: "equipment", label: "Equip" },
+                            { id: "buffers", label: "Buffers" },
                             { id: "projects", label: "Proj" },
                             { id: "people", label: "Ppl" }
                         ].map((tab) => (
@@ -163,6 +167,30 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
                                     <span className="text-xs text-slate-500 text-center line-clamp-2 leading-tight">{eq.name}</span>
                                     <span className="text-[10px] text-slate-500 text-center truncate w-full mt-0.5">
                                         {eq.make && eq.model ? `${eq.make} ${eq.model}` : eq.make || eq.model || "No model info"}
+                                    </span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+                {assetTab === "buffers" && (
+                    <div className="grid grid-cols-2 gap-3">
+                        {filteredBuffers.length === 0 ? (
+                            <div className="col-span-2 text-center py-8 text-xs text-slate-400">
+                                No buffers found
+                            </div>
+                        ) : (
+                            filteredBuffers.map((buffer) => (
+                                <div
+                                    key={buffer.id}
+                                    draggable
+                                    onDragStart={(e) => onDragStart(e, { kind: "buffer", id: buffer.id, name: buffer.name })}
+                                    className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm hover:shadow-md cursor-grab flex flex-col items-center gap-2.5"
+                                >
+                                    <TestTube2 className="text-emerald-600 w-6 h-6 flex-shrink-0 mb-0.5" />
+                                    <span className="text-xs text-slate-500 text-center line-clamp-2 leading-tight">{buffer.name}</span>
+                                    <span className="text-[10px] text-slate-500 text-center truncate w-full mt-0.5">
+                                        {buffer.components.length} component{buffer.components.length !== 1 ? 's' : ''}
                                     </span>
                                 </div>
                             ))

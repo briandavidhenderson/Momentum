@@ -90,28 +90,78 @@ export async function getEvents(): Promise<CalendarEvent[]> {
 }
 
 export function subscribeToEvents(
-  filters: { labId?: string } | null,
+  filters: { labId?: string; userId?: string } | null,
   callback: (events: CalendarEvent[]) => void
 ): Unsubscribe {
   const db = getFirebaseDb()
-  let q: Query = collection(db, "events")
+  const unsubscribers: Unsubscribe[] = []
+  let labEvents: CalendarEvent[] = []
+  let userEvents: CalendarEvent[] = []
 
-  if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
-    q = query(q, where("labId", "==", filters.labId))
+  // Emit merged events without duplicates
+  const emit = () => {
+    const merged = [...labEvents, ...userEvents].reduce((acc, evt) => {
+      acc.set(evt.id, evt)
+      return acc
+    }, new Map<string, CalendarEvent>())
+    callback(Array.from(merged.values()))
   }
 
-  return onSnapshot(q, (snapshot) => {
-    const events = snapshot.docs.map(d => {
-      const data = d.data() as FirestoreCalendarEvent
-      return {
-        ...data,
-        start: data.start?.toDate() || new Date(),
-        end: data.end?.toDate() || new Date(),
-        createdAt: (data.createdAt && (data.createdAt as any).toDate) ? (data.createdAt as any).toDate() : new Date(),
-      } as CalendarEvent
-    })
-    callback(events)
-  })
+  // Lab-visible events (lab/organisation visibility only)
+  if (filters?.labId) {
+    const labQuery: Query = query(
+      collection(db, "events"),
+      where("labId", "==", filters.labId),
+      where("visibility", "in", ["lab", "organisation"])
+    )
+
+    unsubscribers.push(
+      onSnapshot(labQuery, (snapshot) => {
+        labEvents = snapshot.docs.map((d) => {
+          const data = d.data() as FirestoreCalendarEvent
+          return {
+            ...data,
+            start: data.start?.toDate() || new Date(),
+            end: data.end?.toDate() || new Date(),
+            createdAt: (data.createdAt && (data.createdAt as any).toDate)
+              ? (data.createdAt as any).toDate()
+              : new Date(),
+          } as CalendarEvent
+        })
+        emit()
+      })
+    )
+  }
+
+  // User's own events (includes private)
+  if (filters?.userId) {
+    const userQuery: Query = query(
+      collection(db, "events"),
+      where("createdBy", "==", filters.userId)
+    )
+
+    unsubscribers.push(
+      onSnapshot(userQuery, (snapshot) => {
+        userEvents = snapshot.docs.map((d) => {
+          const data = d.data() as FirestoreCalendarEvent
+          return {
+            ...data,
+            start: data.start?.toDate() || new Date(),
+            end: data.end?.toDate() || new Date(),
+            createdAt: (data.createdAt && (data.createdAt as any).toDate)
+              ? (data.createdAt as any).toDate()
+              : new Date(),
+          } as CalendarEvent
+        })
+        emit()
+      })
+    )
+  }
+
+  // Return a combined unsubscribe
+  return () => {
+    unsubscribers.forEach((unsub) => unsub())
+  }
 }
 
 // ============================================================================

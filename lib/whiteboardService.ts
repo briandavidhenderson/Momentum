@@ -43,6 +43,10 @@ export interface Shape {
     linkedEntityType?: 'inventory' | 'equipment'
     linkedEntityId?: string
     protocolData?: UnitOperation
+    fromNodeId?: string  // protocol_node ID arrow starts from
+    toNodeId?: string    // protocol_node ID arrow points to
+    isAutoConnected?: boolean  // true if auto-detected vs manually set
+    parallelGroupId?: string  // ID of parallel group this protocol node belongs to
 }
 
 export interface WhiteboardData {
