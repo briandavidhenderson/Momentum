@@ -872,6 +872,35 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // BUFFERS (Lab-wide buffer recipes)
+    // ============================================================================
+    match /buffers/{bufferId} {
+      // Users can read buffers in their lab
+      allow read: if isAuthenticated() && (
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create buffers in their lab
+      allow create: if isAuthenticated() && (
+        request.resource.data.createdBy == request.auth.uid &&
+        isLabMember(request.resource.data.labId)
+      );
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
     // WHITEBOARDS
     // ============================================================================
     match /whiteboards/{whiteboardId} {

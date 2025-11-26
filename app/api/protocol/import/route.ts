@@ -54,7 +54,11 @@ export async function POST(req: NextRequest) {
         })
     } catch (error) {
         console.error("Failed to import protocol from PDF", error)
-        return NextResponse.json({ error: "Failed to process document" }, { status: 500 })
+        const errorMessage = error instanceof Error ? error.message : "Failed to process document"
+        return NextResponse.json({
+            error: "Failed to process document",
+            details: errorMessage
+        }, { status: 500 })
     }
 }
 

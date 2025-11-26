@@ -55,13 +55,23 @@ export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & 
   const itemRef = doc(collection(db, "inventory"))
   const itemId = itemRef.id
 
-  await setDoc(itemRef, {
+  // Remove undefined values - Firestore doesn't accept them
+  const cleanData: any = {
     ...itemData,
     id: itemId,
     receivedDate: Timestamp.fromDate(itemData.receivedDate),
     lastOrderedDate: itemData.lastOrderedDate ? Timestamp.fromDate(itemData.lastOrderedDate) : null,
     createdAt: serverTimestamp(),
+  }
+
+  // Filter out undefined values
+  Object.keys(cleanData).forEach(key => {
+    if (cleanData[key] === undefined) {
+      delete cleanData[key]
+    }
   })
+
+  await setDoc(itemRef, cleanData)
 
   return itemId
 }
@@ -103,6 +113,13 @@ export async function updateInventoryItem(itemId: string, updates: Partial<Inven
 
   if (updates.receivedDate) updateData.receivedDate = Timestamp.fromDate(updates.receivedDate)
   if (updates.lastOrderedDate) updateData.lastOrderedDate = Timestamp.fromDate(updates.lastOrderedDate)
+
+  // Filter out undefined values - Firestore doesn't accept them
+  Object.keys(updateData).forEach(key => {
+    if (updateData[key] === undefined) {
+      delete updateData[key]
+    }
+  })
 
   await updateDoc(itemRef, updateData)
 }
