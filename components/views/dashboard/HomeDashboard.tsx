@@ -16,16 +16,22 @@ import {
     Package,
     Presentation,
     Users,
-    Wrench
+    Wrench,
+    ChevronDown
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { DashboardTile } from './DashboardTile'
+import { TodayOverview } from './TodayOverview'
+import { TaskKanban } from './TaskKanban'
+import { ProjectExplorerView } from '@/components/projects/ProjectExplorerView'
+import { Task } from '@/lib/types'
 
 export function HomeDashboard() {
     const {
         // Projects
         projects,
+        workpackages: allWorkpackages,
 
         // Tasks
         dayToDayTasks,
@@ -44,7 +50,10 @@ export function HomeDashboard() {
         // Other
         userBookings,
         currentUserProfile,
-        setMainView
+        setMainView,
+
+        // Actions
+        handleUpdateWorkpackage
     } = useAppContext()
 
     const researchBoards = whiteboards
@@ -69,21 +78,15 @@ export function HomeDashboard() {
         })
         .sort((a, b) => (b.updatedAt?.getTime?.() || 0) - (a.updatedAt?.getTime?.() || 0))
 
-    // State for selected project
+    // State for selected project & task
     const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null)
+    const [selectedTask, setSelectedTask] = useState<Task | null>(null)
 
     const labProfiles = useMemo(() => {
         const profiles = allProfiles || []
         if (!currentUserProfile?.labId) return profiles.slice(0, 5)
         return profiles.filter(p => p.labId === currentUserProfile.labId).slice(0, 5)
     }, [allProfiles, currentUserProfile?.labId])
-
-    // Filter for "Today" items (placeholder logic)
-    const today = new Date()
-    const todaysBookings = userBookings.filter(b => {
-        const bookingDate = new Date(b.startTime)
-        return bookingDate.toDateString() === today.toDateString()
-    })
 
     const getMemberTasks = (profileId: string) =>
         dayToDayTasks.filter(task => {
@@ -110,83 +113,100 @@ export function HomeDashboard() {
 
     const getInitials = (firstName?: string, lastName?: string) => `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.trim() || 'TM'
 
+    // Local helper to delete task since it's not in context
+    const handleDeleteTask = async (workpackageId: string, taskId: string) => {
+        const workpackage = allWorkpackages.find(wp => wp.id === workpackageId)
+        if (!workpackage) return
+
+        const updatedTasks = (workpackage.tasks || []).filter(t => t.id !== taskId)
+        await handleUpdateWorkpackage(workpackageId, { tasks: updatedTasks })
+    }
+
+    // Handle Task Updates from Panel
+    const handleTaskUpdate = async (taskId: string, updates: Partial<Task>) => {
+        if (!selectedTask || !selectedTask.workpackageId) return
+
+        const workpackage = allWorkpackages.find(wp => wp.id === selectedTask.workpackageId)
+        if (!workpackage) return
+
+        const updatedTasks = (workpackage.tasks || []).map(t =>
+            t.id === taskId ? { ...t, ...updates } : t
+        )
+
+        await handleUpdateWorkpackage(workpackage.id, { tasks: updatedTasks })
+
+        // Update local state if needed
+        if (selectedTask.id === taskId) {
+            setSelectedTask({ ...selectedTask, ...updates })
+        }
+    }
+
+    const handleTaskDeleteWrapper = async (taskId: string) => {
+        if (!selectedTask || !selectedTask.workpackageId) return
+        const workpackage = allWorkpackages.find(wp => wp.id === selectedTask.workpackageId)
+        if (workpackage) {
+            await handleDeleteTask(workpackage.id, taskId)
+            setSelectedTask(null)
+        }
+    }
+
+    const safeFormatDate = (value: unknown) => {
+        if (!value) return 'No date'
+        const date = value instanceof Date ? value : new Date(value as any)
+        return isNaN(date.getTime()) ? 'No date' : format(date, 'PPP')
+    }
+
+    const safeFormatTime = (value: unknown) => {
+        if (!value) return '—'
+        const date = value instanceof Date ? value : new Date(value as any)
+        return isNaN(date.getTime()) ? '—' : format(date, 'HH:mm')
+    }
+
     return (
         <div className="space-y-6">
-            {/* Top Section: Welcome & Today's Overview */}
+            {/* Top Section: Welcome */}
             <div className="flex flex-col md:flex-row gap-6 items-start justify-between">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">
                         Welcome back, {currentUserProfile?.firstName || 'User'}
                     </h2>
                     <p className="text-muted-foreground">
-                        Here's what's happening in the lab today.
+                        Get your team in motion!
                     </p>
                 </div>
-
-                {/* Today's Schedule / Quick Stats */}
-                <Card className="w-full md:w-auto min-w-[300px]">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium flex items-center gap-2">
-                            <CalendarIcon className="h-4 w-4 text-primary" />
-                            Today
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex gap-4 overflow-x-auto pb-2">
-                            {todaysBookings.length > 0 ? (
-                                todaysBookings.map(booking => (
-                                    <div key={booking.id} className="bg-muted/50 p-3 rounded-lg min-w-[120px] text-sm">
-                                        <div className="font-medium">{booking.equipmentName}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {format(new Date(booking.startTime), 'HH:mm')} - {format(new Date(booking.endTime), 'HH:mm')}
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-sm text-muted-foreground">No bookings today</div>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
 
-            {/* Main Dashboard Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Main Dashboard Grid - 3 Columns */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
 
-                {/* Left Column: Experiments & Whiteboards (3 cols) */}
+                {/* Left Column (20%): Navigation & Status */}
                 <div className="md:col-span-3 space-y-6">
                     {/* Experiments Widget */}
-                    <Card className="h-[300px] flex flex-col">
-                        <CardHeader className="pb-2">
+                    <Card className="h-[240px] flex flex-col">
+                        <CardHeader className="pb-2 py-3">
                             <CardTitle className="text-sm font-medium flex items-center gap-2">
                                 <FlaskConical className="h-4 w-4 text-emerald-500" />
-                                Active Experiments
+                                Experiments
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden">
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
                             <ScrollArea className="h-full">
-                                <div className="space-y-2">
+                                <div className="space-y-1">
                                     {elnExperiments.length > 0 ? (
                                         elnExperiments.slice(0, 5).map(experiment => (
                                             <DashboardTile
                                                 key={experiment.id}
                                                 href={`/eln?experimentId=${experiment.id}`}
-                                                aria-label={`Open experiment ${experiment.title}`}
-                                                className="p-2 text-sm"
+                                                className="p-2 text-sm border-b last:border-0 rounded-none hover:bg-muted/50"
                                             >
-                                                <div className="font-medium truncate group-hover:text-primary transition-colors">
-                                                    {experiment.title}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground truncate">
-                                                    {experiment.description || 'No description'}
-                                                </div>
+                                                <div className="font-medium truncate">{experiment.title}</div>
                                                 {experiment.status && (
-                                                    <Badge variant="outline" className="text-[10px] mt-1">{experiment.status}</Badge>
+                                                    <Badge variant="outline" className="text-[10px] mt-1 h-4">{experiment.status}</Badge>
                                                 )}
                                             </DashboardTile>
                                         ))
                                     ) : (
-                                        <div className="text-sm text-muted-foreground text-center py-4">No active experiments</div>
+                                        <div className="text-xs text-muted-foreground text-center py-4">No active experiments</div>
                                     )}
                                 </div>
                             </ScrollArea>
@@ -195,62 +215,138 @@ export function HomeDashboard() {
 
                     {/* Whiteboards Widget */}
                     <Card className="h-[200px] flex flex-col">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 py-3">
                             <CardTitle className="text-sm font-medium flex items-center gap-2">
                                 <Presentation className="h-4 w-4 text-blue-500" />
                                 Whiteboards
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden">
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
                             <ScrollArea className="h-full">
-                                <div className="space-y-2">
+                                <div className="space-y-1">
                                     {whiteboards.length > 0 ? (
                                         whiteboards.slice(0, 3).map(whiteboard => (
                                             <DashboardTile
                                                 key={whiteboard.id}
                                                 href={`/whiteboard?whiteboardId=${whiteboard.id}`}
-                                                aria-label={`Open whiteboard ${whiteboard.name}`}
-                                                className="p-2 text-sm"
+                                                className="p-2 text-sm border-b last:border-0 rounded-none hover:bg-muted/50"
                                             >
-                                                <div className="font-medium truncate group-hover:text-primary transition-colors">
-                                                    {whiteboard.name}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground">
+                                                <div className="font-medium truncate">{whiteboard.name}</div>
+                                                <div className="text-[10px] text-muted-foreground">
                                                     {whiteboard.shapes?.length || 0} shapes
                                                 </div>
                                             </DashboardTile>
                                         ))
                                     ) : (
-                                        <div className="text-sm text-muted-foreground text-center py-4">No whiteboards</div>
+                                        <div className="text-xs text-muted-foreground text-center py-4">No whiteboards</div>
                                     )}
                                 </div>
                             </ScrollArea>
                         </CardContent>
                     </Card>
-                </div>
 
-                {/* Center Column: Projects & Tasks (6 cols) */}
-                <div className="md:col-span-6 space-y-6">
-                    {/* Projects Grid */}
+                    {/* Team Widget (Moved from Right) */}
+                    <Card className="h-[360px] flex flex-col">
+                        <CardHeader className="pb-2 py-3">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-amber-500" />
+                                    Team
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setMainView('people')}>
+                                    View All
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                            <ScrollArea className="h-full">
+                                <div className="space-y-2">
+                                    {labProfiles.length > 0 ? (
+                                        labProfiles.map(profile => {
+                                            const presence = getPresenceStatus(profile.id)
+                                            return (
+                                                <div key={profile.id} className="p-2 border rounded-lg bg-card/60 flex items-center gap-2">
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarFallback className="text-xs">{getInitials(profile.firstName, profile.lastName)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-medium text-xs truncate">
+                                                            {profile.firstName} {profile.lastName}
+                                                        </div>
+                                                        <Badge variant="outline" className={`text-[9px] h-4 px-1 ${presence.className} border-0`}>
+                                                            {presence.label}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    ) : (
+                                        <div className="text-xs text-muted-foreground text-center py-4">No team members</div>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+
+                    {/* Equipment Health (Moved from Bottom) */}
                     <Card>
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 py-3">
                             <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <Layout className="h-4 w-4 text-indigo-500" />
-                                Active Projects
+                                <Wrench className="h-4 w-4 text-slate-500" />
+                                Equipment Health
                             </CardTitle>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="p-3 pt-0">
+                            <div className="space-y-2">
+                                {equipment.slice(0, 3).map(eq => {
+                                    const lastMaint = new Date(eq.lastMaintained)
+                                    const nextMaint = new Date(lastMaint)
+                                    nextMaint.setDate(nextMaint.getDate() + eq.maintenanceDays)
+                                    const daysUntil = Math.ceil((nextMaint.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                                    const isOperational = daysUntil > 0
+
+                                    return (
+                                        <div key={eq.id} className="flex items-center justify-between text-xs border p-2 rounded">
+                                            <span className="truncate max-w-[120px]">{eq.name}</span>
+                                            <div className={`h-2 w-2 rounded-full ${isOperational ? 'bg-green-500' : 'bg-red-500'}`} />
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Center Column (60%): Active Work */}
+                <div className="md:col-span-6 space-y-6">
+
+                    {/* Projects Grid */}
+                    <Card>
+                        <CardHeader className="pb-2 py-3">
+                            <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                <Layout className="h-4 w-4 text-indigo-500" />
+                                Projects
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4">
                             <div className="grid grid-cols-2 gap-4">
                                 {projects.slice(0, 4).map(project => (
                                     <div
                                         key={project.id}
-                                        className="p-3 border rounded-lg bg-card hover:shadow-sm transition-shadow cursor-pointer"
-                                        onClick={() => setSelectedProject(project)}
+                                        className={`p-4 border rounded-xl transition-all cursor-pointer ${selectedProject?.id === project.id
+                                            ? 'bg-indigo-50 border-indigo-200 shadow-md ring-1 ring-indigo-200'
+                                            : 'bg-card hover:bg-accent/50 hover:shadow-sm'
+                                            }`}
+                                        onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
                                     >
-                                        <div className="font-bold truncate">{project.name}</div>
-                                        <div className="mt-2 h-2 bg-secondary rounded-full overflow-hidden">
+                                        <div className="font-bold text-lg truncate mb-1">{project.name}</div>
+                                        <div className="flex justify-between items-center text-xs text-muted-foreground mb-3">
+                                            <span>{project.status || 'Active'}</span>
+                                            <span>{project.progress || 0}%</span>
+                                        </div>
+                                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
                                             <div
-                                                className="h-full bg-indigo-500"
+                                                className={`h-full ${selectedProject?.id === project.id ? 'bg-indigo-600' : 'bg-indigo-500'}`}
                                                 style={{ width: `${project.progress || 0}%` }}
                                             />
                                         </div>
@@ -260,253 +356,195 @@ export function HomeDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* Kanban / Tasks Overview */}
-                    <Card className="min-h-[300px]">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <Activity className="h-4 w-4 text-orange-500" />
-                                My Tasks
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-3 gap-4 h-full">
-                                {['To Do', 'In Progress', 'Done'].map(status => (
-                                    <div key={status} className="bg-muted/30 rounded-lg p-2">
-                                        <div className="text-xs font-semibold mb-2 text-center">{status}</div>
-                                        <div className="space-y-2">
-                                            {dayToDayTasks
-                                                .filter(t => t.status === status.toLowerCase().replace(' ', '-')) // Approximate mapping
-                                                .slice(0, 3)
-                                                .map(task => (
-                                                    <div key={task.id} className="bg-background p-2 rounded border text-xs shadow-sm">
-                                                        {task.title}
-                                                    </div>
-                                                ))
-                                            }
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Project Details / Deliverables (Bottom Center) */}
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium">Project Details</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {selectedProject ? (
-                                <div className="space-y-4">
-                                    <div>
-                                        <h3 className="font-bold text-lg">{selectedProject.name}</h3>
-                                        {selectedProject.description && (
-                                            <p className="text-sm text-muted-foreground mt-1">{selectedProject.description}</p>
-                                        )}
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <div className="text-xs text-muted-foreground">Status</div>
-                                            <Badge variant="outline" className="mt-1">{selectedProject.status || 'Active'}</Badge>
-                                        </div>
-                                        <div>
-                                            <div className="text-xs text-muted-foreground">Progress</div>
-                                            <div className="font-medium mt-1">{selectedProject.progress || 0}%</div>
-                                        </div>
-                                    </div>
-                                    {selectedProject.startDate && (
-                                        <div>
-                                            <div className="text-xs text-muted-foreground">Start Date</div>
-                                            <div className="text-sm mt-1">{format(new Date(selectedProject.startDate), 'MMM d, yyyy')}</div>
-                                        </div>
-                                    )}
-                                    <Button variant="outline" size="sm" onClick={() => setSelectedProject(null)}>
-                                        Close
+                    {/* Task Kanban Board */}
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <Card className="h-full">
+                                <CardHeader className="pb-2 py-3 flex flex-row items-center justify-between">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <Activity className="h-4 w-4 text-orange-500" />
+                                        Task Board
+                                    </CardTitle>
+                                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setMainView('mytasks')}>
+                                        Full Board
                                     </Button>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="p-4 pt-0">
+                                        <TaskKanban
+                                            tasks={dayToDayTasks}
+                                            onTaskClick={setSelectedTask}
+                                        />
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Task Details Panel (Side Peek) */}
+                        {selectedTask && (
+                            <div className="w-80 flex-shrink-0">
+                                <Card className="h-full border-l-4 border-l-indigo-500">
+                                    <CardHeader className="pb-2 py-3">
+                                        <div className="flex justify-between items-center">
+                                            <CardTitle className="text-sm font-medium">Task Details</CardTitle>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedTask(null)}>
+                                                <ChevronDown className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        {/* Reuse TaskDetailsPanel logic but wrapped for dashboard */}
+                                        <div className="p-4">
+                                            <h3 className="font-bold mb-2">{selectedTask.name}</h3>
+                                            <div className="space-y-4 text-sm">
+                                                <div>
+                                                    <span className="text-muted-foreground block text-xs">Due Date</span>
+                                                    {safeFormatDate(selectedTask.end)}
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground block text-xs">Importance</span>
+                                                    <Badge variant="outline" className="capitalize">{selectedTask.importance || 'Medium'}</Badge>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground block text-xs">Status</span>
+                                                    <Badge className="capitalize">{selectedTask.status || 'To Do'}</Badge>
+                                                </div>
+                                                <Button
+                                                    className="w-full mt-4"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        // Open full edit dialog logic if needed, or just navigate
+                                                        setMainView('mytasks')
+                                                    }}
+                                                >
+                                                    Open in Tasks View
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Embedded Project Details (Miller Column) */}
+                    {selectedProject && (
+                        <div className="relative animate-in fade-in slide-in-from-top-4 duration-300">
+                            {/* Visual connector arrow */}
+                            <div className="flex justify-center -mt-6 mb-2">
+                                <div className="bg-indigo-600 text-white p-1 rounded-full shadow-lg z-10">
+                                    <ChevronDown className="h-6 w-6" />
                                 </div>
-                            ) : (
-                                <div className="text-sm text-muted-foreground text-center py-4">
-                                    Select a project to view details
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                            </div>
+
+                            <Card className="border-2 border-indigo-100 shadow-lg overflow-hidden">
+                                <CardHeader className="bg-indigo-50/50 pb-2 py-3 border-b">
+                                    <div className="flex justify-between items-center">
+                                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-indigo-900">
+                                            <Layout className="h-4 w-4" />
+                                            Project Details: {selectedProject.name}
+                                        </CardTitle>
+                                        <Button variant="ghost" size="sm" onClick={() => setSelectedProject(null)}>Close</Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0 h-[600px]">
+                                    {/* Embed the Miller Column View */}
+                                    <ProjectExplorerView project={selectedProject} />
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
                 </div>
 
-                {/* Right Column: Bookings, Inventory & Research Boards (3 cols) */}
+                {/* Right Column (20%): Resources */}
                 <div className="md:col-span-3 space-y-6">
-                    {/* Team Widget */}
-                    <Card className="h-[360px] flex flex-col">
-                        <CardHeader className="pb-2 flex flex-col gap-2">
-                            <div className="flex items-start justify-between gap-2">
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <Users className="h-4 w-4 text-amber-500" />
-                                    Team
-                                </CardTitle>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-xs"
-                                        onClick={() => setMainView('profiles')}
-                                    >
-                                        Manage
-                                    </Button>
-                                    <Button variant="ghost" size="sm" className="text-xs" asChild>
-                                        <Link href="/profile">My profile</Link>
-                                    </Button>
-                                </div>
-                            </div>
-                            <p className="text-xs text-muted-foreground">Key teammates, their status, and what they are on.</p>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden">
-                            <ScrollArea className="h-full pr-2">
-                                <div className="space-y-3">
-                                    {labProfiles.length > 0 ? (
-                                        labProfiles.map(profile => {
-                                            const presence = getPresenceStatus(profile.id)
-                                            const assignment = getCurrentAssignment(profile.id)
-                                            return (
-                                                <div
-                                                    key={profile.id}
-                                                    className="p-3 border rounded-lg bg-card/60 flex items-center gap-3"
-                                                >
-                                                    <Avatar className="h-10 w-10">
-                                                        <AvatarFallback>{getInitials(profile.firstName, profile.lastName)}</AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex-1 min-w-0 space-y-1">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <div className="font-semibold truncate">
-                                                                {profile.firstName} {profile.lastName}
-                                                            </div>
-                                                            <Badge variant="outline" className={`text-[10px] ${presence.className}`}>
-                                                                {presence.label}
-                                                            </Badge>
-                                                        </div>
-                                                        <p className="text-xs text-muted-foreground truncate">
-                                                            {profile.positionDisplayName || profile.position || 'Team member'}
-                                                        </p>
-                                                        <p className="text-xs truncate">
-                                                            <span className="text-muted-foreground">Assignment:</span> {assignment}
-                                                        </p>
-                                                    </div>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="text-xs"
-                                                        onClick={() => setMainView('people')}
-                                                    >
-                                                        View
-                                                    </Button>
-                                                </div>
-                                            )
-                                        })
-                                    ) : (
-                                        <div className="text-sm text-muted-foreground text-center py-4">
-                                            Team members will appear here once profiles are set up.
-                                        </div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                        <div className="px-6 pb-4">
-                            <Button className="w-full" onClick={() => setMainView('people')}>
-                                View full team
-                            </Button>
-                        </div>
-                    </Card>
+                    {/* Today Overview Widget */}
+                    <TodayOverview />
+
                     {/* Bookings Widget */}
                     <Card className="h-[300px] flex flex-col">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 py-3">
                             <CardTitle className="text-sm font-medium flex items-center gap-2">
                                 <CalendarIcon className="h-4 w-4 text-purple-500" />
-                                Upcoming Bookings
+                                Bookings
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden">
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
                             <ScrollArea className="h-full">
                                 <div className="space-y-2">
                                     {userBookings.slice(0, 5).map(booking => (
-                                        <div key={booking.id} className="p-2 border rounded-md text-sm">
-                                            <div className="font-medium">{booking.equipmentName}</div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {format(new Date(booking.startTime), 'MMM d, HH:mm')}
+                                        <div key={booking.id} className="p-2 border rounded-md text-sm bg-muted/20">
+                                            <div className="font-medium truncate">{booking.equipmentName}</div>
+                                            <div className="text-xs text-muted-foreground mt-1 flex justify-between">
+                                                <span>{safeFormatTime(booking.startTime)}</span>
+                                                <span>{safeFormatTime(booking.endTime)}</span>
                                             </div>
                                         </div>
                                     ))}
                                     {userBookings.length === 0 && (
-                                        <div className="text-sm text-muted-foreground text-center py-4">No upcoming bookings</div>
+                                        <div className="text-xs text-muted-foreground text-center py-4">No bookings today</div>
                                     )}
                                 </div>
                             </ScrollArea>
                         </CardContent>
                     </Card>
 
-                    {/* Inventory / Orders Widget */}
+                    {/* Inventory Widget */}
                     <Card className="h-[300px] flex flex-col">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 py-3">
                             <CardTitle className="text-sm font-medium flex items-center gap-2">
                                 <Package className="h-4 w-4 text-blue-500" />
-                                To Order / Low Stock
+                                Inventory
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden">
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
                             <ScrollArea className="h-full">
                                 <div className="space-y-2">
                                     {orders
                                         .filter(o => o.status === 'to-order' || o.status === 'ordered')
                                         .slice(0, 5)
                                         .map(order => (
-                                            <div key={order.id} className="p-2 border rounded-md text-sm flex justify-between items-center">
-                                                <div className="truncate flex-1">{order.productName}</div>
-                                                <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
+                                            <div key={order.id} className="p-2 border rounded-md text-sm flex justify-between items-center bg-muted/20">
+                                                <div className="truncate flex-1 text-xs font-medium">{order.productName}</div>
+                                                <Badge variant="outline" className="text-[9px] h-4 px-1">{order.status}</Badge>
                                             </div>
                                         ))}
                                     {orders.length === 0 && (
-                                        <div className="text-sm text-muted-foreground text-center py-4">No pending orders</div>
+                                        <div className="text-xs text-muted-foreground text-center py-4">No pending orders</div>
                                     )}
                                 </div>
                             </ScrollArea>
                         </CardContent>
                     </Card>
 
-                    {/* Research Boards Snapshot */}
+                    {/* Knowledge Graph (Research Boards) */}
                     <Card className="h-[260px] flex flex-col">
-                        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                        <CardHeader className="pb-2 py-3">
                             <CardTitle className="text-sm font-medium flex items-center gap-2">
                                 <BrainCircuit className="h-4 w-4 text-indigo-500" />
-                                Research Boards
+                                Knowledge Graph
                             </CardTitle>
-                            <Button variant="link" className="h-auto px-0 text-xs" onClick={() => setMainView('research')}>
-                                Open boards
-                            </Button>
                         </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden">
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
                             <ScrollArea className="h-full">
                                 <div className="space-y-2">
                                     {researchBoards.slice(0, 5).map(board => (
-                                        <button
+                                        <div
                                             key={board.id}
                                             onClick={() => setMainView('research')}
-                                            className="w-full text-left p-2 border rounded-md text-sm hover:bg-accent transition-colors"
+                                            className="w-full text-left p-2 border rounded-md text-sm hover:bg-accent transition-colors cursor-pointer"
                                         >
-                                            <div className="font-medium truncate">{board.name}</div>
+                                            <div className="font-medium truncate text-xs">{board.name}</div>
                                             <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="outline" className="text-[10px] capitalize">
-                                                    {board.status}
-                                                </Badge>
-                                                <Badge variant="secondary" className="text-[10px]">
+                                                <Badge variant="secondary" className="text-[9px] h-4 px-1">
                                                     {board.ownerName}
                                                 </Badge>
                                             </div>
-                                            <div className="text-[11px] text-muted-foreground mt-1">
-                                                Updated {format(board.updatedAt, 'MMM d')}
-                                            </div>
-                                        </button>
+                                        </div>
                                     ))}
                                     {researchBoards.length === 0 && (
-                                        <div className="text-sm text-muted-foreground text-center py-4">
-                                            No research boards yet
+                                        <div className="text-xs text-muted-foreground text-center py-4">
+                                            No graphs yet
                                         </div>
                                     )}
                                 </div>
@@ -515,38 +553,6 @@ export function HomeDashboard() {
                     </Card>
                 </div>
             </div>
-
-            {/* Bottom Section: Equipment Health */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <Wrench className="h-4 w-4 text-slate-500" />
-                        Equipment Health
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex gap-4 overflow-x-auto pb-2">
-                        {equipment.slice(0, 6).map(eq => {
-                            // Calculate status based on maintenance
-                            const lastMaint = new Date(eq.lastMaintained)
-                            const nextMaint = new Date(lastMaint)
-                            nextMaint.setDate(nextMaint.getDate() + eq.maintenanceDays)
-                            const daysUntil = Math.ceil((nextMaint.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-                            const isOperational = daysUntil > 0
-
-                            return (
-                                <div key={eq.id} className="min-w-[150px] p-3 border rounded-lg">
-                                    <div className="font-medium text-sm truncate">{eq.name}</div>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <div className={`h-2 w-2 rounded-full ${isOperational ? 'bg-green-500' : 'bg-red-500'}`} />
-                                        <span className="text-xs text-muted-foreground capitalize">{isOperational ? 'Operational' : 'Maintenance Due'}</span>
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     )
 }

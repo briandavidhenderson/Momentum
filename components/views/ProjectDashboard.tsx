@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { GroupSelector } from "@/components/GroupSelector"
+import { ProjectKanbanBoard } from "./ProjectKanbanBoard"
+import { personProfilesToPeople } from "@/lib/personHelpers"
 
 export function ProjectDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth()
@@ -165,6 +167,8 @@ export function ProjectDashboard() {
     () => new Map(filteredProjects.map(project => [project.id, project])),
     [filteredProjects]
   )
+
+  const peopleList = useMemo(() => personProfilesToPeople(allProfiles), [allProfiles])
 
   const renderHealthBadge = (health?: ProjectHealth) => {
     if (!health) return null
@@ -348,8 +352,8 @@ export function ProjectDashboard() {
               deliverableIds: [],
               isExpanded: true,
               importance: "medium",
-              createdBy: user?.uid || "",
-            } as any)
+
+            })
 
             if (workpackageId) {
               await handleUpdateMasterProject(projectId, {
@@ -805,6 +809,36 @@ export function ProjectDashboard() {
                       return renderProjectCard(project)
                     })}
                   </div>
+                </div>
+              )}
+
+              {projectView === "kanban" && (
+                <div className="h-full overflow-hidden">
+                  <ProjectKanbanBoard
+                    projects={filteredProjects}
+                    workpackages={allWorkpackages}
+                    deliverables={deliverables}
+                    people={allProfiles}
+                    budgetSummaries={budgetSummaries}
+                    projectHealths={projectHealths}
+                    onProjectStatusChange={async (projectId, newStatus) => {
+                      await handleUpdateMasterProject(projectId, { status: newStatus })
+                    }}
+                  />
+                </div>
+              )}
+
+              {projectView === "gantt" && (
+                <div className="h-full overflow-hidden">
+                  <ProjectGanttChart
+                    projects={filteredProjects}
+                    workpackages={allWorkpackages}
+                    people={peopleList}
+                    onTaskClick={(task) => {
+                      setSelectedTask(task)
+                      setShowTaskEditDialog(true)
+                    }}
+                  />
                 </div>
               )}
 

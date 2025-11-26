@@ -101,26 +101,29 @@ export function CreateBoardDialog({ open, onOpenChange }: CreateBoardDialogProps
                         <Label>Add Members</Label>
                         <ScrollArea className="h-[200px] border rounded-md p-2">
                             <div className="space-y-2">
-                                {profiles?.map((profile) => (
-                                    <div key={profile.id} className="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded">
-                                        <Checkbox
-                                            id={`member-${profile.id}`}
-                                            checked={selectedMembers.includes(profile.id) || profile.id === currentUser?.uid}
-                                            disabled={profile.id === currentUser?.uid}
-                                            onCheckedChange={() => toggleMember(profile.id)}
-                                        />
-                                        <Label htmlFor={`member-${profile.id}`} className="flex items-center gap-2 cursor-pointer flex-1">
-                                            <Avatar className="h-6 w-6">
-                                                <AvatarImage src={profile.avatarUrl} />
-                                                <AvatarFallback className="text-[10px]">{profile.firstName?.[0]}{profile.lastName?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <span className="text-sm font-medium">
-                                                {profile.firstName} {profile.lastName}
-                                                {profile.id === currentUser?.uid && " (You)"}
-                                            </span>
-                                        </Label>
-                                    </div>
-                                ))}
+                                {profiles?.map((profile) => {
+                                    const userIdForProfile = profile.userId || '';
+                                    return (
+                                        <div key={profile.id} className="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded">
+                                            <Checkbox
+                                                id={`member-${profile.id}`}
+                                                checked={selectedMembers.includes(userIdForProfile) || userIdForProfile === currentUser?.uid}
+                                                disabled={userIdForProfile === currentUser?.uid}
+                                                onCheckedChange={() => toggleMember(userIdForProfile)}
+                                            />
+                                            <Label htmlFor={`member-${profile.id}`} className="flex items-center gap-2 cursor-pointer flex-1">
+                                                <Avatar className="h-6 w-6">
+                                                    <AvatarImage src={profile.avatarUrl} />
+                                                    <AvatarFallback className="text-[10px]">{profile.firstName?.[0]}{profile.lastName?.[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-sm font-medium">
+                                                    {profile.firstName} {profile.lastName}
+                                                    {userIdForProfile === currentUser?.uid && " (You)"}
+                                                </span>
+                                            </Label>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </ScrollArea>
                     </div>

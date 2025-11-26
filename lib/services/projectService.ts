@@ -96,6 +96,11 @@ export async function createMasterProject(projectData: Omit<MasterProject, 'id' 
     progress: 0,
     groupIds: projectData.groupIds || [],
     workpackageIds: projectData.workpackageIds || [],
+    // Initialize member arrays for PI-only visibility
+    principalInvestigatorIds: projectData.principalInvestigatorIds || [],
+    coPIIds: projectData.coPIIds || [],
+    teamMemberIds: projectData.teamMemberIds || [],
+    teamRoles: projectData.teamRoles || {},
   }
 
   // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)

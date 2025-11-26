@@ -188,15 +188,15 @@ export interface Order {
   url?: string
   priority?: "normal" | "high" | "critical"
 
-  // Linking (UPDATED: Account is now REQUIRED)
-  accountId: string               // ✅ REQUIRED: Link to funding account
-  accountName: string             // Cached
+  // Linking (UPDATED: Account is now OPTIONAL)
+  accountId?: string               // Optional: Link to funding account
+  accountName?: string             // Cached
   fundingAllocationId?: string    // Optional: Specific allocation within the account
   allocationName?: string         // Cached
-  funderId: string                // ✅ Cached from account
-  funderName: string              // Cached
-  masterProjectId: string         // ✅ Cached from account
-  masterProjectName: string       // Cached
+  funderId?: string                // ✅ Cached from account
+  funderName?: string              // Cached
+  masterProjectId?: string         // ✅ Cached from account
+  masterProjectName?: string       // Cached
 
   // NEW: Hierarchical Project Linking (PREFERRED)
   // Orders should ideally be linked to a specific deliverable for accurate budget tracking

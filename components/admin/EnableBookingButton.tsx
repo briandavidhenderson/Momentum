@@ -29,9 +29,13 @@ export function EnableBookingButton() {
       const data = response.data as any;
       console.log('Success:', data);
 
-      setResult(
-        `✅ Success! Enabled booking on ${data.updated} out of ${data.totalEquipment} equipment items.`
-      );
+      if (data.updated === 0 && data.totalEquipment > 0) {
+        setResult(`✅ All ${data.totalEquipment} equipment items already have booking enabled.`);
+      } else {
+        setResult(
+          `✅ Success! Enabled booking on ${data.updated} out of ${data.totalEquipment} equipment items.`
+        );
+      }
     } catch (err: any) {
       console.error('Error calling function:', err);
       setError(`❌ Error: ${err.message || 'Failed to enable booking'}`);

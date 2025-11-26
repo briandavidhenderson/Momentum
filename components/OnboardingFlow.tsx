@@ -228,9 +228,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
     // Feature #8: Add supervisor selection for non-PIs
     if (!state.isPrincipalInvestigator) {
       base.push("supervisor-selection")
+    } else {
+      // Only PIs can create projects
+      base.push("project-choice")
     }
-
-    base.push("project-choice")
 
     if (state.createProject) {
       base.push("project-details", "account-details")
@@ -246,10 +247,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   // Load organisations on mount with cleanup
   useEffect(() => {
     let active = true
-    ;(async () => {
-      const orgs = await loadOrganisations()
-      if (active && orgs) setOrganisations(orgs)
-    })()
+      ; (async () => {
+        const orgs = await loadOrganisations()
+        if (active && orgs) setOrganisations(orgs)
+      })()
     return () => {
       active = false
     }
@@ -258,10 +259,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   // Load funders on mount with cleanup
   useEffect(() => {
     let active = true
-    ;(async () => {
-      const fundersList = await loadFunders()
-      if (active && fundersList) setFunders(fundersList)
-    })()
+      ; (async () => {
+        const fundersList = await loadFunders()
+        if (active && fundersList) setFunders(fundersList)
+      })()
     return () => {
       active = false
     }
@@ -288,10 +289,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   useEffect(() => {
     if (!state.selectedOrganisation) return
     let active = true
-    ;(async () => {
-      const insts = await loadInstitutes(state.selectedOrganisation!.id)
-      if (active && insts) setInstitutes(insts)
-    })()
+      ; (async () => {
+        const insts = await loadInstitutes(state.selectedOrganisation!.id)
+        if (active && insts) setInstitutes(insts)
+      })()
     return () => {
       active = false
     }
@@ -301,10 +302,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   useEffect(() => {
     if (!state.selectedInstitute) return
     let active = true
-    ;(async () => {
-      const labsList = await loadLabs(state.selectedInstitute!.id)
-      if (active && labsList) setLabs(labsList)
-    })()
+      ; (async () => {
+        const labsList = await loadLabs(state.selectedInstitute!.id)
+        if (active && labsList) setLabs(labsList)
+      })()
     return () => {
       active = false
     }
@@ -884,9 +885,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     <button
                       key={org.id}
                       onClick={() => setState((s) => ({ ...s, selectedOrganisation: org }))}
-                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${
-                        state.selectedOrganisation?.id === org.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
-                      }`}
+                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${state.selectedOrganisation?.id === org.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
+                        }`}
                     >
                       <div className="font-medium">{org.name}</div>
                       <div className="text-sm text-gray-500">{org.country}</div>
@@ -998,9 +998,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     <button
                       key={inst.id}
                       onClick={() => setState((s) => ({ ...s, selectedInstitute: inst }))}
-                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${
-                        state.selectedInstitute?.id === inst.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
-                      }`}
+                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${state.selectedInstitute?.id === inst.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
+                        }`}
                     >
                       <div className="font-medium">{inst.name}</div>
                       {inst.department && <div className="text-sm text-gray-500">{inst.department}</div>}
@@ -1070,9 +1069,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     <button
                       key={lab.id}
                       onClick={() => setState((s) => ({ ...s, selectedLab: lab }))}
-                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${
-                        state.selectedLab?.id === lab.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
-                      }`}
+                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${state.selectedLab?.id === lab.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
+                        }`}
                     >
                       <div className="font-medium">{lab.name}</div>
                       {lab.description && <div className="text-sm text-gray-500 mt-1">{lab.description}</div>}
@@ -1217,11 +1215,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                       <button
                         key={pos}
                         onClick={() => setState((s) => ({ ...s, positionLevel: pos }))}
-                        className={`w-full p-3 text-left rounded-lg border transition ${
-                          state.positionLevel === pos
+                        className={`w-full p-3 text-left rounded-lg border transition ${state.positionLevel === pos
                             ? "bg-blue-50 border-blue-600"
                             : "hover:bg-gray-50 border-gray-200"
-                        }`}
+                          }`}
                       >
                         {POSITION_DISPLAY_NAMES[pos]}
                       </button>
@@ -1350,9 +1347,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setState((s) => ({ ...s, isPrincipalInvestigator: true }))}
-                className={`p-6 rounded-lg border-2 transition ${
-                  state.isPrincipalInvestigator ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
-                }`}
+                className={`p-6 rounded-lg border-2 transition ${state.isPrincipalInvestigator ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
+                  }`}
               >
                 <div className="font-semibold mb-2">Yes, I am a PI</div>
                 <div className="text-sm text-gray-600">I lead research projects and can manage funding accounts</div>
@@ -1360,11 +1356,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
               <button
                 onClick={() => setState((s) => ({ ...s, isPrincipalInvestigator: false }))}
-                className={`p-6 rounded-lg border-2 transition ${
-                  !state.isPrincipalInvestigator
+                className={`p-6 rounded-lg border-2 transition ${!state.isPrincipalInvestigator
                     ? "bg-blue-50 border-blue-600"
                     : "border-gray-200 hover:border-gray-300"
-                }`}
+                  }`}
               >
                 <div className="font-semibold mb-2">No, I&apos;m not a PI</div>
                 <div className="text-sm text-gray-600">I work on projects led by other researchers</div>
@@ -1397,8 +1392,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             const position = (p.positionDisplayName || p.position || "").toLowerCase()
             const department = (p.labName || "").toLowerCase()
             return fullName.includes(searchLower) ||
-                   position.includes(searchLower) ||
-                   department.includes(searchLower)
+              position.includes(searchLower) ||
+              department.includes(searchLower)
           })
 
         return (
@@ -1424,41 +1419,37 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             <div className="flex gap-2 border-b">
               <button
                 onClick={() => setSupervisorFilter("all")}
-                className={`px-4 py-2 font-medium border-b-2 transition ${
-                  supervisorFilter === "all"
+                className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "all"
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
+                  }`}
               >
                 All Network
               </button>
               <button
                 onClick={() => setSupervisorFilter("org")}
-                className={`px-4 py-2 font-medium border-b-2 transition ${
-                  supervisorFilter === "org"
+                className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "org"
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
+                  }`}
               >
                 My Organisation
               </button>
               <button
                 onClick={() => setSupervisorFilter("school")}
-                className={`px-4 py-2 font-medium border-b-2 transition ${
-                  supervisorFilter === "school"
+                className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "school"
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
+                  }`}
               >
                 My School/Faculty
               </button>
               <button
                 onClick={() => setSupervisorFilter("dept")}
-                className={`px-4 py-2 font-medium border-b-2 transition ${
-                  supervisorFilter === "dept"
+                className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "dept"
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
+                  }`}
               >
                 My Department
               </button>
@@ -1495,11 +1486,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                   <button
                     key={supervisor.id}
                     onClick={() => setState((s) => ({ ...s, supervisorId: supervisor.id }))}
-                    className={`w-full p-4 rounded-lg border-2 transition text-left ${
-                      state.supervisorId === supervisor.id
+                    className={`w-full p-4 rounded-lg border-2 transition text-left ${state.supervisorId === supervisor.id
                         ? "bg-blue-50 border-blue-600"
                         : "border-gray-200 hover:border-gray-300"
-                    }`}
+                      }`}
                   >
                     <div className="font-semibold">
                       {supervisor.firstName} {supervisor.lastName}
@@ -1533,9 +1523,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setState((s) => ({ ...s, createProject: true }))}
-                className={`p-6 rounded-lg border-2 transition ${
-                  state.createProject ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
-                }`}
+                className={`p-6 rounded-lg border-2 transition ${state.createProject ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
+                  }`}
               >
                 <div className="font-semibold mb-2">Create Project Now</div>
                 <div className="text-sm text-gray-600">Set up your research project with funding details</div>
@@ -1543,9 +1532,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
               <button
                 onClick={() => setState((s) => ({ ...s, createProject: false }))}
-                className={`p-6 rounded-lg border-2 transition ${
-                  !state.createProject ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
-                }`}
+                className={`p-6 rounded-lg border-2 transition ${!state.createProject ? "bg-blue-50 border-blue-600" : "border-gray-200 hover:border-gray-300"
+                  }`}
               >
                 <div className="font-semibold mb-2">Skip for Now</div>
                 <div className="text-sm text-gray-600">I&apos;ll create my project later from my dashboard</div>

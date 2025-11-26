@@ -30,6 +30,8 @@ import type { ResearchPin } from '@/lib/types';
 import { ResearchPinDialog } from '@/components/dialogs/ResearchPinDialog';
 import { ResearchPinQADialog } from '@/components/dialogs/ResearchPinQADialog';
 import { ResearchBoardChat } from './ResearchBoardChat';
+import { analyzeResearchPin } from '@/lib/services/researchAIService';
+import { logger } from '@/lib/logger';
 
 interface ResearchBoardDetailProps {
   boardId: string;
@@ -79,6 +81,15 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
     setQaDialogOpen(true);
     // Clear the quick question input
     setQuickQuestion({ ...quickQuestion, [pin.id]: '' });
+  };
+
+  const handleAnalyzePin = async (pin: ResearchPin) => {
+    try {
+      await analyzeResearchPin(pin);
+    } catch (error) {
+      logger.error('Failed to analyze pin', error);
+      alert('Failed to analyze pin. Please try again.');
+    }
   };
 
   const getTypeColor = (type: ResearchPin['type']) => {
@@ -271,7 +282,14 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
                       )}
 
                       {/* AI Analysis Block */}
-                      {pin.aiAnalysis && !pin.isThinking && (
+                      {pin.isThinking ? (
+                        <div className="mt-2 p-2.5 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-indigo-600">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Analyzing with Gemini...
+                          </div>
+                        </div>
+                      ) : pin.aiAnalysis ? (
                         <div className="mt-2 p-2.5 bg-indigo-50/50 rounded-lg border border-indigo-100">
                           <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
                             <BrainCircuit className="h-3 w-3" />
@@ -279,6 +297,12 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
                           </div>
                           <p className="text-xs text-slate-700 leading-relaxed">
                             {pin.aiAnalysis}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-2 p-2.5 bg-slate-50/50 rounded-lg border border-slate-200">
+                          <p className="text-xs text-slate-500 text-center">
+                            No AI analysis yet. Click &quot;Analyze with AI&quot; to generate insights.
                           </p>
                         </div>
                       )}
@@ -304,6 +328,25 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
                           onClick={() => handleOpenQA(pin)}
                         >
                           Full Chat
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => handleAnalyzePin(pin)}
+                          disabled={pin.isThinking}
+                        >
+                          {pin.isThinking ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <BrainCircuit className="h-3 w-3 mr-1" />
+                              Analyze with AI
+                            </>
+                          )}
                         </Button>
                       </div>
 

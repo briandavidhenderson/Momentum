@@ -49,12 +49,32 @@ service firebase.storage {
       allow write: if isAuthenticated() && isAdmin();
     }
 
-    // Research Board files - lab members can read, authenticated users can write
+    // Research Board files - enforce pin visibility
     match /research/{labId}/{pinId}/{allPaths=**} {
-      // Allow read for authenticated users (lab filtering done client-side)
-      allow read: if isAuthenticated();
-      // Allow write for authenticated users (they can upload to their lab's research folder)
-      allow write: if isAuthenticated();
+      // Read: Check pin visibility in Firestore
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        exists(/databases/(default)/documents/researchPins/$(pinId)) && (
+          // Public pins - anyone can read
+          firestore.get(/databases/(default)/documents/researchPins/$(pinId)).data.visibility == 'public' ||
+          // Lab pins - lab members only
+          (firestore.get(/databases/(default)/documents/researchPins/$(pinId)).data.visibility == 'lab' &&
+           isLabMember(labId)) ||
+          // Private pins - author only
+          (firestore.get(/databases/(default)/documents/researchPins/$(pinId)).data.visibility == 'private' &&
+           firestore.get(/databases/(default)/documents/researchPins/$(pinId)).data.author.userId == request.auth.uid)
+        )
+      );
+
+      // Write: Only lab members can upload to their lab's research folder
+      allow write: if isAuthenticated() && (
+        isAdmin() ||
+        isLabMember(labId) ||
+        (
+          firestore.exists(/databases/(default)/documents/researchPins/$(pinId)) &&
+          firestore.get(/databases/(default)/documents/researchPins/$(pinId)).data.author.userId == request.auth.uid
+        )
+      );
     }
 
     // Helper: get user's profileId and labId

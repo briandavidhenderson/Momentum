@@ -11,6 +11,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "deploy:rules": "firebase deploy --only firestore:rules && firebase deploy --only storage",
+    "deploy:indexes": "firebase deploy --only firestore:indexes",
     "deploy:functions": "cd firebase/functions && npm run build && cd ../.. && firebase deploy --only functions",
     "deploy:hosting": "npm run build && firebase deploy --only hosting",
     "deploy:all": "npm run deploy:rules && npm run deploy:functions && npm run deploy:hosting",

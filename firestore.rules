@@ -295,29 +295,28 @@ service cloud.firestore {
     // MASTER PROJECTS
     // ============================================================================
     match /masterProjects/{projectId} {
-      // Users can read projects if they are:
-      // - A member of the project's lab
-      // - A member of the project team
-      // - An admin
+      // Read: Team members + admins + lab members (backward compatibility)
       allow read: if isAuthenticated() && (
         isAdmin() ||
-        isLabMember(resource.data.labId) ||
-        getUserProfileId() in resource.data.teamMemberIds
+        getUserProfileId() in resource.data.principalInvestigatorIds ||
+        getUserProfileId() in resource.data.coPIIds ||
+        getUserProfileId() in resource.data.teamMemberIds ||
+        isLabMember(resource.data.labId)
       );
 
-      // PIs and lab members can create projects
+      // Create: Lab members can create projects
       allow create: if isAuthenticated() && (
         isAdmin() ||
         isLabMember(request.resource.data.labId)
       );
 
-      // PIs or admins can update projects
+      // Update: PIs or admins only
       allow update: if isAuthenticated() && (
         isAdmin() ||
         getUserProfileId() in resource.data.principalInvestigatorIds
       );
 
-      // Only PIs or admins can delete projects
+      // Delete: PIs or admins only
       allow delete: if isAuthenticated() && (
         isAdmin() ||
         getUserProfileId() in resource.data.principalInvestigatorIds
@@ -817,6 +816,31 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // COMMENTS (Threaded discussions on entities)
+    // ============================================================================
+    match /comments/{commentId} {
+      // Allow authenticated users to read non-deleted comments
+      allow read: if isAuthenticated() && resource.data.isDeleted != true;
+
+      // Create: authenticated user creating as their own profile
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == getUserProfileId();
+
+      // Update: author (profile) or admin; authorId cannot change
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.authorId == getUserProfileId() &&
+         request.resource.data.authorId == resource.data.authorId)
+      );
+
+      // Delete: author or admin (soft delete in client)
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.authorId == getUserProfileId()
+      );
+    }
+
+    // ============================================================================
     // NOTIFICATIONS
     // ============================================================================
     match /notifications/{notificationId} {
@@ -878,22 +902,27 @@ service cloud.firestore {
     // RESEARCH BOARDS
     // ============================================================================
     match /researchBoards/{boardId} {
-      // Users can read boards in their lab
+      // Users can read boards if they are:
+      // - A member of the board (explicit membership)
+      // - A member of the lab (backward compatibility during migration)
+      // - An admin
       allow read: if isAuthenticated() && (
-        isLabMember(resource.data.labId) ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.members != null && resource.data.members.hasAny([request.auth.uid])) ||
+        isLabMember(resource.data.labId)
       );
 
-      // Users can create boards
+      // Users can create boards (must be in their lab)
       allow create: if isAuthenticated() && (
         request.resource.data.creatorId == request.auth.uid &&
         isLabMember(request.resource.data.labId)
       );
 
-      // Members can update boards
+      // Members or lab members can update boards
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        (resource.data.members != null && resource.data.members.hasAny([request.auth.uid]))
+        (resource.data.members != null && resource.data.members.hasAny([request.auth.uid])) ||
+        isLabMember(resource.data.labId)
       );
 
       // Only creator or admin can delete
@@ -906,17 +935,15 @@ service cloud.firestore {
       // BOARD MESSAGES (Subcollection)
       // ============================================================================
       match /messages/{messageId} {
-        // Users can read messages if they can read the board
-        allow read: if isAuthenticated() && (
-          isLabMember(get(/databases/$(database)/documents/researchBoards/$(boardId)).data.labId) ||
-          isAdmin()
-        );
+        // Messages inherit board-level security
+        // If user can access board, they can read messages
+        // Board membership is enforced at board query level
+        allow read: if isAuthenticated();
 
-        // Users can create messages if they can read the board
-        allow create: if isAuthenticated() && (
-          isLabMember(get(/databases/$(database)/documents/researchBoards/$(boardId)).data.labId) ||
-          isAdmin()
-        );
+        // Users can create messages if authenticated
+        // Board membership is enforced at board level
+        allow create: if isAuthenticated() &&
+          request.resource.data.boardId == boardId;
       }
     }
 

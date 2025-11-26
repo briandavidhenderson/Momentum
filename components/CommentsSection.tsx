@@ -73,21 +73,29 @@ export function CommentsSection({
       orderBy("createdAt", "asc")
     )
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const commentsData = snapshot.docs.map((doc) => {
-        const data = doc.data()
-        return {
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
-          editedAt: data.editedAt?.toDate?.()?.toISOString(),
-          deletedAt: data.deletedAt?.toDate?.()?.toISOString(),
-        } as Comment
-      })
-      setComments(commentsData)
-      setLoading(false)
-    })
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const commentsData = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            updatedAt: data.updatedAt?.toDate?.()?.toISOString(),
+            editedAt: data.editedAt?.toDate?.()?.toISOString(),
+            deletedAt: data.deletedAt?.toDate?.()?.toISOString(),
+          } as Comment
+        })
+        setComments(commentsData)
+        setLoading(false)
+      },
+      (error) => {
+        logger.error("Error loading comments", error)
+        setComments([])
+        setLoading(false)
+      }
+    )
 
     return () => unsubscribe()
   }, [entityType, entityId, currentUser?.uid])

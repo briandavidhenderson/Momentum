@@ -555,6 +555,42 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "researchPins",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "author.userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "boardId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "researchPins",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "labId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
@@ -566,6 +602,28 @@
       "fields": [
         {
           "fieldPath": "labId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "researchPins",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "boardId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "labId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibility",
           "order": "ASCENDING"
         },
         {

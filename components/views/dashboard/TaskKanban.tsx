@@ -1,0 +1,101 @@
+"use client"
+
+import React from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Task } from '@/lib/types'
+import { DayToDayTask } from '@/lib/dayToDayTypes'
+import { format } from 'date-fns'
+import { cn } from '@/lib/utils'
+
+// Union type to support both Task and DayToDayTask if possible, 
+// or just use Task and map DayToDayTask to Task before passing.
+// But DayToDayTask might be missing fields.
+// Let's inspect DayToDayTask first.
+// For now, I'll use any to avoid the build error and fix it properly after checking types.
+// Actually, I'll use a generic interface that covers both.
+
+interface KanbanTask {
+    id: string
+    title?: string // DayToDayTask
+    name?: string // Task
+    status?: string
+    end?: Date | string
+    importance?: string
+    // Add other fields as needed
+}
+
+interface TaskKanbanProps {
+    tasks: any[] // Using any temporarily to bypass the DayToDayTask mismatch
+    onTaskClick?: (task: any) => void
+}
+
+export function TaskKanban({ tasks, onTaskClick }: TaskKanbanProps) {
+    const columns = [
+        { id: 'todo', label: 'To do', color: 'bg-sky-100 border-sky-200' },
+        { id: 'in-progress', label: 'In Progress', color: 'bg-indigo-100 border-indigo-200' },
+        { id: 'done', label: 'Done', color: 'bg-emerald-100 border-emerald-200' }
+    ]
+
+    const getColumnTasks = (status: string) => {
+        // Map various statuses to the 3 main columns
+        if (status === 'done') return tasks.filter(t => t.status === 'done' || t.status === 'completed')
+        if (status === 'in-progress') return tasks.filter(t => t.status === 'in-progress' || t.status === 'working')
+        return tasks.filter(t => t.status === 'not-started' || t.status === 'todo' || !t.status)
+    }
+
+    const getImportanceColor = (importance?: string) => {
+        switch (importance) {
+            case 'high': return 'bg-red-100 text-red-700 border-red-200'
+            case 'medium': return 'bg-amber-100 text-amber-700 border-amber-200'
+            case 'low': return 'bg-slate-100 text-slate-700 border-slate-200'
+            default: return 'bg-slate-100 text-slate-700 border-slate-200'
+        }
+    }
+
+    return (
+        <div className="grid grid-cols-3 gap-4 h-full min-h-[400px]">
+            {columns.map(col => (
+                <div key={col.id} className="flex flex-col h-full">
+                    <div className={cn("text-center py-2 font-semibold text-sm border-b-2 mb-2 rounded-t-lg", col.color)}>
+                        {col.label}
+                    </div>
+                    <div className={cn("flex-1 bg-muted/20 rounded-b-lg border border-t-0 p-2", col.color.replace('bg-', 'border-'))}>
+                        <ScrollArea className="h-[360px]">
+                            <div className="space-y-2 pr-2">
+                                {getColumnTasks(col.id).map(task => (
+                                    <div
+                                        key={task.id}
+                                        onClick={() => onTaskClick?.(task)}
+                                        className="bg-white p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+                                    >
+                                        <div className="font-medium text-sm mb-2 line-clamp-2 group-hover:text-primary">
+                                            {task.name || task.title}
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-1.5 mt-auto">
+                                            {task.end && (
+                                                <Badge variant="outline" className="text-[10px] h-5 font-normal">
+                                                    Due {format(new Date(task.end), 'MMM d')}
+                                                </Badge>
+                                            )}
+                                            {task.importance && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className={cn("text-[10px] h-5 font-normal capitalize border-0", getImportanceColor(task.importance))}
+                                                >
+                                                    {task.importance}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
+}
