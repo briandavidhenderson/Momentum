@@ -19,7 +19,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useToast } from "@/components/ui/toast"
 import { useWhiteboardHistory } from "@/lib/hooks/useWhiteboardHistory"
 import { useWhiteboardHotkeys } from "@/lib/hooks/useWhiteboardHotkeys"
-import { PROTOCOL_SCHEMA_VERSION, ProtocolExport, UnitOperation } from "@/lib/protocol/types"
+import { PROTOCOL_SCHEMA_VERSION, ProtocolExport, UnitOperation, ProtocolGroup } from "@/lib/protocol/types"
 import { getOperationDefinition } from "./protocolConfig"
 import {
     Dialog,
@@ -139,6 +139,58 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
 
     const isProtocolShape = (shape: Shape): shape is Shape & { protocolData: UnitOperation } => {
         return shape.type === "protocol_node" && !!shape.protocolData
+    }
+
+    const findNodeAtPoint = (point: Point, snapDistance: number = 30): Shape | null => {
+        // Find protocol nodes within snap distance of the point
+        const protocolNodes = shapes.filter(s => s.type === "protocol_node")
+
+        for (const node of protocolNodes) {
+            const bounds = normalizeBounds(node)
+            const centerX = bounds.x + bounds.width / 2
+            const centerY = bounds.y + bounds.height / 2
+
+            const distance = Math.sqrt(Math.pow(point.x - centerX, 2) + Math.pow(point.y - centerY, 2))
+
+            if (distance <= snapDistance) {
+                return node
+            }
+        }
+
+        return null
+    }
+
+    const migrateArrowConnections = (shapesToMigrate: Shape[]): Shape[] => {
+        // Migrate arrows without fromNodeId/toNodeId by detecting spatial connections
+        return shapesToMigrate.map(shape => {
+            if (!["arrow", "line", "elbow", "curve"].includes(shape.type)) return shape
+            if (shape.fromNodeId && shape.toNodeId) return shape // already migrated
+
+            const startPoint = { x: shape.x, y: shape.y }
+            const endPoint = { x: shape.x + shape.width, y: shape.y + shape.height }
+
+            // Use a helper to find nodes at these points
+            const protocolNodes = shapesToMigrate.filter(s => s.type === "protocol_node")
+
+            const findNodeAtPointForMigration = (point: Point): Shape | null => {
+                for (const node of protocolNodes) {
+                    const bounds = normalizeBounds(node)
+                    const centerX = bounds.x + bounds.width / 2
+                    const centerY = bounds.y + bounds.height / 2
+                    const distance = Math.sqrt(Math.pow(point.x - centerX, 2) + Math.pow(point.y - centerY, 2))
+                    if (distance <= 30) return node
+                }
+                return null
+            }
+
+            const fromNode = findNodeAtPointForMigration(startPoint)
+            const toNode = findNodeAtPointForMigration(endPoint)
+
+            if (fromNode || toNode) {
+                return { ...shape, fromNodeId: fromNode?.id, toNodeId: toNode?.id, isAutoConnected: true }
+            }
+            return shape
+        })
     }
 
     // -- ACTIONS --
@@ -352,6 +404,31 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
             setSelectedIds(newSelection)
         }
 
+        // Detect arrow connections when drawing is complete
+        if (interaction === "drawing" && selectedIds.size === 1) {
+            const drawnShapeId = Array.from(selectedIds)[0]
+            const drawnShape = shapes.find(s => s.id === drawnShapeId)
+
+            if (drawnShape && ["arrow", "line", "elbow", "curve"].includes(drawnShape.type)) {
+                const startPoint = { x: drawnShape.x, y: drawnShape.y }
+                const endPoint = {
+                    x: drawnShape.x + drawnShape.width,
+                    y: drawnShape.y + drawnShape.height
+                }
+
+                const fromNode = findNodeAtPoint(startPoint)
+                const toNode = findNodeAtPoint(endPoint)
+
+                if (fromNode || toNode) {
+                    setShapes(prev => prev.map(s =>
+                        s.id === drawnShapeId
+                            ? { ...s, fromNodeId: fromNode?.id, toNodeId: toNode?.id, isAutoConnected: true }
+                            : s
+                    ))
+                }
+            }
+        }
+
         setInteraction("none")
         setDragStart(null)
         setLastMousePos(null)
@@ -419,6 +496,27 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
     const ungroupSelected = useCallback(() => {
         setShapes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, groupId: undefined } : s))
     }, [selectedIds, setShapes])
+
+    const createParallelGroup = useCallback(() => {
+        // Only group protocol nodes, and need at least 2
+        const protocolNodes = shapes.filter(s => selectedIds.has(s.id) && s.type === "protocol_node")
+        if (protocolNodes.length < 2) return
+
+        const newParallelGroupId = generateId()
+        setShapes(prev => prev.map(s =>
+            selectedIds.has(s.id) && s.type === "protocol_node"
+                ? { ...s, parallelGroupId: newParallelGroupId }
+                : s
+        ))
+        success("Created parallel group")
+    }, [selectedIds, shapes, setShapes, success])
+
+    const removeFromParallelGroup = useCallback(() => {
+        setShapes(prev => prev.map(s =>
+            selectedIds.has(s.id) ? { ...s, parallelGroupId: undefined } : s
+        ))
+        success("Removed from parallel group")
+    }, [selectedIds, setShapes, success])
 
     const toggleLock = () => {
         setShapes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, locked: !s.locked } : s))
@@ -620,8 +718,23 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         console.log("Whiteboard hotkeys active", { enabled: true, isTextEditing: !!editingId })
     }, [editingId])
 
+    // Migrate arrow connections on initial load (backward compatibility)
+    useEffect(() => {
+        if (initialData?.shapes) {
+            const migrated = migrateArrowConnections(initialData.shapes)
+            // Only update if migration actually changed something
+            const hasChanges = migrated.some((shape, i) => {
+                const orig = initialData.shapes[i]
+                return shape.fromNodeId !== orig.fromNodeId || shape.toNodeId !== orig.toNodeId
+            })
+            if (hasChanges) {
+                setShapes(migrated)
+            }
+        }
+    }, []) // Run only once on mount
+
     // -- ASSET DRAG --
-    const handleDragStart = (e: React.DragEvent, payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol', id: string, name?: string, operationType?: string }) => {
+    const handleDragStart = (e: React.DragEvent, payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer', id: string, name?: string, operationType?: string }) => {
         e.dataTransfer.setData("application/x-protocolviz", JSON.stringify(payload))
     }
 
@@ -664,7 +777,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         const raw = e.dataTransfer.getData("application/x-protocolviz")
         if (!raw) return
 
-        let payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol', id: string, name?: string, operationType?: string }
+        let payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer', id: string, name?: string, operationType?: string }
         try { payload = JSON.parse(raw) } catch { return }
 
         const pos = getCanvasPos(e as unknown as React.MouseEvent)
@@ -672,7 +785,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
 
         if (payload.kind === "protocol") {
             const nodeWidth = 240
-            const nodeHeight = 140
+            const nodeHeight = 130
             const newId = generateId()
             const type = payload.operationType || "custom"
             const newOperation: UnitOperation = {
@@ -698,6 +811,14 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
 
         if (targetShape && targetShape.type === "protocol_node" && targetShape.protocolData) {
             if (payload.kind === "inventory") {
+                updateProtocolNode(targetShape.id, (operation) => {
+                    const existing = new Set(operation.objects || [])
+                    if (payload.name) existing.add(payload.name)
+                    return { ...operation, objects: Array.from(existing) }
+                })
+                return
+            }
+            if (payload.kind === "buffer") {
                 updateProtocolNode(targetShape.id, (operation) => {
                     const existing = new Set(operation.objects || [])
                     if (payload.name) existing.add(payload.name)
@@ -805,7 +926,23 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         }
 
         const connectionShapes = shapes.filter(s => ["line", "arrow", "elbow", "curve"].includes(s.type))
-        const connections = connectionShapes.reduce<{ from: string, to: string }[]>((acc, conn) => {
+
+        // Try explicit connections first
+        const explicitConnections = connectionShapes.reduce<{ from: string, to: string }[]>((acc, conn) => {
+            if (conn.fromNodeId && conn.toNodeId) {
+                // Find the operation IDs from the node IDs
+                const fromEntry = nodeEntries.find(e => shapes.find(s => s.id === conn.fromNodeId)?.protocolData?.id === e.node.id)
+                const toEntry = nodeEntries.find(e => shapes.find(s => s.id === conn.toNodeId)?.protocolData?.id === e.node.id)
+
+                if (fromEntry && toEntry && fromEntry.node.id !== toEntry.node.id) {
+                    acc.push({ from: fromEntry.node.id, to: toEntry.node.id })
+                }
+            }
+            return acc
+        }, [])
+
+        // Fallback to spatial detection if no explicit connections
+        const connections = explicitConnections.length > 0 ? explicitConnections : connectionShapes.reduce<{ from: string, to: string }[]>((acc, conn) => {
             const fromId = getNodeIdAtPoint({ x: conn.x, y: conn.y })
             const toId = getNodeIdAtPoint({ x: conn.x + conn.width, y: conn.y + conn.height })
             if (fromId && toId && fromId !== toId) {
@@ -814,6 +951,43 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
             return acc
         }, [])
 
+        // Extract parallel groups
+        const groupMap = new Map<string, Shape[]>()
+        protocolShapes.forEach(shape => {
+            if (shape.parallelGroupId) {
+                if (!groupMap.has(shape.parallelGroupId)) {
+                    groupMap.set(shape.parallelGroupId, [])
+                }
+                groupMap.get(shape.parallelGroupId)!.push(shape)
+            }
+        })
+
+        const groups: ProtocolGroup[] = Array.from(groupMap.entries()).map(([groupId, groupShapes]) => {
+            // Map shape IDs to operation IDs
+            const nodeIds = groupShapes
+                .map(shape => shape.protocolData?.id || `op-${shape.id}`)
+                .filter(Boolean)
+
+            // Calculate bounding box for the group
+            const bounds = groupShapes.map(s => normalizeBounds(s))
+            const minX = Math.min(...bounds.map(b => b.x))
+            const minY = Math.min(...bounds.map(b => b.y))
+            const maxX = Math.max(...bounds.map(b => b.x + b.width))
+            const maxY = Math.max(...bounds.map(b => b.y + b.height))
+
+            return {
+                id: groupId,
+                name: `Parallel Group ${groupId.slice(0, 8)}`,
+                nodeIds,
+                groupType: 'parallel' as const,
+                color: '#ec4899',
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY
+            }
+        })
+
         return {
             metadata: {
                 schemaVersion: PROTOCOL_SCHEMA_VERSION,
@@ -821,7 +995,8 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                 name: initialData?.name || "Protocol"
             },
             nodes: nodeEntries.map(entry => entry.node),
-            connections
+            connections,
+            groups: groups.length > 0 ? groups : undefined
         }
     }
 
@@ -1084,6 +1259,9 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                                         <div className="w-px h-4 bg-slate-200 mx-1" />
                                         <button onClick={groupSelected} className="p-1.5 hover:bg-slate-100 text-slate-600 rounded" title="Group (Ctrl+G)"> <Group size={16} /></button>
                                         <button onClick={ungroupSelected} className="p-1.5 hover:bg-slate-100 text-slate-600 rounded" title="Ungroup"> <Ungroup size={16} /></button>
+                                        <div className="w-px h-4 bg-slate-200 mx-1" />
+                                        <button onClick={createParallelGroup} className="p-1.5 hover:bg-slate-100 text-slate-600 rounded" title="Mark as Parallel (2+ protocol nodes)"> <Layers size={16} /></button>
+                                        <button onClick={removeFromParallelGroup} className="p-1.5 hover:bg-slate-100 text-slate-600 rounded" title="Remove from Parallel Group"> <MoveRight size={16} /></button>
                                         <div className="w-px h-4 bg-slate-200 mx-1" />
                                         <button onClick={toggleLock} className={`p-1.5 hover:bg-slate-100 rounded ${shapes.find(s => selectedIds.has(s.id))?.locked ? 'text-red-500 bg-red-50' : 'text-slate-600'}`} title="Lock"> <Lock size={16} /></button>
                                     </div>

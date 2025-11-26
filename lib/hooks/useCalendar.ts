@@ -10,17 +10,20 @@ import {
 import { useAuth } from './useAuth';
 
 export function useCalendar() {
-  const { currentUserProfile: profile } = useAuth();
+  const { currentUserProfile: profile, currentUser } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
-    if (!profile?.labId) return;
+    if (!profile?.labId && !currentUser?.uid) return;
 
-    const unsubscribe = subscribeToEvents({ labId: profile.labId }, (newEvents) => {
+    const unsubscribe = subscribeToEvents({
+      labId: profile?.labId,
+      userId: currentUser?.uid,
+    }, (newEvents) => {
       setEvents(newEvents);
     });
     return () => unsubscribe();
-  }, [profile]);
+  }, [profile?.labId, currentUser?.uid]);
 
   const handleCreateEvent = async (eventData: Omit<CalendarEvent, 'id' | 'labId'>) => {
     if (!profile) return;

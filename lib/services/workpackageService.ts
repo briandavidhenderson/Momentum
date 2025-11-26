@@ -21,6 +21,32 @@ import {
 import { getFirebaseDb } from "../firebase"
 import type { Workpackage, Subtask } from "../types"
 
+// Remove undefined fields recursively and normalize dates to Firestore Timestamps.
+function deepClean(value: any): any {
+  if (value === undefined) return undefined
+  if (value instanceof Date) return Timestamp.fromDate(value)
+  if (value instanceof Timestamp) return value
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => deepClean(item))
+      .filter((item) => item !== undefined)
+  }
+
+  if (value && typeof value === "object" && value.constructor === Object) {
+    const cleaned: any = {}
+    for (const [key, val] of Object.entries(value)) {
+      const cleanedVal = deepClean(val)
+      if (cleanedVal !== undefined) {
+        cleaned[key] = cleanedVal
+      }
+    }
+    return cleaned
+  }
+
+  return value
+}
+
 // ============================================================================
 // WORKPACKAGE MANAGEMENT
 // ============================================================================
@@ -65,15 +91,17 @@ export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'>
   // Map projectId to profileProjectId for Firestore (backward compatibility)
   const { projectId, ...restData } = workpackageData as any
 
-  await setDoc(wpRef, {
+  const payload = deepClean({
     ...restData,
     id: wpId,
     profileProjectId: projectId, // Map projectId to profileProjectId for Firestore
-    start: workpackageData.start instanceof Date ? Timestamp.fromDate(workpackageData.start) : workpackageData.start,
-    end: workpackageData.end instanceof Date ? Timestamp.fromDate(workpackageData.end) : workpackageData.end,
+    start: workpackageData.start,
+    end: workpackageData.end,
     tasks: tasksWithTimestamps,
     createdAt: serverTimestamp(),
   })
+
+  await setDoc(wpRef, payload)
 
   return wpId
 }
@@ -110,22 +138,27 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
 export async function updateWorkpackage(wpId: string, updates: Partial<Workpackage>): Promise<void> {
   const db = getFirebaseDb()
   const wpRef = doc(db, "workpackages", wpId)
-  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
+  const updateData: any = {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  }
 
-  if (updates.start) updateData.start = Timestamp.fromDate(updates.start)
-  if (updates.end) updateData.end = Timestamp.fromDate(updates.end)
+  if (updates.start instanceof Date) updateData.start = Timestamp.fromDate(updates.start)
+  if (updates.end instanceof Date) updateData.end = Timestamp.fromDate(updates.end)
   if (updates.tasks) {
     updateData.tasks = updates.tasks.map(task => ({
       ...task,
-      start: Timestamp.fromDate(task.start),
-      end: Timestamp.fromDate(task.end),
+      start: task.start instanceof Date ? Timestamp.fromDate(task.start) : task.start,
+      end: task.end instanceof Date ? Timestamp.fromDate(task.end) : task.end,
+      subtasks: (task.subtasks || []).map((st: Subtask) => ({
+        ...st,
+        start: st.start instanceof Date ? Timestamp.fromDate(st.start) : st.start,
+        end: st.end instanceof Date ? Timestamp.fromDate(st.end) : st.end,
+      })),
     }))
   }
 
-  // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
-  const cleanedUpdate = Object.fromEntries(
-    Object.entries(updateData).filter(([_, v]) => v !== undefined)
-  )
+  const cleanedUpdate = deepClean(updateData)
 
   await updateDoc(wpRef, cleanedUpdate)
 }

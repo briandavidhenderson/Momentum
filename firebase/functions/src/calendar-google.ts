@@ -287,32 +287,64 @@ export const syncGoogleCalendar = functions.https.onCall(async (data: any, conte
             throw new functions.https.HttpsError("not-found", "User profile not found")
         }
 
+        // Fetch labId for filtering in UI queries
+        const profileDoc = await admin.firestore().collection("personProfiles").doc(profileId).get()
+        const profileData = profileDoc.data() || {}
+        const labId = profileData.labId
+
         // Store events in Firestore
         let syncedCount = 0
         const batch = admin.firestore().batch()
 
         for (const event of events) {
-            const eventId = `google_${event.id}`
-            const eventRef = admin.firestore().collection("calendarEvents").doc(eventId)
+            const startTimestamp = event.start?.dateTime
+                ? admin.firestore.Timestamp.fromDate(new Date(event.start.dateTime))
+                : event.start?.date
+                    ? admin.firestore.Timestamp.fromDate(new Date(event.start.date))
+                    : null
+            const endTimestamp = event.end?.dateTime
+                ? admin.firestore.Timestamp.fromDate(new Date(event.end.dateTime))
+                : event.end?.date
+                    ? admin.firestore.Timestamp.fromDate(new Date(event.end.date))
+                    : null
 
-            const eventData = {
+            if (!startTimestamp || !endTimestamp) {
+                console.warn("Skipping event without start/end", { eventId: event.id, hasStart: !!startTimestamp, hasEnd: !!endTimestamp })
+                continue
+            }
+
+            const eventId = `google-${connectionId}-${event.id}`
+            const eventRef = admin.firestore().collection("events").doc(eventId)
+
+            const eventData: Record<string, any> = {
                 id: eventId,
-                googleEventId: event.id,
                 title: event.summary || "Untitled Event",
                 description: event.description || "",
-                startDate: event.start.dateTime ? admin.firestore.Timestamp.fromDate(new Date(event.start.dateTime)) :
-                           event.start.date ? admin.firestore.Timestamp.fromDate(new Date(event.start.date)) : null,
-                endDate: event.end.dateTime ? admin.firestore.Timestamp.fromDate(new Date(event.end.dateTime)) :
-                         event.end.date ? admin.firestore.Timestamp.fromDate(new Date(event.end.date)) : null,
                 location: event.location || "",
-                isAllDay: !!event.start.date, // If there's a date instead of dateTime, it's all-day
-                source: "google",
-                connectionId,
-                profileId,
-                userId: context.auth.uid,
-                htmlLink: event.htmlLink,
-                syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+                start: startTimestamp,
+                end: endTimestamp,
+                attendees: [],
+                reminders: [],
+                tags: [],
+                visibility: "lab",
+                ownerId: profileId,
+                createdBy: context.auth.uid,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                calendarSource: "google",
+                calendarId: "primary",
+                isReadOnly: true,
+                externalUrl: event.htmlLink || "",
+                syncStatus: "synced",
+                lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+                integrationRefs: {
+                    googleEventId: event.id,
+                },
+                type: "other",
+            }
+
+            if (labId) {
+                eventData.labId = labId
             }
 
             batch.set(eventRef, eventData, { merge: true })

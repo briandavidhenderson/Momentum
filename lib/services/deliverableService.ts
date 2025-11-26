@@ -226,6 +226,7 @@ export async function deleteDeliverable(deliverableId: string): Promise<void> {
  */
 export function subscribeToDeliverables(
   filters: {
+    labId?: string
     workpackageId?: string
     ownerId?: string
     status?: string
@@ -235,6 +236,9 @@ export function subscribeToDeliverables(
   const db = getFirebaseDb()
   let q: Query = collection(db, "deliverables")
 
+  if (filters?.labId) {
+    q = query(q, where("labId", "==", filters.labId))
+  }
   if (filters?.workpackageId) {
     q = query(q, where("workpackageId", "==", filters.workpackageId))
   }

@@ -32,6 +32,8 @@ export interface ProtocolOperationDefinition {
     Icon: LucideIcon
     parameterFields: ProtocolParameterField[]
     defaultParameters?: Record<string, any>
+    summaryFields?: string[]
+    summaryFormatter?: (params: Record<string, any>) => string
 }
 
 const base = {
@@ -84,7 +86,8 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             { key: "time", label: "Duration (min)", type: "number", placeholder: "5" },
             { key: "speed", label: "Speed / Mode", type: "text", placeholder: "gentle / vortex" }
         ],
-        defaultParameters: { time: 5, timeUnit: "min", speed: "gentle" }
+        defaultParameters: { time: 5, timeUnit: "min", speed: "gentle" },
+        summaryFields: ["speed", "time"]
     },
     {
         type: "heat",
@@ -96,7 +99,8 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             { key: "temperature", label: "Target Temp (°C)", type: "number", placeholder: "95" },
             { key: "time", label: "Hold Time (min)", type: "number", placeholder: "10" }
         ],
-        defaultParameters: { temperature: 95, temperatureUnit: "°C", time: 10, timeUnit: "min" }
+        defaultParameters: { temperature: 95, temperatureUnit: "°C", time: 10, timeUnit: "min" },
+        summaryFields: ["temperature", "time"]
     },
     {
         type: "cool",
@@ -108,7 +112,8 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             { key: "temperature", label: "Target Temp (°C)", type: "number", placeholder: "4" },
             { key: "time", label: "Duration (min)", type: "number", placeholder: "15" }
         ],
-        defaultParameters: { temperature: 4, temperatureUnit: "°C", time: 15, timeUnit: "min" }
+        defaultParameters: { temperature: 4, temperatureUnit: "°C", time: 15, timeUnit: "min" },
+        summaryFields: ["temperature", "time"]
     },
     {
         type: "incubate",
@@ -121,7 +126,8 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             { key: "time", label: "Duration (min)", type: "number", placeholder: "30" },
             { key: "atmosphere", label: "Atmosphere", type: "text", placeholder: "CO₂, dark, shaking..." }
         ],
-        defaultParameters: { temperature: 37, temperatureUnit: "°C", time: 30, timeUnit: "min" }
+        defaultParameters: { temperature: 37, temperatureUnit: "°C", time: 30, timeUnit: "min" },
+        summaryFields: ["temperature", "time"]
     },
     {
         type: "centrifuge",
@@ -134,7 +140,8 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             { key: "time", label: "Duration (min)", type: "number", placeholder: "5" },
             { key: "temperature", label: "Temperature (°C)", type: "number", placeholder: "4" }
         ],
-        defaultParameters: { speed: "5000", speedUnit: "rpm", time: 5, timeUnit: "min", temperature: 4, temperatureUnit: "°C" }
+        defaultParameters: { speed: "5000", speedUnit: "rpm", time: 5, timeUnit: "min", temperature: 4, temperatureUnit: "°C" },
+        summaryFields: ["speed", "time", "temperature"]
     },
     {
         type: "pipette",
@@ -148,7 +155,15 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             { key: "from", label: "From", type: "text", placeholder: "Tube A" },
             { key: "to", label: "To", type: "text", placeholder: "Tube B" }
         ],
-        defaultParameters: { volume: 10, volumeUnit: "µL" }
+        defaultParameters: { volume: 10, volumeUnit: "µL" },
+        summaryFormatter: (params) => {
+            const parts = []
+            if (params.volume) parts.push(`${params.volume}${params.volumeUnit || 'µL'}`)
+            if (params.from && params.to) parts.push(`${params.from} → ${params.to}`)
+            else if (params.from) parts.push(params.from)
+            else if (params.to) parts.push(`to ${params.to}`)
+            return parts.join(' · ')
+        }
     },
     {
         type: "measure",
@@ -161,7 +176,8 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             { key: "wavelength", label: "Wavelength / Filter", type: "text", placeholder: "600 nm" },
             { key: "instrument", label: "Instrument Mode", type: "text", placeholder: "Plate reader" }
         ],
-        defaultParameters: { measurementType: "Absorbance" }
+        defaultParameters: { measurementType: "Absorbance" },
+        summaryFields: ["measurementType", "wavelength"]
     },
     {
         type: "thermocycle",
@@ -188,7 +204,8 @@ export const PROTOCOL_OPERATIONS: ProtocolOperationDefinition[] = [
             extensionTemp: 72,
             extensionTime: 60,
             holdTemp: 4
-        }
+        },
+        summaryFields: ["cycleCount"]
     },
     {
         type: "custom",

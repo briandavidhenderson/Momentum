@@ -2,10 +2,11 @@
 
 import React, { useRef, useEffect } from "react"
 import { Shape } from "@/lib/whiteboardService"
-import { Lock, Ban, Beaker, AlertTriangle, FileText, Activity, ArrowRight, Circle, Minus } from "lucide-react"
+import { Lock, Ban, Beaker, AlertTriangle, FileText, Activity, ArrowRight, Circle, Minus, CheckCircle2, XCircle } from "lucide-react"
 import { ASSETS } from "./WhiteboardSidebar"
 import { UnitOperation } from "@/lib/protocol/types"
 import { getOperationDefinition } from "./protocolConfig"
+import { useAppContext } from "@/lib/AppContext"
 
 interface WhiteboardCanvasProps {
     shapes: Shape[]
@@ -58,15 +59,183 @@ export function WhiteboardCanvas({
     dragStart,
     lastMousePos
 }: WhiteboardCanvasProps) {
+    const { inventory, equipment } = useAppContext()
 
-    const formatSummary = (operation?: UnitOperation) => {
-        if (!operation?.parameters) return ""
-        const { time, timeUnit, temperature, temperatureUnit, cycleCount } = operation.parameters as Record<string, any>
-        const summary: string[] = []
-        if (temperature) summary.push(`${temperature}${temperatureUnit || "°C"}`)
-        if (time) summary.push(`${time}${timeUnit || "min"}`)
-        if (cycleCount) summary.push(`${cycleCount} cycles`)
-        return summary.join(" · ")
+    // Topological sort to compute step numbers
+    const computeStepNumbers = (): Map<string, number> => {
+        const stepNumbers = new Map<string, number>()
+        const protocolNodes = shapes.filter(s => s.type === "protocol_node")
+
+        // Build adjacency list from connections (arrows)
+        const outgoing = new Map<string, string[]>()
+        const incoming = new Map<string, number>()
+
+        protocolNodes.forEach(node => {
+            outgoing.set(node.id, [])
+            incoming.set(node.id, 0)
+        })
+
+        // Find connections from arrow shapes
+        const arrows = shapes.filter(s => ["line", "arrow", "elbow", "curve"].includes(s.type))
+        arrows.forEach(arrow => {
+            if (arrow.fromNodeId && arrow.toNodeId) {
+                const fromNode = protocolNodes.find(n => n.id === arrow.fromNodeId)
+                const toNode = protocolNodes.find(n => n.id === arrow.toNodeId)
+                if (fromNode && toNode && fromNode.id !== toNode.id) {
+                    outgoing.get(fromNode.id)!.push(toNode.id)
+                    incoming.set(toNode.id, (incoming.get(toNode.id) || 0) + 1)
+                }
+            }
+        })
+
+        // Group nodes by parallelGroupId
+        const parallelGroups = new Map<string, Set<string>>()
+        protocolNodes.forEach(node => {
+            if (node.parallelGroupId) {
+                if (!parallelGroups.has(node.parallelGroupId)) {
+                    parallelGroups.set(node.parallelGroupId, new Set())
+                }
+                parallelGroups.get(node.parallelGroupId)!.add(node.id)
+            }
+        })
+
+        // Kahn's algorithm for topological sort
+        const queue: string[] = []
+        protocolNodes.forEach(node => {
+            if (incoming.get(node.id) === 0) queue.push(node.id)
+        })
+
+        let stepNumber = 1
+        const visited = new Set<string>()
+
+        while (queue.length > 0) {
+            const batchSize = queue.length
+            const currentBatch: string[] = []
+
+            // Process all nodes at current level
+            for (let i = 0; i < batchSize; i++) {
+                const nodeId = queue.shift()!
+                if (visited.has(nodeId)) continue
+
+                currentBatch.push(nodeId)
+
+                // If this node is in a parallel group, add all group members to this batch
+                const node = protocolNodes.find(n => n.id === nodeId)
+                if (node?.parallelGroupId && parallelGroups.has(node.parallelGroupId)) {
+                    const groupNodes = parallelGroups.get(node.parallelGroupId)!
+                    groupNodes.forEach(gNodeId => {
+                        if (!visited.has(gNodeId)) {
+                            currentBatch.push(gNodeId)
+                        }
+                    })
+                }
+            }
+
+            // Assign same step number to all nodes in current batch
+            currentBatch.forEach(nodeId => {
+                if (!visited.has(nodeId)) {
+                    stepNumbers.set(nodeId, stepNumber)
+                    visited.add(nodeId)
+
+                    // Reduce incoming count for neighbors
+                    outgoing.get(nodeId)?.forEach(neighborId => {
+                        const count = incoming.get(neighborId)! - 1
+                        incoming.set(neighborId, count)
+                        if (count === 0 && !visited.has(neighborId)) {
+                            queue.push(neighborId)
+                        }
+                    })
+                }
+            })
+
+            if (currentBatch.length > 0) stepNumber++
+        }
+
+        // Assign numbers to any remaining unconnected nodes
+        protocolNodes.forEach(node => {
+            if (!stepNumbers.has(node.id)) {
+                stepNumbers.set(node.id, stepNumber++)
+            }
+        })
+
+        return stepNumbers
+    }
+
+    const stepNumbers = computeStepNumbers()
+
+    const buildSummaryFromConfig = (operation?: UnitOperation): string => {
+        if (!operation) return ""
+        const definition = getOperationDefinition(operation.type)
+
+        if (definition.summaryFormatter && operation.parameters) {
+            return definition.summaryFormatter(operation.parameters)
+        }
+
+        if (definition.summaryFields && operation.parameters) {
+            return definition.summaryFields
+                .map(key => {
+                    const value = operation.parameters?.[key]
+                    const unit = operation.parameters?.[`${key}Unit`]
+                    return value ? (unit ? `${value}${unit}` : value) : null
+                })
+                .filter(Boolean)
+                .join(' · ')
+        }
+
+        return ""
+    }
+
+    const renderParallelGroupBackgrounds = () => {
+        // Group shapes by parallelGroupId
+        const groups = new Map<string, Shape[]>()
+        shapes
+            .filter(s => s.type === "protocol_node" && s.parallelGroupId)
+            .forEach(shape => {
+                const groupId = shape.parallelGroupId!
+                if (!groups.has(groupId)) groups.set(groupId, [])
+                groups.get(groupId)!.push(shape)
+            })
+
+        // Render backgrounds for each group
+        return Array.from(groups.entries()).map(([groupId, nodes]) => {
+            // Calculate bounding box with padding
+            const xs = nodes.map(n => n.x)
+            const ys = nodes.map(n => n.y)
+            const ws = nodes.map(n => n.x + n.width)
+            const hs = nodes.map(n => n.y + n.height)
+
+            const minX = Math.min(...xs) - 20
+            const minY = Math.min(...ys) - 20
+            const maxX = Math.max(...ws) + 20
+            const maxY = Math.max(...hs) + 20
+
+            return (
+                <g key={`parallel-group-${groupId}`}>
+                    <rect
+                        x={minX}
+                        y={minY}
+                        width={maxX - minX}
+                        height={maxY - minY}
+                        fill="rgba(236, 72, 153, 0.05)"
+                        stroke="#ec4899"
+                        strokeWidth="2"
+                        strokeDasharray="8 4"
+                        rx="8"
+                        className="pointer-events-none"
+                    />
+                    <text
+                        x={minX + 10}
+                        y={minY - 5}
+                        fontSize="11"
+                        fill="#ec4899"
+                        fontWeight="600"
+                        className="pointer-events-none"
+                    >
+                        Parallel Execution
+                    </text>
+                </g>
+            )
+        })
     }
 
     // -- RENDER SHAPE --
@@ -156,34 +325,82 @@ export function WhiteboardCanvas({
         let assetContent: any = null
         if (shape.type === 'asset') {
             if (shape.linkedEntityType === 'inventory') {
+                const inventoryItem = inventory?.find(item => item.id === shape.linkedEntityId)
+                const level = inventoryItem?.inventoryLevel || 'unknown'
+
                 assetContent = (
                     <div className="w-full h-full flex flex-col justify-between p-3 text-slate-800">
                         <div className="flex items-start gap-2">
                             <Beaker className="w-4 h-4 text-emerald-700 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <div className="text-[12px] font-semibold leading-tight truncate">{shape.text || "Inventory item"}</div>
-                                <div className="text-[10px] text-slate-500 leading-tight truncate">Stocked resource</div>
+                                <div className="text-[10px] text-slate-500 leading-tight truncate">
+                                    {inventoryItem ? `Qty: ${inventoryItem.currentQuantity || 0}` : 'Stocked resource'}
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                        <div className="flex items-center justify-between text-[10px] gap-1">
                             <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">Inventory</span>
-                            <span className="text-[9px] uppercase tracking-wide text-slate-400">Drag to protocol</span>
+                            {inventoryItem && (
+                                level === 'empty' ? (
+                                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700">
+                                        <XCircle className="w-2.5 h-2.5" />
+                                        <span className="text-[9px] font-semibold">Empty</span>
+                                    </span>
+                                ) : level === 'low' ? (
+                                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
+                                        <AlertTriangle className="w-2.5 h-2.5" />
+                                        <span className="text-[9px] font-semibold">Low</span>
+                                    </span>
+                                ) : level === 'full' || level === 'medium' ? (
+                                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+                                        <CheckCircle2 className="w-2.5 h-2.5" />
+                                        <span className="text-[9px] font-semibold capitalize">{level}</span>
+                                    </span>
+                                ) : null
+                            )}
                         </div>
                     </div>
                 )
             } else if (shape.linkedEntityType === 'equipment') {
+                const equipmentItem = equipment?.find(eq => eq.id === shape.linkedEntityId)
+
+                // Calculate maintenance status
+                let maintenanceNeeded = false
+                if (equipmentItem && equipmentItem.lastMaintained && equipmentItem.maintenanceDays) {
+                    const lastMaintained = new Date(equipmentItem.lastMaintained)
+                    const daysSince = Math.floor((Date.now() - lastMaintained.getTime()) / (1000 * 60 * 60 * 24))
+                    const threshold = equipmentItem.threshold || 80
+                    const percentUsed = (daysSince / equipmentItem.maintenanceDays) * 100
+                    maintenanceNeeded = percentUsed >= threshold
+                }
+
                 assetContent = (
                     <div className="w-full h-full flex flex-col justify-between p-3 text-slate-800">
                         <div className="flex items-start gap-2">
                             <Activity className="w-4 h-4 text-indigo-700 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <div className="text-[12px] font-semibold leading-tight truncate">{shape.text || "Equipment"}</div>
-                                <div className="text-[10px] text-slate-500 leading-tight truncate">Device</div>
+                                <div className="text-[10px] text-slate-500 leading-tight truncate">
+                                    {equipmentItem ? `${equipmentItem.make || ''} ${equipmentItem.model || ''}`.trim() || 'Device' : 'Device'}
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                        <div className="flex items-center justify-between text-[10px] gap-1">
                             <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700">Equipment</span>
-                            <span className="text-[9px] uppercase tracking-wide text-slate-400">Drag to protocol</span>
+                            {equipmentItem && (
+                                maintenanceNeeded ? (
+                                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
+                                        <AlertTriangle className="w-2.5 h-2.5" />
+                                        <span className="text-[9px] font-semibold">Maint</span>
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+                                        <CheckCircle2 className="w-2.5 h-2.5" />
+                                        <span className="text-[9px] font-semibold">Ready</span>
+                                    </span>
+                                )
+                            )}
                         </div>
                     </div>
                 )
@@ -204,7 +421,7 @@ export function WhiteboardCanvas({
         const protocolOperation = shape.type === "protocol_node" ? shape.protocolData : undefined
         const definition = protocolOperation ? getOperationDefinition(protocolOperation.type) : null
         const ProtocolIcon = definition?.Icon || Beaker
-        const protocolSummary = formatSummary(protocolOperation)
+        const protocolSummary = buildSummaryFromConfig(protocolOperation)
         const accent = definition?.color || "#cbd5e1"
 
         const content = (
@@ -227,20 +444,34 @@ export function WhiteboardCanvas({
                 {shape.type === "protocol_node" && (
                     <g transform={`translate(${x}, ${y})`} className={commonProps.className} onMouseDown={commonProps.onMouseDown} onDoubleClick={commonProps.onDoubleClick}>
                         <rect width={w} height={h} rx={16} fill="#ffffff" stroke={accent} strokeWidth={1.6} />
+                        {/* Step Number Badge */}
+                        {stepNumbers.has(shape.id) && (
+                            <g transform={`translate(${w - 28}, 8)`}>
+                                <circle cx="12" cy="12" r="12" fill={accent} opacity="0.9" />
+                                <text x="12" y="12" textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="11" fontWeight="600">
+                                    {stepNumbers.get(shape.id)}
+                                </text>
+                            </g>
+                        )}
                         <foreignObject width={w} height={h} className="pointer-events-none">
-                            <div className="w-full h-full flex flex-col justify-between p-3 text-slate-700">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: `${accent}` }}>
-                                        <ProtocolIcon className="w-5 h-5 opacity-95" />
+                            <div className="w-full h-full flex flex-col justify-between p-2.5 text-slate-700">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white flex-shrink-0" style={{ backgroundColor: `${accent}` }}>
+                                        <ProtocolIcon className="w-4 h-4 opacity-95" />
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-semibold leading-tight">{protocolOperation?.label || "Protocol Step"}</p>
-                                        <p className="text-[11px] uppercase tracking-wide" style={{ color: accent }}>{definition?.label || protocolOperation?.type || "custom"}</p>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[13px] font-semibold leading-tight truncate">{protocolOperation?.label || "Protocol Step"}</p>
+                                        <p className="text-[10px] uppercase tracking-wide leading-tight" style={{ color: accent }}>{definition?.label || protocolOperation?.type || "custom"}</p>
                                     </div>
                                 </div>
-                                {protocolSummary && <p className="text-xs text-slate-500 mt-2">{protocolSummary}</p>}
+                                {protocolSummary && <p className="text-[11px] text-slate-500 mt-1.5 leading-tight line-clamp-2">{protocolSummary}</p>}
                                 {protocolOperation?.objects && protocolOperation.objects.length > 0 && (
-                                    <p className="text-[11px] text-slate-500 truncate">With {protocolOperation.objects.join(", ")}</p>
+                                    <p className="text-[10px] text-slate-500 truncate leading-tight mt-1">With {protocolOperation.objects.join(", ")}</p>
+                                )}
+                                {shape.parallelGroupId && (
+                                    <div className="mt-1 flex items-center gap-1">
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-pink-50 text-pink-600 border border-pink-200 font-semibold">∥ Parallel</span>
+                                    </div>
                                 )}
                             </div>
                         </foreignObject>
@@ -269,6 +500,7 @@ export function WhiteboardCanvas({
 
             <svg ref={svgRef} className="w-full h-full absolute inset-0" id="canvas-bg">
                 <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
+                    {renderParallelGroupBackgrounds()}
                     {shapes.map(renderShape)}
                     {interaction === "selecting_area" && dragStart && lastMousePos && <rect x={Math.min(dragStart.x, lastMousePos.x)} y={Math.min(dragStart.y, lastMousePos.y)} width={Math.abs(dragStart.x - lastMousePos.x)} height={Math.abs(dragStart.y - lastMousePos.y)} fill="rgba(59, 130, 246, 0.1)" stroke="#3b82f6" strokeWidth={1} />}
                 </g>
