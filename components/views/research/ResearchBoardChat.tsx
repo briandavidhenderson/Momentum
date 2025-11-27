@@ -67,24 +67,33 @@ export function ResearchBoardChat({ boardId }: ResearchBoardChatProps) {
                     </div>
                 ) : (
                     messages.map((msg) => {
+                        if (!msg.author) return null;
                         const isMe = msg.author.userId === currentUser?.uid;
+
+                        let timeString = '';
+                        try {
+                            timeString = formatDistanceToNow(msg.createdAt, { addSuffix: true });
+                        } catch (e) {
+                            timeString = 'just now';
+                        }
+
                         return (
                             <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
                                 <Avatar className="h-8 w-8 mt-1">
                                     <AvatarImage src={msg.author.avatar} />
                                     <AvatarFallback className="text-[10px] bg-slate-200">
-                                        {msg.author.name[0]}
+                                        {msg.author.name?.[0] || '?'}
                                     </AvatarFallback>
                                 </Avatar>
                                 <div className={`max-w-[80%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
                                     <div className={`px-3 py-2 rounded-lg text-sm ${isMe
-                                            ? 'bg-indigo-600 text-white rounded-tr-none'
-                                            : 'bg-slate-100 text-slate-800 rounded-tl-none'
+                                        ? 'bg-indigo-600 text-white rounded-tr-none'
+                                        : 'bg-slate-100 text-slate-800 rounded-tl-none'
                                         }`}>
                                         {msg.content}
                                     </div>
                                     <span className="text-[10px] text-slate-400 mt-1">
-                                        {msg.author.name} • {formatDistanceToNow(msg.createdAt, { addSuffix: true })}
+                                        {msg.author.name || 'Unknown'} • {timeString}
                                     </span>
                                 </div>
                             </div>

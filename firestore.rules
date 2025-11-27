@@ -415,6 +415,9 @@ service cloud.firestore {
     // ============================================================================
     // ORDERS COLLECTION
     // ============================================================================
+    // ============================================================================
+    // ORDERS COLLECTION
+    // ============================================================================
     match /orders/{orderId} {
       // Users can read orders in their lab. During onboarding (no lab yet), allow
       // users to read records they created so they can complete setup without
@@ -427,8 +430,12 @@ service cloud.firestore {
       // Users can create orders
       allow create: if isAuthenticated();
 
-      // Any authenticated user can update orders (collaborative lab environment)
-      allow update: if isAuthenticated();
+      // Users can update orders if they are in the same lab or created it
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId)
+      );
 
       // Creator or admin can delete
       allow delete: if isAuthenticated() && (
@@ -452,18 +459,22 @@ service cloud.firestore {
       // Users can create inventory items
       allow create: if isAuthenticated();
 
-      // Creator or admin can update
+      // Creator, admin, or lab member can update
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        resource.data.createdBy == request.auth.uid
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId)
       );
 
-      // Creator or admin can delete
+      // Creator, admin, or lab member can delete
       allow delete: if isAuthenticated() && (
         isAdmin() ||
-        resource.data.createdBy == request.auth.uid
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId)
       );
     }
+
+
 
     // ============================================================================
     // DAY-TO-DAY TASKS
@@ -964,15 +975,23 @@ service cloud.firestore {
       // BOARD MESSAGES (Subcollection)
       // ============================================================================
       match /messages/{messageId} {
-        // Messages inherit board-level security
-        // If user can access board, they can read messages
-        // Board membership is enforced at board query level
-        allow read: if isAuthenticated();
+        // Helper to check board access
+        function canAccessBoard() {
+          let board = get(/databases/$(database)/documents/researchBoards/$(boardId));
+          return board != null && (
+            isAdmin() ||
+            (board.data.members != null && board.data.members.hasAny([request.auth.uid])) ||
+            isLabMember(board.data.labId)
+          );
+        }
 
-        // Users can create messages if authenticated
-        // Board membership is enforced at board level
+        // Messages inherit board-level security
+        allow read: if isAuthenticated() && canAccessBoard();
+
+        // Users can create messages if they can access the board
         allow create: if isAuthenticated() &&
-          request.resource.data.boardId == boardId;
+          request.resource.data.boardId == boardId &&
+          canAccessBoard();
       }
     }
 

@@ -26,6 +26,7 @@ import { TodayOverview } from './TodayOverview'
 import { TaskKanban } from './TaskKanban'
 import { ProjectExplorerView } from '@/components/projects/ProjectExplorerView'
 import { Task } from '@/lib/types'
+import { TaskDetailsPanel } from '@/components/projects/TaskDetailsPanel'
 
 export function HomeDashboard() {
     const {
@@ -374,56 +375,22 @@ export function HomeDashboard() {
                                         <TaskKanban
                                             tasks={dayToDayTasks}
                                             onTaskClick={setSelectedTask}
+                                            onTaskUpdate={handleTaskUpdate}
                                         />
                                     </div>
                                 </CardContent>
                             </Card>
                         </div>
-
-                        {/* Task Details Panel (Side Peek) */}
+                        {/* Task Details Panel (Overlay) */}
                         {selectedTask && (
-                            <div className="w-80 flex-shrink-0">
-                                <Card className="h-full border-l-4 border-l-indigo-500">
-                                    <CardHeader className="pb-2 py-3">
-                                        <div className="flex justify-between items-center">
-                                            <CardTitle className="text-sm font-medium">Task Details</CardTitle>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedTask(null)}>
-                                                <ChevronDown className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="p-0">
-                                        {/* Reuse TaskDetailsPanel logic but wrapped for dashboard */}
-                                        <div className="p-4">
-                                            <h3 className="font-bold mb-2">{selectedTask.name}</h3>
-                                            <div className="space-y-4 text-sm">
-                                                <div>
-                                                    <span className="text-muted-foreground block text-xs">Due Date</span>
-                                                    {safeFormatDate(selectedTask.end)}
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground block text-xs">Importance</span>
-                                                    <Badge variant="outline" className="capitalize">{selectedTask.importance || 'Medium'}</Badge>
-                                                </div>
-                                                <div>
-                                                    <span className="text-muted-foreground block text-xs">Status</span>
-                                                    <Badge className="capitalize">{selectedTask.status || 'To Do'}</Badge>
-                                                </div>
-                                                <Button
-                                                    className="w-full mt-4"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        // Open full edit dialog logic if needed, or just navigate
-                                                        setMainView('mytasks')
-                                                    }}
-                                                >
-                                                    Open in Tasks View
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
+                            <TaskDetailsPanel
+                                task={selectedTask}
+                                workpackageId={selectedTask.workpackageId || ''}
+                                onClose={() => setSelectedTask(null)}
+                                onSave={handleTaskUpdate}
+                                onDelete={handleTaskDeleteWrapper}
+                                availablePeople={allProfiles}
+                            />
                         )}
                     </div>
 
