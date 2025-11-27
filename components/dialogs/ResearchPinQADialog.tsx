@@ -31,7 +31,7 @@ export function ResearchPinQADialog({ open, onClose, pin, initialQuestion = '' }
 
   const handleSubmit = async (e?: React.FormEvent, questionText?: string) => {
     e?.preventDefault();
-    
+
     if (!pin || loading) return;
 
     const questionToSubmit = questionText || question.trim();
@@ -90,7 +90,7 @@ export function ResearchPinQADialog({ open, onClose, pin, initialQuestion = '' }
         timestamp: new Date(),
       };
       setMessages([welcomeMessage]);
-      
+
       // Set initial question if provided
       if (initialQuestion) {
         setQuestion(initialQuestion);
@@ -149,11 +149,10 @@ export function ResearchPinQADialog({ open, onClose, pin, initialQuestion = '' }
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg p-3 ${
-                    message.role === 'user'
+                  className={`max-w-[80%] rounded-lg p-3 ${message.role === 'user'
                       ? 'bg-indigo-600 text-white'
                       : 'bg-slate-100 text-slate-900'
-                  }`}
+                    }`}
                 >
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   <p className="text-xs mt-1 opacity-70">
@@ -168,6 +167,27 @@ export function ResearchPinQADialog({ open, onClose, pin, initialQuestion = '' }
                   <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
                   <span className="text-sm text-slate-600">Thinking...</span>
                 </div>
+              </div>
+            )}
+            {messages.length === 1 && messages[0].role === 'assistant' && (
+              <div className="flex flex-wrap gap-2 mt-2 px-2">
+                {(pin.type === 'paper' ? [
+                  "Summarize the key findings", "What methodology was used?", "What are the limitations?"
+                ] : pin.type === 'figure' ? [
+                  "Explain this figure", "What trends are shown?", "Is there statistical significance?"
+                ] : pin.type === 'video' ? [
+                  "Summarize the video", "What are the main points?", "List key takeaways"
+                ] : [
+                  "Summarize this", "Key takeaways", "Explain in simple terms"
+                ]).map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => handleSubmit(undefined, q)}
+                    className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                  >
+                    {q}
+                  </button>
+                ))}
               </div>
             )}
           </div>

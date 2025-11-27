@@ -1135,6 +1135,9 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         }
     }
 
+    // -- STATE --
+    const [whiteboardName, setWhiteboardName] = useState(initialData?.name || "Untitled Whiteboard")
+
     // -- SAVE --
     const handleSave = async () => {
         if (!currentUserProfile?.labId) {
@@ -1143,11 +1146,11 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         }
         try {
             if (whiteboardId) {
-                await updateWhiteboard(whiteboardId, { shapes })
+                await updateWhiteboard(whiteboardId, { shapes, name: whiteboardName })
                 success("Whiteboard saved successfully")
             } else {
                 const newId = await createWhiteboard({
-                    name: "New Whiteboard",
+                    name: whiteboardName,
                     shapes,
                     createdBy: currentUser?.uid || "unknown",
                     labId: currentUserProfile.labId
@@ -1206,7 +1209,16 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
             {/* --- CANVAS --- */}
             <div className="flex-1 flex flex-col">
                 <div className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between z-10">
-                    <div className="font-bold text-lg text-slate-800">Protocol Viz</div>
+                    <div className="flex items-center gap-2">
+                        <div className="font-bold text-lg text-slate-800 hidden md:block">Momentum</div>
+                        <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block" />
+                        <input
+                            value={whiteboardName}
+                            onChange={(e) => setWhiteboardName(e.target.value)}
+                            className="font-semibold text-slate-700 bg-transparent border-none focus:ring-0 p-0 text-lg w-64 hover:bg-slate-50 rounded px-2 transition-colors"
+                            placeholder="Untitled Whiteboard"
+                        />
+                    </div>
                     <div className="flex items-center gap-3">
                         <button onClick={() => setSnapToGrid(!snapToGrid)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${snapToGrid ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}> <Grid3X3 size={14} /> Snap: {snapToGrid ? 'ON' : 'OFF'}</button>
                         <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">

@@ -168,10 +168,19 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Search figures, papers, notes..."
-                className="pl-9 bg-white border-slate-200"
+                className="pl-9 pr-8 bg-white border-slate-200"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  <span className="sr-only">Clear search</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                </button>
+              )}
             </div>
             <Button
               variant={showChat ? "secondary" : "outline"}
@@ -354,9 +363,16 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
                       {pin.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-3">
                           {pin.tags.map(tag => (
-                            <span key={tag} className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            <button
+                              key={tag}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSearchQuery(tag);
+                              }}
+                              className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded hover:bg-slate-200 hover:text-slate-700 transition-colors"
+                            >
                               #{tag}
-                            </span>
+                            </button>
                           ))}
                         </div>
                       )}
