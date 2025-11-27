@@ -62,7 +62,7 @@ export class GeminiProvider implements AIProvider {
         : "Transcribe this audio file exactly as spoken. Return only the transcription text, no other commentary."
 
       const response = await fetch(
-        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
+        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
         {
           method: 'POST',
           headers: {
@@ -142,7 +142,7 @@ export class GeminiProvider implements AIProvider {
         : IMAGE_OCR_PROMPT.TYPED
 
       const response = await fetch(
-        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
+        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
         {
           method: 'POST',
           headers: {
@@ -216,7 +216,7 @@ export class GeminiProvider implements AIProvider {
       const base64Image = await this.fileToBase64(image)
 
       const response = await fetch(
-        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
+        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
         {
           method: 'POST',
           headers: {
@@ -284,7 +284,7 @@ export class GeminiProvider implements AIProvider {
 
     try {
       const response = await fetch(
-        `${this.baseURL}/models/gemini-2.5-flash:generateContent`,
+        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
         {
           method: 'POST',
           headers: {

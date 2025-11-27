@@ -132,6 +132,13 @@ export function OrdersInventory() {
 
     if (!over || !currentUserProfile) return
 
+    const columnIds: OrderStatus[] = ['to-order', 'ordered', 'received']
+
+    // Only allow dropping onto a column (not another card)
+    if (!columnIds.includes(over.id as OrderStatus)) {
+      return
+    }
+
     const orderId = active.id as string
     const newStatus = over.id as OrderStatus
 

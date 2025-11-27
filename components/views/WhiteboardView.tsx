@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { WhiteboardEditor } from "@/components/whiteboard/WhiteboardEditor"
-import { WhiteboardData, getWhiteboardsForLab, createWhiteboard, deleteWhiteboard } from "@/lib/whiteboardService"
+import { WhiteboardData, getWhiteboardsForLab, createWhiteboard, deleteWhiteboard, updateWhiteboard } from "@/lib/whiteboardService"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { Plus, Trash2, Layout, Loader2, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -84,15 +84,52 @@ export function WhiteboardView() {
         }
     }
 
+    // Handle browser back button
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            if (event.state?.whiteboardId) {
+                const board = whiteboards.find(b => b.id === event.state.whiteboardId)
+                if (board) setSelectedWhiteboard(board)
+            } else {
+                setSelectedWhiteboard(null)
+            }
+        }
+
+        window.addEventListener('popstate', handlePopState)
+        return () => window.removeEventListener('popstate', handlePopState)
+    }, [whiteboards])
+
+    const handleSelectBoard = (board: WhiteboardData) => {
+        setSelectedWhiteboard(board)
+        window.history.pushState({ whiteboardId: board.id }, '', `#whiteboard=${board.id}`)
+    }
+
+    const handleBack = () => {
+        window.history.back()
+    }
+
     if (selectedWhiteboard) {
         return (
             <div className="h-screen flex flex-col">
                 <div className="bg-white border-b px-4 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedWhiteboard(null)}>
+                        <Button variant="ghost" size="icon" onClick={handleBack}>
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
-                        <h1 className="font-semibold text-lg">{selectedWhiteboard.name}</h1>
+                        <input
+                            className="font-semibold text-lg border rounded px-2 py-1"
+                            value={selectedWhiteboard.name}
+                            onChange={async (e) => {
+                                const name = e.target.value
+                                setSelectedWhiteboard({ ...selectedWhiteboard, name })
+                                try {
+                                    await updateWhiteboard(selectedWhiteboard.id!, { name })
+                                } catch (err) {
+                                    console.error("Failed to rename whiteboard", err)
+                                    error("Failed to rename whiteboard")
+                                }
+                            }}
+                        />
                     </div>
                 </div>
                 <div className="flex-1 overflow-hidden">
@@ -133,7 +170,7 @@ export function WhiteboardView() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {whiteboards.map((board) => (
-                            <Card key={board.id} className="cursor-pointer hover:shadow-md transition-shadow group" onClick={() => setSelectedWhiteboard(board)}>
+                            <Card key={board.id} className="cursor-pointer hover:shadow-md transition-shadow group" onClick={() => handleSelectBoard(board)}>
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-lg font-semibold truncate">{board.name}</CardTitle>
                                 </CardHeader>

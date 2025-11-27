@@ -109,6 +109,8 @@ export interface EquipmentBooking {
   maintenanceDueDate?: Date        // When maintenance is due
 }
 
+import { Timestamp } from 'firebase/firestore'
+
 /**
  * Firestore representation of EquipmentBooking
  * Dates stored as Firestore Timestamps
@@ -119,13 +121,13 @@ export interface FirestoreEquipmentBooking extends Omit<EquipmentBooking,
   'startTime' | 'endTime' | 'createdAt' | 'updatedAt' | 'checkedOutAt' | 'checkedInAt' | 'maintenanceDueDate' |
   'actualSupplyUsage' | 'expectedSupplyUsage'
 > {
-  startTime: any  // Firestore Timestamp
-  endTime: any    // Firestore Timestamp
-  createdAt: any  // Firestore Timestamp
-  updatedAt?: any // Firestore Timestamp
-  checkedOutAt?: any  // Firestore Timestamp
-  checkedInAt?: any   // Firestore Timestamp
-  maintenanceDueDate?: any  // Firestore Timestamp
+  startTime: Timestamp  // Firestore Timestamp
+  endTime: Timestamp    // Firestore Timestamp
+  createdAt: Timestamp  // Firestore Timestamp
+  updatedAt?: Timestamp // Firestore Timestamp
+  checkedOutAt?: Timestamp  // Firestore Timestamp
+  checkedInAt?: Timestamp   // Firestore Timestamp
+  maintenanceDueDate?: Timestamp  // Firestore Timestamp
 
   expectedSupplyUsage?: Array<{
     inventoryItemId: string
@@ -136,7 +138,7 @@ export interface FirestoreEquipmentBooking extends Omit<EquipmentBooking,
   actualSupplyUsage?: Array<{
     inventoryItemId: string
     actualQuantity: number
-    recordedAt: any  // Firestore Timestamp
+    recordedAt: Timestamp  // Firestore Timestamp
     recordedBy: string
   }>
 }

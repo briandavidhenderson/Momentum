@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User as FirebaseUser, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase';
 import { getUser, findUserProfile, FirestoreUser as User } from '@/lib/firestoreService';
@@ -20,6 +20,10 @@ export function useAuth() {
 
   useEffect(() => {
     const auth = getFirebaseAuth();
+    // Ensure sessions persist across reload/back navigation
+    setPersistence(auth, browserLocalPersistence).catch((err) => {
+      logger.error('Failed to set auth persistence', err);
+    });
     setMounted(true);
     isMountedRef.current = true;
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -87,9 +91,12 @@ export function useAuth() {
 
                     // If we found a profile but user doc didn't have ID, we should probably update user doc
                     // But for now just update local state
-                    if (currentUser && !currentUser.profileId) {
-                      setCurrentUser({ ...currentUser, profileId: profile.id });
-                    }
+                    setCurrentUser((prev) => {
+                      if (prev && !prev.profileId) {
+                        return { ...prev, profileId: profile.id };
+                      }
+                      return prev;
+                    });
 
                     setAuthState('app');
                     setIsLoadingProfile(false);

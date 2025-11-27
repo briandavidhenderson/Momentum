@@ -116,20 +116,28 @@ export function subscribeToEvents(
     )
 
     unsubscribers.push(
-      onSnapshot(labQuery, (snapshot) => {
-        labEvents = snapshot.docs.map((d) => {
-          const data = d.data() as FirestoreCalendarEvent
-          return {
-            ...data,
-            start: data.start?.toDate() || new Date(),
-            end: data.end?.toDate() || new Date(),
-            createdAt: (data.createdAt && (data.createdAt as any).toDate)
-              ? (data.createdAt as any).toDate()
-              : new Date(),
-          } as CalendarEvent
-        })
-        emit()
-      })
+      onSnapshot(
+        labQuery,
+        (snapshot) => {
+          labEvents = snapshot.docs.map((d) => {
+            const data = d.data() as FirestoreCalendarEvent
+            return {
+              ...data,
+              start: data.start?.toDate() || new Date(),
+              end: data.end?.toDate() || new Date(),
+              createdAt: (data.createdAt && (data.createdAt as any).toDate)
+                ? (data.createdAt as any).toDate()
+                : new Date(),
+            } as CalendarEvent
+          })
+          emit()
+        },
+        (error) => {
+          logger.error("Calendar lab events snapshot error", error)
+          labEvents = []
+          emit()
+        }
+      )
     )
   }
 
@@ -141,20 +149,28 @@ export function subscribeToEvents(
     )
 
     unsubscribers.push(
-      onSnapshot(userQuery, (snapshot) => {
-        userEvents = snapshot.docs.map((d) => {
-          const data = d.data() as FirestoreCalendarEvent
-          return {
-            ...data,
-            start: data.start?.toDate() || new Date(),
-            end: data.end?.toDate() || new Date(),
-            createdAt: (data.createdAt && (data.createdAt as any).toDate)
-              ? (data.createdAt as any).toDate()
-              : new Date(),
-          } as CalendarEvent
-        })
-        emit()
-      })
+      onSnapshot(
+        userQuery,
+        (snapshot) => {
+          userEvents = snapshot.docs.map((d) => {
+            const data = d.data() as FirestoreCalendarEvent
+            return {
+              ...data,
+              start: data.start?.toDate() || new Date(),
+              end: data.end?.toDate() || new Date(),
+              createdAt: (data.createdAt && (data.createdAt as any).toDate)
+                ? (data.createdAt as any).toDate()
+                : new Date(),
+            } as CalendarEvent
+          })
+          emit()
+        },
+        (error) => {
+          logger.error("Calendar personal events snapshot error", error)
+          userEvents = []
+          emit()
+        }
+      )
     )
   }
 

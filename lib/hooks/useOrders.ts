@@ -73,6 +73,12 @@ export function useOrders() {
   };
 
   const handleUpdateOrder = async (orderId: string, updates: Partial<Order>) => {
+    // Optimistic update
+    const previousOrders = [...orders];
+    setOrders(prevOrders => prevOrders.map(o =>
+      o.id === orderId ? { ...o, ...updates } : o
+    ));
+
     try {
       await updateOrder(orderId, updates);
       if (updates.status) {
@@ -86,6 +92,8 @@ export function useOrders() {
         success("Your changes have been saved.");
       }
     } catch (err) {
+      // Revert on error
+      setOrders(previousOrders);
       logger.error('Error updating order', err);
       error("Failed to update order. Please try again.");
     }
@@ -94,9 +102,11 @@ export function useOrders() {
   const handleUpdateOrderField = (orderId: string, field: keyof Order, value: any) => {
     handleUpdateOrder(orderId, { [field]: value });
   };
-  
+
   const handleReorder = async (item: InventoryItem) => {
     if (!profile) return;
+    const proceed = window.confirm(`Create a reorder for "${item.productName}"? You can edit supplier/price after creation.`);
+    if (!proceed) return;
     try {
       const newOrder: Omit<Order, 'id'> = {
         productName: item.productName,

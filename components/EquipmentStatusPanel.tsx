@@ -37,7 +37,7 @@ interface EquipmentStatusPanelProps {
   masterProjects: MasterProject[]
   currentUserProfile: PersonProfile | null
   allProfiles: PersonProfile[] // For notification recipients
-  onEquipmentCreate: (equipment: Omit<EquipmentDevice, 'id'>) => void
+  onEquipmentCreate: (equipment: Omit<EquipmentDevice, 'id'>) => Promise<void> | void
   onEquipmentUpdate: (equipmentId: string, updates: Partial<EquipmentDevice>) => void
   onInventoryUpdate: (inventory: InventoryItem[]) => void
   onOrderCreate: (order: Order) => void
@@ -216,6 +216,12 @@ export function EquipmentStatusPanel({
         return false
       }
 
+      if (!silent) {
+        if (!confirm(`Are you sure you want to create a reorder for "${enrichedSupply.name}"?`)) {
+          return false
+        }
+      }
+
       // Create order
       const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
       const newOrder: Order = {
@@ -281,6 +287,10 @@ export function EquipmentStatusPanel({
         return
       }
 
+      if (!confirm(`Found ${missingSupplies.length} missing supplies for ${device.name}. Create orders for all?`)) {
+        return
+      }
+
       logger.info(`Creating ${missingSupplies.length} orders for ${device.name}`)
 
       let successCount = 0
@@ -308,37 +318,47 @@ export function EquipmentStatusPanel({
   }
 
   // Handle create device from modal
-  const handleCreateDevice = () => {
+  const handleCreateDevice = async () => {
     if (!newDeviceForm.name.trim()) {
       alert('Please enter a device name')
       return
     }
 
-    const newDevice: Omit<EquipmentDevice, 'id'> = {
-      name: newDeviceForm.name,
-      make: newDeviceForm.make,
-      model: newDeviceForm.model,
-      serialNumber: newDeviceForm.serialNumber,
-      imageUrl: '',
-      type: 'Device',
-      maintenanceDays: newDeviceForm.maintenanceDays,
-      lastMaintained: toISODateString(new Date()),
-      threshold: EQUIPMENT_CONFIG.maintenance.defaultThreshold,
-      supplies: [],
-      sops: [],
-      labId: currentUserProfile?.labId,
-      createdAt: new Date().toISOString(),
-    }
+    try {
+      const newDevice: Omit<EquipmentDevice, 'id'> = {
+        name: newDeviceForm.name,
+        make: newDeviceForm.make,
+        model: newDeviceForm.model,
+        serialNumber: newDeviceForm.serialNumber,
+        imageUrl: '',
+        type: 'Device',
+        maintenanceDays: newDeviceForm.maintenanceDays,
+        lastMaintained: toISODateString(new Date()),
+        threshold: EQUIPMENT_CONFIG.maintenance.defaultThreshold,
+        supplies: [],
+        sops: [],
+        labId: currentUserProfile?.labId,
+        createdAt: new Date().toISOString(),
+      }
 
-    onEquipmentCreate(newDevice)
-    setShowDeviceCreationModal(false)
-    setNewDeviceForm({
-      name: '',
-      make: '',
-      model: '',
-      serialNumber: '',
-      maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
-    })
+      await onEquipmentCreate(newDevice)
+
+      // Show success message (using alert for now as toast is not passed, or use logger)
+      // Ideally we should use toast here if available in props or context
+      // But since we don't have toast in props, we'll rely on the UI update
+
+      setShowDeviceCreationModal(false)
+      setNewDeviceForm({
+        name: '',
+        make: '',
+        model: '',
+        serialNumber: '',
+        maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
+      })
+    } catch (error) {
+      logger.error('Failed to create device', error)
+      alert(`Failed to create device: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   // Handle edit device

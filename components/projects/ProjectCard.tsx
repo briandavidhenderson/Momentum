@@ -145,6 +145,9 @@ export function ProjectCard({
                     <span className="ml-1 capitalize">{health.status.replace('-', ' ')}</span>
                   </Badge>
                 )}
+                <Button variant="outline" size="sm" className="h-6 text-xs ml-2" asChild>
+                  <a href={`/projects/${project.id}`}>View Project</a>
+                </Button>
               </div>
 
               {/* Funding Source */}

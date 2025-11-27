@@ -33,11 +33,12 @@ interface UnifiedTask {
 export function MyTasksView() {
   const { currentUserProfile } = useAuth()
   const { projects, workpackages: allWorkpackages } = useProjects()
-  const { dayToDayTasks } = useAppContext()
+  const { dayToDayTasks, handleCreateDayToDayTask } = useAppContext()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [sourceFilter, setSourceFilter] = useState<TaskSource>("all")
   const [statusFilter, setStatusFilter] = useState<TaskFilter>("active")
+  const [newTaskTitle, setNewTaskTitle] = useState("")
 
   // Simple loading check - if we have no profile yet, still loading
   const isLoading = !currentUserProfile
@@ -282,6 +283,31 @@ export function MyTasksView() {
           <CardDescription>
             All tasks assigned to you from day-to-day and project work
           </CardDescription>
+          <div className="mt-3 flex gap-2">
+            <Input
+              placeholder="Quick add a personal task..."
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+            />
+            <Button
+              onClick={async () => {
+                if (!newTaskTitle.trim()) return
+                await handleCreateDayToDayTask({
+                  title: newTaskTitle.trim(),
+                  description: '',
+                  status: 'todo' as TaskStatus,
+                  importance: 'medium',
+                  assigneeId: currentUserProfile?.id || '',
+                  dueDate: undefined,
+                  createdBy: currentUserProfile?.id || '',
+                } as any)
+                setNewTaskTitle("")
+              }}
+              disabled={!newTaskTitle.trim()}
+            >
+              Add Task
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-4 mb-6">

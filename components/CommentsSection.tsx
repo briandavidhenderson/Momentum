@@ -98,7 +98,7 @@ export function CommentsSection({
     )
 
     return () => unsubscribe()
-  }, [entityType, entityId, currentUser?.uid])
+  }, [entityType, entityId, currentUser?.uid, currentUser])
 
   // Organize comments into threads
   const commentThreads = useMemo(() => {

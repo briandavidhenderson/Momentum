@@ -46,8 +46,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { GroupSelector } from "@/components/GroupSelector"
 import { ProjectKanbanBoard } from "./ProjectKanbanBoard"
 import { personProfilesToPeople } from "@/lib/personHelpers"
+import { useToast } from "@/lib/toast"
 
 export function ProjectDashboard() {
+  const { error: toastError } = useToast()
   const { currentUser: user, currentUserProfile: profile } = useAuth()
   const {
     projects,
@@ -457,9 +459,9 @@ export function ProjectDashboard() {
       setShowTaskDialog(false)
     } catch (error) {
       logger.error("Error creating task", error)
-      alert(`Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`)
+      toastError(`Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-  }, [allWorkpackages, handleUpdateWorkpackage])
+  }, [allWorkpackages, handleUpdateWorkpackage, toastError])
 
   const handleUpdateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
     try {
@@ -484,9 +486,9 @@ export function ProjectDashboard() {
       setSelectedTask(null)
     } catch (error) {
       logger.error("Error updating task", error)
-      alert(`Failed to update task: ${error instanceof Error ? error.message : "Unknown error"}`)
+      toastError(`Failed to update task: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-  }, [allWorkpackages, handleUpdateWorkpackage])
+  }, [allWorkpackages, handleUpdateWorkpackage, toastError])
 
   const handleDeleteTask = useCallback(async (workpackageId: string, taskId: string) => {
     try {
@@ -502,9 +504,9 @@ export function ProjectDashboard() {
       })
     } catch (error) {
       logger.error("Error deleting task", error)
-      alert(`Failed to delete task: ${error instanceof Error ? error.message : "Unknown error"}`)
+      toastError(`Failed to delete task: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-  }, [allWorkpackages, handleUpdateWorkpackage])
+  }, [allWorkpackages, handleUpdateWorkpackage, toastError])
 
   const handleCreateMasterProjectFromDialog = async (
     projectData: ProfileProject & { funderId?: string; groupIds?: string[] }
@@ -584,7 +586,7 @@ export function ProjectDashboard() {
       setShowProjectDialog(false)
     } catch (error) {
       logger.error("Error creating master project", error)
-      alert(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`)
+      toastError(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }
 

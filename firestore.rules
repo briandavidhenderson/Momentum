@@ -136,8 +136,10 @@ service cloud.firestore {
 
       // Allow updates for:
       // - Creator or admin for all fields
-      // - Any authenticated user can update (simplified for onboarding)
-      allow update: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
 
       // Only admin can delete
       allow delete: if isAdmin();
@@ -155,8 +157,11 @@ service cloud.firestore {
       allow create: if isAuthenticated();
 
       // Allow updates for:
-      // - Any authenticated user can update (simplified for onboarding)
-      allow update: if isAuthenticated();
+      // - Creator or admin
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
 
       // Only admin can delete
       allow delete: if isAdmin();
@@ -174,8 +179,11 @@ service cloud.firestore {
       // They will become the PI of the lab they create
       allow create: if isAuthenticated();
 
-      // Authenticated users can update labs (simplified to avoid getUserLab() dependency)
-      allow update: if isAuthenticated();
+      // Authenticated users can update labs if they created it or are admin
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
 
       // Only admin can delete
       allow delete: if isAdmin();
@@ -356,7 +364,11 @@ service cloud.firestore {
     // ============================================================================
     match /workpackages/{workpackageId} {
       // Users can only read workpackages they created OR in their lab
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
 
       // Users can create workpackages
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;

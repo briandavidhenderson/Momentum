@@ -187,6 +187,7 @@ export function TaskListView({
                     <QuickTaskInput
                         deliverable={deliverable}
                         workpackageId={workpackageId}
+                        availableOwners={allProfiles}
                     />
                 </div>
             )}

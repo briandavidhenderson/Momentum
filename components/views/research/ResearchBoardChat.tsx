@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { subscribeToBoardMessages, sendBoardMessage } from '@/lib/services/researchBoardService';
+import { useResearchBoardDetails } from '@/lib/hooks/useResearchBoards';
 import { BoardMessage } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -15,16 +16,25 @@ interface ResearchBoardChatProps {
 
 export function ResearchBoardChat({ boardId }: ResearchBoardChatProps) {
     const { currentUser, currentUserProfile } = useAuth();
+    const { board } = useResearchBoardDetails(boardId);
     const [messages, setMessages] = useState<BoardMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        // Avoid subscribing if user cannot access the board to prevent permission-denied crashes
+        if (!currentUser || !currentUserProfile) return;
+        const isMember = board?.members?.includes(currentUser.uid) || (board?.labId && board.labId === currentUserProfile.labId);
+        if (!isMember) {
+            setMessages([]);
+            return;
+        }
+
         const unsubscribe = subscribeToBoardMessages(boardId, (msgs) => {
             setMessages(msgs);
         });
         return () => unsubscribe();
-    }, [boardId]);
+    }, [boardId, board?.members, board?.labId, currentUser, currentUserProfile]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -35,19 +45,32 @@ export function ResearchBoardChat({ boardId }: ResearchBoardChatProps) {
     const handleSendMessage = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!newMessage.trim() || !currentUser || !currentUserProfile) return;
+        // Basic membership gate
+        const isMember = board?.members?.includes(currentUser.uid) || (board?.labId && board.labId === currentUserProfile.labId);
+        if (!isMember) {
+            alert('You do not have permission to post to this board.');
+            return;
+        }
 
         const content = newMessage;
         setNewMessage(''); // Optimistic clear
 
-        await sendBoardMessage(
-            boardId,
-            content,
-            {
-                userId: currentUser.uid,
-                name: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`,
-                avatar: currentUserProfile.avatarUrl
-            }
-        );
+        try {
+            await sendBoardMessage(
+                boardId,
+                content,
+                {
+                    userId: currentUser.uid,
+                    name: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`,
+                    avatar: currentUserProfile.avatarUrl
+                }
+            );
+        } catch (err) {
+            console.error('Failed to send board message', err);
+            alert('Failed to send message. Please try again.');
+            // Restore text so user can retry
+            setNewMessage(content);
+        }
     };
 
     return (

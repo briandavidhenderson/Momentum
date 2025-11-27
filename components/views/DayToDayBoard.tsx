@@ -894,6 +894,10 @@ export function DayToDayBoard() {
   const [activeTask, setActiveTask] = useState<DayToDayTask | null>(null)
   const [editingTask, setEditingTask] = useState<DayToDayTask | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [quickTitle, setQuickTitle] = useState("")
+  const [quickAssignee, setQuickAssignee] = useState<string>("")
+  const [quickDue, setQuickDue] = useState<string>("")
+  const [quickProject, setQuickProject] = useState<string>("")
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1067,6 +1071,80 @@ export function DayToDayBoard() {
             onCreateTask={(task) => onCreateTask(task as any)}
             currentUserId={currentUser?.uid}
           />
+
+          {/* Quick add */}
+          <div className="p-4 border rounded-lg bg-surface-2 flex flex-col md:flex-row gap-3 md:items-end mb-4">
+            <div className="flex-1">
+              <Label className="text-xs">Quick add task</Label>
+              <Input
+                placeholder="Task title"
+                value={quickTitle}
+                onChange={(e) => setQuickTitle(e.target.value)}
+              />
+            </div>
+            <div className="w-full md:w-48">
+              <Label className="text-xs">Assignee</Label>
+              <select
+                className="w-full border rounded h-10 px-2 text-sm"
+                value={quickAssignee}
+                onChange={(e) => setQuickAssignee(e.target.value)}
+              >
+                <option value="">Unassigned</option>
+                {(people || []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-full md:w-56">
+              <Label className="text-xs">Link to project (optional)</Label>
+              <select
+                className="w-full border rounded h-10 px-2 text-sm"
+                value={quickProject}
+                onChange={(e) => setQuickProject(e.target.value)}
+              >
+                <option value="">No project link</option>
+                {allProjects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-full md:w-44">
+              <Label className="text-xs">Due date (optional)</Label>
+              <Input
+                type="date"
+                value={quickDue}
+                onChange={(e) => setQuickDue(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={async () => {
+                if (!quickTitle.trim()) return
+                const due = quickDue ? new Date(quickDue) : (() => {
+                  const d = new Date()
+                  d.setDate(d.getDate() + 7)
+                  return d
+                })()
+                await onCreateTask({
+                  title: quickTitle.trim(),
+                  description: '',
+                  status: 'todo',
+                  importance: 'medium',
+                  assigneeId: quickAssignee || undefined,
+                  assigneeIds: quickAssignee ? [quickAssignee] : [],
+                  dueDate: due,
+                  linkedProjectId: quickProject || undefined,
+                  createdBy: currentUser?.uid || '',
+                } as any)
+                setQuickTitle("")
+                setQuickAssignee("")
+                setQuickDue("")
+                setQuickProject("")
+              }}
+              disabled={!quickTitle.trim()}
+            >
+              Add
+            </Button>
+          </div>
 
       {/* Empty state - when no tasks exist */}
       {tasks.length === 0 && (

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, KeyboardEvent } from "react"
-import { Deliverable, Task, ImportanceLevel } from "@/lib/types"
+import { Deliverable, Task, ImportanceLevel, PersonProfile } from "@/lib/types"
 import { useAppContext } from "@/lib/AppContext"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { Input } from "@/components/ui/input"
@@ -12,12 +12,15 @@ import { TaskCreationDialog } from "./TaskCreationDialog"
 interface QuickTaskInputProps {
     deliverable: Deliverable
     workpackageId: string
+    availableOwners?: PersonProfile[]
 }
 
-export function QuickTaskInput({ deliverable, workpackageId }: QuickTaskInputProps) {
+export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [] }: QuickTaskInputProps) {
     const [taskName, setTaskName] = useState("")
     const [isCreating, setIsCreating] = useState(false)
     const [showFullDialog, setShowFullDialog] = useState(false)
+    const [assigneeId, setAssigneeId] = useState<string>("")
+    const [dueDate, setDueDate] = useState<string>("")
     const { currentUser, currentUserProfile } = useAuth()
     const { workpackages, handleUpdateWorkpackage, handleUpdateDeliverable } = useAppContext()
 
@@ -29,35 +32,35 @@ export function QuickTaskInput({ deliverable, workpackageId }: QuickTaskInputPro
         return result
     }
 
-    const handleQuickCreate = async () => {
-        if (!taskName.trim() || !currentUser || !workpackage) return
+    const createTask = async (data: Partial<Task>) => {
+        if (!currentUser || !workpackage) return
 
         setIsCreating(true)
 
         try {
             // Smart defaults
             const now = new Date()
-            const endDate = deliverable.dueDate
-                ? new Date(deliverable.dueDate)
-                : addDays(now, 2)
+            const endDate = data.end || (dueDate
+                ? new Date(dueDate)
+                : deliverable.dueDate
+                    ? new Date(deliverable.dueDate)
+                    : addDays(now, 2))
 
-            // Build task object with only defined values (Firestore doesn't allow undefined)
+            // Build task object
             const newTask: Task = {
                 id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                name: taskName.trim(),
-                start: now,
+                name: data.name || taskName.trim(),
+                start: data.start || now,
                 end: endDate,
-                progress: 0,
-                status: "not-started",
+                progress: data.progress || 0,
+                status: data.status || "not-started",
                 workpackageId: workpackageId,
-                importance: "medium" as ImportanceLevel,
+                importance: data.importance || "medium",
+                notes: data.notes,
+                primaryOwner: data.primaryOwner || assigneeId || (currentUserProfile?.id ? currentUserProfile.id : undefined),
+                helpers: data.helpers,
                 deliverables: [], // Legacy field
                 isExpanded: false,
-            }
-
-            // Only add primaryOwner if it exists
-            if (currentUserProfile?.id) {
-                newTask.primaryOwner = currentUserProfile.id
             }
 
             // Add task to workpackage
@@ -78,11 +81,22 @@ export function QuickTaskInput({ deliverable, workpackageId }: QuickTaskInputPro
             // Clear input
             setTaskName("")
         } catch (error) {
-            console.error("Error creating quick task:", error)
+            console.error("Error creating task:", error)
             alert("Failed to create task. Please try again.")
         } finally {
             setIsCreating(false)
         }
+    }
+
+    const handleQuickCreate = async () => {
+        if (!taskName.trim()) return
+        await createTask({
+            name: taskName.trim(),
+            primaryOwner: assigneeId || undefined,
+            end: dueDate ? new Date(dueDate) : undefined,
+        })
+        setAssigneeId("")
+        setDueDate("")
     }
 
     const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -100,9 +114,7 @@ export function QuickTaskInput({ deliverable, workpackageId }: QuickTaskInputPro
     }
 
     const handleFullDialogCreate = async (taskData: Partial<Task> & { workpackageId: string }) => {
-        // This will be handled by the parent component's task creation logic
-        // For now, we'll use the same quick create logic
-        await handleQuickCreate()
+        await createTask(taskData)
         setShowFullDialog(false)
     }
 
@@ -116,6 +128,24 @@ export function QuickTaskInput({ deliverable, workpackageId }: QuickTaskInputPro
                     placeholder="Add a task... (Enter to create, Shift+Enter for details)"
                     className="flex-1 text-sm h-9"
                     disabled={isCreating}
+                />
+                <select
+                    className="h-9 border rounded px-2 text-sm"
+                    value={assigneeId}
+                    onChange={(e) => setAssigneeId(e.target.value)}
+                >
+                    <option value="">Assignee</option>
+                    {availableOwners.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.firstName} {p.lastName}
+                        </option>
+                    ))}
+                </select>
+                <Input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="h-9 w-36"
                 />
                 <Button
                     size="sm"

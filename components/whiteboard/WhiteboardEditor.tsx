@@ -12,6 +12,7 @@ import {
     Grid3X3, Copy, Layers, ChevronsUp, ChevronsDown, LucideIcon, Save
 } from "lucide-react"
 import { Shape, createWhiteboard, updateWhiteboard, WhiteboardData } from "@/lib/whiteboardService"
+import { logger } from "@/lib/logger"
 import { WhiteboardCanvas } from "./WhiteboardCanvas"
 import { WhiteboardSidebar } from "./WhiteboardSidebar"
 import { ProtocolPropertiesPanel } from "./ProtocolPropertiesPanel"
@@ -32,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
 
 // --- TYPES ---
 
@@ -532,7 +534,15 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
 
     const handleTextSave = () => {
         if (editingId) {
-            setShapes(prev => prev.map(s => s.id === editingId ? { ...s, text: editText } : s))
+            setShapes(prev => {
+                const next = prev.map(s => s.id === editingId ? { ...s, text: editText } : s)
+                if (whiteboardId) {
+                    updateWhiteboard(whiteboardId, { shapes: next }).catch((err) => {
+                        logger.error("Failed to save text edit", err)
+                    })
+                }
+                return next
+            })
             setEditingId(null)
         }
     }
@@ -715,7 +725,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
     // Debug: confirm hotkeys are wired
     useEffect(() => {
         // Logs once per mount or when text-editing state flips
-        console.log("Whiteboard hotkeys active", { enabled: true, isTextEditing: !!editingId })
+
     }, [editingId])
 
     // Migrate arrow connections on initial load (backward compatibility)
@@ -731,6 +741,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                 setShapes(migrated)
             }
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []) // Run only once on mount
 
     // -- ASSET DRAG --
@@ -1258,6 +1269,96 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                             dragStart={dragStart}
                             lastMousePos={lastMousePos}
                         />
+
+                        {/* Inline text toolbar when editing */}
+                        {editingId && (
+                            <div className="absolute top-4 right-4 z-50 bg-white border rounded shadow-sm flex items-center gap-1 p-1">
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textBold: !s.textBold } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <Bold className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textItalic: !s.textItalic } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <Italic className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textUnderline: !s.textUnderline } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <Underline className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textAlign: 'left' as const } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <AlignLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textAlign: 'center' as const } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <AlignCenter className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textAlign: 'right' as const } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <AlignRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
 
                         {selectedIds.size > 0 && !editingId && (
                             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white p-3 rounded-2xl shadow-2xl border border-slate-200 flex flex-col gap-4 animate-in slide-in-from-bottom-4 z-50 min-w-[400px]">

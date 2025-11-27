@@ -1,0 +1,306 @@
+﻿
+> lab-management-app@0.1.0 deploy:all
+> npm run deploy:rules && npm run deploy:functions && npm run deploy:hosting
+
+
+> lab-management-app@0.1.0 deploy:rules
+> firebase deploy --only firestore:rules && firebase deploy --only storage
+
+
+[1m[37m===[39m Deploying to 'momentum-a60c5'...[22m
+
+[36m[1mi [22m[39m deploying [1mfirestore[22m
+[36m[1mi  firestore:[22m[39m ensuring required API [1mfirestore.googleapis.com[22m is enabled...
+[36m[1mi  firestore:[22m[39m ensuring required API [1mfirestore.googleapis.com[22m is enabled...
+[36m[1mi [22m[39m [1m[36mfirestore:[39m[22m reading indexes from [1mfirestore.indexes.json[22m...
+[36m[1mi  cloud.firestore:[22m[39m checking [1mfirestore.rules[22m for compilation errors...
+[32m[1m+  cloud.firestore:[22m[39m rules file [1mfirestore.rules[22m compiled successfully
+[36m[1mi  firestore:[22m[39m uploading rules [1mfirestore.rules[22m...
+[32m[1m+  firestore:[22m[39m released rules [1mfirestore.rules[22m to [1mcloud.firestore[22m
+
+[32m[1m+ [22m[39m [1m[4mDeploy complete![24m[22m
+
+[1mProject Console:[22m https://console.firebase.google.com/project/momentum-a60c5/overview
+
+[1m[37m===[39m Deploying to 'momentum-a60c5'...[22m
+
+[36m[1mi [22m[39m deploying [1mstorage[22m
+[36m[1mi  storage:[22m[39m ensuring required API [1mfirebasestorage.googleapis.com[22m is enabled...
+[36m[1mi  firebase.storage:[22m[39m checking [1mstorage.rules[22m for compilation errors...
+[32m[1m+  firebase.storage:[22m[39m rules file [1mstorage.rules[22m compiled successfully
+[36m[1mi  storage:[22m[39m latest version of [1mstorage.rules[22m already up to date, skipping upload...
+[32m[1m+  storage:[22m[39m released rules [1mstorage.rules[22m to [1mfirebase.storage[22m
+
+[32m[1m+ [22m[39m [1m[4mDeploy complete![24m[22m
+
+[1mProject Console:[22m https://console.firebase.google.com/project/momentum-a60c5/overview
+
+> lab-management-app@0.1.0 deploy:functions
+> cd firebase/functions && npm run build && cd ../.. && firebase deploy --only functions
+
+
+> build
+> tsc
+
+
+[1m[37m===[39m Deploying to 'momentum-a60c5'...[22m
+
+[36m[1mi [22m[39m deploying [1mfunctions[22m
+[32m[1m+ [22m[39m [32m[1mfunctions:[22m[39m Finished running [1mpredeploy[22m script.
+[36m[1mi  functions:[22m[39m preparing codebase [1mdefault[22m for deployment
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudfunctions.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudbuild.googleapis.com[22m is enabled...
+[36m[1mi  artifactregistry:[22m[39m ensuring required API [1martifactregistry.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m Loading and analyzing source code for codebase default to determine what to deploy
+Serving at port 8209
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ÔÜÖ´©Å  specify custom .env file path with { path: '/custom/path/.env' }
+
+[36m[1mi  extensions:[22m[39m ensuring required API [1mfirebaseextensions.googleapis.com[22m is enabled...
+[36m[1mi [22m[39m [36m[1mfunctions: [22m[39mLoaded environment variables from .env, .env.momentum-a60c5.
+[36m[1mi  functions:[22m[39m preparing [1mfirebase/functions[22m directory for uploading...
+node.exe : [33m[1m! [22mDEPRECATION 
+NOTICE: Action required to deploy after 
+March 2026
+At C:\Program Files\nodejs\npm.ps1:29 
+char:3
++   & $NODE_EXE $NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecifie 
+   d: ([33m[1m! [22...fter March 2026  
+  :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeComma 
+   ndError
+ 
+  
+  functions.config() API is deprecated.
+  Cloud Runtime Configuration API, the 
+Google Cloud service used to store 
+function configuration data, will be shut 
+down in March 2026. As a result, you must 
+migrate away from using 
+functions.config() to continue deploying 
+your functions after March 2026.
+  
+  What this means for you:
+  
+  - The Firebase CLI commands for 
+managing this configuration 
+(functions:config:set, get, unset, clone, 
+and export) are deprecated. These 
+commands will no longer work after March 
+2026.
+  - firebase deploy command will fail for 
+functions that use the legacy 
+functions.config() API after March 2026.
+  
+  Existing deployments will continue to 
+work with their current configuration.
+  
+  See your migration options at: https://f
+irebase.google.com/docs/functions/config-e
+nv#migrate-to-dotenv[39m
+[36m[1mi [22m[39m [36m[1mfunctions:[22m[39m packaged [1mC:\Users\hendersb\Documents\Momentum\firebase\functions[22m (248.52 KB) for uploading
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudscheduler.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1msecretmanager.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m Skipping the deploy of unchanged functions.
+[32m[1m+ [22m[39m [1m[35mfunctions[enableEquipmentBooking(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logAuditEvent(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logUserLogin(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logUserDeletion(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logConsentChanges(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logPrivacySettingsChanges(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logDataExportRequests(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logAccountDeletionRequests(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[logSpecialCategoryData(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[onOrderStatusChange(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[createDefaultAllocation(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[checkFundingAlertNotifications(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[notifyLargeOrder(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[notifyAllocationCreated(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[notifyTransactionFinalized(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[unlinkGoogleCalendar(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[syncGoogleCalendar(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[googleCalendarAuthStart(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[googleCalendarAuthCallback(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[generateExperimentSuggestions(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[generateProjectDescription(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[suggestMaintenanceSchedule(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[fixCalendarTokenPermissions(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[fixCalendarTokenPermissionsHTTP(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[orcidAuthStart(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[orcidAuthCallback(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[orcidLinkAccount(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[orcidResyncProfile(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[processDataExportRequest(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[processAccountDeletion(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[enforceDataRetention(us-central1)][39m[22m Skipped (No changes detected)
+[32m[1m+ [22m[39m [1m[35mfunctions[importProtocolFromPdf(us-central1)][39m[22m Skipped (No changes detected)
+
+[32m[1m+ [22m[39m [1m[4mDeploy complete![24m[22m
+
+[1mProject Console:[22m https://console.firebase.google.com/project/momentum-a60c5/overview
+
+> lab-management-app@0.1.0 deploy:hosting
+> npm run build && firebase deploy --only hosting
+
+
+> lab-management-app@0.1.0 build
+> next build
+
+  Ôû▓ Next.js 14.2.33
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ Ô£ô Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/12) ...
+   Generating static pages (3/12) 
+   Generating static pages (6/12) 
+   Generating static pages (9/12) 
+ Ô£ô Generating static pages (12/12)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size     First Load JS
+Ôöî Ôùï /                                       164 kB          600 kB
+Ôö£ Ôùï /_not-found                             876 B          88.4 kB
+Ôö£ ãÆ /api/protocol/import                    0 B                0 B
+Ôö£ ãÆ /api/protocol/parse                     0 B                0 B
+Ôö£ Ôùï /auth/orcid/callback                    567 B          88.1 kB
+Ôö£ Ôùï /eln                                    6.2 kB          295 kB
+Ôö£ Ôùï /profile                                3.25 kB         272 kB
+Ôö£ Ôùï /projects                               27.1 kB         411 kB
+Ôö£ ãÆ /projects/[id]                          13.3 kB         369 kB
+Ôö£ ãÆ /projects/[id]/explorer                 4.68 kB         319 kB
+Ôö£ Ôùï /settings/integrations/google-callback  1.69 kB        89.3 kB
+Ôöö Ôùï /whiteboard                             4.18 kB         301 kB
++ First Load JS shared by all               87.6 kB
+  Ôö£ chunks/117-5adf3420703dcffa.js          31.9 kB
+  Ôö£ chunks/fd9d1056-8bd31246ee1b9f44.js     53.6 kB
+  Ôöö other shared chunks (total)             2.05 kB
+
+
+Ôùï  (Static)   prerendered as static content
+ãÆ  (Dynamic)  server-rendered on demand
+
+
+   Thank you for trying our [3mearly preview[23m of Next.js support on Firebase Hosting.
+   [31mDuring the preview, support is best-effort and breaking changes can be expected. Proceed with caution.[39m
+
+   [1mDocumentation:[22m https://firebase.google.com/docs/hosting/frameworks/nextjs
+   [1mFile a bug:[22m https://github.com/firebase/firebase-tools/issues/new?template=bug_report.md
+   [1mSubmit a feature request:[22m https://github.com/firebase/firebase-tools/issues/new?template=feature_request.md
+
+   We'd love to learn from you. Express your interest in helping us shape the future of Firebase Hosting: https://goo.gle/41enW5X
+
+  Ôû▓ Next.js 14.2.33
+  - Environments: .env.local
+
+
+   Creating an optimized production build ...
+
+ Ô£ô Compiled successfully
+
+   Linting and checking validity of types ...
+
+   Collecting page data ...
+
+   Generating static pages (0/12) ...
+
+   Generating static pages (3/12) 
+
+   Generating static pages (6/12) 
+   Generating static pages (9/12) 
+ Ô£ô Generating static pages (12/12)
+
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+
+
+Route (app)                                 Size     First Load JS
+Ôöî Ôùï /                                       164 kB          600 kB
+Ôö£ Ôùï /_not-found                             876 B          88.4 kB
+Ôö£ ãÆ /api/protocol/import                    0 B                0 B
+Ôö£ ãÆ /api/protocol/parse                     0 B                0 B
+Ôö£ Ôùï /auth/orcid/callback                    567 B          88.1 kB
+Ôö£ Ôùï /eln                                    6.2 kB          295 kB
+Ôö£ Ôùï /profile                                3.25 kB         272 kB
+Ôö£ Ôùï /projects                               27.1 kB         411 kB
+Ôö£ ãÆ /projects/[id]                          13.3 kB         369 kB
+Ôö£ ãÆ /projects/[id]/explorer                 4.68 kB         319 kB
+Ôö£ Ôùï /settings/integrations/google-callback  1.69 kB        89.3 kB
+Ôöö Ôùï /whiteboard                             4.18 kB         301 kB
++ First Load JS shared by all               87.6 kB
+  Ôö£ chunks/117-5adf3420703dcffa.js          31.9 kB
+  Ôö£ chunks/fd9d1056-8bd31246ee1b9f44.js     53.6 kB
+  Ôöö other shared chunks (total)             2.05 kB
+
+
+
+Ôùï  (Static)   prerendered as static content
+ãÆ  (Dynamic)  server-rendered on demand
+
+
+Building a Cloud Function to run this application. This is needed due to:
+ ÔÇó non-static component /api/protocol/parse/route
+ ÔÇó non-static component /projects/[id]/explorer/page
+ ÔÇó non-static component /projects/[id]/page
+ ÔÇó non-static component /api/protocol/import/route
+
+[33m[1m! [22m[39m This integration expects Node version 16, 18, or 20. You're running version 22, problems may be encountered.
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 
+'lab-management-app@0.1.0',
+npm warn EBADENGINE   required: { node: 
+'20' },
+npm warn EBADENGINE   current: { node: 
+'v22.14.0', npm: '11.2.0' }
+npm warn EBADENGINE }
+
+up to date in 4s
+
+40 packages are looking for funding
+  run `npm fund` for details
+[36m[1mi  hosting:[22m[39m The following function(s) are pinned to site [1mmomentum-a60c5[22m and will be deployed as well: [1mssrmomentuma60c5[22m
+
+[1m[37m===[39m Deploying to 'momentum-a60c5'...[22m
+
+[36m[1mi [22m[39m deploying [1mfunctions, hosting[22m
+[36m[1mi  functions:[22m[39m preparing codebase [1mfirebase-frameworks-momentum-a60c5[22m for deployment
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudfunctions.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudbuild.googleapis.com[22m is enabled...
+[36m[1mi  artifactregistry:[22m[39m ensuring required API [1martifactregistry.googleapis.com[22m is enabled...
+[33m[1m! [22m[39m [1m[33mfunctions: [39m[22mpackage.json indicates an outdated version of firebase-functions. Please upgrade using [1mnpm install --save firebase-functions@latest[22m in your functions directory.
+[33m[1m! [22m[39m [1m[33mfunctions: [39m[22mPlease note that there will be breaking changes when you upgrade.
+[36m[1mi  functions:[22m[39m Loading and analyzing source code for codebase firebase-frameworks-momentum-a60c5 to determine what to deploy
+Serving at port 8171
+
+[36m[1mi  extensions:[22m[39m ensuring required API [1mfirebaseextensions.googleapis.com[22m is enabled...
+[36m[1mi [22m[39m [36m[1mfunctions: [22m[39mLoaded environment variables from .env.
+[36m[1mi  functions:[22m[39m preparing [1m.firebase\momentum-a60c5\functions[22m directory for uploading...
+[36m[1mi [22m[39m [36m[1mfunctions:[22m[39m packaged [1mC:\Users\hendersb\Documents\Momentum\.firebase\momentum-a60c5\functions[22m (214.63 MB) for uploading
+[36m[1mi  functions:[22m[39m ensuring required API [1mrun.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1meventarc.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mpubsub.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mstorage.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m generating the service identity for [1mpubsub.googleapis.com[22m...
+[36m[1mi  functions:[22m[39m generating the service identity for [1meventarc.googleapis.com[22m...
+[32m[1m+  functions:[22m[39m [1m.firebase\momentum-a60c5\functions[22m source uploaded successfully
+[36m[1mi  hosting[momentum-a60c5]:[22m[39m beginning deploy...
+[36m[1mi  hosting[momentum-a60c5]:[22m[39m found 63 files in [1m.firebase\momentum-a60c5\hosting[22m
+[32m[1m+  hosting[momentum-a60c5]:[22m[39m file upload complete
+[36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1mfirebase-frameworks-momentum-a60c5:ssrmomentuma60c5(us-central1)[22m...
+[32m[1m+ [22m[39m [1m[32mfunctions[firebase-frameworks-momentum-a60c5:ssrmomentuma60c5(us-central1)][39m[22m Successful update operation.
+[1mFunction URL[22m (firebase-frameworks-momentum-a60c5:ssrmomentuma60c5(us-central1)): https://ssrmomentuma60c5-tzx6fqddra-uc.a.run.app
+[36m[1mi  hosting[momentum-a60c5]:[22m[39m finalizing version...
+[32m[1m+  hosting[momentum-a60c5]:[22m[39m version finalized
+[36m[1mi  hosting[momentum-a60c5]:[22m[39m releasing new version...
+[32m[1m+  hosting[momentum-a60c5]:[22m[39m release complete
+
+[32m[1m+ [22m[39m [1m[4mDeploy complete![24m[22m
+
+[1mProject Console:[22m https://console.firebase.google.com/project/momentum-a60c5/overview
+[1mHosting URL:[22m https://momentum-a60c5.web.app

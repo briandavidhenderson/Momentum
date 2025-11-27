@@ -249,17 +249,24 @@ export function subscribeToDeliverables(
     q = query(q, where("status", "==", filters.status))
   }
 
-  return onSnapshot(q, (snapshot) => {
-    const deliverables = snapshot.docs.map(doc => {
-      const data = doc.data() as FirestoreDeliverable
-      return {
-        ...data,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-      } as Deliverable
-    })
-    callback(deliverables)
-  })
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const deliverables = snapshot.docs.map(doc => {
+        const data = doc.data() as FirestoreDeliverable
+        return {
+          ...data,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        } as Deliverable
+      })
+      callback(deliverables)
+    },
+    (error) => {
+      console.error("Deliverables snapshot error", error)
+      callback([])
+    }
+  )
 }
 
 /**

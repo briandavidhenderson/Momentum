@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
@@ -12,6 +12,7 @@ import OnboardingFlow from "@/components/OnboardingFlow"
 import TopModuleNavigation from "@/components/TopModuleNavigation"
 import { Button } from "@/components/ui/button"
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage"
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog"
 import { useAppContext } from "@/lib/AppContext"
 import { logger } from "@/lib/logger"
 import { UserRole } from "@/lib/types"
@@ -22,6 +23,7 @@ export default function ProjectDetailRoute() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const projectId = useMemo(() => params?.id?.toString() || "", [params])
+  const [showEditDialog, setShowEditDialog] = useState(false)
   const {
     currentUserProfile,
     currentUser,
@@ -236,9 +238,7 @@ export default function ProjectDetailRoute() {
             health={projectHealth}
             budgetSummary={projectBudgetSummary}
             onBack={() => router.push("/projects")}
-            onEdit={() => {
-              alert("Edit functionality coming soon")
-            }}
+            onEdit={() => setShowEditDialog(true)}
             onCreateWorkpackage={handleCreateWorkpackageForProject}
             onUpdateWorkpackage={async (workpackageId, updates) => {
               await handleUpdateWorkpackage(workpackageId, updates)
@@ -251,8 +251,32 @@ export default function ProjectDetailRoute() {
         </div>
       </div>
 
+
+      {
+        project && (
+          <ProjectCreationDialog
+            open={showEditDialog}
+            onClose={() => setShowEditDialog(false)}
+            onCreateRegular={() => { }} // Not used in edit mode
+            onCreateMaster={() => { }} // Not used in edit mode
+            onUpdate={async (updatedProject) => {
+              if (project) {
+                await handleUpdateMasterProject(project.id, updatedProject)
+                setShowEditDialog(false)
+              }
+            }}
+            currentUserProfileId={currentUserProfile?.id || null}
+            currentUserId={currentUser?.uid || ""}
+            organisationId={currentUserProfile?.organisationId}
+            labId={currentUserProfile?.labId}
+            project={project}
+            mode="edit"
+          />
+        )
+      }
+
       <CookieConsentBanner />
-    </main>
+    </main >
   )
 }
 

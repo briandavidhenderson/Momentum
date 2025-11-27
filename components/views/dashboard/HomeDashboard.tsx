@@ -26,6 +26,7 @@ import { TodayOverview } from './TodayOverview'
 import { TaskKanban } from './TaskKanban'
 import { ProjectExplorerView } from '@/components/projects/ProjectExplorerView'
 import { Task } from '@/lib/types'
+
 import { TaskDetailsPanel } from '@/components/projects/TaskDetailsPanel'
 
 export function HomeDashboard() {
@@ -350,6 +351,11 @@ export function HomeDashboard() {
                                                 className={`h-full ${selectedProject?.id === project.id ? 'bg-indigo-600' : 'bg-indigo-500'}`}
                                                 style={{ width: `${project.progress || 0}%` }}
                                             />
+                                        </div>
+                                        <div className="mt-3 flex justify-end">
+                                            <Link href={`/projects/${project.id}/explorer`} className="text-xs text-indigo-600 hover:underline">
+                                                View Project
+                                            </Link>
                                         </div>
                                     </div>
                                 ))}
