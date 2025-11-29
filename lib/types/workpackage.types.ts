@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type { ImportanceLevel } from './common.types'
+import type { Task } from './task.types'
 
 /**
  * Workpackage - Structured unit of work within a project
@@ -52,7 +53,7 @@ export interface Workpackage {
   isExpanded?: boolean      // For accordion/tree views
 
   // Backward compatibility - DEPRECATED
-  tasks?: any[]             // @deprecated Use deliverableIds instead
+  tasks?: Task[]             // @deprecated Use deliverableIds instead
 }
 
 /**

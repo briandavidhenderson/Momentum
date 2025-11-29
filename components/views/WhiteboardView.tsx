@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/toast"
 import { formatDistanceToNow } from "date-fns"
 
 export function WhiteboardView() {
-    const { currentUser, currentUserProfile } = useAuth()
+    const { currentUser, currentUserProfile, isLoadingProfile } = useAuth()
     const { success, error } = useToast()
     const [whiteboards, setWhiteboards] = useState<WhiteboardData[]>([])
     const [loading, setLoading] = useState(true)
@@ -32,10 +32,14 @@ export function WhiteboardView() {
     }, [error])
 
     useEffect(() => {
+        if (isLoadingProfile) return
+
         if (currentUserProfile?.labId) {
             loadWhiteboards(currentUserProfile.labId)
+        } else {
+            setLoading(false)
         }
-    }, [currentUserProfile, loadWhiteboards])
+    }, [currentUserProfile, isLoadingProfile, loadWhiteboards])
 
     const handleCreate = async () => {
         if (!currentUserProfile?.labId || !currentUser) return
@@ -45,7 +49,8 @@ export function WhiteboardView() {
                 name: `Untitled Whiteboard ${new Date().toLocaleDateString()}`,
                 shapes: [],
                 createdBy: currentUser.uid,
-                labId: currentUserProfile.labId
+                labId: currentUserProfile.labId,
+                visibility: 'private'
             })
             const newBoard: WhiteboardData = {
                 id: newId,
@@ -53,6 +58,7 @@ export function WhiteboardView() {
                 shapes: [],
                 createdBy: currentUser.uid,
                 labId: currentUserProfile.labId,
+                visibility: 'private',
                 createdAt: new Date(),
                 updatedAt: new Date()
             }
@@ -172,7 +178,14 @@ export function WhiteboardView() {
                         {whiteboards.map((board) => (
                             <Card key={board.id} className="cursor-pointer hover:shadow-md transition-shadow group" onClick={() => handleSelectBoard(board)}>
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-lg font-semibold truncate">{board.name}</CardTitle>
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-lg font-semibold truncate">{board.name}</CardTitle>
+                                        {board.visibility === 'lab' ? (
+                                            <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100 uppercase font-bold tracking-wider">Lab</span>
+                                        ) : (
+                                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase font-bold tracking-wider">Private</span>
+                                        )}
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="h-32 bg-slate-100 rounded-md flex items-center justify-center relative overflow-hidden">

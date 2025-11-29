@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment, Task, ImportanceLevel } from "@/lib/types"
+import { MasterProject, Workpackage, PersonProfile, FundingAccount, Order, Deliverable, CalendarEvent, ELNExperiment, ProjectTask, ImportanceLevel, WorkStatus, HydratedWorkpackage } from "@/lib/types"
 import { getFirebaseDb } from "@/lib/firebase"
 import { collection, query, where, getDocs, orderBy, addDoc, serverTimestamp, deleteDoc, doc } from "firebase/firestore"
 import { logger } from "@/lib/logger"
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
+import { useToast } from "@/components/ui/toast"
 import { WorkpackageDialog } from "@/components/projects/WorkpackageDialog"
 import { DeliverableDialog } from "@/components/DeliverableDialog"
 import { DeliverableDetailsPanel } from "@/components/projects/DeliverableDetailsPanel"
@@ -37,6 +38,7 @@ import {
   PanelLeft,
   PanelRight,
   LayoutDashboard,
+  Trash2,
 } from "lucide-react"
 import { calculateProjectHealth, getHealthStatusColor, ProjectHealth } from "@/lib/utils/projectHealth"
 import { formatCurrency, getBudgetStatusColor, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
@@ -58,7 +60,7 @@ interface ProjectFile {
 
 interface ProjectDetailPageProps {
   project: MasterProject
-  workpackages: Workpackage[]
+  workpackages: HydratedWorkpackage[]
   deliverables: Deliverable[]
   teamMembers: PersonProfile[]
   fundingAccounts: FundingAccount[]
@@ -67,18 +69,19 @@ interface ProjectDetailPageProps {
   budgetSummary?: ProjectBudgetSummary
   onBack: () => void
   onEdit?: () => void
-  onCreateWorkpackage?: (workpackageData: Partial<Workpackage>) => void
-  onUpdateWorkpackage?: (workpackageId: string, updates: Partial<Workpackage>) => void
-  onDeleteWorkpackage?: (workpackageId: string) => void
-  onCreateDeliverable?: (deliverableData: Partial<Deliverable>) => void
-  onUpdateDeliverable?: (deliverableId: string, updates: Partial<Deliverable>) => void
-  onDeleteDeliverable?: (deliverableId: string) => void
-  onUpdateProject?: (updates: Partial<MasterProject>) => void
-  onUpdateTask?: (workpackageId: string, taskId: string, updates: any) => void
-  onDeleteTask?: (workpackageId: string, taskId: string) => void
+  onCreateWorkpackage?: (workpackageData: Partial<Workpackage>) => Promise<string | undefined>
+  onUpdateWorkpackage?: (workpackageId: string, updates: Partial<Workpackage>) => Promise<void>
+  onDeleteWorkpackage?: (workpackageId: string) => Promise<void>
+  onCreateDeliverable?: (deliverableData: Partial<Deliverable>) => Promise<string | undefined>
+  onUpdateDeliverable?: (deliverableId: string, updates: Partial<Deliverable>) => Promise<void>
+  onDeleteDeliverable?: (deliverableId: string) => Promise<void>
+  onUpdateProject?: (projectId: string, updates: Partial<MasterProject>) => Promise<void>
+  onUpdateTask?: (taskId: string, updates: Partial<ProjectTask>) => Promise<void>
+  onDeleteTask?: (taskId: string) => Promise<void>
   onViewOrder?: (orderId: string) => void
   onViewExperiment?: (experimentId: string) => void
   onViewEvent?: (eventId: string) => void
+  onUpdateDeliverableTasks?: (deliverableId: string, tasks: ProjectTask[]) => Promise<void>
 }
 
 export function ProjectDetailPage({
@@ -104,7 +107,9 @@ export function ProjectDetailPage({
   onViewOrder,
   onViewExperiment,
   onViewEvent,
+  onUpdateDeliverableTasks,
 }: ProjectDetailPageProps) {
+  const { toast } = useToast()
   const [workpackageDialogOpen, setWorkpackageDialogOpen] = useState(false)
   const [selectedWorkpackageDialog, setSelectedWorkpackageDialog] = useState<Workpackage | null>(null)
   const [workpackageDialogMode, setWorkpackageDialogMode] = useState<"create" | "edit" | "view">("view")
@@ -290,9 +295,9 @@ export function ProjectDetailPage({
 
   // Calculate project statistics
   const stats = useMemo(() => {
-    const totalTasks = workpackages.reduce((sum, wp) => sum + (wp.tasks?.length || 0), 0)
+    const totalTasks = workpackages.reduce((sum, wp) => sum + (wp.deliverables?.reduce((dSum, d) => dSum + (d.tasks?.length || 0), 0) || 0), 0)
     const completedTasks = workpackages.reduce(
-      (sum, wp) => sum + (wp.tasks?.filter(t => t.status === "done").length || 0),
+      (sum, wp) => sum + (wp.deliverables?.reduce((dSum, d) => dSum + (d.tasks?.filter(t => t.status === "done").length || 0), 0) || 0),
       0
     )
     const completedWorkpackages = workpackages.filter(wp => wp.status === "completed").length
@@ -352,9 +357,11 @@ export function ProjectDetailPage({
   const peopleActive = useMemo(() => {
     const ids = new Set<string>()
     workpackages.forEach(wp => {
-      wp.tasks?.forEach(task => {
-        if (task.primaryOwner) ids.add(task.primaryOwner)
-        task.helpers?.forEach((h: string) => h && ids.add(h))
+      wp.deliverables?.forEach(d => {
+        d.tasks?.forEach(task => {
+          if (task.primaryOwner) ids.add(task.primaryOwner)
+          task.helpers?.forEach((h: string) => h && ids.add(h))
+        })
       })
     })
     deliverables.forEach(d => d.ownerId && ids.add(d.ownerId))
@@ -398,12 +405,14 @@ export function ProjectDetailPage({
     })
 
     workpackages.forEach(wp => {
-      wp.tasks?.slice(0, 10).forEach(task => {
-        events.push({
-          type: "task",
-          label: `Task ${task.status || "updated"}: ${task.name}`,
-          meta: teamMembers.find(p => p.id === task.primaryOwner)?.firstName || "Unassigned",
-          timestamp: task.updatedAt ? new Date(task.updatedAt as any) : new Date(task.start || Date.now()),
+      wp.deliverables?.forEach(d => {
+        d.tasks?.slice(0, 5).forEach(task => {
+          events.push({
+            type: "task",
+            label: `Task ${task.status || "updated"}: ${task.name}`,
+            meta: teamMembers.find(p => p.id === task.primaryOwner)?.firstName || "Unassigned",
+            timestamp: new Date(task.start || Date.now()),
+          })
         })
       })
     })
@@ -586,7 +595,10 @@ export function ProjectDetailPage({
     logger.info('Project imported successfully', { projectId })
     // Parent component should handle navigation to the new project
     // For now, just log success
-    alert(`Project imported successfully! Refresh the page to see the new project.`)
+    toast({
+      title: "Import Successful",
+      description: "Project imported successfully! Refresh the page to see the new project.",
+    })
   }
 
   const selectedWorkpackage = useMemo(
@@ -604,35 +616,28 @@ export function ProjectDetailPage({
     [deliverablesForSelectedWp, selectedDeliverableId]
   )
 
-  const getTaskDueDate = (task: any) => {
+  const getTaskDueDate = (task: ProjectTask) => {
     if (!task) return null
-    const rawDate = task.dueDate || task.end || task.due
-    if (!rawDate) return null
-    const due = rawDate.toDate ? rawDate.toDate() : new Date(rawDate)
+    const due = task.end
+    if (!due) return null
     return isNaN(due.getTime()) ? null : due
   }
 
-  const wasTaskUpdatedThisWeek = (task: any) => {
-    const referenceDate = task?.updatedAt || task?.modifiedAt || task?.createdAt || task?.start
-    if (!referenceDate) return false
-    const date = referenceDate.toDate ? referenceDate.toDate() : new Date(referenceDate)
-    if (isNaN(date.getTime())) return false
-    const now = new Date()
-    const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
-    return diffDays <= 7
+  const wasTaskUpdatedThisWeek = (task: ProjectTask) => {
+    return false
   }
 
-  const hasTaskDependencies = (task: any) => Array.isArray(task?.dependencies) && task.dependencies.length > 0
+  const hasTaskDependencies = (task: ProjectTask) => Array.isArray(task?.dependencies) && task.dependencies.length > 0
 
-  const isTaskBlocked = (task: any) => task?.status === "blocked" || task?.status === "at-risk"
+  const isTaskBlocked = (task: ProjectTask) => task?.status === "blocked" || task?.status === "at-risk"
 
-  const isTaskOverdue = (task: any) => {
+  const isTaskOverdue = (task: ProjectTask) => {
     const due = getTaskDueDate(task)
     if (!due) return false
-    return due.getTime() < Date.now() && task?.status !== "done" && task?.status !== "completed"
+    return due.getTime() < Date.now() && task?.status !== "done"
   }
 
-  const isTaskDueSoon = (task: any) => {
+  const isTaskDueSoon = (task: ProjectTask) => {
     const due = getTaskDueDate(task)
     if (!due) return false
     const now = new Date()
@@ -641,11 +646,11 @@ export function ProjectDetailPage({
   }
 
   const getTasksForSelectedDeliverable = useCallback(() => {
-    const tasks = Array.isArray(selectedWorkpackage?.tasks) ? selectedWorkpackage?.tasks : []
-    if (!selectedDeliverable) return tasks || []
-
-    return tasks.filter(task => task.deliverableId === selectedDeliverable.id)
-  }, [selectedWorkpackage?.tasks, selectedDeliverable])
+    // Need to cast to access nested tasks on HydratedDeliverable
+    const deliverable = selectedDeliverable as any
+    const tasks = Array.isArray(deliverable?.tasks) ? deliverable?.tasks : []
+    return tasks || []
+  }, [selectedDeliverable])
 
   const handleQuickAddDeliverable = (workpackageId: string) => {
     if (!onCreateDeliverable) return
@@ -672,7 +677,7 @@ export function ProjectDetailPage({
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-    const newTask: Task = {
+    const newTask: ProjectTask = {
       id: generateId(),
       name,
       start: new Date(),
@@ -680,31 +685,81 @@ export function ProjectDetailPage({
       progress: 0,
       primaryOwner: selectedDeliverable?.ownerId,
       helpers: [],
-      workpackageId: selectedWorkpackage.id,
       importance: "medium" as ImportanceLevel,
-      deliverables: selectedDeliverable ? [selectedDeliverable.id] : [],
+      deliverableId: selectedDeliverable?.id || "",
       status: "not-started",
       notes: "",
+      todos: [],
+      dependencies: []
     }
 
-    const nextTasks = [...(selectedWorkpackage.tasks || []), newTask]
-    onUpdateWorkpackage(selectedWorkpackage.id, { tasks: nextTasks })
-    setNewTaskName("")
+    const deliverable = selectedDeliverable as any
+    const nextTasks = [...(deliverable.tasks || []), newTask]
+
+    if (onUpdateDeliverableTasks && selectedDeliverable) {
+      onUpdateDeliverableTasks(selectedDeliverable.id, nextTasks)
+        .then(() => {
+          logger.info("Task created successfully via onUpdateDeliverableTasks")
+          setNewTaskName("")
+        })
+        .catch(err => {
+          logger.error("Failed to create task", err)
+          toast({
+            title: "Error",
+            description: "Failed to create task",
+            variant: "destructive"
+          })
+        })
+    } else {
+      logger.warn("onUpdateDeliverableTasks not provided or selectedDeliverable missing")
+    }
   }
 
   const updateTaskStatus = (taskId: string, status: string) => {
-    if (!selectedWorkpackage || !onUpdateWorkpackage) return
-    const nextTasks = (selectedWorkpackage.tasks || []).map(task =>
+    if (!selectedDeliverable || !onUpdateDeliverableTasks) return
+
+    // Need to cast to access nested tasks on HydratedDeliverable
+    const deliverable = selectedDeliverable as any
+    const currentTasks = (Array.isArray(deliverable?.tasks) ? deliverable?.tasks : []) as ProjectTask[]
+
+    const nextTasks = currentTasks.map(task =>
       task.id === taskId
         ? {
-            ...task,
-            status,
-            progress: status === "done" || status === "completed" ? 100 : task.progress || 0,
-            updatedAt: new Date(),
-          }
+          ...task,
+          status: status as WorkStatus,
+          progress: status === "done" || status === "completed" ? 100 : task.progress || 0,
+          // We don't track updatedAt on ProjectTask anymore, relying on parent update
+        }
         : task
     )
-    onUpdateWorkpackage(selectedWorkpackage.id, { tasks: nextTasks })
+
+    onUpdateDeliverableTasks(selectedDeliverable.id, nextTasks)
+      .catch(err => {
+        logger.error("Failed to update task status", err)
+        toast({
+          title: "Error",
+          description: "Failed to update task status",
+          variant: "destructive"
+        })
+      })
+  }
+
+  const handleDeleteTask = (taskId: string) => {
+    if (!selectedDeliverable || !onUpdateDeliverableTasks) return
+
+    const deliverable = selectedDeliverable as any
+    const currentTasks = (Array.isArray(deliverable?.tasks) ? deliverable?.tasks : []) as ProjectTask[]
+    const nextTasks = currentTasks.filter(task => task.id !== taskId)
+
+    onUpdateDeliverableTasks(selectedDeliverable.id, nextTasks)
+      .catch(err => {
+        logger.error("Failed to delete task", err)
+        toast({
+          title: "Error",
+          description: "Failed to delete task",
+          variant: "destructive"
+        })
+      })
   }
 
   const handleFileUpload = async (file?: File | null) => {
@@ -764,7 +819,11 @@ export function ProjectDetailPage({
       setProjectFiles((prev) => prev.filter((f) => f.id !== file.id))
     } catch (error) {
       logger.error("Failed to delete file", error)
-      alert("Unable to delete file. Please try again.")
+      toast({
+        title: "Delete Failed",
+        description: "Unable to delete file. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -1077,7 +1136,7 @@ export function ProjectDetailPage({
         </div>
       )}
 
-            {drawerVisibility.funding && (
+      {drawerVisibility.funding && (
         <div className="border-b border-border bg-surface-2 px-6 py-4 space-y-4">
           <Card>
             <CardHeader>
@@ -1243,10 +1302,10 @@ export function ProjectDetailPage({
                             <Badge
                               variant="outline"
                               className={`text-xs ${order.status === "received"
-                                  ? "bg-green-50 text-green-700 border-green-200"
-                                  : order.status === "ordered"
-                                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                                    : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : order.status === "ordered"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-yellow-50 text-yellow-700 border-yellow-200"
                                 }`}
                             >
                               {order.status === "to-order"
@@ -1673,7 +1732,7 @@ export function ProjectDetailPage({
               )}
 
               <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
-                {getTasksForSelectedDeliverable().map((task: any, idx: number) => {
+                {getTasksForSelectedDeliverable().map((task: ProjectTask, idx: number) => {
                   const meta = getTaskStatusMeta(task?.status)
                   const owner = getPersonById(task?.primaryOwner)
                   const progressValue = typeof task?.progress === "number" ? task.progress : 0
@@ -1712,6 +1771,14 @@ export function ProjectDetailPage({
                           onClick={() => task?.id && updateTaskStatus(task.id, "done")}
                         >
                           Complete
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => task?.id && handleDeleteTask(task.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>

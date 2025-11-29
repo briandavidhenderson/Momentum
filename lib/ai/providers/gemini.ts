@@ -3,6 +3,13 @@
  * Supports: Vision (Gemini Pro Vision), LLM (Gemini Pro), Multimodal
  */
 
+import {
+  GoogleGenerativeAI,
+  GenerativeModel,
+  Part,
+  GenerationConfig,
+} from '@google/generative-ai'
+
 import type {
   AIProvider,
   AICapability,
@@ -34,14 +41,21 @@ export class GeminiProvider implements AIProvider {
   name = 'Gemini'
   capabilities: AICapability[] = ['stt', 'ocr', 'vlm', 'llm']
 
+  private genAI: GoogleGenerativeAI
+  private model: GenerativeModel
+  private visionModel: GenerativeModel
   private apiKey: string
-  private baseURL = 'https://generativelanguage.googleapis.com/v1'
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.NEXT_PUBLIC_GEMINI_API_KEY || ''
     if (!this.apiKey) {
       logger.warn('Gemini: No API key provided')
     }
+
+    this.genAI = new GoogleGenerativeAI(this.apiKey)
+    // Use gemini-1.5-flash as default for speed and cost
+    this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    this.visionModel = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
   }
 
   /**
@@ -57,55 +71,28 @@ export class GeminiProvider implements AIProvider {
       // Convert audio to base64
       const base64Audio = await this.fileToBase64(audio)
 
+      const audioPart: Part = {
+        inlineData: {
+          data: base64Audio,
+          mimeType: audio.type || 'audio/mp3',
+        },
+      }
+
       const promptText = options.language
         ? `Transcribe this audio file exactly as spoken. The language is ${options.language}. Return only the transcription text, no other commentary.`
         : "Transcribe this audio file exactly as spoken. Return only the transcription text, no other commentary."
 
-      const response = await fetch(
-        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': this.apiKey,
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: promptText },
-                {
-                  inlineData: {
-                    data: base64Audio,
-                    mimeType: audio.type || 'audio/mp3' // Default to mp3 if type missing
-                  }
-                }
-              ]
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 8192, // Allow long transcriptions
-            }
-          }),
-        }
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Gemini API error')
-      }
-
-      const data = await response.json()
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const result = await this.model.generateContent([promptText, audioPart])
+      const response = await result.response
+      const text = response.text()
 
       const latency = Date.now() - startTime
-
-      // Estimate cost (Gemini Flash audio input is cheap)
       const cost = 0.0001 // Placeholder estimate
 
       return {
         data: {
           text: text.trim(),
-          language: options.language || 'en', // Gemini doesn't explicitly return detected language in this mode
+          language: options.language || 'en',
         },
         confidence: 90,
         provider: this.name,
@@ -133,59 +120,30 @@ export class GeminiProvider implements AIProvider {
     const startTime = Date.now()
 
     try {
-      // Convert image to base64
       const base64Image = await this.fileToBase64(image)
 
-      // Select appropriate OCR prompt
+      const imagePart: Part = {
+        inlineData: {
+          data: base64Image,
+          mimeType: image.type,
+        },
+      }
+
       const promptText = options.handwritten
         ? IMAGE_OCR_PROMPT.HANDWRITTEN
         : IMAGE_OCR_PROMPT.TYPED
 
-      const response = await fetch(
-        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': this.apiKey,
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: promptText },
-                {
-                  inlineData: {
-                    data: base64Image,
-                    mimeType: image.type
-                  }
-                }
-              ]
-            }],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 2048,
-            }
-          }),
-        }
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Gemini API error')
-      }
-
-      const data = await response.json()
-      const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const result = await this.visionModel.generateContent([promptText, imagePart])
+      const response = await result.response
+      const extractedText = response.text()
 
       const latency = Date.now() - startTime
-
-      // Estimate cost (Gemini Flash is very cheap: ~$0.00001 per image)
       const cost = 0.00001
 
       return {
         data: {
           text: extractedText,
-          confidence: 0.95, // Gemini doesn't provide confidence scores
+          confidence: 0.95,
         },
         confidence: 95,
         provider: this.name,
@@ -212,47 +170,31 @@ export class GeminiProvider implements AIProvider {
     const startTime = Date.now()
 
     try {
-      // Convert image to base64
       const base64Image = await this.fileToBase64(image)
 
-      const response = await fetch(
-        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': this.apiKey,
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: prompt },
-                {
-                  inlineData: {
-                    data: base64Image,
-                    mimeType: image.type
-                  }
-                }
-              ]
-            }],
-            generationConfig: {
-              temperature: options.temperature || 0.7,
-              maxOutputTokens: options.maxTokens || 2048,
-            }
-          }),
-        }
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Gemini API error')
+      const imagePart: Part = {
+        inlineData: {
+          data: base64Image,
+          mimeType: image.type,
+        },
       }
 
-      const data = await response.json()
-      const description = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const generationConfig: GenerationConfig = {
+        temperature: options.temperature || 0.7,
+        maxOutputTokens: options.maxTokens || 2048,
+      }
+
+      const model = options.temperature ? this.genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig
+      }) : this.visionModel
+
+      const result = await model.generateContent([prompt, imagePart])
+      const response = await result.response
+      const description = response.text()
 
       const latency = Date.now() - startTime
-      const cost = 0.00001 // Very cheap with Flash model
+      const cost = 0.00001
 
       return {
         data: {
@@ -283,37 +225,24 @@ export class GeminiProvider implements AIProvider {
     const startTime = Date.now()
 
     try {
-      const response = await fetch(
-        `${this.baseURL}/models/gemini-1.5-flash:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': this.apiKey,
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompt }]
-            }],
-            generationConfig: {
-              temperature: options.temperature || 0.7,
-              maxOutputTokens: options.maxTokens || 2048,
-            }
-          }),
-        }
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error?.message || 'Gemini API error')
+      const generationConfig: GenerationConfig = {
+        temperature: options.temperature || 0.7,
+        maxOutputTokens: options.maxTokens || 2048,
+        responseMimeType: options.responseMimeType,
       }
 
-      const data = await response.json()
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig
+      })
+
+      const result = await model.generateContent(prompt)
+      const response = await result.response
+      const text = response.text()
 
       const latency = Date.now() - startTime
 
-      // Estimate tokens and cost (Gemini Flash: ~$0.00001 per 1K tokens)
+      // Estimate tokens
       const estimatedTokens = Math.ceil((prompt.length + text.length) / 4)
       const cost = (estimatedTokens / 1000) * 0.00001
 
@@ -335,35 +264,40 @@ export class GeminiProvider implements AIProvider {
   }
 
   /**
-   * Structure protocol from text using Gemini Pro
+   * Structure protocol from text using Gemini Pro with JSON mode
    */
   async structureProtocol(
     text: string,
     options: ProtocolOptions = {}
   ): Promise<AIResponse<ProtocolStructure>> {
+    const startTime = Date.now()
     const prompt = PROTOCOL_STRUCTURING_PROMPT.replace('{TEXT}', text)
-    const result = await this.generateText(prompt, {
-      temperature: 0.1,
-      maxTokens: 2048,
-    })
 
     try {
-      // Extract JSON from markdown code blocks if present
-      let jsonText = result.data
-      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/)
-      if (jsonMatch) {
-        jsonText = jsonMatch[1]
-      }
+      // Use JSON mode for structured output
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 4096,
+          responseMimeType: "application/json"
+        }
+      })
+
+      const result = await model.generateContent(prompt)
+      const response = await result.response
+      const jsonText = response.text()
 
       const structured = JSON.parse(jsonText)
+      const latency = Date.now() - startTime
 
       return {
         data: structured,
-        confidence: result.confidence,
+        confidence: 0.9,
         provider: this.name,
-        cost: result.cost,
-        latency: result.latency,
-        tokensUsed: result.tokensUsed,
+        cost: 0.0001,
+        latency,
+        tokensUsed: 0,
       }
     } catch (error) {
       throw new AIProviderError(
@@ -375,37 +309,43 @@ export class GeminiProvider implements AIProvider {
   }
 
   /**
-   * Extract entities from text using Gemini Pro
+   * Extract entities from text using Gemini Pro with JSON mode
    */
   async extractEntities(
     text: string,
     entityTypes: string[],
     options: EntityOptions = {}
   ): Promise<AIResponse<ExtractedEntity[]>> {
+    const startTime = Date.now()
     const prompt = ENTITY_EXTRACTION_PROMPT(entityTypes) + '\n\nText:\n' + text
 
-    const result = await this.generateText(prompt, {
-      temperature: 0.1,
-      maxTokens: 1024,
-    })
-
     try {
-      // Extract JSON from markdown code blocks if present
-      let jsonText = result.data
-      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/)
-      if (jsonMatch) {
-        jsonText = jsonMatch[1]
-      }
+      // Use JSON mode for structured output
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json"
+        }
+      })
 
-      const entities = JSON.parse(jsonText)
+      const result = await model.generateContent(prompt)
+      const response = await result.response
+      const jsonText = response.text()
+
+      const parsed = JSON.parse(jsonText)
+      const entities = parsed.entities || parsed // Handle both {entities: [...]} and [...] formats
+
+      const latency = Date.now() - startTime
 
       return {
         data: Array.isArray(entities) ? entities : [],
-        confidence: result.confidence,
+        confidence: 0.9,
         provider: this.name,
-        cost: result.cost,
-        latency: result.latency,
-        tokensUsed: result.tokensUsed,
+        cost: 0.0001,
+        latency,
+        tokensUsed: 0,
       }
     } catch (error) {
       throw new AIProviderError(

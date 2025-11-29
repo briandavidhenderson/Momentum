@@ -596,25 +596,13 @@ Each should be a string containing well-formatted markdown text.`
 
     const response = await defaultRouter.generateText(prompt, {
       temperature: 0.7,
-      maxTokens: 4000
+      maxTokens: 4000,
+      responseMimeType: 'application/json',
     })
 
     // Parse JSON response
     try {
-      // Extract JSON from markdown code blocks if present
-      let jsonText = response.data.trim()
-      const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/)
-      if (jsonMatch) {
-        jsonText = jsonMatch[1].trim()
-      } else {
-        // Try to find JSON object without code block markers
-        const jsonObjMatch = jsonText.match(/\{[\s\S]*\}/)
-        if (jsonObjMatch) {
-          jsonText = jsonObjMatch[0]
-        }
-      }
-
-      const reportData = JSON.parse(jsonText)
+      const reportData = JSON.parse(response.data)
 
       // Validate that we have all required sections
       if (!reportData.background || !reportData.protocols || !reportData.results || !reportData.conclusion) {

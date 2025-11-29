@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Workpackage, Deliverable, PersonProfile, Task } from "@/lib/types"
+import { Workpackage, Deliverable, PersonProfile, ProjectTask } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -30,6 +30,8 @@ interface WorkpackageCardProps {
   onDeleteDeliverable?: (deliverableId: string) => void
   onDeliverableClick?: (deliverable: Deliverable) => void
   onCreateTask?: (deliverableId: string) => void
+  onEditTask?: (task: ProjectTask) => void
+  onDeleteTask?: (taskId: string) => void
 }
 
 export function WorkpackageCard({
@@ -43,6 +45,8 @@ export function WorkpackageCard({
   onDeleteDeliverable,
   onDeliverableClick,
   onCreateTask,
+  onEditTask,
+  onDeleteTask,
 }: WorkpackageCardProps) {
   const [isExpanded, setIsExpanded] = useState(workpackage.isExpanded ?? false)
 
@@ -265,6 +269,8 @@ export function WorkpackageCard({
                         onDelete={onDeleteDeliverable || (() => { })}
                         onClick={onDeliverableClick}
                         onCreateTask={onCreateTask}
+                        onEditTask={onEditTask}
+                        onDeleteTask={onDeleteTask}
                         enableDrag={false}
                       />
                     )

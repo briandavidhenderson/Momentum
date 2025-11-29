@@ -55,7 +55,8 @@ export default function WhiteboardPage({ searchParams }: { searchParams: { white
                 name: `Untitled Whiteboard ${new Date().toLocaleDateString()}`,
                 shapes: [],
                 createdBy: currentUser.uid,
-                labId: currentUserProfile.labId
+                labId: currentUserProfile.labId,
+                visibility: 'private'
             })
             const newBoard: WhiteboardData = {
                 id: newId,
@@ -63,6 +64,7 @@ export default function WhiteboardPage({ searchParams }: { searchParams: { white
                 shapes: [],
                 createdBy: currentUser.uid,
                 labId: currentUserProfile.labId,
+                visibility: 'private',
                 createdAt: new Date(),
                 updatedAt: new Date()
             }

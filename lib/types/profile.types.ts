@@ -177,6 +177,7 @@ export interface PersonProfile {
   // Basic Information
   firstName: string
   lastName: string
+  displayName: string // ✅ NEW: Full name for display
   email: string
   phone: string
   officeLocation: string

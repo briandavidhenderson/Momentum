@@ -1,0 +1,199 @@
+"On this platform can I see, at a glance, what every person, project, and lab is working on today and this week, without having to open 10 different tabs or spreadsheets?"
+
+"On this platform can I book any piece of shared equipment (across all three labs), see its availability in real time, enforce booking rules (training, maintenance blocks, priority), and get automatic reminders before and after my slot?"
+
+"On this platform can I link experiments and bookings directly to inventory items, so that when I run a protocol and log what I did, the correct reagents and consumables are automatically decremented from stock and low-stock alerts are triggered?"
+
+"On this platform can I create, version, and share experimental protocols (with attached files, checklists, parameters, and safety notes), and then run them in ‘execution mode’ so people can tick off steps and record deviations as they go?"
+
+"On this platform can I assign tasks to specific people or roles (e.g. ‘any postdoc in Lab 2’), set priorities and deadlines, link them to projects/work packages, and then track progress with clear visual status (not started / in progress / blocked / done)?"
+
+"On this platform can I keep a structured view of all projects (funded vs unfunded), each with work packages, deliverables, and associated tasks, and instantly see which projects are at risk based on overdue tasks, bottlenecks, or missing resources?"
+
+"On this platform can I manage orders end-to-end—request, approval, PO number, delivery, lot number, expiry—and automatically link each item to inventory, protocols, and equipment (e.g. service contracts, spare parts)?"
+
+"On this platform can I schedule and manage meetings, trainings, lab clean-ups, and also social events like pub quizzes, while automatically syncing to people’s calendars and linking relevant tasks, documents, and action items back into projects?"
+
+"On this platform can I control who sees what—so that PIs, lab managers, students, and external collaborators each have the right views and permissions over projects, data, equipment, and inventory, without creating a permissions nightmare?"
+
+"On this platform can I generate useful reports and dashboards—such as equipment usage, reagent burn-rate, project progress, staff workload, and compliance records—so I can make decisions quickly and justify budgets and headcount to senior management?"
+
+"On this platform can I capture all experiment records in a proper electronic lab notebook (ELN) that links samples, protocols, raw data files, and results together so nothing is ever ‘floating’ in random folders?"
+
+"On this platform can I track training, competencies, and safety certifications for each person, and automatically restrict bookings or protocol access if someone isn’t trained or their certification has expired?"
+
+"On this platform can I integrate with lab instruments (e.g. qPCR, plate readers, flow cytometers) so that run logs and output files are automatically attached to the correct experiment, user, and project?"
+
+"On this platform can I manage samples and biobank items (cell lines, patient samples, plasmids, antibodies) with full genealogy—who created them, where they’re stored, which experiments they’ve been used in, and when they should be discarded?"
+
+"On this platform can I maintain proper audit trails and version histories for everything (protocols, inventory, bookings, tasks, documents) so that I can reconstruct who did what, when, and why for QA, IP, or regulatory purposes?"
+
+"On this platform can I create standardised templates for recurring things—like RNA extraction, Western blot, weekly lab meeting, or monthly equipment checks—so the team stops reinventing the wheel each time?"
+
+"On this platform can I host discussions directly on objects (protocols, tasks, projects, bookings), so people can comment, ask questions, tag colleagues, and resolve issues without relying on scattered email threads and chats?"
+
+"On this platform can I log incidents and near-misses (spills, equipment faults, safety issues), track follow-up actions, and see patterns over time to improve lab safety and reliability?"
+
+"On this platform can I easily export or sync data to other systems (LIMS, data lake, institutional storage, analysis pipelines) via APIs or standard formats, without manual copy-paste or bespoke one-off scripts every time?"
+
+"On this platform can I give people a clean mobile/tablet view to check bookings, run protocols at the bench, tick off steps, upload photos, and respond to tasks—so they actually use it while working, not just at their desks?"
+
+"On this platform can I see my day clearly laid out—experiments, bookings, meetings, and deadlines—so I know exactly what I need to do and in what order when I walk into the lab?"
+
+"On this platform can I run protocols in a clean ‘bench mode’ on my phone or tablet, ticking off steps, entering observations, timings, and photos without juggling paper printouts and pens?"
+
+"On this platform can I find validated protocols quickly (with versions and owner), instead of digging through old PDFs, email attachments, or someone’s personal folder?"
+
+"On this platform can I check, before I start, whether all the reagents, plastics, and equipment I need are actually available—and get an automatic warning if something is low or booked?"
+
+"On this platform can I book instruments in a couple of clicks, see who’s using them before and after me, and get notified if a previous run overruns or the instrument goes down?"
+
+"On this platform can I attach raw data files (qPCR, plate reader, flow, images) straight to the experiment entry and project, so I don’t end up with ‘Result_final_v6_really_final.xlsx’ on my desktop?"
+
+"On this platform can I search past experiments by sample, gene, cell line, reagent lot, or protocol, to see what worked, what failed, and what conditions were used?"
+
+"On this platform can I raise an order request for a reagent or consumable, track its approval and delivery, and get notified when it arrives—without chasing the lab manager?"
+
+"On this platform can I quickly see which tasks are assigned to me, what’s urgent, what’s blocked, and who I’m waiting on—so I don’t have to manage my work from a messy notebook and memory?"
+
+"On this platform can I tag colleagues on a protocol, result, or task to ask questions, share troubleshooting notes, or agree changes, instead of scattering these conversations across Slack/WhatsApp/email?"
+
+"On this platform can I log my training (what I’m certified on, what I’m not yet allowed to use) and see what training is required to use a given instrument or perform a specific protocol?"
+
+"On this platform can I clone an existing experiment setup (same cell line, same treatment scheme) and tweak a few parameters, instead of rebuilding everything from scratch each time?"
+
+"On this platform can I easily record which exact samples, aliquots, and lot numbers I used in a run, so that when something strange happens we can trace it back quickly?"
+
+"On this platform can I see upcoming lab events—journal club, lab meetings, deadlines, social stuff like pub quizzes—in the same place as my experimental schedule?"
+
+"On this platform can I export or share a clean summary of an experiment (objective, protocol, key settings, results) with my PI or collaborators in one click, without reformatting everything in Word or PowerPoint?"
+
+"On this platform can I see, in one view, what my whole team is doing today and this week—experiments, bookings, deadlines, and paperwork—so I can spot bottlenecks and re-prioritise quickly?"
+
+"On this platform can I assign, reassign, and prioritise tasks (lab work, analysis, paperwork) to my staff, and see at a glance who is overloaded and who has capacity?"
+
+"On this platform can I review and electronically sign off experiment records, reports, and data analyses, with a proper audit trail, instead of chasing people for Word files and email attachments?"
+
+"On this platform can I create, approve, and version-control risk assessments, COSHH/safety sheets, and SOPs, and then link them directly to protocols, equipment, and rooms so they’re always at the point of use?"
+
+"On this platform can I see which protocols, experiments, or equipment don’t yet have an approved risk assessment or SOP attached, and get alerts so I can close those gaps before audits?"
+
+"On this platform can I track training, competencies, and authorisations for my team (e.g. who’s allowed to use which equipment or work with which hazards), and have that automatically enforced for bookings and task assignments?"
+
+"On this platform can I manage incident and near-miss reports, assign follow-up actions to staff, and track completion so I can demonstrate a clear safety culture to my PI and external boss?"
+
+"On this platform can I prepare concise project and safety summaries for my project manager and external boss—project status, key risks, deviations, and resource needs—without manually compiling data from multiple systems?"
+
+"On this platform can I monitor resource usage for my group—equipment utilisation, reagent burn-rate, sample consumption—so I can plan orders, justify budgets, and avoid last-minute shortages?"
+
+"On this platform can I define standard templates for recurring paperwork (risk assessments, change controls, method updates, equipment qualification logs) so I’m not rewriting the same documents every month?"
+
+"On this platform can I schedule and document regular checks (equipment maintenance, safety inspections, housekeeping rounds), assign them to staff, and verify completion with timestamps and photos?"
+
+"On this platform can I quickly see the experimental and paperwork workload for each of my direct reports over the next few weeks, so I can balance development opportunities with operational needs?"
+
+"On this platform can I keep all conversations about a protocol, risk assessment, or incident attached to that item (comments, questions, approvals), instead of scattered across email and chat?"
+
+"On this platform can I get a weekly digest just for my role—key tasks needing my approval, overdue documents, incidents raised, and projects at risk—so I know what to tackle first when I sit down at my desk?"
+
+Project Manager – Top 5 Hates
+
+1. “Yet another system everyone refuses to use.”
+If the software isn’t intuitive, half the team ignores it → chaos. A system is useless unless the whole lab buys in.
+
+2. “Data lives everywhere except where it should.”
+Bookings in one place, inventory in another, tasks in another, protocols in Dropbox… A new tool that adds one more silo is hated.
+
+3. “Manual updates that feel like admin punishment.”
+If I have to double-enter data or babysit people to update tasks, it becomes more work, not less.
+
+4. “Terrible permissions and no role logic.”
+Either everything is locked down like Fort Knox or everyone can edit everything. Both scenarios create disasters.
+
+5. “Rigid workflows that don’t fit how real labs operate.”
+Labs are messy. Projects pivot daily. If the software forces a rigid structure, it becomes unusable immediately.
+
+Project Manager – Top 5 hates
+
+No single source of truth
+Having to open five different views or tools (tasks here, bookings there, inventory somewhere else) because the new software doesn’t actually centralise anything—just adds another layer.
+
+Terrible onboarding for the team
+No decent quick-start tours, templates, or examples. I don’t have time to train 18 people one by one because the UI is cryptic.
+
+Rigid workflows that don’t match reality
+The system forces a specific way to run projects that doesn’t fit how labs actually work (e.g. no support for experiments that span multiple projects, or shared equipment across groups).
+
+Poor reporting / dashboards
+I still have to export everything to Excel or PowerPoint just to answer basic questions like “Which projects are at risk?” or “Who’s overloaded this week?”
+
+Permissions chaos
+Either everything is locked down so tightly I become the bottleneck for every tiny change, or everything is wide open and I can’t stop people from editing critical stuff.
+
+Bench Scientist – Top 5 Hates
+
+1. “Slows me down when I’m at the bench.”
+If updating the system takes longer than writing in my notebook or snapping a photo → hate instantly.
+
+2. “Can’t find what I need quickly.”
+Buried protocols, hidden equipment calendars, or 10-click flows = death. A scientist wants one tap → action.
+
+3. “Mobile experience sucks.”
+If I can’t easily run a protocol or book something from my phone while in the lab, it’s useless.
+
+4. “Too many notifications or irrelevant alerts.”
+Spam notifications make people disable the system → then they miss the important ones.
+
+5. “Lack of integration with real lab life.”
+If I can’t attach data files, photos, sample IDs, or link bookings → I stop using the tool and revert to paper/WhatsApp.
+
+Bench Scientist – Top 5 hates
+
+Too many clicks to do simple things
+If booking an instrument or starting an experiment takes 10 clicks and 4 screens, I’ll go back to the whiteboard and paper sign-up sheet.
+
+Slow, laggy, or buggy at the bench
+The app hangs when I’m in the middle of a protocol, or doesn’t work properly on my phone/tablet with gloves on—instant hatred.
+
+Can’t find anything
+Poor search and organisation: I can’t quickly find the right protocol, previous experiment, or sample record, so I end up recreating work from scratch.
+
+Data goes in but never comes back out usefully
+I spend ages typing notes, uploading files, filling forms—and then it’s painful to actually view, compare, or reuse that information.
+
+Feels like surveillance, not support
+The tool is clearly built for management metrics, not for making my day easier—lots of mandatory fields and tracking, very little that helps me run better experiments.
+
+Senior Scientist (Hands-on + Managerial) – Top 5 Hates
+
+1. “Paperwork burden actually gets bigger.”
+If risk assessments, SOPs, and approvals become harder, not easier → instant rejection.
+
+2. “No high-level visibility.”
+A system that hides workload distribution, training status, or experiment progress forces me to chase people.
+
+3. “Approvals are buried or hard to sign off.”
+If I have to hunt through menus or emails to approve RA/SOP/task updates → frustration skyrockets.
+
+4. “Bad linking between safety, protocols, and equipment.”
+If risks aren’t automatically tied to tasks, experiments, or equipment, I can’t trust the system.
+
+5. “Not configurable for real-world exceptions.”
+Labs change protocols hourly; rigid forms or forced fields break workflows and cause resistance.
+
+Senior Scientist – Top 5 hates
+
+Duplicated work between systems
+I have to enter the same information in the ELN, in the safety system, and in the project tracker because they don’t talk to each other.
+
+Approval bottlenecks with no flexibility
+The system forces rigid approval flows (for SOPs, risk assessments, experiments), so everything waits on one person with no delegation or sensible overrides.
+
+No overview tailored to my role
+Either I get a granular mess of everyone’s tasks, or a useless high-level “100% on track” view—nothing that actually helps me manage people, safety, and science together.
+
+Unclear audit and accountability
+It’s hard to see who changed what and when (protocols, risks, data). When an issue arises, the system doesn’t help me reconstruct events clearly.
+
+Constant context switching
+I’m bouncing between tabs and modules (projects, safety, training, incidents, experiments) because the software is designed as separate silos, not around real workflows.

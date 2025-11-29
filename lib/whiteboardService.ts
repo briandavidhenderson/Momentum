@@ -8,6 +8,8 @@ import {
     deleteDoc,
     query,
     where,
+    or,
+    and,
     Timestamp,
     serverTimestamp,
     onSnapshot
@@ -15,6 +17,8 @@ import {
 import { getFirebaseDb } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
 import { UnitOperation } from "@/lib/protocol/types";
+import { getAuth } from "firebase/auth";
+import { VisibilitySettings, VisibilityLevel, DEFAULT_VISIBILITY_PRIVATE } from "./types/visibility.types";
 
 export interface Shape {
     id: string
@@ -40,16 +44,18 @@ export interface Shape {
     lineStartMarker?: 'none' | 'arrow' | 'circle'
     lineEndMarker?: 'none' | 'arrow' | 'circle'
     lineStyle?: 'solid' | 'dashed' | 'dotted'
-    linkedEntityType?: 'inventory' | 'equipment'
+    linkedEntityType?: 'inventory' | 'equipment' | 'buffer'
     linkedEntityId?: string
     protocolData?: UnitOperation
     fromNodeId?: string  // protocol_node ID arrow starts from
     toNodeId?: string    // protocol_node ID arrow points to
     isAutoConnected?: boolean  // true if auto-detected vs manually set
     parallelGroupId?: string  // ID of parallel group this protocol node belongs to
+    points?: { x: number, y: number }[] // For freehand drawing (pencil)
+    src?: string // For images (base64 or URL)
 }
 
-export interface WhiteboardData {
+export interface WhiteboardData extends VisibilitySettings {
     id?: string;
     name: string;
     shapes: Shape[];
@@ -66,6 +72,9 @@ export const createWhiteboard = async (data: Omit<WhiteboardData, "id" | "create
         const db = getFirebaseDb();
         const docRef = await addDoc(collection(db, COLLECTION_NAME), {
             ...data,
+            visibility: data.visibility || 'private',
+            sharedWithUsers: data.sharedWithUsers || [],
+            sharedWithGroups: data.sharedWithGroups || [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
@@ -108,7 +117,23 @@ export const getWhiteboard = async (id: string): Promise<WhiteboardData | null> 
 export const getWhiteboardsForLab = async (labId: string): Promise<WhiteboardData[]> => {
     try {
         const db = getFirebaseDb();
-        const q = query(collection(db, COLLECTION_NAME), where("labId", "==", labId || ""));
+        const auth = getAuth();
+        const userId = auth.currentUser?.uid;
+
+        if (!userId) return [];
+
+        const q = query(
+            collection(db, COLLECTION_NAME),
+            and(
+                where("labId", "==", labId || ""),
+                or(
+                    where("visibility", "==", "lab"),
+                    where("createdBy", "==", userId),
+                    where("sharedWithUsers", "array-contains", userId)
+                )
+            )
+        );
+
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WhiteboardData));
     } catch (error) {
@@ -133,7 +158,25 @@ export const subscribeToWhiteboards = (
 ): (() => void) => {
     try {
         const db = getFirebaseDb();
-        const q = query(collection(db, COLLECTION_NAME), where("labId", "==", labId || ""));
+        const auth = getAuth();
+        const userId = auth.currentUser?.uid;
+
+        if (!userId) {
+            callback([]);
+            return () => { };
+        }
+
+        const q = query(
+            collection(db, COLLECTION_NAME),
+            and(
+                where("labId", "==", labId || ""),
+                or(
+                    where("visibility", "==", "lab"),
+                    where("createdBy", "==", userId),
+                    where("sharedWithUsers", "array-contains", userId)
+                )
+            )
+        );
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const whiteboards = querySnapshot.docs.map(doc => ({

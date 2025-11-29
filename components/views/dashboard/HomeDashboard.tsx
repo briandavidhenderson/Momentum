@@ -17,17 +17,26 @@ import {
     Presentation,
     Users,
     Wrench,
-    ChevronDown
+    ChevronDown,
+    BarChart3
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { DashboardTile } from './DashboardTile'
 import { TodayOverview } from './TodayOverview'
 import { TaskKanban } from './TaskKanban'
+import DailyAgendaView from '@/components/DailyAgendaView'
+import { ProtocolBenchMode } from '@/components/ProtocolBenchMode'
 import { ProjectExplorerView } from '@/components/projects/ProjectExplorerView'
 import { Task } from '@/lib/types'
 
 import { TaskDetailsPanel } from '@/components/projects/TaskDetailsPanel'
+import { subscribeToLabActiveExecutions } from '@/lib/services/protocolExecutionService'
+import { ProtocolExecution } from '@/lib/types'
+import { DashboardRiskWidget } from './DashboardRiskWidget'
+import { MyWeeklyDigest } from './MyWeeklyDigest'
+import { ReportsView } from '../reports/ReportsView'
+import { ChevronLeft } from 'lucide-react'
 
 export function HomeDashboard() {
     const {
@@ -50,6 +59,7 @@ export function HomeDashboard() {
         whiteboards,
 
         // Other
+        events,
         userBookings,
         currentUserProfile,
         setMainView,
@@ -83,6 +93,16 @@ export function HomeDashboard() {
     // State for selected project & task
     const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null)
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+    const [activeExecutions, setActiveExecutions] = useState<ProtocolExecution[]>([])
+
+    React.useEffect(() => {
+        if (!currentUserProfile?.labId) return
+        const unsubscribe = subscribeToLabActiveExecutions(currentUserProfile.labId, (executions) => {
+            setActiveExecutions(executions)
+        })
+        return () => unsubscribe()
+    }, [currentUserProfile?.labId])
+
 
     const labProfiles = useMemo(() => {
         const profiles = allProfiles || []
@@ -97,6 +117,11 @@ export function HomeDashboard() {
         })
 
     const getPresenceStatus = (profileId: string) => {
+        const activeExecution = activeExecutions.find(e => e.performedBy === profileId)
+        if (activeExecution) {
+            return { label: 'Running Protocol', className: 'bg-green-100 text-green-700 border-green-200 animate-pulse' }
+        }
+
         const tasks = getMemberTasks(profileId)
         if (tasks.some(task => task.status === 'working')) {
             return { label: 'In lab', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
@@ -164,6 +189,32 @@ export function HomeDashboard() {
         return isNaN(date.getTime()) ? '—' : format(date, 'HH:mm')
     }
 
+    import { ReportsView } from '@/components/views/reports/ReportsView'
+
+    // ... inside HomeDashboard component ...
+
+    const {
+        // ... other context ...
+        mainView, // Assuming mainView is available in context, if not need to check AppContext
+        setMainView,
+    } = useAppContext()
+
+    // ...
+
+    if (mainView === 'reports') {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <Button variant="ghost" onClick={() => setMainView('dashboard')} className="gap-2">
+                        <ChevronLeft className="h-4 w-4" />
+                        Back to Dashboard
+                    </Button>
+                </div>
+                <ReportsView />
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
             {/* Top Section: Welcome */}
@@ -178,11 +229,48 @@ export function HomeDashboard() {
                 </div>
             </div>
 
+            {/* Daily Agenda Row (New Phase 2 Feature) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[350px]">
+                <div className="md:col-span-2 h-full">
+                    <DailyAgendaView />
+                </div>
+                <div className="h-full">
+                    <ProtocolBenchMode />
+                </div>
+            </div>
+
             {/* Main Dashboard Grid - 3 Columns */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
 
                 {/* Left Column (20%): Navigation & Status */}
                 <div className="md:col-span-3 space-y-6">
+                    {/* Quick Actions (New Phase 3) */}
+                    <Card>
+                        <CardHeader className="pb-2 py-3">
+                            <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                <Activity className="h-4 w-4 text-indigo-500" />
+                                Quick Actions
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-3 pt-0 grid grid-cols-2 gap-2">
+                            <Link href="/equipment?action=book" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                                <CalendarIcon className="h-5 w-5 mb-1 text-purple-500" />
+                                <span className="text-[10px] font-medium">Book</span>
+                            </Link>
+                            <Link href="/projects?action=new" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                                <Layout className="h-5 w-5 mb-1 text-blue-500" />
+                                <span className="text-[10px] font-medium">New Project</span>
+                            </Link>
+                            <Link href="/eln?action=new" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                                <FlaskConical className="h-5 w-5 mb-1 text-emerald-500" />
+                                <span className="text-[10px] font-medium">Experiment</span>
+                            </Link>
+                            <Link href="/reports" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                                <BarChart3 className="h-5 w-5 mb-1 text-orange-500" />
+                                <span className="text-[10px] font-medium">Reports</span>
+                            </Link>
+                        </CardContent>
+                    </Card>
                     {/* Experiments Widget */}
                     <Card className="h-[240px] flex flex-col">
                         <CardHeader className="pb-2 py-3">
@@ -322,6 +410,9 @@ export function HomeDashboard() {
                 {/* Center Column (60%): Active Work */}
                 <div className="md:col-span-6 space-y-6">
 
+                    {/* Risk Widget (New Phase 2) */}
+                    <DashboardRiskWidget projects={projects} tasks={dayToDayTasks} />
+
                     {/* Projects Grid */}
                     <Card>
                         <CardHeader className="pb-2 py-3">
@@ -431,8 +522,59 @@ export function HomeDashboard() {
 
                 {/* Right Column (20%): Resources */}
                 <div className="md:col-span-3 space-y-6">
+                    {/* Weekly Digest (New Phase 2) */}
+                    {currentUserProfile && (
+                        <div className="h-[400px]">
+                            <MyWeeklyDigest
+                                userId={currentUserProfile.id}
+                                tasks={dayToDayTasks}
+                                bookings={userBookings}
+                            />
+                        </div>
+                    )}
+
                     {/* Today Overview Widget */}
                     <TodayOverview />
+
+                    {/* Upcoming Events Widget */}
+                    <Card className="h-[300px] flex flex-col">
+                        <CardHeader className="pb-2 py-3">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                    <CalendarIcon className="h-4 w-4 text-rose-500" />
+                                    Upcoming Events
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setMainView('calendar')}>
+                                    View Calendar
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                            <ScrollArea className="h-full">
+                                <div className="space-y-2">
+                                    {events && events.length > 0 ? (
+                                        events
+                                            .filter(e => new Date(e.start) >= new Date())
+                                            .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+                                            .slice(0, 5)
+                                            .map(event => (
+                                                <div key={event.id} className="p-2 border rounded-md text-sm bg-muted/20">
+                                                    <div className="font-medium truncate">{event.title}</div>
+                                                    <div className="text-xs text-muted-foreground mt-1 flex justify-between">
+                                                        <span>{format(new Date(event.start), 'MMM d, HH:mm')}</span>
+                                                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-0 bg-white/50">
+                                                            {event.type}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            ))
+                                    ) : (
+                                        <div className="text-xs text-muted-foreground text-center py-4">No upcoming events</div>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
 
                     {/* Bookings Widget */}
                     <Card className="h-[300px] flex flex-col">

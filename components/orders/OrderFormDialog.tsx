@@ -20,6 +20,8 @@ import { formatCurrency } from "@/lib/constants"
 import { notifyLowBudget, notifyBudgetExhausted, shouldSendLowBudgetNotification } from "@/lib/notificationUtils"
 import { logger } from "@/lib/logger"
 import { getBudgetHealthClass } from "@/lib/equipmentConfig"
+import { VisibilitySelector } from "@/components/ui/VisibilitySelector"
+import { VisibilitySettings } from "@/lib/types/visibility.types"
 
 interface OrderFormDialogProps {
   open: boolean
@@ -49,6 +51,12 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
     linkedDeliverableId: '',
   })
 
+  const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>({
+    visibility: 'lab',
+    sharedWithUsers: [],
+    sharedWithGroups: []
+  })
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -71,6 +79,11 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
         notes: order.notes,
         priority: order.priority,
       })
+      setVisibilitySettings({
+        visibility: order.visibility || 'lab',
+        sharedWithUsers: order.sharedWithUsers || [],
+        sharedWithGroups: order.sharedWithGroups || []
+      })
     } else if (open && !order) {
       // Reset for new order
       setFormData({
@@ -84,6 +97,11 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
         fundingAllocationId: '',
         linkedDeliverableId: '',
         quantity: 1,
+      })
+      setVisibilitySettings({
+        visibility: 'lab',
+        sharedWithUsers: [],
+        sharedWithGroups: []
       })
     }
   }, [open, order])
@@ -171,6 +189,10 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
         funderName: selectedAccount?.funderName || '',
         masterProjectId: selectedAccount?.masterProjectId || '',
         masterProjectName: selectedAccount?.masterProjectName || '',
+        // Visibility
+        visibility: visibilitySettings.visibility,
+        sharedWithUsers: visibilitySettings.sharedWithUsers,
+        sharedWithGroups: visibilitySettings.sharedWithGroups,
       }
 
       if (selectedAllocation) {
@@ -217,6 +239,11 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
         accountId: '',
         fundingAllocationId: '',
         linkedDeliverableId: '',
+      })
+      setVisibilitySettings({
+        visibility: 'lab',
+        sharedWithUsers: [],
+        sharedWithGroups: []
       })
 
       onOpenChange(false)
@@ -419,6 +446,17 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
                     <option value="USD">USD</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Visibility */}
+              <div className="space-y-2">
+                <Label>Visibility</Label>
+                <VisibilitySelector
+                  value={visibilitySettings}
+                  onChange={setVisibilitySettings}
+                  labId={currentUserProfile?.labId || ""}
+                  disabled={isReadOnly}
+                />
               </div>
             </>
           )}

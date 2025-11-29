@@ -5,6 +5,8 @@
 // can join and leave. Unlike Department (fixed), these are flexible groupings.
 // ============================================================================
 
+import { VisibilitySettings } from './visibility.types'
+
 /**
  * ResearchGroup - Dynamic research collaboration group
  * Sub-entity of Department, can contain multiple WorkingLabs
@@ -13,7 +15,7 @@
  * Hierarchy:
  * Organisation → School/Faculty (Institute) → Department (Lab) → ResearchGroup → WorkingLab
  */
-export interface ResearchGroup {
+export interface ResearchGroup extends VisibilitySettings {
   id: string
   name: string
   description?: string
@@ -49,7 +51,7 @@ export interface ResearchGroup {
   workingLabIds?: string[]          // Array of WorkingLab IDs associated with this group
 
   // Settings
-  isPublic?: boolean                // Whether group is visible to all in organization
+  isPublic?: boolean                // DEPRECATED: Use visibility: 'lab' instead
   allowSelfJoin?: boolean           // Whether users can join without approval
 
   // Statistics
@@ -92,6 +94,10 @@ export interface WorkingLab {
   floor?: string                    // Floor number
   roomNumber?: string               // Room/suite number
   address?: string                  // Full address if needed
+
+  // New Physical Hierarchy (Refactor)
+  physicalInstitute?: string        // e.g., "Trinity Translational Medicine Institute"
+  labNumber?: string                // e.g., "2.20", "1.11"
 
   // Access & Management
   labManagerIds: string[]           // Array of PersonProfile IDs who manage this space

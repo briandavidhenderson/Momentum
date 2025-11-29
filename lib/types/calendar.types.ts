@@ -63,7 +63,7 @@ export interface CalendarEvent {
     equipmentId?: string
     equipmentBookingId?: string
   }
-  type?: "meeting" | "deadline" | "milestone" | "training" | "equipment" | "other"
+  type?: "meeting" | "deadline" | "milestone" | "training" | "equipment" | "abstract-submission" | "other"
   notes?: string
   createdBy: string // User ID
   createdAt: Date

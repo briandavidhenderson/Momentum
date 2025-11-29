@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Task, PersonProfile, ImportanceLevel } from "@/lib/types"
+import { ProjectTask, PersonProfile, ImportanceLevel } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,9 +28,9 @@ import { Calendar, User, Users } from "lucide-react"
 interface TaskEditDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  task: Task | null
-  workpackageId: string
-  onSave: (taskId: string, taskData: Partial<Task>) => void
+  task: ProjectTask | null
+  workpackageId?: string // Optional now
+  onSave: (taskId: string, taskData: Partial<ProjectTask>) => void
   onDelete?: (taskId: string) => void
   availablePeople?: PersonProfile[]
 }
@@ -48,7 +48,7 @@ export function TaskEditDialog({
   const [notes, setNotes] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [status, setStatus] = useState<Task["status"]>("not-started")
+  const [status, setStatus] = useState<ProjectTask["status"]>("not-started")
   const [importance, setImportance] = useState<ImportanceLevel>("medium")
   const [primaryOwner, setPrimaryOwner] = useState<string>("")
   const [helpers, setHelpers] = useState<string[]>([])
@@ -109,7 +109,7 @@ export function TaskEditDialog({
       return
     }
 
-    const taskData: Partial<Task> = {
+    const taskData: Partial<ProjectTask> = {
       name: name.trim(),
       notes: notes.trim() || undefined,
       start: new Date(startDate),
@@ -200,7 +200,7 @@ export function TaskEditDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="edit-task-status">Status</Label>
-              <Select value={status} onValueChange={(value) => setStatus(value as Task["status"])}>
+              <Select value={status} onValueChange={(value) => setStatus(value as ProjectTask["status"])}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>

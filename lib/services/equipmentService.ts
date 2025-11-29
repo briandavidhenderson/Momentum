@@ -39,7 +39,7 @@ export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>
 export async function updateEquipment(equipmentId: string, updates: Partial<EquipmentDevice>): Promise<void> {
   const db = getFirebaseDb()
   const equipmentRef = doc(db, "equipment", equipmentId)
-  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
+  const updateData: Record<string, any> = { ...updates, updatedAt: serverTimestamp() }
   await updateDoc(equipmentRef, updateData)
 }
 
@@ -53,7 +53,7 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
   if (!labId) {
     logger.warn("subscribeToEquipment called with undefined or empty labId")
     callback([])
-    return () => {}
+    return () => { }
   }
 
   try {
@@ -82,6 +82,6 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
     )
   } catch (error) {
     logger.error("Error setting up equipment subscription", error)
-    return () => {}
+    return () => { }
   }
 }

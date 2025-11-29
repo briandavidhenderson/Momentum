@@ -166,7 +166,8 @@ export function reconcileReceivedOrder(
     equipmentDeviceIds: order.sourceDeviceId ? [order.sourceDeviceId] : [],
     notes: `Created from order ${order.id}`,
     createdAt: new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
+    visibility: 'lab'
   }
 
   // If order came from a specific device supply, link the supply to this new inventory item
@@ -263,7 +264,7 @@ export function findPotentialDuplicates(
   const nameLower = order.productName.toLowerCase().trim()
   const nameMatches = existingInventory.filter(
     i => i.productName.toLowerCase().trim().includes(nameLower) ||
-         nameLower.includes(i.productName.toLowerCase().trim())
+      nameLower.includes(i.productName.toLowerCase().trim())
   )
   candidates.push(...nameMatches)
 

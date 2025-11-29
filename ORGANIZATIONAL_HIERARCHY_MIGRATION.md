@@ -231,7 +231,11 @@ Dynamic (users can join multiple):
 - `components/OnboardingFlow.tsx`
 - `components/views/PeopleView.tsx`
 - `components/views/PersonalProfilePage.tsx`
+- `components/profile/MembershipManager.tsx` (NEW)
 - `components/views/ProfileManagement.tsx`
+- `components/ProjectCreationDialog.tsx`
+- `components/EquipmentStatusPanel.tsx`
+- `components/views/OrdersInventory.tsx`
 
 ### Database Configuration
 - `firestore.indexes.json`
@@ -244,18 +248,16 @@ Dynamic (users can join multiple):
 ### Not Yet Implemented (Medium Priority)
 
 #### 1. Research Group Management UI
-**Status**: Backend ready, UI pending
+**Status**: ✅ COMPLETE
 
-**Needed**:
-- UI to create new research groups
-- UI to create new working labs
-- UI to join/leave research groups
-- UI to join/leave working labs
-- Display current group memberships on profiles
+**Implemented**:
+- Created `MembershipManager` component for joining/leaving/creating groups and labs
+- Integrated into `PersonalProfilePage`
+- Added dialogs for creating new Research Groups and Working Labs
+- Implemented real-time updates for membership lists
+- Updated Firestore rules to allow self-service membership management
 
-**Suggested Location**: Add "Research Groups" tab to PeopleView.tsx
-
-**Estimated Effort**: 2-4 hours
+**Location**: `components/profile/MembershipManager.tsx` integrated into `components/views/PersonalProfilePage.tsx`
 
 ---
 
@@ -283,9 +285,9 @@ Dynamic (users can join multiple):
 
 #### Testing Recommended
 - [ ] End-to-end onboarding flow with new user
-- [ ] Research group creation and membership
-- [ ] Working lab creation and membership
-- [ ] Profile display with group memberships
+- [x] Research group creation and membership (Implemented, ready for manual test)
+- [x] Working lab creation and membership (Implemented, ready for manual test)
+- [x] Profile display with group memberships (Implemented, ready for manual test)
 - [ ] Data integrity after re-onboarding
 
 ---
@@ -296,7 +298,7 @@ Dynamic (users can join multiple):
 |-------|------|--------|-------|
 | Type Definitions | Nov 21, 2025 | ✅ Complete | All new types defined |
 | Services Layer | Nov 21, 2025 | ✅ Complete | CRUD operations implemented |
-| UI Updates | Nov 21, 2025 | ✅ Complete | All labels updated |
+| UI Updates | Nov 28, 2025 | ✅ Complete | All labels updated |
 | Database Config | Nov 21, 2025 | ✅ Complete | Indexes and rules deployed |
 | Bug Fixes | Nov 21, 2025 | ✅ Complete | All critical bugs resolved |
 | Debug Code Removal | Nov 21, 2025 | ✅ Complete | Production-ready |
@@ -350,4 +352,4 @@ For questions or issues related to this migration:
 - Review service functions in `lib/services/researchGroupService.ts`
 - Consult Firestore indexes and rules for database configuration
 
-**Last Updated**: November 21, 2025
+**Last Updated**: November 28, 2025

@@ -1,6 +1,6 @@
 "use client"
 
-import { Deliverable, PersonProfile } from "@/lib/types"
+import { Deliverable, PersonProfile, HydratedDeliverable } from "@/lib/types"
 import { useAppContext } from "@/lib/AppContext"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -67,34 +67,27 @@ export function DeliverableList({
 
     // Calculate progress from tasks
     const calculateProgress = (deliverable: Deliverable): number => {
-        if (!deliverable.projectTaskIds || deliverable.projectTaskIds.length === 0) {
+        // Cast to HydratedDeliverable to access nested tasks
+        const hydratedDeliverable = deliverable as unknown as HydratedDeliverable
+
+        if (!hydratedDeliverable.tasks || hydratedDeliverable.tasks.length === 0) {
             return deliverable.progress || 0
         }
 
-        // Find workpackage to get tasks
-        const workpackage = workpackages.find((wp) => wp.id === deliverable.workpackageId)
-        if (!workpackage || !workpackage.tasks) return deliverable.progress || 0
+        const deliverableTasks = hydratedDeliverable.tasks
+        const completedTasks = deliverableTasks.filter((task) => task.status === "done")
 
-        const deliverableTasks = workpackage.tasks.filter((task) =>
-            deliverable.projectTaskIds?.includes(task.id)
-        )
-
-        if (deliverableTasks.length === 0) return deliverable.progress || 0
-
-        const completedTasks = deliverableTasks.filter((task) => task.status === "completed")
         return Math.round((completedTasks.length / deliverableTasks.length) * 100)
     }
 
     // Check if any tasks are blocked or at-risk
     const hasWarnings = (deliverable: Deliverable): boolean => {
-        const workpackage = workpackages.find((wp) => wp.id === deliverable.workpackageId)
-        if (!workpackage || !workpackage.tasks) return false
+        // Cast to HydratedDeliverable to access nested tasks
+        const hydratedDeliverable = deliverable as unknown as HydratedDeliverable
 
-        const deliverableTasks = workpackage.tasks.filter((task) =>
-            deliverable.projectTaskIds?.includes(task.id)
-        )
+        if (!hydratedDeliverable.tasks) return false
 
-        return deliverableTasks.some(
+        return hydratedDeliverable.tasks.some(
             (task) => task.status === "blocked" || task.status === "at-risk"
         )
     }

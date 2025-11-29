@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Package, Edit, Trash2, Calendar, DollarSign, GripVertical, MoreVertical, Target } from "lucide-react"
+import { Package, Edit, Trash2, Calendar, DollarSign, GripVertical, MoreVertical, Target, Lock, Globe, Eye, Users } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -55,12 +55,40 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
     ).join(' ')
   }
 
+  const getVisibilityIcon = (visibility?: string) => {
+    switch (visibility) {
+      case 'private':
+        return <Lock className="h-3 w-3" />
+      case 'public':
+        return <Globe className="h-3 w-3" />
+      case 'shared':
+        return <Users className="h-3 w-3" />
+      case 'lab':
+      default:
+        return <Eye className="h-3 w-3" />
+    }
+  }
+
+  const getVisibilityLabel = (visibility?: string) => {
+    switch (visibility) {
+      case 'private':
+        return 'Private'
+      case 'public':
+        return 'Public'
+      case 'shared':
+        return 'Shared'
+      case 'lab':
+      default:
+        return 'Lab'
+    }
+  }
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="order-card relative overflow-hidden"
+      className="order-card relative overflow-hidden group"
     >
       <div
         className="absolute inset-x-5 top-0 h-1 rounded-full"
@@ -71,26 +99,34 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div
             {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-accent rounded-md flex-shrink-0"
+            className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-accent rounded-md flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <GripVertical className="h-5 w-5 text-gray-400" />
           </div>
           <div className="h-9 w-9 rounded-xl bg-accent text-brand-700 grid place-items-center shadow-subtle flex-shrink-0">
             <Package className="h-5 w-5" />
           </div>
-          <h3 className="font-semibold text-foreground text-base truncate">
-            {order.productName || 'Unnamed Product'}
-          </h3>
-          <span className={getStatusPillClass(order.status || 'to-order')}>
-            {formatStatusLabel(order.status || 'to-order')}
-          </span>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-foreground text-base truncate">
+              {order.productName || 'Unnamed Product'}
+            </h3>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={getStatusPillClass(order.status || 'to-order')}>
+                {formatStatusLabel(order.status || 'to-order')}
+              </span>
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal gap-1 text-muted-foreground border-border/60">
+                {getVisibilityIcon(order.visibility)}
+                {getVisibilityLabel(order.visibility)}
+              </Badge>
+            </div>
+          </div>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 ml-2 flex-shrink-0 hover:bg-secondary"
+              className="h-8 w-8 p-0 ml-2 flex-shrink-0 hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical className="h-4 w-4 text-gray-600" />

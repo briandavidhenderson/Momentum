@@ -15,6 +15,7 @@ import { useUI } from './hooks/useUI';
 import { useFunding } from './hooks/useFunding';
 import { useDeliverables } from './hooks/useDeliverables';
 import { useBookings } from './hooks/useBookings';
+import { useProtocols } from './hooks/useProtocols';
 import { useProfiles } from './useProfiles';
 import { personProfilesToPeople } from './personHelpers';
 import { PersonProfile, Person } from './types';
@@ -37,6 +38,7 @@ type AppContextType = ReturnType<typeof useAuth> &
   ReturnType<typeof useUI> &
   ReturnType<typeof useDeliverables> &
   ReturnType<typeof useBookings> &
+  ReturnType<typeof useProtocols> &
   Omit<ReturnType<typeof useFunding>, never> & {
     allProfiles: PersonProfile[]
     people: Person[]
@@ -53,12 +55,13 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
   const polls = usePolls();
   const eln = useELN();
   const whiteboardsState = useWhiteboards();
-  const calendar = useCalendar();
+  const calendar = useCalendar(projectsAndWorkpackages.projects, projectsAndWorkpackages.workpackages);
   const interfaceState = useInterface();
   const uiState = useUI();
   const funding = useFunding(auth.currentUserProfile?.labId, auth.currentUser?.uid);
   const deliverablesState = useDeliverables(auth.currentUserProfile);
-  const bookingsState = useBookings();
+  const bookingsState = useBookings(auth.currentUserProfile?.labId);
+  const protocolsState = useProtocols(auth.currentUserProfile?.labId);
 
   // Fix Bug #3 & #4: Add profiles and convert to people for UI
   const allProfiles = useProfiles(auth.currentUserProfile?.labId || null);
@@ -79,6 +82,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     ...uiState,
     ...deliverablesState,
     ...bookingsState,
+    ...protocolsState,
     allProfiles,  // Expose profiles for components that need full profile data
     people,       // Expose people for UI components (assignee dropdowns, etc.)
   };

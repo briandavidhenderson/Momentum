@@ -1,3 +1,9 @@
+// ============================================================================
+// AUTO-GENERATED FILE. DO NOT EDIT DIRECTLY.
+// Edit files in firestore/rules/ instead.
+// ============================================================================
+
+// Source: firestore/rules/00_base.rules
 rules_version = '2';
 
 service cloud.firestore {
@@ -7,47 +13,8 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // ============================================================================
-    // EVENTS (Calendar)
-    // ============================================================================
-    match /events/{eventId} {
-      // Users can read events they created OR events with lab/org visibility in their lab
-      // Private events are only visible to creator
-      allow read: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        (resource.data.visibility == 'lab' && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
-        (resource.data.visibility == 'organisation')
-      );
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
 
-      // Users can update events they created OR events in same lab (if admin)
-      // External events (read-only) cannot be updated unless isReadOnly is removed
-      allow update: if isAuthenticated() && (
-        (resource.data.createdBy == request.auth.uid &&
-         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true)) ||
-        isAdmin()
-      );
-
-      // External read-only events cannot be deleted
-      allow delete: if isAuthenticated() && (
-        isAdmin() ||
-        (resource.data.createdBy == request.auth.uid &&
-         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true))
-      );
-    }
-
-    // ============================================================================
-    // AUDIT TRAILS
-    // ============================================================================
-    match /auditTrails/{auditId} {
-      // Readable by authenticated users (used in Right Info Panel)
-      allow read: if isAuthenticated();
-      // Create-only endpoint; no updates or deletes by regular users
-      allow create: if isAuthenticated();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
+// Source: firestore/rules/10_helpers.rules
     // Helper function to check if user is administrator
     function isAdmin() {
       return isAuthenticated() && 
@@ -79,7 +46,36 @@ service cloud.firestore {
       return userProfile != null && userProfile.data != null && userProfile.data.labId == labId;
     }
 
+    // Helper function to check if user is PI of a master project
+    function isProjectPI(projectId) {
+      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      return project != null && project.data != null && (
+        getUserProfileId() in project.data.principalInvestigatorIds
+      );
+    }
 
+    function isProjectTeamMember(projectId) {
+      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      let profileId = getUserProfileId();
+      return profileId != null && project != null && project.data != null && (
+        (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
+        (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
+        (project.data.coPIIds != null && profileId in project.data.coPIIds)
+      );
+    }
+
+    // Helper: Check if user is equipment manager
+    function isEquipmentManager(equipmentId) {
+      let equipment = get(/databases/$(database)/documents/equipment/$(equipmentId));
+      let profileId = getUserProfileId();
+      return equipment != null && equipment.data != null && (
+        (equipment.data.managerId != null && equipment.data.managerId == profileId) ||
+        (equipment.data.managerIds != null && profileId in equipment.data.managerIds)
+      );
+    }
+
+
+// Source: firestore/rules/20_users.rules
     // ============================================================================
     // USERS COLLECTION
     // ============================================================================
@@ -124,6 +120,91 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ============================================================================
+    // CONSENT (Privacy & Data Protection)
+    // ============================================================================
+    match /consent/{consentId} {
+      // All authenticated users can read consent records
+      // (Client-side filters by userId; allows checking if consent exists before creation)
+      allow read: if isAuthenticated();
+
+      // Users can create their own consent records
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own consent records
+      allow update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can delete their own consent records
+      allow delete: if isAuthenticated() && request.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // USER CONSENTS (Cookie Banner & GDPR Compliance)
+    // ============================================================================
+    match /userConsents/{userId} {
+      // Users can read their own consent records
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Users can create their own consent records
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own consent records (for consent version updates)
+      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
+
+      // No deletion allowed (GDPR audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // PRIVACY SETTINGS (GDPR User Rights Management)
+    // ============================================================================
+    match /privacySettings/{userId} {
+      // Users can read their own privacy settings
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Users can create their own privacy settings
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own privacy settings
+      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
+
+      // No deletion allowed (GDPR audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // DATA EXPORT REQUESTS (GDPR Article 15 & 20)
+    // ============================================================================
+    match /dataExportRequests/{requestId} {
+      // Users can read their own export requests
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create export requests for themselves
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Admin can update request status (processed by Cloud Function)
+      allow update: if isAdmin();
+
+      // No deletion allowed (audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // SPECIAL CATEGORY DATA MARKERS (GDPR Article 9 - Sensitive Data)
+    // ============================================================================
+    match /specialCategoryDataMarkers/{markerId} {
+      // Users can read markers they acknowledged
+      allow read: if isAuthenticated() && resource.data.acknowledgedBy == request.auth.uid;
+
+      // Users can create acknowledgment markers
+      allow create: if isAuthenticated() && request.resource.data.acknowledgedBy == request.auth.uid;
+
+      // No updates or deletes (immutable audit trail)
+      allow update, delete: if false;
+    }
+
+
+// Source: firestore/rules/30_structure.rules
     // ============================================================================
     // ORGANISATIONS (Shared Reference Data)
     // ============================================================================
@@ -237,68 +318,8 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ============================================================================
-    // FUNDERS (Shared Reference Data)
-    // ============================================================================
-    match /funders/{funderId} {
-      // All authenticated users can read funders
-      allow read: if isAuthenticated();
 
-      // Any authenticated user can create a funder
-      allow create: if isAuthenticated();
-
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
-      );
-
-      // Only admin can delete
-      allow delete: if isAdmin();
-    }
-
-    // ============================================================================
-    // FUNDING ACCOUNTS
-    // ============================================================================
-    // Helper function to check if user is PI of a master project
-    function isProjectPI(projectId) {
-      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
-      return project != null && project.data != null && (
-        getUserProfileId() in project.data.principalInvestigatorIds
-      );
-    }
-
-    function isProjectTeamMember(projectId) {
-      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
-      let profileId = getUserProfileId();
-      return profileId != null && project != null && project.data != null && (
-        (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
-        (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
-        (project.data.coPIIds != null && profileId in project.data.coPIIds)
-      );
-    }
-
-    match /accounts/{accountId} {
-      // Users can read accounts for projects they're a member of
-      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
-      allow read: if isAuthenticated();
-
-      // PIs can create accounts for their projects
-      allow create: if isAuthenticated() && (
-        isAdmin() ||
-        isProjectPI(request.resource.data.masterProjectId)
-      );
-
-      // PIs or admins can update accounts
-      allow update: if isAuthenticated();
-
-      // Only PIs or admins can delete accounts
-      allow delete: if isAuthenticated() && (
-        isAdmin() ||
-        isProjectPI(resource.data.masterProjectId)
-      );
-    }
-
+// Source: firestore/rules/40_projects.rules
     // ============================================================================
     // MASTER PROJECTS
     // ============================================================================
@@ -425,8 +446,30 @@ service cloud.firestore {
     }
 
     // ============================================================================
-    // ORDERS COLLECTION
+    // PROJECT FILES (Storage metadata)
     // ============================================================================
+    match /projectFiles/{fileId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
+        (resource.data.labId != null && isLabMember(resource.data.labId))
+      );
+
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (request.resource.data.projectId != null && isProjectTeamMember(request.resource.data.projectId)) ||
+        (request.resource.data.labId != null && isLabMember(request.resource.data.labId))
+      );
+
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
+        (resource.data.labId != null && isLabMember(resource.data.labId))
+      );
+    }
+
+
+// Source: firestore/rules/50_resources.rules
     // ============================================================================
     // ORDERS COLLECTION
     // ============================================================================
@@ -486,59 +529,6 @@ service cloud.firestore {
       );
     }
 
-
-
-    // ============================================================================
-    // DAY-TO-DAY TASKS
-    // ============================================================================
-    match /dayToDayTasks/{taskId} {
-      // Users can only read tasks they created OR in their lab
-      allow read: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isLabMember(resource.data.labId) ||
-        isAdmin()
-      );
-
-      // Users can create tasks
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-
-      // Users can update tasks
-      allow update: if isAuthenticated();
-
-      // Users can delete tasks they created or admins can delete any
-      allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
-      );
-    }
-
-    // ============================================================================
-    // LAB POLLS
-    // ============================================================================
-    match /labPolls/{pollId} {
-      // Users can only read polls they created OR in their lab
-      allow read: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isLabMember(resource.data.labId) ||
-        isAdmin()
-      );
-
-      // Users can create polls
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
-
-      // Creator or admin can update
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.createdBy == request.auth.uid
-      );
-
-      // Creator or admin can delete
-      allow delete: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.createdBy == request.auth.uid
-      );
-    }
-
     // ============================================================================
     // EQUIPMENT
     // ============================================================================
@@ -573,16 +563,14 @@ service cloud.firestore {
         );
       }
 
-      // Users can read bookings in their lab (for conflict checking)
-      // Required for conflict checking - users need to see existing bookings to avoid conflicts
+      // Users can read bookings if they are authenticated (needed for cross-lab availability)
       allow read: if isAuthenticated();
 
-      // Users can create bookings for their lab
-      // Allow if user is creating for themselves and either has a lab or is admin
+      // Users can create bookings if they are authenticated
+      // Must be for themselves
       allow create: if isAuthenticated() && (
         request.resource.data.bookedBy == getUserProfileId() &&
-        request.resource.data.createdBy == request.auth.uid &&
-        (getUserLab() == null || request.resource.data.labId == getUserLab() || isAdmin())
+        request.resource.data.createdBy == request.auth.uid
       );
 
       // Users can update their own bookings
@@ -602,137 +590,47 @@ service cloud.firestore {
     }
 
     // ============================================================================
-    // ELN EXPERIMENTS
+    // FUNDERS (Shared Reference Data)
     // ============================================================================
-    match /elnExperiments/{experimentId} {
-      // Users can read experiments they created, in their lab, or linked to their projects
-      allow read: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isLabMember(resource.data.labId) ||
-        isAdmin() ||
-        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId))
-      );
+    match /funders/{funderId} {
+      // All authenticated users can read funders
+      allow read: if isAuthenticated();
 
-      // Users can create their own experiments
-      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      // Any authenticated user can create a funder
+      allow create: if isAuthenticated();
 
-      // Users can update their own experiments
+      // Creator or admin can update
       allow update: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isAdmin()
       );
 
-      // Users can delete their own experiments
-      allow delete: if isAuthenticated() && (
-        resource.data.createdBy == request.auth.uid ||
-        isAdmin()
-      );
+      // Only admin can delete
+      allow delete: if isAdmin();
     }
 
     // ============================================================================
-    // PROJECT FILES (Storage metadata)
+    // FUNDING ACCOUNTS
     // ============================================================================
-    match /projectFiles/{fileId} {
-      allow read: if isAuthenticated() && (
-        isAdmin() ||
-        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
-        (resource.data.labId != null && isLabMember(resource.data.labId))
-      );
-
-      allow create: if isAuthenticated() && (
-        isAdmin() ||
-        (request.resource.data.projectId != null && isProjectTeamMember(request.resource.data.projectId)) ||
-        (request.resource.data.labId != null && isLabMember(request.resource.data.labId))
-      );
-
-      allow update, delete: if isAuthenticated() && (
-        isAdmin() ||
-        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
-        (resource.data.labId != null && isLabMember(resource.data.labId))
-      );
-    }
-
-    // ============================================================================
-    // CONSENT (Privacy & Data Protection)
-    // ============================================================================
-    match /consent/{consentId} {
-      // All authenticated users can read consent records
-      // (Client-side filters by userId; allows checking if consent exists before creation)
+    match /accounts/{accountId} {
+      // Users can read accounts for projects they're a member of
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
       allow read: if isAuthenticated();
 
-      // Users can create their own consent records
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // PIs can create accounts for their projects
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectPI(request.resource.data.masterProjectId)
+      );
 
-      // Users can update their own consent records
-      allow update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // PIs or admins can update accounts
+      allow update: if isAuthenticated();
 
-      // Users can delete their own consent records
-      allow delete: if isAuthenticated() && request.data.userId == request.auth.uid;
-    }
-
-    // ============================================================================
-    // USER CONSENTS (Cookie Banner & GDPR Compliance)
-    // ============================================================================
-    match /userConsents/{userId} {
-      // Users can read their own consent records
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-
-      // Users can create their own consent records
-      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
-
-      // Users can update their own consent records (for consent version updates)
-      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
-
-      // No deletion allowed (GDPR audit trail)
-      allow delete: if false;
-    }
-
-    // ============================================================================
-    // PRIVACY SETTINGS (GDPR User Rights Management)
-    // ============================================================================
-    match /privacySettings/{userId} {
-      // Users can read their own privacy settings
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-
-      // Users can create their own privacy settings
-      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
-
-      // Users can update their own privacy settings
-      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
-
-      // No deletion allowed (GDPR audit trail)
-      allow delete: if false;
-    }
-
-    // ============================================================================
-    // DATA EXPORT REQUESTS (GDPR Article 15 & 20)
-    // ============================================================================
-    match /dataExportRequests/{requestId} {
-      // Users can read their own export requests
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-
-      // Users can create export requests for themselves
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-
-      // Admin can update request status (processed by Cloud Function)
-      allow update: if isAdmin();
-
-      // No deletion allowed (audit trail)
-      allow delete: if false;
-    }
-
-    // ============================================================================
-    // SPECIAL CATEGORY DATA MARKERS (GDPR Article 9 - Sensitive Data)
-    // ============================================================================
-    match /specialCategoryDataMarkers/{markerId} {
-      // Users can read markers they acknowledged
-      allow read: if isAuthenticated() && resource.data.acknowledgedBy == request.auth.uid;
-
-      // Users can create acknowledgment markers
-      allow create: if isAuthenticated() && request.resource.data.acknowledgedBy == request.auth.uid;
-
-      // No updates or deletes (immutable audit trail)
-      allow update, delete: if false;
+      // Only PIs or admins can delete accounts
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectPI(resource.data.masterProjectId)
+      );
     }
 
     // ============================================================================
@@ -756,6 +654,88 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (
         isAdmin() ||
         ('masterProjectId' in resource.data && isProjectPI(resource.data.masterProjectId))
+      );
+    }
+
+    // ============================================================================
+    // BUFFERS (Lab-wide buffer recipes)
+    // ============================================================================
+    match /buffers/{bufferId} {
+      // Users can read buffers in their lab
+      allow read: if isAuthenticated() && (
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create buffers in their lab
+      allow create: if isAuthenticated() && (
+        request.resource.data.createdBy == request.auth.uid &&
+        isLabMember(request.resource.data.labId)
+      );
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+
+// Source: firestore/rules/60_safety.rules
+    // ============================================================================
+    // RISK ASSESSMENTS (Safety - Phase 3)
+    // ============================================================================
+    match /riskAssessments/{assessmentId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+    }
+
+    // ============================================================================
+    // INCIDENTS (Safety - Phase 3)
+    // ============================================================================
+    match /incidents/{incidentId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.reportedBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+    }
+
+
+// Source: firestore/rules/70_collaboration.rules
+    // ============================================================================
+    // EVENTS (Calendar)
+    // ============================================================================
+    match /events/{eventId} {
+      // Users can read events they created OR events with lab/org visibility in their lab
+      // Private events are only visible to creator
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        (resource.data.visibility == 'lab' && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
+        (resource.data.visibility == 'organisation')
+      );
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update events they created OR events in same lab (if admin)
+      // External events (read-only) cannot be updated unless isReadOnly is removed
+      allow update: if isAuthenticated() && (
+        (resource.data.createdBy == request.auth.uid &&
+         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true)) ||
+        isAdmin()
+      );
+
+      // External read-only events cannot be deleted
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid &&
+         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true))
       );
     }
 
@@ -839,76 +819,77 @@ service cloud.firestore {
     }
 
     // ============================================================================
-    // COMMENTS (Threaded discussions on entities)
+    // DAY-TO-DAY TASKS
     // ============================================================================
-    match /comments/{commentId} {
-      // Allow authenticated users to read non-deleted comments
-      allow read: if isAuthenticated() && resource.data.isDeleted != true;
-
-      // Create: authenticated user creating as their own profile
-      allow create: if isAuthenticated() &&
-        request.resource.data.authorId == getUserProfileId();
-
-      // Update: author (profile) or admin; authorId cannot change
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        (resource.data.authorId == getUserProfileId() &&
-         request.resource.data.authorId == resource.data.authorId)
-      );
-
-      // Delete: author or admin (soft delete in client)
-      allow delete: if isAuthenticated() && (
-        isAdmin() ||
-        resource.data.authorId == getUserProfileId()
-      );
-    }
-
     // ============================================================================
-    // NOTIFICATIONS
+    // DAY-TO-DAY TASKS
     // ============================================================================
-    match /notifications/{notificationId} {
-      // Users can read their own notifications
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-
-      // System and authenticated users can create notifications
-      allow create: if isAuthenticated();
-
-      // Users can update their own notifications (mark as read)
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-
-      // Users can delete their own notifications
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
-    }
-
-    // ============================================================================
-    // AI GENERATED CONTENT (GDPR/EU AI Act Compliance)
-    // ============================================================================
-    match /aiGeneratedContent/{contentId} {
-      // Users can read AI content records they created
-      allow read: if isAuthenticated() && resource.data.generatedBy == request.auth.uid;
-
-      // Users can create AI content records
-      allow create: if isAuthenticated() && request.resource.data.generatedBy == request.auth.uid;
-
-      // No updates or deletes (audit trail for compliance)
-      allow update, delete: if false;
-    }
-
-    // ============================================================================
-    // BUFFERS (Lab-wide buffer recipes)
-    // ============================================================================
-    match /buffers/{bufferId} {
-      // Users can read buffers in their lab
+    match /dayToDayTasks/{taskId} {
+      // Users can only read tasks they created OR in their lab
       allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
         isLabMember(resource.data.labId) ||
         isAdmin()
       );
 
-      // Users can create buffers in their lab
-      allow create: if isAuthenticated() && (
-        request.resource.data.createdBy == request.auth.uid &&
-        isLabMember(request.resource.data.labId)
+      // Users can create tasks
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update tasks if they created it, are in the lab, or are assigned
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin() ||
+        (resource.data.assigneeIds != null && request.auth.uid in resource.data.assigneeIds)
       );
+
+      // Users can delete tasks they created or admins can delete any
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // PROTOCOLS (Phase 2)
+    // ============================================================================
+    match /protocols/{protocolId} {
+      // Users can read protocols in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.labId == getUserLab() || 
+        resource.data.isPublic == true ||
+        isAdmin()
+      );
+
+      // Users can create protocols
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // LAB POLLS
+    // ============================================================================
+    match /labPolls/{pollId} {
+      // Users can only read polls they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create polls
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
 
       // Creator or admin can update
       allow update: if isAuthenticated() && (
@@ -921,6 +902,54 @@ service cloud.firestore {
         isAdmin() ||
         resource.data.createdBy == request.auth.uid
       );
+    }
+
+    // ============================================================================
+    // ELN EXPERIMENTS
+    // ============================================================================
+    match /elnExperiments/{experimentId} {
+      // Users can read experiments they created, in their lab, or linked to their projects
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin() ||
+        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId))
+      );
+
+      // Users can create their own experiments
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update their own experiments
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can delete their own experiments
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // ANNOUNCEMENTS (Lab Communication - Phase 5)
+    // ============================================================================
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.publishedBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.publishedBy == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.publishedBy == request.auth.uid || isAdmin());
+    }
+
+    // ============================================================================
+    // PROTOCOL TEMPLATES (Shared Templates - Phase 5)
+    // ============================================================================
+    match /protocolTemplates/{templateId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
     }
 
     // ============================================================================
@@ -1039,6 +1068,74 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // COMMENTS (Threaded discussions on entities)
+    // ============================================================================
+    match /comments/{commentId} {
+      // Allow authenticated users to read non-deleted comments
+      allow read: if isAuthenticated() && resource.data.isDeleted != true;
+
+      // Create: authenticated user creating as their own profile
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == getUserProfileId();
+
+      // Update: author (profile) or admin; authorId cannot change
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.authorId == getUserProfileId() &&
+         request.resource.data.authorId == resource.data.authorId)
+      );
+
+      // Delete: author or admin (soft delete in client)
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.authorId == getUserProfileId()
+      );
+    }
+
+
+// Source: firestore/rules/80_misc.rules
+    // ============================================================================
+    // NOTIFICATIONS
+    // ============================================================================
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // System and authenticated users can create notifications
+      allow create: if isAuthenticated();
+
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own notifications
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // AI GENERATED CONTENT (GDPR/EU AI Act Compliance)
+    // ============================================================================
+    match /aiGeneratedContent/{contentId} {
+      // Users can read AI content records they created
+      allow read: if isAuthenticated() && resource.data.generatedBy == request.auth.uid;
+
+      // Users can create AI content records
+      allow create: if isAuthenticated() && request.resource.data.generatedBy == request.auth.uid;
+
+      // No updates or deletes (audit trail for compliance)
+      allow update, delete: if false;
+    }
+
+    // ============================================================================
+    // SAMPLES (Sample Genealogy - Phase 4)
+    // ============================================================================
+    match /samples/{sampleId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+    }
+
+    // ============================================================================
     // ORCID RECORDS
     // ============================================================================
     match /orcidRecords/{orcidId} {
@@ -1051,6 +1148,20 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // AUDIT TRAILS
+    // ============================================================================
+    match /auditTrails/{auditId} {
+      // Readable by authenticated users (used in Right Info Panel)
+      allow read: if isAuthenticated();
+      // Create-only endpoint; no updates or deletes by regular users
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+
+// Source: firestore/rules/99_footer.rules
+    // ============================================================================
     // DEFAULT DENY (catch-all)
     // ============================================================================
     match /{document=**} {
@@ -1058,3 +1169,5 @@ service cloud.firestore {
     }
   }
 }
+
+

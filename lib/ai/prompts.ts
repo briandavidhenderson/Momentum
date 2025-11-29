@@ -258,6 +258,7 @@ export const WHITEBOARD_PROTOCOL_PROMPT = `You are an assistant that converts ex
 - centrifuge: spin samples; include speed (rpm or g), time, optional temperature
 - pipette: transfer volume; include volume, unit, from, to
 - measure: record a readout; include measurementType, instrument/wavelength
+- read: read plate or sensor; include instrument, mode, wavelength
 - thermocycle: PCR style cycles; include cycleCount, denature/anneal/extension temps and times, final hold
 - custom: for steps that do not map above (provide descriptive parameters)
 
@@ -268,7 +269,7 @@ Return strict JSON:
   "steps": [
     {
       "id": "op-1",
-      "type": "mix|heat|cool|incubate|centrifuge|pipette|measure|thermocycle|custom",
+      "type": "mix|heat|cool|incubate|centrifuge|pipette|measure|read|thermocycle|custom",
       "label": "Readable card title",
       "parameters": { "time": 15, "timeUnit": "min", "temperature": 37, ... },
       "objects": ["Sample A", "Buffer X"],
@@ -295,3 +296,62 @@ Guidelines:
 - Include safety or atmosphere details in metadata.notes.
 - If the source describes parallel branches, create multiple outputs and connect them appropriately.
 - Do not include free text outside the JSON object.`
+
+/**
+ * Scientific Figure Analysis Prompt
+ */
+export const SCIENTIFIC_FIGURE_ANALYSIS_PROMPT = `Analyze this scientific figure. Describe the key findings, trends, and any statistical significance shown. Be specific and scientific.`
+
+/**
+ * Scientific Text Analysis Prompt
+ */
+export const SCIENTIFIC_TEXT_ANALYSIS_PROMPT = `Analyze this scientific text and provide a comprehensive summary with key findings.`
+
+/**
+ * Scientific Paper Analysis Prompt
+ */
+export const SCIENTIFIC_PAPER_ANALYSIS_PROMPT = `Analyze this scientific paper (extracted text). Provide a comprehensive summary including:
+1. Main research question/hypothesis
+2. Key methodologies
+3. Major findings
+4. Conclusions and implications
+5. Any limitations mentioned`
+
+/**
+ * Research Summary Prompt Generator
+ */
+export function RESEARCH_SUMMARY_PROMPT(contentType: 'text' | 'pdf'): string {
+  return contentType === 'pdf'
+    ? `Provide a concise 2-3 sentence summary of this scientific paper:`
+    : `Provide a concise 2-3 sentence summary of this research content:`
+}
+
+/**
+ * Research Q&A Prompt Generator
+ */
+export function RESEARCH_QA_PROMPT(context: string, conversationContext: string, question: string): string {
+  return `You are an AI assistant helping researchers understand scientific content. Answer the user's question based on the research pin information provided. Be accurate, scientific, and helpful.
+
+${context}
+
+${conversationContext}
+
+User question: ${question}
+
+Provide a clear, concise answer:`
+}
+
+/**
+ * YouTube Analysis Prompt Generator
+ */
+export function YOUTUBE_ANALYSIS_PROMPT(metadataText: string, videoUrl: string): string {
+  return `Analyze this YouTube video for research purposes. Based on the available metadata, provide:
+1. Main topic/subject
+2. Key concepts covered
+3. Potential research applications
+4. Any notable techniques or methodologies mentioned
+
+${metadataText}
+
+Video URL: ${videoUrl}`
+}

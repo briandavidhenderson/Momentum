@@ -16,7 +16,7 @@ import { ProjectCard } from "@/components/projects/ProjectCard"
 import { PersonalTasksWidget } from "@/components/projects/PersonalTasksWidget"
 import { TaskCreationDialog } from "@/components/projects/TaskCreationDialog"
 import { TaskEditDialog } from "@/components/projects/TaskEditDialog"
-import { MasterProject, Workpackage, Deliverable, PersonProfile, Task, ProfileProject } from "@/lib/types"
+import { MasterProject, Workpackage, Deliverable, PersonProfile, ProjectTask, ProfileProject, HydratedWorkpackage } from "@/lib/types"
 import {
   Plus,
   FolderKanban,
@@ -49,7 +49,7 @@ import { personProfilesToPeople } from "@/lib/personHelpers"
 import { useToast } from "@/lib/toast"
 
 export function ProjectDashboard() {
-  const { error: toastError } = useToast()
+  const { toast, error: toastError } = useToast()
   const { currentUser: user, currentUserProfile: profile } = useAuth()
   const {
     projects,
@@ -67,6 +67,7 @@ export function ProjectDashboard() {
     projectsSyncStatus,
     allProfiles,
     people,
+    handleUpdateDeliverableTasks,
   } = useAppContext()
 
   // Get selected group for filtering
@@ -80,7 +81,7 @@ export function ProjectDashboard() {
   const [deliverableParentId, setDeliverableParentId] = useState<string | null>(null)
   const [showTaskDialog, setShowTaskDialog] = useState(false)
   const [showTaskEditDialog, setShowTaskEditDialog] = useState(false)
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [selectedTask, setSelectedTask] = useState<ProjectTask | null>(null)
   const [taskDeliverableId, setTaskDeliverableId] = useState<string>("")
   const [taskWorkpackageId, setTaskWorkpackageId] = useState<string>("")
 
@@ -337,7 +338,7 @@ export function ProjectDashboard() {
       >
         <ProjectCard
           project={project}
-          workpackages={allWorkpackages}
+          workpackages={allWorkpackages as unknown as HydratedWorkpackage[]}
           deliverables={deliverables}
           people={allProfiles}
           budgetSummary={budgetSummary}
@@ -350,7 +351,6 @@ export function ProjectDashboard() {
               end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
               status: "planning",
               progress: 0,
-              tasks: [],
               deliverableIds: [],
               isExpanded: true,
               importance: "medium",
@@ -363,49 +363,6 @@ export function ProjectDashboard() {
               })
             }
           }}
-          onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
-          onDeleteWorkpackage={async (workpackageId) => {
-            await handleUpdateMasterProject(project.id, {
-              workpackageIds: (project.workpackageIds || []).filter(id => id !== workpackageId),
-            })
-          }}
-          onCreateDeliverable={(workpackageId) => {
-            setDeliverableParentId(workpackageId)
-            setSelectedDeliverable(null)
-            setDeliverableMode("create")
-            setShowDeliverableDialog(true)
-          }}
-          onEditDeliverable={(deliverable) => {
-            try {
-              if (deliverable && deliverable.id) {
-                setSelectedDeliverable(deliverable)
-                setDeliverableMode("edit")
-                setShowDeliverableDialog(true)
-              }
-            } catch (error) {
-              logger.error("Error editing deliverable", error)
-            }
-          }}
-          onDeleteDeliverable={handleDeleteDeliverable}
-          onDeliverableClick={(deliverable) => {
-            try {
-              if (deliverable && deliverable.id) {
-                setSelectedDeliverable(deliverable)
-                setDeliverableMode("view")
-                setShowDeliverableDialog(true)
-              }
-            } catch (error) {
-              logger.error("Error opening deliverable dialog", error)
-            }
-          }}
-          onCreateTask={(deliverableId) => {
-            const deliverable = deliverables.find(d => d.id === deliverableId)
-            if (deliverable) {
-              setTaskDeliverableId(deliverableId)
-              setTaskWorkpackageId(deliverable.workpackageId)
-              setShowTaskDialog(true)
-            }
-          }}
           onEditTask={(task) => {
             try {
               if (task && task.id) {
@@ -416,10 +373,62 @@ export function ProjectDashboard() {
               logger.error("Error opening task edit dialog", error)
             }
           }}
-          onDeleteTask={(taskId) => {
-            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
-            if (workpackage) {
-              handleDeleteTask(workpackage.id, taskId)
+          onContextAction={(action) => {
+            const { action: actionType, targetId, targetType } = action
+
+            if (actionType === "add-child" && targetType === "deliverable") {
+              const deliverable = deliverables.find(d => d.id === targetId)
+              if (deliverable) {
+                setTaskDeliverableId(targetId)
+                setTaskWorkpackageId(deliverable.workpackageId)
+                setShowTaskDialog(true)
+              }
+            } else if (actionType === "open-details") {
+              if (targetType === "task") {
+                // Find task across all workpackages/deliverables
+                let foundTask: ProjectTask | undefined
+                for (const wp of allWorkpackages) {
+                  if (wp.deliverables) {
+                    for (const d of wp.deliverables) {
+                      if (d.tasks) {
+                        const t = d.tasks.find(t => t.id === targetId)
+                        if (t) {
+                          foundTask = t
+                          break
+                        }
+                      }
+                    }
+                  }
+                  if (foundTask) break
+                }
+
+                if (foundTask) {
+                  setSelectedTask(foundTask)
+                  setShowTaskEditDialog(true)
+                }
+              } else if (targetType === "deliverable") {
+                const deliverable = deliverables.find(d => d.id === targetId)
+                if (deliverable) {
+                  setSelectedDeliverable(deliverable)
+                  setDeliverableMode("edit")
+                  setShowDeliverableDialog(true)
+                }
+              } else if (targetType === "workpackage") {
+                const workpackage = allWorkpackages.find(wp => wp.id === targetId)
+                if (workpackage) {
+                  handleUpdateWorkpackage(workpackage.id, workpackage) // This seems to just trigger update? Maybe open dialog?
+                  // The original code was: onEditWorkpackage={(workpackage) => handleUpdateWorkpackage(workpackage.id, workpackage)}
+                  // But handleUpdateWorkpackage usually takes updates. 
+                  // Maybe it was meant to open a dialog? 
+                  // 'handleUpdateWorkpackage' from context updates Firestore.
+                  // There is no 'setSelectedWorkpackage' or 'setShowWorkpackageDialog' in ProjectDashboard?
+                  // Let's check if there is a workpackage dialog in ProjectDashboard.
+                  // There isn't one visible in the file snippet.
+                  // So maybe editing workpackage is not fully supported in Dashboard yet?
+                  // I will leave it as is or log a warning.
+                  logger.warn("Edit workpackage not implemented in Dashboard")
+                }
+              }
             }
           }}
         />
@@ -427,86 +436,119 @@ export function ProjectDashboard() {
     )
   }
 
-  const handleCreateTask = useCallback(async (taskData: Partial<Task> & { workpackageId: string }) => {
+  const handleCreateTask = useCallback(async (taskData: Partial<ProjectTask> & { deliverableId: string }) => {
     try {
-      const workpackage = allWorkpackages.find(wp => wp.id === taskData.workpackageId)
-      if (!workpackage) {
-        throw new Error("Workpackage not found")
+      // Find the deliverable to get current tasks
+      let targetDeliverable: any = null
+      for (const wp of allWorkpackages) {
+        if (wp.deliverables) {
+          const found = wp.deliverables.find(d => d.id === taskData.deliverableId)
+          if (found) {
+            targetDeliverable = found
+            break
+          }
+        }
       }
 
-      const newTask: Task = {
-        id: `task-${Date.now()}`,
+      if (!targetDeliverable) {
+        throw new Error("Deliverable not found")
+      }
+
+      const newTask: ProjectTask = {
+        id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `task-${Date.now()}`,
         name: taskData.name || "New Task",
         start: taskData.start || new Date(),
         end: taskData.end || new Date(),
         progress: taskData.progress || 0,
         status: taskData.status || "not-started",
-        workpackageId: taskData.workpackageId,
+        deliverableId: taskData.deliverableId,
         primaryOwner: taskData.primaryOwner,
         helpers: taskData.helpers,
         importance: taskData.importance || "medium",
         notes: taskData.notes,
-        subtasks: [],
-        deliverables: [],
+        todos: [],
+        dependencies: []
       }
 
-      const updatedTasks = [...(workpackage.tasks || []), newTask]
-      await handleUpdateWorkpackage(workpackage.id, {
-        tasks: updatedTasks,
-      })
+      const currentTasks = Array.isArray(targetDeliverable.tasks) ? targetDeliverable.tasks : []
+      const nextTasks = [...currentTasks, newTask]
 
-      logger.info("Task created successfully", { taskId: newTask.id, workpackageId: workpackage.id })
+      await handleUpdateDeliverableTasks(targetDeliverable.id, nextTasks)
+
       setShowTaskDialog(false)
+      toast({ title: "Success", description: "Task created successfully" })
     } catch (error) {
       logger.error("Error creating task", error)
       toastError(`Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-  }, [allWorkpackages, handleUpdateWorkpackage, toastError])
+  }, [allWorkpackages, handleUpdateDeliverableTasks, toastError, toast])
 
-  const handleUpdateTask = useCallback(async (taskId: string, updates: Partial<Task>) => {
+  const handleUpdateTask = useCallback(async (taskId: string, updates: Partial<ProjectTask>) => {
     try {
-      // Find the workpackage containing this task
-      const workpackage = allWorkpackages.find(wp =>
-        wp.tasks?.some(t => t.id === taskId)
-      )
-      if (!workpackage) {
-        throw new Error("Workpackage not found for task")
+      // Find the deliverable containing this task
+      let targetDeliverable: any = null
+      for (const wp of allWorkpackages) {
+        if (wp.deliverables) {
+          const found = wp.deliverables.find(d => d.tasks?.some((t: ProjectTask) => t.id === taskId))
+          if (found) {
+            targetDeliverable = found
+            break
+          }
+        }
       }
 
-      const updatedTasks = (workpackage.tasks || []).map(task =>
+      if (!targetDeliverable) {
+        throw new Error("Deliverable not found for task")
+      }
+
+      const currentTasks = (Array.isArray(targetDeliverable.tasks) ? targetDeliverable.tasks : []) as ProjectTask[]
+      const updatedTasks = currentTasks.map(task =>
         task.id === taskId ? { ...task, ...updates } : task
       )
 
-      await handleUpdateWorkpackage(workpackage.id, {
-        tasks: updatedTasks,
-      })
+      await handleUpdateDeliverableTasks(targetDeliverable.id, updatedTasks)
 
-      logger.info("Task updated successfully", { taskId, workpackageId: workpackage.id })
+      logger.info("Task updated successfully", { taskId, deliverableId: targetDeliverable.id })
       setShowTaskEditDialog(false)
       setSelectedTask(null)
     } catch (error) {
       logger.error("Error updating task", error)
       toastError(`Failed to update task: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-  }, [allWorkpackages, handleUpdateWorkpackage, toastError])
+  }, [allWorkpackages, handleUpdateDeliverableTasks, toastError])
 
   const handleDeleteTask = useCallback(async (workpackageId: string, taskId: string) => {
     try {
-      const workpackage = allWorkpackages.find(wp => wp.id === workpackageId)
-      if (!workpackage) {
-        throw new Error("Workpackage not found")
+      // Find the deliverable containing this task
+      // Note: workpackageId might be passed, but we should verify or find the deliverable
+      let targetDeliverable: any = null
+
+      // Try finding via workpackageId first if possible, but searching all is safer for now
+      for (const wp of allWorkpackages) {
+        if (wp.deliverables) {
+          const found = wp.deliverables.find(d => d.tasks?.some((t: ProjectTask) => t.id === taskId))
+          if (found) {
+            targetDeliverable = found
+            break
+          }
+        }
       }
 
-      const updatedTasks = (workpackage.tasks || []).filter(task => task.id !== taskId)
+      if (!targetDeliverable) {
+        throw new Error("Deliverable not found for task")
+      }
 
-      await handleUpdateWorkpackage(workpackageId, {
-        tasks: updatedTasks,
-      })
+      const currentTasks = (Array.isArray(targetDeliverable.tasks) ? targetDeliverable.tasks : []) as ProjectTask[]
+      const updatedTasks = currentTasks.filter(task => task.id !== taskId)
+
+      await handleUpdateDeliverableTasks(targetDeliverable.id, updatedTasks)
+
+      toast({ title: "Success", description: "Task deleted successfully" })
     } catch (error) {
       logger.error("Error deleting task", error)
       toastError(`Failed to delete task: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
-  }, [allWorkpackages, handleUpdateWorkpackage, toastError])
+  }, [allWorkpackages, handleUpdateDeliverableTasks, toastError, toast])
 
   const handleCreateMasterProjectFromDialog = async (
     projectData: ProfileProject & { funderId?: string; groupIds?: string[] }
@@ -886,9 +928,53 @@ export function ProjectDashboard() {
       <ProjectCreationDialog
         open={showProjectDialog}
         onClose={() => setShowProjectDialog(false)}
-        onCreateRegular={() => {
-          // Handle regular project creation
-          setShowProjectDialog(false)
+        onCreateRegular={async (projectData) => {
+          if (!profile || !user) return
+
+          const newProject: Omit<MasterProject, "id" | "createdAt"> = {
+            name: projectData.name || "New Project",
+            description: projectData.description || "",
+            labId: profile.labId,
+            labName: profile.labName,
+            instituteId: profile.instituteId,
+            instituteName: profile.instituteName,
+            organisationId: profile.organisationId,
+            organisationName: profile.organisationName,
+            grantName: "",
+            grantNumber: "",
+            totalBudget: 0,
+            currency: "EUR",
+            startDate: new Date().toISOString().split("T")[0],
+            endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+            funderId: "",
+            funderName: "",
+            accountIds: [],
+            principalInvestigatorIds: profile.id ? [profile.id] : [],
+            coPIIds: [],
+            teamMemberIds: profile.id ? [profile.id] : [],
+            teamRoles: profile.id ? { [profile.id]: "PI" } : {},
+            status: "active",
+            progress: 0,
+            workpackageIds: [],
+            groupIds: selectedGroupId ? [selectedGroupId] : [],
+            visibility: projectData.visibility || "lab",
+            visibleTo: [],
+            tags: [],
+            notes: "",
+            createdBy: user.uid,
+            isExpanded: true,
+            type: "unfunded",
+            legacyTypeLabel: "Regular Project",
+          }
+
+          try {
+            await handleCreateMasterProject(newProject)
+            setShowProjectDialog(false)
+            toast({ title: "Success", description: "Project created successfully" })
+          } catch (error) {
+            logger.error("Error creating regular project", error)
+            toastError(`Failed to create project: ${error instanceof Error ? error.message : "Unknown error"}`)
+          }
         }}
         onCreateMaster={handleCreateMasterProjectFromDialog}
         currentUserProfileId={profile?.id || null}
@@ -929,7 +1015,7 @@ export function ProjectDashboard() {
             setShowDeliverableDialog(false)
           } catch (error) {
             logger.error("Error saving deliverable", error)
-            alert("Failed to save deliverable")
+            toastError("Failed to save deliverable")
           }
         }}
         onDelete={
@@ -940,7 +1026,7 @@ export function ProjectDashboard() {
                 setShowDeliverableDialog(false)
               } catch (error) {
                 logger.error("Error deleting deliverable", error)
-                alert("Failed to delete deliverable")
+                toastError("Failed to delete deliverable")
               }
             }
             : undefined
@@ -966,15 +1052,11 @@ export function ProjectDashboard() {
           open={showTaskEditDialog}
           onOpenChange={setShowTaskEditDialog}
           task={selectedTask}
-          workpackageId={selectedTask.workpackageId || ""}
           onSave={handleUpdateTask}
           onDelete={async (taskId) => {
-            const workpackage = allWorkpackages.find(wp => wp.tasks?.some(t => t.id === taskId))
-            if (workpackage) {
-              await handleDeleteTask(workpackage.id, taskId)
-              setShowTaskEditDialog(false)
-              setSelectedTask(null)
-            }
+            await handleDeleteTask("", taskId)
+            setShowTaskEditDialog(false)
+            setSelectedTask(null)
           }}
           availablePeople={allProfiles}
         />

@@ -171,6 +171,8 @@ export const CATEGORIES: Category[] = [
   },
 ]
 
+import { VisibilitySettings } from './visibility.types'
+
 /**
  * Order - Supply order for lab consumables/equipment
  *
@@ -180,7 +182,7 @@ export const CATEGORIES: Category[] = [
  * Orders should ideally be linked to a specific Deliverable for accurate budget tracking
  * and to enable deliverables to show their required supplies/equipment.
  */
-export interface Order {
+export interface Order extends VisibilitySettings {
   id: string
   productName: string
   catNum: string

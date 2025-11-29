@@ -41,6 +41,8 @@ export function MyTasksView() {
   const [newTaskTitle, setNewTaskTitle] = useState("")
 
   // Simple loading check - if we have no profile yet, still loading
+
+  // Simple loading check - if we have no profile yet, still loading
   const isLoading = !currentUserProfile
 
   // Combine all tasks from both sources
@@ -50,7 +52,12 @@ export function MyTasksView() {
     // Add day-to-day tasks
     if (dayToDayTasks && currentUserProfile) {
       const myDayToDayTasks = dayToDayTasks.filter(
-        (task) => task.assigneeId === currentUserProfile.id
+        (task) => {
+          // Check both legacy assigneeId and new assigneeIds array
+          const hasAssigneeId = task.assigneeId === currentUserProfile.id
+          const hasAssigneeIds = task.assigneeIds?.includes(currentUserProfile.id)
+          return hasAssigneeId || hasAssigneeIds
+        }
       )
 
       myDayToDayTasks.forEach((task) => {
@@ -297,7 +304,7 @@ export function MyTasksView() {
                   description: '',
                   status: 'todo' as TaskStatus,
                   importance: 'medium',
-                  assigneeId: currentUserProfile?.id || '',
+                  assigneeIds: currentUserProfile?.id ? [currentUserProfile.id] : [],
                   dueDate: undefined,
                   createdBy: currentUserProfile?.id || '',
                 } as any)
@@ -418,12 +425,12 @@ export function MyTasksView() {
                 {searchTerm
                   ? "Try adjusting your search or filters"
                   : statusFilter === "active"
-                  ? "You have no active tasks assigned"
-                  : statusFilter === "completed"
-                  ? "You have no completed tasks"
-                  : statusFilter === "overdue"
-                  ? "You have no overdue tasks"
-                  : "You have no tasks assigned"}
+                    ? "You have no active tasks assigned"
+                    : statusFilter === "completed"
+                      ? "You have no completed tasks"
+                      : statusFilter === "overdue"
+                        ? "You have no overdue tasks"
+                        : "You have no tasks assigned"}
               </p>
             </CardContent>
           </Card>

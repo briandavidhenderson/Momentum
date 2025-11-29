@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { getFirebaseDb, sanitizeForFirestore } from "@/lib/firebase"
@@ -35,6 +36,7 @@ interface CookieConsentBannerProps {
 
 export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProps) {
   const { currentUser: user, currentUserProfile: userProfile } = useAuth()
+  const { toast } = useToast()
   const [showBanner, setShowBanner] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -58,7 +60,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
 
         if (consentDoc.exists()) {
           const data = sanitizeForFirestore(consentDoc.data())
-          
+
           // Validate and sanitize consent data to handle any corrupted documents
           if (!data || typeof data !== 'object') {
             // Invalid data - show banner to get new consent
@@ -140,18 +142,18 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
     try {
       const userAgent = typeof window !== "undefined" ? window.navigator.userAgent : ""
 
-          const consentPayload = sanitizeForFirestore({
+      const consentPayload = sanitizeForFirestore({
         id: user.uid,
         userId: user.uid,
         ...(userProfile?.labId && { labId: userProfile.labId }), // Only include labId if defined
         functionalCookies: true, // Always required
-            analyticsCookies: Boolean(consent.analyticsCookies),
-            dataProcessingConsent: Boolean(consent.dataProcessingConsent),
+        analyticsCookies: Boolean(consent.analyticsCookies),
+        dataProcessingConsent: Boolean(consent.dataProcessingConsent),
         specialCategoryDataAcknowledged: false, // Separate ELN workflow
         consentGivenAt: new Date().toISOString(),
         consentVersion: PRIVACY_POLICY_VERSION,
         userAgent,
-          }) as UserConsent
+      }) as UserConsent
 
       // Save to Firestore
       await setDoc(doc(db, "userConsents", user.uid), consentPayload)
@@ -177,7 +179,11 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
       setShowBanner(false)
     } catch (error) {
       logger.error("Error saving consent", error)
-      alert("Failed to save consent settings. Please try again.")
+      toast({
+        title: "Save Failed",
+        description: "Failed to save consent settings. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }

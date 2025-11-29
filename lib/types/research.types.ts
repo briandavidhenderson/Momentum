@@ -85,10 +85,12 @@ export type CreateResearchPinInput = Omit<ResearchPin, 'id' | 'createdAt' | 'upd
  */
 export type UpdateResearchPinInput = Partial<Omit<ResearchPin, 'id' | 'createdAt' | 'author' | 'labId'>>;
 
+import { VisibilitySettings } from './visibility.types';
+
 /**
  * Research Board - A collection of pins around a specific topic
  */
-export interface ResearchBoard {
+export interface ResearchBoard extends VisibilitySettings {
   id: string;
   title: string;
   description?: string;
@@ -96,7 +98,7 @@ export interface ResearchBoard {
   // Ownership/Access
   creatorId: string;
   labId: string; // The lab this board belongs to (for billing/org purposes)
-  members: string[]; // User IDs who can access/contribute
+  members?: string[]; // Deprecated: Use sharedWithUsers from VisibilitySettings
 
   // Metadata
   createdAt: Date;

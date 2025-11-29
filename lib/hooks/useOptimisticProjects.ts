@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Workpackage } from '@/lib/types'
+import { HydratedWorkpackage, Workpackage } from '@/lib/types'
 import { useProjects } from './useProjects'
 import { logger } from '@/lib/logger'
 import { useToast } from '@/lib/toast'
@@ -13,9 +13,10 @@ export type ProjectsSyncStatus = 'synced' | 'syncing' | 'error'
 
 export function useOptimisticProjects() {
   const baseHook = useProjects()
-  const { workpackages: firestoreWorkpackages, handleUpdateWorkpackage: baseUpdateWorkpackage } = baseHook
+  const { workpackages: firestoreWorkpackages, handleUpdateWorkpackage: baseUpdateWorkpackage, handleUpdateDeliverableTasks } = baseHook
 
-  const [optimisticWorkpackages, setOptimisticWorkpackages] = useState<Workpackage[]>([])
+  // Cast to HydratedWorkpackage[] for internal use - assuming data fetching layer handles hydration
+  const [optimisticWorkpackages, setOptimisticWorkpackages] = useState<HydratedWorkpackage[]>([])
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set())
   const [errorIds, setErrorIds] = useState<Set<string>>(new Set())
   const { error: errorToast } = useToast()
@@ -23,7 +24,7 @@ export function useOptimisticProjects() {
   // Sync optimistic workpackages with Firestore when no pending operations
   useEffect(() => {
     if (syncingIds.size === 0 && errorIds.size === 0) {
-      setOptimisticWorkpackages(firestoreWorkpackages)
+      setOptimisticWorkpackages(firestoreWorkpackages as unknown as HydratedWorkpackage[])
     }
   }, [firestoreWorkpackages, syncingIds.size, errorIds.size])
 
@@ -31,7 +32,7 @@ export function useOptimisticProjects() {
    * Create optimistic workpackagesMap
    */
   const optimisticWorkpackagesMap = useMemo(() => {
-    const map = new Map<string, Workpackage>()
+    const map = new Map<string, HydratedWorkpackage>()
     optimisticWorkpackages.forEach(wp => map.set(wp.id, wp))
     return map
   }, [optimisticWorkpackages])
@@ -111,6 +112,7 @@ export function useOptimisticProjects() {
 
   /**
    * Optimistic update task helpers (person assignment)
+   * UPDATED: Now handles ProjectTasks within Deliverables
    */
   const handleUpdateTaskHelpers = useCallback(async (
     workpackageId: string,
@@ -122,11 +124,17 @@ export function useOptimisticProjects() {
 
     // Find the workpackage and update the task
     const updatedWorkpackages = optimisticWorkpackages.map(wp => {
-      if (wp.id === workpackageId && wp.tasks) {
-        const updatedTasks = wp.tasks.map(task =>
-          task.id === taskId ? { ...task, helpers: newHelpers } : task
-        )
-        return { ...wp, tasks: updatedTasks }
+      if (wp.id === workpackageId && wp.deliverables) {
+        const updatedDeliverables = wp.deliverables.map(del => {
+          if (del.tasks) {
+            const updatedTasks = del.tasks.map(task =>
+              task.id === taskId ? { ...task, helpers: newHelpers } : task
+            )
+            return { ...del, tasks: updatedTasks }
+          }
+          return del
+        })
+        return { ...wp, deliverables: updatedDeliverables }
       }
       return wp
     })
@@ -136,11 +144,16 @@ export function useOptimisticProjects() {
     markSyncing(workpackageId)
 
     try {
-      // Find the updated tasks array and send to Firestore
-      const updatedWp = updatedWorkpackages.find(wp => wp.id === workpackageId)
-      if (updatedWp) {
-        await baseUpdateWorkpackage(workpackageId, { tasks: updatedWp.tasks })
+      // Find the updated deliverable and send to Firestore
+      const workpackage = updatedWorkpackages.find(wp => wp.id === workpackageId)
+      const deliverable = workpackage?.deliverables?.find(d => d.tasks?.some(t => t.id === taskId))
+
+      if (deliverable && deliverable.tasks) {
+        await handleUpdateDeliverableTasks(deliverable.id, deliverable.tasks)
+      } else {
+        logger.warn('Could not find deliverable for task update', { taskId, workpackageId })
       }
+
       markSynced(workpackageId)
     } catch (err) {
       logger.error('Error updating task helpers', err)
@@ -149,10 +162,11 @@ export function useOptimisticProjects() {
       markError(workpackageId)
       errorToast('Failed to assign person. Please try again.')
     }
-  }, [optimisticWorkpackages, baseUpdateWorkpackage, markSyncing, markSynced, markError, errorToast])
+  }, [optimisticWorkpackages, baseUpdateWorkpackage, handleUpdateDeliverableTasks, markSyncing, markSynced, markError, errorToast])
 
   /**
    * Optimistic update task dates (Gantt drag)
+   * UPDATED: Now handles ProjectTasks within Deliverables
    */
   const handleUpdateTaskDates = useCallback(async (
     workpackageId: string,
@@ -165,11 +179,17 @@ export function useOptimisticProjects() {
 
     // Find the workpackage and update the task
     const updatedWorkpackages = optimisticWorkpackages.map(wp => {
-      if (wp.id === workpackageId && wp.tasks) {
-        const updatedTasks = wp.tasks.map(task =>
-          task.id === taskId ? { ...task, start, end } : task
-        )
-        return { ...wp, tasks: updatedTasks }
+      if (wp.id === workpackageId && wp.deliverables) {
+        const updatedDeliverables = wp.deliverables.map(del => {
+          if (del.tasks) {
+            const updatedTasks = del.tasks.map(task =>
+              task.id === taskId ? { ...task, start, end } : task
+            )
+            return { ...del, tasks: updatedTasks }
+          }
+          return del
+        })
+        return { ...wp, deliverables: updatedDeliverables }
       }
       return wp
     })
@@ -179,11 +199,16 @@ export function useOptimisticProjects() {
     markSyncing(workpackageId)
 
     try {
-      // Find the updated tasks array and send to Firestore
-      const updatedWp = updatedWorkpackages.find(wp => wp.id === workpackageId)
-      if (updatedWp) {
-        await baseUpdateWorkpackage(workpackageId, { tasks: updatedWp.tasks })
+      // Find the updated deliverable and send to Firestore
+      const workpackage = updatedWorkpackages.find(wp => wp.id === workpackageId)
+      const deliverable = workpackage?.deliverables?.find(d => d.tasks?.some(t => t.id === taskId))
+
+      if (deliverable && deliverable.tasks) {
+        await handleUpdateDeliverableTasks(deliverable.id, deliverable.tasks)
+      } else {
+        logger.warn('Could not find deliverable for task update', { taskId, workpackageId })
       }
+
       markSynced(workpackageId)
     } catch (err) {
       logger.error('Error updating task dates', err)
@@ -192,15 +217,15 @@ export function useOptimisticProjects() {
       markError(workpackageId)
       errorToast('Failed to update task dates. Please try again.')
     }
-  }, [optimisticWorkpackages, baseUpdateWorkpackage, markSyncing, markSynced, markError, errorToast])
+  }, [optimisticWorkpackages, baseUpdateWorkpackage, handleUpdateDeliverableTasks, markSyncing, markSynced, markError, errorToast])
 
   return {
     ...baseHook,
     workpackages: optimisticWorkpackages,
     workpackagesMap: optimisticWorkpackagesMap,
     handleUpdateWorkpackage,
-    handleUpdateTaskHelpers, // New optimistic helper function
-    handleUpdateTaskDates,   // New optimistic helper function
+    handleUpdateTaskHelpers,
+    handleUpdateTaskDates,
     projectsSyncStatus: syncStatus,
   }
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Task, PersonProfile, ImportanceLevel } from "@/lib/types"
+import { ProjectTask, PersonProfile, ImportanceLevel } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,9 +28,9 @@ import { Badge } from "@/components/ui/badge"
 interface TaskCreationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  deliverableId?: string
-  workpackageId: string
-  onCreateTask: (taskData: Partial<Task> & { workpackageId: string }) => void
+  deliverableId: string
+  workpackageId?: string // Optional now
+  onCreateTask: (taskData: Partial<ProjectTask> & { deliverableId: string }) => void
   availablePeople?: PersonProfile[]
   initialTaskName?: string
 }
@@ -48,7 +48,7 @@ export function TaskCreationDialog({
   const [notes, setNotes] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [status, setStatus] = useState<Task["status"]>("not-started")
+  const [status, setStatus] = useState<ProjectTask["status"]>("not-started")
   const [importance, setImportance] = useState<ImportanceLevel>("medium")
   const [primaryOwner, setPrimaryOwner] = useState<string>("")
   const [helpers, setHelpers] = useState<string[]>([])
@@ -81,7 +81,7 @@ export function TaskCreationDialog({
       return
     }
 
-    const taskData: Partial<Task> & { workpackageId: string } = {
+    const taskData: Partial<ProjectTask> & { deliverableId: string } = {
       name: name.trim(),
       notes: notes.trim() || undefined,
       start: new Date(startDate),
@@ -89,10 +89,10 @@ export function TaskCreationDialog({
       status,
       importance,
       progress: 0,
-      workpackageId,
+      deliverableId,
       primaryOwner: primaryOwner || undefined,
       helpers: helpers.length > 0 ? helpers : undefined,
-      subtasks: [],
+      todos: [],
     }
 
     onCreateTask(taskData)
@@ -165,7 +165,7 @@ export function TaskCreationDialog({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="task-status">Status</Label>
-              <Select value={status} onValueChange={(value) => setStatus(value as Task["status"])}>
+              <Select value={status} onValueChange={(value) => setStatus(value as ProjectTask["status"])}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>

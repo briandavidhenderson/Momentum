@@ -64,6 +64,7 @@ export interface EquipmentBookingSettings {
   bufferTimeAfter: number          // Required minutes after booking ends
   allowRecurring: boolean          // Can users create recurring bookings?
   autoBlockMaintenance: boolean    // Auto-block slots when maintenance due?
+  requiresTraining: boolean        // Does user need valid training record?
 }
 
 /**

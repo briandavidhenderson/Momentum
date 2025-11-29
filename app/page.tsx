@@ -26,6 +26,8 @@ import TopModuleNavigation from "@/components/TopModuleNavigation"
 import { MyBookingsView } from "@/components/equipment/MyBookingsView"
 import { WhiteboardView } from "@/components/views/WhiteboardView"
 import ResearchBoard from "@/components/views/ResearchBoard"
+import HierarchyExplorer from "@/components/views/HierarchyExplorer"
+import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import { UserRole } from "@/lib/types"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 
@@ -87,11 +89,6 @@ export default function Page() {
 
   // Navigation handler with proper typing
   const handleNavigationSelect = (moduleId: string) => {
-    if (moduleId === "projects") {
-      router.push("/projects")
-      return
-    }
-
     setMainView(moduleId as typeof mainView)
   }
 
@@ -134,6 +131,7 @@ export default function Page() {
         {/* Render selected view */}
         <div className="p-6">
           {mainView === 'dashboard' && <HomeDashboard />}
+          {mainView === 'projects' && <ProjectDashboard />}
           {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
           {mainView === 'daytoday' && <DayToDayBoard />}
           {mainView === 'mytasks' && <MyTasksView />}
@@ -148,6 +146,7 @@ export default function Page() {
           {mainView === 'calendar' && <CalendarEvents />}
           {mainView === 'whiteboard' && <WhiteboardView />}
           {mainView === 'research' && <ResearchBoard />}
+          {mainView === 'explore' && <HierarchyExplorer />}
           {mainView === 'funding' && hasRoleRestriction && <FundingAdmin />}
           {mainView === 'ledger' && <PersonalLedger />}
           {mainView === 'myprofile' && currentUser && currentUserProfile && <EnhancedProfilePage currentUser={currentUser} currentUserProfile={currentUserProfile} />}

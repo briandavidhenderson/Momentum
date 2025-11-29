@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Calendar, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { useToast } from '@/components/ui/use-toast'
 import { linkGoogleCalendar, unlinkGoogleCalendar, isGoogleCalendarLinked, getGoogleCalendarConnectionId, syncGoogleCalendar } from '@/lib/calendar/google'
 import { linkMicrosoftCalendar, unlinkMicrosoftCalendar, isMicrosoftCalendarLinked, getMicrosoftCalendarConnectionId } from '@/lib/calendar/microsoft'
 import { PersonProfile } from '@/lib/types'
@@ -22,6 +23,7 @@ interface CalendarConnectionsProps {
 }
 
 export function CalendarConnections({ currentUserProfile, onConnectionChange }: CalendarConnectionsProps) {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [microsoftLoading, setMicrosoftLoading] = useState(false)
@@ -39,15 +41,26 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
       const success = await linkGoogleCalendar()
       if (success) {
         // Show success message
-        alert('Google Calendar connected successfully!')
+        toast({
+          title: "Connected",
+          description: "Google Calendar connected successfully!",
+        })
         // Trigger refresh of user profile
         onConnectionChange?.()
       } else {
-        alert('Failed to connect Google Calendar')
+        toast({
+          title: "Connection Failed",
+          description: "Failed to connect Google Calendar",
+          variant: "destructive",
+        })
       }
     } catch (error: any) {
       logger.error('Error connecting Google Calendar', error)
-      alert(error.message || 'Failed to connect Google Calendar')
+      toast({
+        title: "Connection Error",
+        description: error.message || 'Failed to connect Google Calendar',
+        variant: "destructive",
+      })
     } finally {
       setGoogleLoading(false)
       setLoading(false)
@@ -65,11 +78,18 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
     setLoading(true)
     try {
       await unlinkGoogleCalendar(googleConnectionId)
-      alert('Google Calendar disconnected')
+      toast({
+        title: "Disconnected",
+        description: "Google Calendar disconnected",
+      })
       onConnectionChange?.()
     } catch (error: any) {
       logger.error('Error disconnecting Google Calendar', error)
-      alert(error.message || 'Failed to disconnect Google Calendar')
+      toast({
+        title: "Disconnection Error",
+        description: error.message || 'Failed to disconnect Google Calendar',
+        variant: "destructive",
+      })
     } finally {
       setGoogleLoading(false)
       setLoading(false)
@@ -83,11 +103,18 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
     setLoading(true)
     try {
       await syncGoogleCalendar(googleConnectionId)
-      alert('Google Calendar synced successfully!')
+      toast({
+        title: "Synced",
+        description: "Google Calendar synced successfully!",
+      })
       onConnectionChange?.()
     } catch (error: any) {
       logger.error('Error syncing Google Calendar', error)
-      alert(error.message || 'Failed to sync Google Calendar')
+      toast({
+        title: "Sync Error",
+        description: error.message || 'Failed to sync Google Calendar',
+        variant: "destructive",
+      })
     } finally {
       setGoogleLoading(false)
       setLoading(false)
@@ -100,14 +127,25 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
     try {
       const success = await linkMicrosoftCalendar()
       if (success) {
-        alert('Microsoft Calendar connected successfully!')
+        toast({
+          title: "Connected",
+          description: "Microsoft Calendar connected successfully!",
+        })
         onConnectionChange?.()
       } else {
-        alert('Failed to connect Microsoft Calendar')
+        toast({
+          title: "Connection Failed",
+          description: "Failed to connect Microsoft Calendar",
+          variant: "destructive",
+        })
       }
     } catch (error: any) {
       logger.error('Error connecting Microsoft Calendar', error)
-      alert(error.message || 'Microsoft Calendar integration coming in Phase 5')
+      toast({
+        title: "Connection Error",
+        description: error.message || 'Microsoft Calendar integration coming in Phase 5',
+        variant: "destructive",
+      })
     } finally {
       setMicrosoftLoading(false)
       setLoading(false)
@@ -125,11 +163,18 @@ export function CalendarConnections({ currentUserProfile, onConnectionChange }: 
     setLoading(true)
     try {
       await unlinkMicrosoftCalendar(microsoftConnectionId)
-      alert('Microsoft Calendar disconnected')
+      toast({
+        title: "Disconnected",
+        description: "Microsoft Calendar disconnected",
+      })
       onConnectionChange?.()
     } catch (error: any) {
       logger.error('Error disconnecting Microsoft Calendar', error)
-      alert(error.message || 'Failed to disconnect Microsoft Calendar')
+      toast({
+        title: "Disconnection Error",
+        description: error.message || 'Failed to disconnect Microsoft Calendar',
+        variant: "destructive",
+      })
     } finally {
       setMicrosoftLoading(false)
       setLoading(false)

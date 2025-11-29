@@ -1,0 +1,112 @@
+    // ============================================================================
+    // ORGANISATIONS (Shared Reference Data)
+    // ============================================================================
+    match /organisations/{orgId} {
+      // All authenticated users can read organisations
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create organisations (for onboarding)
+      allow create: if isAuthenticated();
+
+      // Allow updates for:
+      // - Creator or admin for all fields
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // INSTITUTES (Shared Reference Data)
+    // NOTE: "Institutes" now represents Schools/Faculties in the UI
+    // ============================================================================
+    match /institutes/{instituteId} {
+      // All authenticated users can read institutes
+      allow read: if isAuthenticated();
+
+      // Any authenticated user can create an institute
+      allow create: if isAuthenticated();
+
+      // Allow updates for:
+      // - Creator or admin
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // LABS (Shared Reference Data)
+    // NOTE: "Labs" now represents Departments in the UI
+    // ============================================================================
+    match /labs/{labId} {
+      // All authenticated users can read labs
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create labs (for onboarding)
+      // They will become the PI of the lab they create
+      allow create: if isAuthenticated();
+
+      // Authenticated users can update labs if they created it or are admin
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // RESEARCH GROUPS (Dynamic Membership)
+    // ============================================================================
+    match /researchGroups/{groupId} {
+      // All authenticated users can read research groups
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create research groups
+      allow create: if isAuthenticated();
+
+      // Group PIs, coordinators, creator, or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin() ||
+        // Check if user is a PI or coordinator of this group
+        (getUserProfileId() != null && (
+          getUserProfileId() in resource.data.principalInvestigators ||
+          getUserProfileId() in resource.data.coordinatorIds
+        ))
+      );
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // WORKING LABS (Dynamic Membership)
+    // ============================================================================
+    match /workingLabs/{workingLabId} {
+      // All authenticated users can read working labs
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create working labs
+      allow create: if isAuthenticated();
+
+      // Lab managers, creator, or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin() ||
+        // Check if user is a lab manager
+        (getUserProfileId() != null &&
+         getUserProfileId() in resource.data.labManagerIds)
+      );
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }

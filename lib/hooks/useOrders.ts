@@ -53,6 +53,7 @@ export function useOrders() {
         masterProjectId: orderData.masterProjectId || '',
         masterProjectName: orderData.masterProjectName || '',
         accountId: orderData.accountId || '',
+        visibility: 'lab',
       };
       await createOrder(newOrder);
       success(`"${newOrder.productName}" has been added to orders.`);
@@ -128,6 +129,7 @@ export function useOrders() {
         subcategory: item.subcategory,
         chargeToAccount: item.chargeToAccount,
         createdDate: new Date(),
+        visibility: 'lab',
       };
       await createOrder(newOrder);
       await updateInventoryItem(item.id, { inventoryLevel: 'empty', lastOrderedDate: new Date() });

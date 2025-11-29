@@ -22,8 +22,10 @@ import {
   Wallet,
   DollarSign,
   BrainCircuit,
+  Search,
   LucideIcon
 } from "lucide-react"
+import { QRCodeScanner } from "./QRCodeScanner"
 
 // Type definitions
 type SubItem = {
@@ -41,20 +43,20 @@ type NavCategory = {
   hoverColor: string
   icon: LucideIcon
   subItems: SubItem[]
+  actionId?: string
 }
 
 // Refined, Subtle Color Palette
 export const NAV_ITEMS: NavCategory[] = [
   {
-    id: "home",
-    label: "Home",
+    id: "dashboard",
+    label: "Dashboard",
     // Neutral / Brand Color
     activeColor: "text-slate-900 bg-slate-100 border-slate-200",
     hoverColor: "hover:bg-slate-50 hover:text-slate-900",
     icon: LayoutDashboard,
-    subItems: [
-      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    ]
+    subItems: [],
+    actionId: "dashboard"
   },
   {
     id: "project",
@@ -78,7 +80,7 @@ export const NAV_ITEMS: NavCategory[] = [
     subItems: [
       { id: "equipment", label: "Equipment", icon: Wrench },
       { id: "orders", label: "Orders", icon: Package },
-      { id: "eln", label: "Lab Notebook", icon: FileText },
+      { id: "experiments", label: "Experiments", icon: FlaskConical },
       { id: "groups", label: "Groups", icon: Users },
       { id: "funding", label: "Funding", icon: DollarSign, roleRestricted: true },
     ]
@@ -96,6 +98,7 @@ export const NAV_ITEMS: NavCategory[] = [
       { id: "mytasks", label: "My Tasks", icon: ListTodo },
       { id: "calendar", label: "Calendar", icon: Calendar },
       { id: "bookings", label: "My Bookings", icon: Calendar },
+      { id: "training", label: "My Training", icon: Shield },
       { id: "privacy", label: "Privacy", icon: Shield },
     ]
   },
@@ -110,6 +113,7 @@ export const NAV_ITEMS: NavCategory[] = [
       { id: "people", label: "People", icon: Users },
       { id: "whiteboard", label: "Whiteboard", icon: Presentation },
       { id: "research", label: "Research Board", icon: BrainCircuit },
+      { id: "explore", label: "Explore", icon: Search },
       { id: "profiles", label: "All Profiles", icon: Users, adminOnly: true },
     ]
   }
@@ -157,8 +161,28 @@ export function TopModuleNavigation({
             return true
           })
 
-          // Don't render category if no visible subitems
-          if (visibleSubItems.length === 0) return null
+          // Don't render category if no visible subitems and not a direct link
+          if (visibleSubItems.length === 0 && !category.actionId) return null
+
+          // Direct Link Rendering
+          if (category.actionId) {
+            const isActive = activeModule === category.actionId
+            return (
+              <button
+                key={category.id}
+                onClick={() => onSelect?.(category.actionId!)}
+                className={cn(
+                  "relative flex items-center gap-2 px-4 py-1.5 rounded-md transition-all duration-200 border border-transparent",
+                  "font-medium text-slate-500",
+                  category.hoverColor,
+                  isActive && cn(category.activeColor, "shadow-sm")
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {category.label}
+              </button>
+            )
+          }
 
           return (
             <div
@@ -229,6 +253,9 @@ export function TopModuleNavigation({
             </div>
           )
         })}
+        <div className="ml-2">
+          <QRCodeScanner />
+        </div>
       </div>
     </div>
   )

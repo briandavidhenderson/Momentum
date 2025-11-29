@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { logger } from "@/lib/logger"
+import { useToast } from "@/components/ui/toast"
 
 interface CommentsSectionProps {
   entityType: Comment["entityType"]
@@ -48,6 +49,7 @@ export function CommentsSection({
   teamMembers = [],
 }: CommentsSectionProps) {
   const { currentUser, currentUserProfile } = useAuth()
+  const { toast } = useToast()
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
@@ -131,7 +133,8 @@ export function CommentsSection({
       setNewComment("")
     } catch (error) {
       logger.error("Error posting comment", error)
-      alert("Failed to post comment. Please try again.")
+      logger.error("Error posting comment", error)
+      toast({ title: "Failed to post comment. Please try again.", variant: "destructive" })
     }
   }
 
@@ -160,7 +163,8 @@ export function CommentsSection({
       setReplyingTo(null)
     } catch (error) {
       logger.error("Error posting reply", error)
-      alert("Failed to post reply. Please try again.")
+      logger.error("Error posting reply", error)
+      toast({ title: "Failed to post reply. Please try again.", variant: "destructive" })
     }
   }
 
@@ -180,7 +184,8 @@ export function CommentsSection({
       setEditContent("")
     } catch (error) {
       logger.error("Error editing comment", error)
-      alert("Failed to edit comment. Please try again.")
+      logger.error("Error editing comment", error)
+      toast({ title: "Failed to edit comment. Please try again.", variant: "destructive" })
     }
   }
 
@@ -197,7 +202,8 @@ export function CommentsSection({
       })
     } catch (error) {
       logger.error("Error deleting comment", error)
-      alert("Failed to delete comment. Please try again.")
+      logger.error("Error deleting comment", error)
+      toast({ title: "Failed to delete comment. Please try again.", variant: "destructive" })
     }
   }
 

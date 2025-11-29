@@ -8,7 +8,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, FileText, Download, Upload, Trash2 } from "lucide-react"
+import { Plus, FileText, Download, Upload, Trash2, Lock, Users, Globe, Eye } from "lucide-react"
+import { VisibilitySelector } from "@/components/ui/VisibilitySelector"
+import { VisibilitySettings } from "@/lib/types/visibility.types"
+import { Badge } from "@/components/ui/badge"
 import { useAppContext } from "@/lib/AppContext"
 import { useToast } from "@/components/ui/toast"
 import { ELNJupyterCanvasV2 } from "@/components/ELNJupyterCanvasV2"
@@ -33,6 +36,11 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
   const [newExperimentTitle, setNewExperimentTitle] = useState("")
   const [newExperimentDescription, setNewExperimentDescription] = useState("")
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>({
+    visibility: 'private',
+    sharedWithUsers: [],
+    sharedWithGroups: []
+  })
 
   // Debug: Log profile and experiments on mount
   useEffect(() => {
@@ -79,7 +87,12 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
       labName: currentUserProfile?.labName || "Unknown Lab",
       pages: [],
       items: [], // New multimodal items array
-      reports: [] // New reports array
+      reports: [], // New reports array
+      visibility: visibilitySettings.visibility,
+      sharedWithUsers: visibilitySettings.sharedWithUsers,
+      sharedWithGroups: visibilitySettings.sharedWithGroups,
+      collaborators: visibilitySettings.sharedWithUsers || [], // Backward compatibility
+      groupId: visibilitySettings.sharedWithGroups?.[0] // Backward compatibility
     }
 
     try {
@@ -88,6 +101,11 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
       setNewExperimentTitle("")
       setNewExperimentDescription("")
       toast.success("Experiment created successfully!")
+      setVisibilitySettings({
+        visibility: 'private',
+        sharedWithUsers: [],
+        sharedWithGroups: []
+      })
     } catch (error) {
       logger.error("Error creating experiment", error)
       toast.error("Failed to create experiment. Please try again.")
@@ -273,15 +291,36 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
                   <div key={exp.id} className="relative group">
                     <button
                       onClick={() => setSelectedExperiment(exp)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors ${
-                        selectedExperiment?.id === exp.id
-                          ? "bg-brand-500 text-white"
-                          : "hover:bg-gray-100"
-                      }`}
+                      className={`w-full text-left p-3 rounded-lg transition-colors ${selectedExperiment?.id === exp.id
+                        ? "bg-brand-500 text-white"
+                        : "hover:bg-gray-100"
+                        }`}
                     >
                       <div className="font-medium text-sm truncate">{exp.title}</div>
                       <div className={`text-xs mt-1 ${selectedExperiment?.id === exp.id ? "text-white/80" : "text-muted-foreground"}`}>
                         {exp.items?.length || 0} items • {exp.reports?.length || 0} reports
+                      </div>
+                      <div className="flex gap-1 mt-2">
+                        {exp.visibility === 'private' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-slate-100 text-slate-600 border-slate-200">
+                            <Lock className="h-2.5 w-2.5 mr-1" /> Private
+                          </Badge>
+                        )}
+                        {exp.visibility === 'lab' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-indigo-50 text-indigo-600 border-indigo-100">
+                            <Users className="h-2.5 w-2.5 mr-1" /> Lab
+                          </Badge>
+                        )}
+                        {exp.visibility === 'public' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-green-50 text-green-600 border-green-100">
+                            <Globe className="h-2.5 w-2.5 mr-1" /> Public
+                          </Badge>
+                        )}
+                        {exp.visibility === 'shared' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-amber-50 text-amber-600 border-amber-100">
+                            <Eye className="h-2.5 w-2.5 mr-1" /> Shared
+                          </Badge>
+                        )}
                       </div>
                     </button>
                     {experiments.length > 1 && (
@@ -387,6 +426,14 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
                 placeholder="Brief description of the experiment..."
                 rows={3}
                 className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Visibility & Sharing</Label>
+              <VisibilitySelector
+                value={visibilitySettings}
+                onChange={setVisibilitySettings}
+                labId={currentUserProfile?.labId || ""}
               />
             </div>
             <div className="flex justify-end gap-2">

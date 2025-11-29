@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Upload, FileText, Image as ImageIcon, Video, BookOpen, StickyNote, X } from 'lucide-react';
+import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useResearchBoard } from '@/lib/hooks/useResearchBoard';
 import { uploadResearchImage, uploadResearchPDF } from '@/lib/storage';
@@ -26,6 +27,7 @@ interface ResearchPinDialogProps {
 }
 
 export function ResearchPinDialog({ open, onClose, editingPin, boardId }: ResearchPinDialogProps) {
+  const { toast } = useToast();
   const { currentUser, currentUserProfile } = useAuth();
   const { createPin, updatePin } = useResearchBoard(boardId);
   const [loading, setLoading] = useState(false);
@@ -128,7 +130,11 @@ export function ResearchPinDialog({ open, onClose, editingPin, boardId }: Resear
 
   const handleSubmit = async () => {
     if (!currentUserProfile?.labId || !currentUser?.uid) {
-      alert('You must be logged in to create a pin');
+      toast({
+        title: "Authentication Required",
+        description: "You must be logged in to create a pin",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -221,7 +227,11 @@ export function ResearchPinDialog({ open, onClose, editingPin, boardId }: Resear
       onClose();
     } catch (error) {
       logger.error('Error creating/updating research pin', error);
-      alert('Failed to save pin. Please try again.');
+      toast({
+        title: "Save Failed",
+        description: "Failed to save pin. Please try again.",
+        variant: "destructive",
+      });
       setAnalyzing(false);
       setLoading(false);
     }

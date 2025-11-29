@@ -1,0 +1,58 @@
+    // Helper function to check if user is administrator
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdministrator == true;
+    }
+
+    // Helper function to get user's profile ID
+    function getUserProfileId() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null && userDoc.data != null ? userDoc.data.profileId : null;
+    }
+
+    // Helper function to get user's profile
+    function getUserProfile() {
+      let profileId = getUserProfileId();
+      return profileId != null ? get(/databases/$(database)/documents/personProfiles/$(profileId)) : null;
+    }
+
+    // Helper function to get user's lab ID
+    function getUserLab() {
+      let userProfile = getUserProfile();
+      return userProfile != null && userProfile.data != null ? userProfile.data.labId : null;
+    }
+
+    // Helper function to check if user is member of a specific lab
+    function isLabMember(labId) {
+      let userProfile = getUserProfile();
+      return userProfile != null && userProfile.data != null && userProfile.data.labId == labId;
+    }
+
+    // Helper function to check if user is PI of a master project
+    function isProjectPI(projectId) {
+      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      return project != null && project.data != null && (
+        getUserProfileId() in project.data.principalInvestigatorIds
+      );
+    }
+
+    function isProjectTeamMember(projectId) {
+      let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      let profileId = getUserProfileId();
+      return profileId != null && project != null && project.data != null && (
+        (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
+        (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
+        (project.data.coPIIds != null && profileId in project.data.coPIIds)
+      );
+    }
+
+    // Helper: Check if user is equipment manager
+    function isEquipmentManager(equipmentId) {
+      let equipment = get(/databases/$(database)/documents/equipment/$(equipmentId));
+      let profileId = getUserProfileId();
+      return equipment != null && equipment.data != null && (
+        (equipment.data.managerId != null && equipment.data.managerId == profileId) ||
+        (equipment.data.managerIds != null && profileId in equipment.data.managerIds)
+      );
+    }

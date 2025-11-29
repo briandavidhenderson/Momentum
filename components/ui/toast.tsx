@@ -4,17 +4,24 @@ import * as React from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export type ToastType = "success" | "error" | "warning" | "info"
+export type ToastVariant = "default" | "destructive" | "success" | "warning" | "info"
 
 export interface Toast {
   id: string
-  type: ToastType
-  message: string
+  title?: string
+  description?: string
+  variant?: ToastVariant
   duration?: number
+  // Legacy support
+  message?: string
+  type?: string
 }
 
-interface ToastContextValue {
+export interface ToastContextValue {
   toasts: Toast[]
+  toast: (props: Omit<Toast, "id">) => void
+  dismiss: (id: string) => void
+  // Helpers for backward compatibility
   addToast: (toast: Omit<Toast, "id">) => void
   removeToast: (id: string) => void
   success: (message: string, duration?: number) => void
@@ -28,64 +35,39 @@ const ToastContext = React.createContext<ToastContextValue | undefined>(undefine
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([])
 
-  const removeToast = React.useCallback((id: string) => {
+  const dismiss = React.useCallback((id: string) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id))
   }, [])
 
-  const addToast = React.useCallback(
-    (toast: Omit<Toast, "id">) => {
+  const toast = React.useCallback(
+    ({ title, description, variant = "default", duration = 5000, message, type }: Omit<Toast, "id">) => {
       const id = Math.random().toString(36).substring(7)
-      const newToast: Toast = { ...toast, id }
+      // Map legacy fields
+      const desc = description || message
+      const v = variant || (type === "error" ? "destructive" : type as ToastVariant) || "default"
+
+      const newToast: Toast = { id, title, description: desc, variant: v, duration }
       setToasts((prev) => [...prev, newToast])
 
-      const duration = toast.duration || 5000
       if (duration > 0) {
-        setTimeout(() => removeToast(id), duration)
+        setTimeout(() => dismiss(id), duration)
       }
     },
-    [removeToast]
+    [dismiss]
   )
 
-  const success = React.useCallback(
-    (message: string, duration?: number) => {
-      addToast({ type: "success", message, duration })
-    },
-    [addToast]
-  )
+  // Helpers
+  const success = (message: string, duration?: number) => toast({ description: message, variant: "success", duration })
+  const error = (message: string, duration?: number) => toast({ description: message, variant: "destructive", duration })
+  const warning = (message: string, duration?: number) => toast({ description: message, variant: "warning", duration })
+  const info = (message: string, duration?: number) => toast({ description: message, variant: "info", duration })
 
-  const error = React.useCallback(
-    (message: string, duration?: number) => {
-      addToast({ type: "error", message, duration })
-    },
-    [addToast]
-  )
-
-  const warning = React.useCallback(
-    (message: string, duration?: number) => {
-      addToast({ type: "warning", message, duration })
-    },
-    [addToast]
-  )
-
-  const info = React.useCallback(
-    (message: string, duration?: number) => {
-      addToast({ type: "info", message, duration })
-    },
-    [addToast]
-  )
-
-  const value: ToastContextValue = {
-    toasts,
-    addToast,
-    removeToast,
-    success,
-    error,
-    warning,
-    info,
-  }
+  // Aliases for backward compatibility
+  const addToast = toast
+  const removeToast = dismiss
 
   return (
-    <ToastContext.Provider value={value}>
+    <ToastContext.Provider value={{ toasts, toast, dismiss, addToast, removeToast, success, error, warning, info }}>
       {children}
       <ToastContainer />
     </ToastContext.Provider>
@@ -101,23 +83,18 @@ export function useToast() {
 }
 
 function ToastContainer() {
-  const { toasts, removeToast } = useToast()
+  const { toasts, dismiss } = useToast()
 
   return (
-    <div className="fixed bottom-0 right-0 z-50 flex flex-col gap-2 p-4 sm:max-w-md">
+    <div className="fixed bottom-0 right-0 z-50 flex flex-col gap-2 p-4 sm:max-w-md w-full pointer-events-none">
       {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onRemove={removeToast} />
+        <ToastItem key={toast.id} toast={toast} onRemove={dismiss} />
       ))}
     </div>
   )
 }
 
-interface ToastItemProps {
-  toast: Toast
-  onRemove: (id: string) => void
-}
-
-function ToastItem({ toast, onRemove }: ToastItemProps) {
+function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
   const [isExiting, setIsExiting] = React.useState(false)
 
   const handleRemove = () => {
@@ -125,49 +102,36 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
     setTimeout(() => onRemove(toast.id), 200)
   }
 
-  const getToastStyles = () => {
-    switch (toast.type) {
+  const getVariantStyles = () => {
+    switch (toast.variant) {
+      case "destructive":
+        return "bg-red-50 border-red-200 text-red-900"
       case "success":
         return "bg-green-50 border-green-200 text-green-900"
-      case "error":
-        return "bg-red-50 border-red-200 text-red-900"
       case "warning":
         return "bg-yellow-50 border-yellow-200 text-yellow-900"
       case "info":
         return "bg-blue-50 border-blue-200 text-blue-900"
       default:
-        return "bg-gray-50 border-gray-200 text-gray-900"
-    }
-  }
-
-  const getIconStyles = () => {
-    switch (toast.type) {
-      case "success":
-        return "✓"
-      case "error":
-        return "✕"
-      case "warning":
-        return "⚠"
-      case "info":
-        return "ℹ"
-      default:
-        return ""
+        return "bg-white border-slate-200 text-slate-900"
     }
   }
 
   return (
     <div
       className={cn(
-        "pointer-events-auto flex w-full items-center gap-3 rounded-lg border p-4 shadow-lg transition-all duration-200",
-        getToastStyles(),
+        "pointer-events-auto flex w-full items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-200",
+        getVariantStyles(),
         isExiting ? "translate-x-full opacity-0" : "translate-x-0 opacity-100"
       )}
     >
-      <div className="text-lg font-semibold">{getIconStyles()}</div>
-      <div className="flex-1 text-sm font-medium">{toast.message}</div>
+      <div className="flex-1 grid gap-1">
+        {toast.title && <div className="text-sm font-semibold">{toast.title}</div>}
+        {toast.description && <div className="text-sm opacity-90">{toast.description}</div>}
+      </div>
       <button
         onClick={handleRemove}
-        className="rounded-md p-1 hover:bg-black/5 transition-colors"
+        className="rounded-md p-1 hover:bg-black/5 transition-colors -mr-2 -mt-2"
         aria-label="Close"
       >
         <X className="h-4 w-4" />

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useToast } from "@/components/ui/use-toast"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ProfileProject, ProjectVisibility, Funder, ResearchGroup, MasterProject } from "@/lib/types"
@@ -16,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 interface ProjectCreationDialogProps {
   open: boolean
   onClose: () => void
-  onCreateRegular: () => void
+  onCreateRegular: (project: Partial<MasterProject>) => void
   onCreateMaster: (masterProject: ProfileProject & { funderId?: string; groupIds?: string[] }) => void
   currentUserProfileId: string | null
   currentUserId: string
@@ -42,7 +43,8 @@ export function ProjectCreationDialog({
   mode = "create",
   onUpdate,
 }: ProjectCreationDialogProps) {
-  const [step, setStep] = useState<"choose" | "master-details">("choose")
+  const { toast } = useToast()
+  const [step, setStep] = useState<"choose" | "master-details" | "regular-details">("choose")
   const [formData, setFormData] = useState<Partial<MasterProject & { groupIds?: string[] }>>({
     id: "",
     name: "",
@@ -147,7 +149,11 @@ export function ProjectCreationDialog({
     }
 
     if (!formData.name?.trim()) {
-      alert("Please enter a project name")
+      toast({
+        title: "Missing Name",
+        description: "Please enter a project name",
+        variant: "destructive",
+      })
       return
     }
 
@@ -168,8 +174,7 @@ export function ProjectCreationDialog({
   }
 
   const handleRegularProject = () => {
-    onCreateRegular()
-    onClose()
+    setStep("regular-details")
   }
 
   return (
@@ -216,7 +221,11 @@ export function ProjectCreationDialog({
                 <button
                   onClick={() => {
                     if (!currentUserProfileId) {
-                      alert("Please set up your profile first to create master projects")
+                      toast({
+                        title: "Profile Required",
+                        description: "Please set up your profile first to create master projects",
+                        variant: "destructive",
+                      })
                       return
                     }
                     setStep("master-details")
@@ -233,6 +242,72 @@ export function ProjectCreationDialog({
                     </p>
                   </div>
                 </button>
+              </div>
+            </div>
+          ) : step === "regular-details" ? (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="regular-name">Project Name *</Label>
+                <Input
+                  id="regular-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., Lab Meeting Agenda"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="regular-description">Description</Label>
+                <Textarea
+                  id="regular-description"
+                  value={formData.description || ""}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Brief description..."
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="regular-visibility">Visibility</Label>
+                <select
+                  id="regular-visibility"
+                  value={formData.visibility || "lab"}
+                  onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
+                  className="mt-1 w-full px-3 py-2 border border-border rounded-lg bg-background"
+                >
+                  <option value="private">Private (Only me)</option>
+                  <option value="lab">Department (All department members)</option>
+                  <option value="institute">School/Faculty (All school/faculty members)</option>
+                  <option value="organisation">Organisation (All organisation members)</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setStep("choose")}
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!formData.name?.trim()) {
+                      toast({
+                        title: "Missing Name",
+                        description: "Please enter a project name",
+                        variant: "destructive",
+                      })
+                      return
+                    }
+                    onCreateRegular(formData as MasterProject)
+                    onClose()
+                  }}
+                  className="bg-brand-500 hover:bg-brand-600"
+                >
+                  Create Project
+                </Button>
               </div>
             </div>
           ) : (
@@ -395,8 +470,8 @@ export function ProjectCreationDialog({
                   className="mt-1 w-full px-3 py-2 border border-border rounded-lg bg-background"
                 >
                   <option value="private">Private (Only me)</option>
-                  <option value="lab">Lab (All lab members)</option>
-                  <option value="institute">Institute (All institute members)</option>
+                  <option value="lab">Department (All department members)</option>
+                  <option value="institute">School/Faculty (All school/faculty members)</option>
                   <option value="organisation">Organisation (All organisation members)</option>
                   <option value="public">Public (Everyone)</option>
                 </select>

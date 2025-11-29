@@ -96,6 +96,11 @@ export function useProjects() {
     await deleteWorkpackageFromFirestore(workpackageId);
   };
 
+  const handleUpdateDeliverableTasks = async (deliverableId: string, tasks: any[]) => {
+    const { updateDeliverableTasks } = await import('@/lib/services/projectService');
+    await updateDeliverableTasks(deliverableId, tasks);
+  };
+
   return {
     projects,
     workpackages,
@@ -106,5 +111,6 @@ export function useProjects() {
     handleCreateWorkpackage,
     handleUpdateWorkpackage,
     handleDeleteWorkpackage,
+    handleUpdateDeliverableTasks,
   };
 }

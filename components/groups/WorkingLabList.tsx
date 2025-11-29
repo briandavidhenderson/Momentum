@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ResearchGroup, WorkingLab } from '@/lib/types/researchgroup.types'
 import { getWorkingLabs } from '@/lib/services/groupService'
@@ -14,6 +15,13 @@ export function WorkingLabList({ group }: WorkingLabListProps) {
     const [labs, setLabs] = useState<WorkingLab[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+    const [searchTerm, setSearchTerm] = useState("")
+
+    const filteredLabs = labs.filter(lab =>
+        lab.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lab.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lab.physicalInstitute?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
 
     useEffect(() => {
         async function loadLabs() {
@@ -35,26 +43,41 @@ export function WorkingLabList({ group }: WorkingLabListProps) {
                 </Button>
             </div>
 
+            <div className="flex items-center space-x-2">
+                <Input
+                    placeholder="Search labs..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="max-w-sm"
+                />
+            </div>
+
             {isLoading ? (
                 <div>Loading labs...</div>
-            ) : labs.length === 0 ? (
+            ) : filteredLabs.length === 0 ? (
                 <Card className="bg-muted/50 border-dashed">
                     <CardContent className="flex flex-col items-center justify-center py-8">
                         <MapPin className="h-8 w-8 text-muted-foreground mb-3" />
                         <p className="text-muted-foreground text-center">
-                            No physical labs defined for this group yet.
+                            {searchTerm ? "No labs found matching your search." : "No physical labs defined for this group yet."}
                         </p>
                     </CardContent>
                 </Card>
             ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                    {labs.map((lab) => (
+                    {filteredLabs.map((lab) => (
                         <Card key={lab.id}>
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-base">{lab.name}</CardTitle>
                                 <CardDescription>
-                                    {lab.building && `${lab.building}, `}
-                                    {lab.roomNumber && `Room ${lab.roomNumber}`}
+                                    {lab.physicalInstitute && <div className="font-medium text-slate-700">{lab.physicalInstitute}</div>}
+                                    <div>
+                                        {lab.labNumber && `Lab ${lab.labNumber}`}
+                                        {lab.labNumber && (lab.building || lab.roomNumber) && " • "}
+                                        {lab.building && `${lab.building}`}
+                                        {lab.building && lab.roomNumber && ", "}
+                                        {lab.roomNumber && `Room ${lab.roomNumber}`}
+                                    </div>
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>

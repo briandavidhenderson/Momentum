@@ -329,33 +329,33 @@ export function WhiteboardCanvas({
                 const level = inventoryItem?.inventoryLevel || 'unknown'
 
                 assetContent = (
-                    <div className="w-full h-full flex flex-col justify-between p-3 text-slate-800">
+                    <div className="w-full h-full flex flex-col justify-between p-2 text-slate-800">
                         <div className="flex items-start gap-2">
-                            <Beaker className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                            <Beaker className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
-                                <div className="text-[12px] font-semibold leading-tight truncate">{shape.text || "Inventory item"}</div>
-                                <div className="text-[10px] text-slate-500 leading-tight truncate">
+                                <div className="text-[11px] font-semibold leading-tight truncate" title={shape.text || "Inventory item"}>{shape.text || "Inventory item"}</div>
+                                <div className="text-[9px] text-slate-500 leading-tight truncate">
                                     {inventoryItem ? `Qty: ${inventoryItem.currentQuantity || 0}` : 'Stocked resource'}
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] gap-1">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">Inventory</span>
+                        <div className="flex items-center justify-between text-[9px] gap-1">
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">Inventory</span>
                             {inventoryItem && (
                                 level === 'empty' ? (
                                     <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-700">
-                                        <XCircle className="w-2.5 h-2.5" />
-                                        <span className="text-[9px] font-semibold">Empty</span>
+                                        <XCircle className="w-2 h-2" />
+                                        <span className="font-semibold">Empty</span>
                                     </span>
                                 ) : level === 'low' ? (
                                     <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
-                                        <AlertTriangle className="w-2.5 h-2.5" />
-                                        <span className="text-[9px] font-semibold">Low</span>
+                                        <AlertTriangle className="w-2 h-2" />
+                                        <span className="font-semibold">Low</span>
                                     </span>
                                 ) : level === 'full' || level === 'medium' ? (
                                     <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
-                                        <CheckCircle2 className="w-2.5 h-2.5" />
-                                        <span className="text-[9px] font-semibold capitalize">{level}</span>
+                                        <CheckCircle2 className="w-2 h-2" />
+                                        <span className="font-semibold capitalize">{level}</span>
                                     </span>
                                 ) : null
                             )}
@@ -376,31 +376,48 @@ export function WhiteboardCanvas({
                 }
 
                 assetContent = (
-                    <div className="w-full h-full flex flex-col justify-between p-3 text-slate-800">
+                    <div className="w-full h-full flex flex-col justify-between p-2 text-slate-800">
                         <div className="flex items-start gap-2">
-                            <Activity className="w-4 h-4 text-indigo-700 flex-shrink-0" />
+                            <Activity className="w-4 h-4 text-indigo-700 flex-shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
-                                <div className="text-[12px] font-semibold leading-tight truncate">{shape.text || "Equipment"}</div>
-                                <div className="text-[10px] text-slate-500 leading-tight truncate">
+                                <div className="text-[11px] font-semibold leading-tight truncate" title={shape.text || "Equipment"}>{shape.text || "Equipment"}</div>
+                                <div className="text-[9px] text-slate-500 leading-tight truncate">
                                     {equipmentItem ? `${equipmentItem.make || ''} ${equipmentItem.model || ''}`.trim() || 'Device' : 'Device'}
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] gap-1">
-                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700">Equipment</span>
+                        <div className="flex items-center justify-between text-[9px] gap-1">
+                            <span className="px-1.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700">Equipment</span>
                             {equipmentItem && (
                                 maintenanceNeeded ? (
                                     <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
-                                        <AlertTriangle className="w-2.5 h-2.5" />
-                                        <span className="text-[9px] font-semibold">Maint</span>
+                                        <AlertTriangle className="w-2 h-2" />
+                                        <span className="font-semibold">Maint</span>
                                     </span>
                                 ) : (
                                     <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
-                                        <CheckCircle2 className="w-2.5 h-2.5" />
-                                        <span className="text-[9px] font-semibold">Ready</span>
+                                        <CheckCircle2 className="w-2 h-2" />
+                                        <span className="font-semibold">Ready</span>
                                     </span>
                                 )
                             )}
+                        </div>
+                    </div>
+                )
+            } else if (shape.linkedEntityType === 'buffer') {
+                assetContent = (
+                    <div className="w-full h-full flex flex-col justify-between p-2 text-slate-800">
+                        <div className="flex items-start gap-2">
+                            <Beaker className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-[11px] font-semibold leading-tight truncate" title={shape.text || "Buffer"}>{shape.text || "Buffer"}</div>
+                                <div className="text-[9px] text-slate-500 leading-tight truncate">
+                                    Buffer Recipe
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-start text-[9px] gap-1">
+                            <span className="px-1.5 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-purple-700">Buffer</span>
                         </div>
                     </div>
                 )
@@ -436,6 +453,34 @@ export function WhiteboardCanvas({
                 {(shape.type === "line" || shape.type === "arrow") && <path d={linePath} {...commonProps} fill="none" {...getMarkers()} />}
                 {shape.type === "elbow" && <path d={elbowPath} {...commonProps} fill="none" {...getMarkers()} />}
                 {shape.type === "curve" && <path d={curvePath} {...commonProps} fill="none" {...getMarkers()} />}
+
+                {shape.type === "path" && shape.points && shape.points.length > 0 && (
+                    <path
+                        d={`M ${shape.points[0].x} ${shape.points[0].y} ${shape.points.map(p => `L ${p.x} ${p.y}`).join(" ")}`}
+                        fill="none"
+                        stroke={shape.stroke}
+                        strokeWidth={shape.strokeWidth}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={commonProps.className}
+                        onMouseDown={commonProps.onMouseDown}
+                        onDoubleClick={commonProps.onDoubleClick}
+                    />
+                )}
+
+                {shape.type === "image" && shape.src && (
+                    <image
+                        href={shape.src}
+                        x={x}
+                        y={y}
+                        width={w}
+                        height={h}
+                        preserveAspectRatio="none"
+                        className={commonProps.className}
+                        onMouseDown={commonProps.onMouseDown}
+                        onDoubleClick={commonProps.onDoubleClick}
+                    />
+                )}
 
                 {shape.type === "text" && !isEditing && (() => {
                     const { stroke, fill, ...propsRest } = commonProps;

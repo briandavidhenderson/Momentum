@@ -21,6 +21,7 @@ import {
 import type { Query } from "firebase/firestore"
 import { getFirebaseDb } from "../firebase"
 import type { Order, OrderStatus } from "../types"
+import { VisibilityLevel } from "../types/visibility.types"
 
 // ============================================================================
 // ORDER MANAGEMENT
@@ -47,6 +48,10 @@ export interface FirestoreOrder {
   priceExVAT?: number
   currency?: string
   supplier?: string
+  // Visibility fields
+  visibility: VisibilityLevel
+  sharedWithUsers?: string[]
+  sharedWithGroups?: string[]
 }
 
 /**
@@ -54,7 +59,8 @@ export interface FirestoreOrder {
  * @returns The ID of the newly created order
  */
 export async function createOrder(orderData: Omit<Order, 'id'> & {
-  createdBy: string }): Promise<string> {
+  createdBy: string
+}): Promise<string> {
   const db = getFirebaseDb()
   const orderRef = doc(collection(db, "orders"))
   const orderId = orderRef.id
@@ -152,6 +158,10 @@ export async function createOrder(orderData: Omit<Order, 'id'> & {
     receivedDate: orderData.receivedDate ? Timestamp.fromDate(orderData.receivedDate) : null,
     createdDate: Timestamp.fromDate(orderData.createdDate),
     createdAt: serverTimestamp(),
+    // Default visibility if not provided
+    visibility: orderData.visibility || 'lab',
+    sharedWithUsers: orderData.sharedWithUsers || [],
+    sharedWithGroups: orderData.sharedWithGroups || [],
   }
 
   // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
@@ -178,6 +188,9 @@ export async function getOrders(): Promise<Order[]> {
       orderedDate: data.orderedDate?.toDate(),
       receivedDate: data.receivedDate?.toDate(),
       createdDate: data.createdDate?.toDate() || new Date(),
+      visibility: data.visibility || 'lab',
+      sharedWithUsers: data.sharedWithUsers || [],
+      sharedWithGroups: data.sharedWithGroups || [],
     } as Order
   })
 }
@@ -316,6 +329,8 @@ export function subscribeToOrders(
   let q: Query = collection(db, "orders")
 
   if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
+    // Similar to inventory, we query by labId.
+    // Security rules will filter out "Private" orders that don't belong to the user.
     q = query(q, where("labId", "==", filters.labId))
   }
 
@@ -327,6 +342,9 @@ export function subscribeToOrders(
         orderedDate: data.orderedDate?.toDate(),
         receivedDate: data.receivedDate?.toDate(),
         createdDate: data.createdDate?.toDate() || new Date(),
+        visibility: data.visibility || 'lab',
+        sharedWithUsers: data.sharedWithUsers || [],
+        sharedWithGroups: data.sharedWithGroups || [],
       } as Order
     })
     callback(orders)

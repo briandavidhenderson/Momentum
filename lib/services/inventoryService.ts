@@ -12,6 +12,7 @@ import {
   Unsubscribe,
   serverTimestamp,
   Query,
+  runTransaction,
 } from "firebase/firestore"
 import { getFirebaseDb } from "../firebase"
 import { logger } from "../logger"
@@ -50,7 +51,8 @@ export interface FirestoreInventoryItem {
 }
 
 export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & {
-  createdBy: string }): Promise<string> {
+  createdBy: string
+}): Promise<string> {
   const db = getFirebaseDb()
   const itemRef = doc(collection(db, "inventory"))
   const itemId = itemRef.id
@@ -167,4 +169,39 @@ export function subscribeToInventory(
     })
     callback(inventory)
   })
+}
+
+export async function deductInventory(itemId: string, quantity: number): Promise<{ newLevel: InventoryLevel, productName: string }> {
+  const db = getFirebaseDb()
+  const itemRef = doc(db, "inventory", itemId)
+
+  try {
+    return await runTransaction(db, async (transaction) => {
+      const itemDoc = await transaction.get(itemRef)
+      if (!itemDoc.exists()) throw "Inventory item does not exist!"
+
+      const data = itemDoc.data()
+      const currentQuantity = data.currentQuantity || 0
+      const minQuantity = data.minQuantity || 0
+      const newQuantity = Math.max(0, currentQuantity - quantity)
+
+      let newLevel: InventoryLevel = 'good'
+      if (newQuantity === 0) {
+        newLevel = 'out_of_stock'
+      } else if (newQuantity <= minQuantity) {
+        newLevel = 'low'
+      }
+
+      transaction.update(itemRef, {
+        currentQuantity: newQuantity,
+        inventoryLevel: newLevel,
+        updatedAt: serverTimestamp()
+      })
+
+      return { newLevel, productName: data.productName }
+    })
+  } catch (error) {
+    logger.error("Error deducting inventory", error)
+    throw error
+  }
 }

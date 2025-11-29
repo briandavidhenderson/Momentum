@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { useAppContext } from "@/lib/AppContext"
 import { useAuth } from "@/lib/hooks/useAuth"
+import { useToast } from "@/components/ui/use-toast"
 
 interface DeliverableDetailsPanelProps {
   deliverable: Deliverable | null
@@ -49,6 +50,7 @@ export function DeliverableDetailsPanel({
   people = [],
 }: DeliverableDetailsPanelProps) {
   const { currentUser } = useAuth()
+  const { toast } = useToast()
   const [isAddingBlocker, setIsAddingBlocker] = useState(false)
   const [newBlockerText, setNewBlockerText] = useState("")
   const [isAddingMetric, setIsAddingMetric] = useState(false)
@@ -482,7 +484,10 @@ export function DeliverableDetailsPanel({
               size="sm"
               onClick={() => {
                 // TODO: Open create task dialog with deliverable pre-linked
-                alert(`Create Task feature coming soon!\n\nThis will open the task creation dialog with deliverable "${deliverable.name}" pre-selected for linking.`)
+                toast({
+                  title: "Coming Soon",
+                  description: `Create Task feature coming soon! This will open the task creation dialog with deliverable "${deliverable.name}" pre-selected for linking.`,
+                })
               }}
             >
               <Plus className="h-4 w-4 mr-1" />

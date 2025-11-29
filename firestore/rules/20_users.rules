@@ -1,0 +1,126 @@
+    // ============================================================================
+    // USERS COLLECTION
+    // ============================================================================
+    match /users/{userId} {
+      // All authenticated users can read all user profiles (for collaboration)
+      allow read: if isAuthenticated();
+
+      // Users can update their own profile (limited fields)
+      allow update: if isAuthenticated() &&
+        request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isAdministrator',
+          'userRole',
+          'labId'
+        ]);
+      
+      // User creation handled by Auth triggers
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // PERSON PROFILES COLLECTION
+    // ============================================================================
+    match /personProfiles/{profileId} {
+      // Users can read profiles (lab filtering done client-side to avoid circular dependency)
+      // Note: This allows reading all profiles, but client-side code should filter by lab
+      allow read: if isAuthenticated();
+
+      // Users can create their own profile
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own profile, admins can update any
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Only admins can delete profiles
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // CONSENT (Privacy & Data Protection)
+    // ============================================================================
+    match /consent/{consentId} {
+      // All authenticated users can read consent records
+      // (Client-side filters by userId; allows checking if consent exists before creation)
+      allow read: if isAuthenticated();
+
+      // Users can create their own consent records
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own consent records
+      allow update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can delete their own consent records
+      allow delete: if isAuthenticated() && request.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // USER CONSENTS (Cookie Banner & GDPR Compliance)
+    // ============================================================================
+    match /userConsents/{userId} {
+      // Users can read their own consent records
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Users can create their own consent records
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own consent records (for consent version updates)
+      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
+
+      // No deletion allowed (GDPR audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // PRIVACY SETTINGS (GDPR User Rights Management)
+    // ============================================================================
+    match /privacySettings/{userId} {
+      // Users can read their own privacy settings
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Users can create their own privacy settings
+      allow create: if isAuthenticated() && request.auth.uid == userId && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own privacy settings
+      allow update: if isAuthenticated() && request.auth.uid == userId && resource.data.userId == request.auth.uid;
+
+      // No deletion allowed (GDPR audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // DATA EXPORT REQUESTS (GDPR Article 15 & 20)
+    // ============================================================================
+    match /dataExportRequests/{requestId} {
+      // Users can read their own export requests
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create export requests for themselves
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Admin can update request status (processed by Cloud Function)
+      allow update: if isAdmin();
+
+      // No deletion allowed (audit trail)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // SPECIAL CATEGORY DATA MARKERS (GDPR Article 9 - Sensitive Data)
+    // ============================================================================
+    match /specialCategoryDataMarkers/{markerId} {
+      // Users can read markers they acknowledged
+      allow read: if isAuthenticated() && resource.data.acknowledgedBy == request.auth.uid;
+
+      // Users can create acknowledgment markers
+      allow create: if isAuthenticated() && request.resource.data.acknowledgedBy == request.auth.uid;
+
+      // No updates or deletes (immutable audit trail)
+      allow update, delete: if false;
+    }

@@ -43,6 +43,7 @@ export default function ProjectDetailRoute() {
     handleCreateDeliverable,
     handleUpdateDeliverable,
     handleDeleteDeliverable,
+    handleUpdateDeliverableTasks,
     allProfiles,
     fundingAccounts,
     mainView,
@@ -89,7 +90,7 @@ export default function ProjectDetailRoute() {
 
   const handleCreateWorkpackageForProject = useCallback(
     async (workpackageData: any) => {
-      if (!project) return
+      if (!project) return undefined
       const workpackageId = await createWorkpackage({
         ...workpackageData,
         projectId: project.id,
@@ -101,6 +102,7 @@ export default function ProjectDetailRoute() {
           workpackageIds: [...(project.workpackageIds || []), workpackageId],
         })
       }
+      return workpackageId
     },
     [createWorkpackage, currentUser?.uid, handleUpdateMasterProject, project]
   )
@@ -118,12 +120,14 @@ export default function ProjectDetailRoute() {
   const handleCreateDeliverableForProject = useCallback(
     async (deliverableData: any) => {
       try {
-        await handleCreateDeliverable({
+        const deliverableId = await handleCreateDeliverable({
           ...deliverableData,
           createdBy: currentUser?.uid || "",
         } as any)
+        return deliverableId
       } catch (error) {
         logger.error("Error creating deliverable", error)
+        return undefined
       }
     },
     [currentUser?.uid, handleCreateDeliverable]
@@ -247,6 +251,7 @@ export default function ProjectDetailRoute() {
             onCreateDeliverable={handleCreateDeliverableForProject}
             onUpdateDeliverable={handleUpdateDeliverableForProject}
             onDeleteDeliverable={handleDeleteDeliverableForProject}
+            onUpdateDeliverableTasks={handleUpdateDeliverableTasks}
           />
         </div>
       </div>

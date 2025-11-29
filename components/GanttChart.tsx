@@ -2,7 +2,7 @@
 
 import { Gantt, Task as GanttTask, ViewMode } from "gantt-task-react"
 import "gantt-task-react/dist/index.css"
-import { MasterProject, Workpackage, Task, Person, Subtask, Deliverable, CalendarEvent } from "@/lib/types"
+import { MasterProject, HydratedWorkpackage, ProjectTask, Person, Deliverable, CalendarEvent, HydratedDeliverable } from "@/lib/types"
 import { useMemo, useState, useCallback } from "react"
 import type { MouseEvent } from "react"
 import { ChevronDown, ChevronRight, ZoomIn, ZoomOut } from "lucide-react"
@@ -10,17 +10,17 @@ import { Button } from "@/components/ui/button"
 
 interface GanttChartProps {
   projects: MasterProject[]
-  workpackages?: Workpackage[] // Optional: workpackages loaded separately
+  workpackages?: HydratedWorkpackage[] // Updated to use HydratedWorkpackage
   people: Person[]
   onDateChange?: (task: GanttTask) => void
-  onTaskClick?: (task: Task) => void
-  onDoubleClick?: (task: Task | Deliverable | Workpackage | MasterProject | CalendarEvent) => void
+  onTaskClick?: (task: ProjectTask) => void
+  onDoubleClick?: (task: ProjectTask | Deliverable | HydratedWorkpackage | MasterProject | CalendarEvent) => void
   onPersonDropOnBar?: (taskOrProjectId: string, personId: string, isProject: boolean) => void
   onToggleExpand?: (id: string, isProject: boolean) => void
   onContextAction?: (action: GanttContextAction) => void
 }
 
-type GanttContextTargetType = "project" | "workpackage" | "task" | "subtask" | "deliverable"
+type GanttContextTargetType = "project" | "workpackage" | "task" | "deliverable"
 
 interface GanttContextAction {
   action: "add-child" | "add-dependency" | "mark-complete" | "open-details"
@@ -66,7 +66,7 @@ const CustomTaskListTable: React.FC<{
   selectedTaskId: string
   setSelectedTask: (taskId: string) => void
   onToggleExpand?: (id: string, isProject: boolean) => void
-  taskMeta: Map<string, { type: GanttContextTargetType; reference: any }>
+  taskMeta: Map<string, { type: GanttContextTargetType; reference: MasterProject | HydratedWorkpackage | HydratedDeliverable | Deliverable | ProjectTask }>
   childCount: Map<string, number>
   onContextMenu?: (event: MouseEvent<HTMLDivElement>, task: GanttTask) => void
 }> = ({
@@ -106,16 +106,12 @@ const CustomTaskListTable: React.FC<{
             case "workpackage":
               level = 1
               break
-            case "task":
+            case "deliverable":
               level = 2
               break
-            case "subtask":
+            case "task":
               level = 3
               break
-            case "deliverable":
-              level = 4
-              isExpanded = false
-              break;
           }
 
           const hasChildren = (childCount.get(task.id) ?? 0) > 0 && !isMilestone
@@ -213,9 +209,9 @@ export function GanttChart({
 
   const { ganttTasks, metaMap } = useMemo(() => {
     const ganttTasks: GanttTask[] = []
-    const metaMap = new Map<string, { type: GanttContextTargetType; reference: any }>()
+    const metaMap = new Map<string, { type: GanttContextTargetType; reference: MasterProject | HydratedWorkpackage | HydratedDeliverable | Deliverable | ProjectTask }>()
 
-    const addTask = (task: GanttTask, meta: { type: GanttContextTargetType; reference: any }) => {
+    const addTask = (task: GanttTask, meta: { type: GanttContextTargetType; reference: MasterProject | HydratedWorkpackage | HydratedDeliverable | Deliverable | ProjectTask }) => {
       ganttTasks.push(task)
       metaMap.set(task.id, meta)
     }
@@ -276,112 +272,50 @@ export function GanttChart({
           return
         }
 
-        workpackage.tasks?.forEach((task: Task) => {
-          // Ensure dates are Date objects (converted from Firestore Timestamps)
-          const taskStart = task.start instanceof Date
-            ? task.start
-            : new Date(task.start)
-          const taskEnd = task.end instanceof Date
-            ? task.end
-            : new Date(task.end)
+        // Iterate Deliverables (Level 2)
+        workpackage.deliverables?.forEach((deliverable: Deliverable) => {
+          const delStart = deliverable.startDate ? new Date(deliverable.startDate) : (deliverable.dueDate ? new Date(deliverable.dueDate) : wpStart)
+          const delEnd = deliverable.dueDate ? new Date(deliverable.dueDate) : wpEnd
 
           addTask(
             {
-              id: task.id,
-              name: task.name,
-              start: taskStart,
-              end: taskEnd,
-              progress: task.progress,
-              type: "task",
+              id: deliverable.id,
+              name: deliverable.name,
+              start: delStart,
+              end: delEnd,
+              progress: deliverable.progress,
+              type: "task", // Render as task bar
               project: workpackage.id,
-              hideChildren: task.isExpanded === false,
-              dependencies: task.dependencies,
+              hideChildren: deliverable.isExpanded === false,
             },
-            { type: "task", reference: task }
+            { type: "deliverable", reference: deliverable }
           )
 
-          if (task.isExpanded === false) {
-            // Still add deliverables even if task is collapsed
-            task.deliverables?.forEach((deliverable: Deliverable) => {
-              if (deliverable.dueDate) {
-                addTask(
-                  {
-                    id: deliverable.id,
-                    name: deliverable.name,
-                    start: new Date(deliverable.dueDate),
-                    end: new Date(deliverable.dueDate),
-                    progress: deliverable.progress,
-                    type: "milestone",
-                    project: task.id,
-                  },
-                  { type: "deliverable", reference: deliverable }
-                )
-              }
-            })
-            return
-          }
+          if (deliverable.isExpanded === false) return
 
-          // Add subtasks
-          task.subtasks?.forEach((subtask: Subtask) => {
-            // Ensure dates are Date objects (converted from Firestore Timestamps)
-            const subtaskStart = subtask.start instanceof Date
-              ? subtask.start
-              : new Date(subtask.start)
-            const subtaskEnd = subtask.end instanceof Date
-              ? subtask.end
-              : new Date(subtask.end)
+          // Iterate ProjectTasks (Level 3)
+          // Need to cast to check for 'tasks' property since Deliverable type doesn't have it but HydratedDeliverable does
+          const hydratedDeliverable = deliverable as any
+          if (hydratedDeliverable.tasks) {
+            hydratedDeliverable.tasks.forEach((task: ProjectTask) => {
+              const taskStart = task.start instanceof Date ? task.start : new Date(task.start)
+              const taskEnd = task.end instanceof Date ? task.end : new Date(task.end)
 
-            addTask(
-              {
-                id: subtask.id,
-                name: subtask.name,
-                start: subtaskStart,
-                end: subtaskEnd,
-                progress: subtask.progress,
-                type: "task",
-                project: task.id,
-                hideChildren: subtask.isExpanded === false,
-                dependencies: subtask.dependencies,
-              },
-              { type: "subtask", reference: subtask }
-            )
-
-            // Add deliverables from subtasks
-            subtask.deliverables?.forEach((deliverable: Deliverable) => {
-              if (deliverable.dueDate) {
-                addTask(
-                  {
-                    id: deliverable.id,
-                    name: deliverable.name,
-                    start: new Date(deliverable.dueDate),
-                    end: new Date(deliverable.dueDate),
-                    progress: deliverable.progress,
-                    type: "milestone",
-                    project: subtask.id,
-                  },
-                  { type: "deliverable", reference: deliverable }
-                )
-              }
-            })
-          })
-
-          // Add deliverables from tasks
-          task.deliverables?.forEach((deliverable: Deliverable) => {
-            if (deliverable.dueDate) {
               addTask(
                 {
-                  id: deliverable.id,
-                  name: deliverable.name,
-                  start: new Date(deliverable.dueDate),
-                  end: new Date(deliverable.dueDate),
-                  progress: deliverable.progress,
-                  type: "milestone",
-                  project: task.id,
+                  id: task.id,
+                  name: task.name,
+                  start: taskStart,
+                  end: taskEnd,
+                  progress: task.progress,
+                  type: "task",
+                  project: deliverable.id,
+                  dependencies: task.dependencies
                 },
-                { type: "deliverable", reference: deliverable }
+                { type: "task", reference: task }
               )
-            }
-          })
+            })
+          }
         })
       })
     })
@@ -426,22 +360,9 @@ export function GanttChart({
 
     // Only call onTaskClick for actual tasks (not projects or workpackages)
     if (meta.type === "task" && onTaskClick) {
-      onTaskClick(meta.reference as Task)
-    } else if (meta.type === "subtask" && onTaskClick) {
-      // For subtasks, find and open the parent task
-      const subtask = meta.reference as Subtask
-      for (const ganttTask of ganttTasks) {
-        const taskMeta = metaMap.get(ganttTask.id)
-        if (taskMeta?.type === "task") {
-          const parentTask = taskMeta.reference as Task
-          if (parentTask.subtasks?.some(st => st.id === subtask.id)) {
-            onTaskClick(parentTask)
-            return
-          }
-        }
-      }
+      onTaskClick(meta.reference as ProjectTask)
     }
-  }, [metaMap, ganttTasks, onTaskClick])
+  }, [metaMap, onTaskClick])
 
   if (ganttTasks.length === 0) {
     return (
@@ -513,21 +434,7 @@ export function GanttChart({
         onClick={(task) => {
           const meta = metaMap.get(task.id)
           if (meta?.type === "task" && onTaskClick) {
-            onTaskClick(meta.reference as Task)
-          } else if (meta?.type === "subtask" && onTaskClick) {
-            // For subtasks, find and open the parent task
-            const subtask = meta.reference as Subtask
-            // Find the parent task by looking for a task that has this subtask
-            for (const ganttTask of ganttTasks) {
-              const taskMeta = metaMap.get(ganttTask.id)
-              if (taskMeta?.type === "task") {
-                const parentTask = taskMeta.reference as Task
-                if (parentTask.subtasks?.some(st => st.id === subtask.id)) {
-                  onTaskClick(parentTask)
-                  return
-                }
-              }
-            }
+            onTaskClick(meta.reference as ProjectTask)
           }
         }}
         listCellWidth="250px"

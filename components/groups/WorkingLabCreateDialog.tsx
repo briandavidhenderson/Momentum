@@ -1,11 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppContext } from '@/lib/AppContext'
-import { createWorkingLab } from '@/lib/services/groupService'
+import { createWorkingLab, getWorkingLabs } from '@/lib/services/researchGroupService'
 import { ResearchGroup, WorkingLab } from '@/lib/types/researchgroup.types'
 
 interface WorkingLabCreateDialogProps {
@@ -23,8 +23,28 @@ export function WorkingLabCreateDialog({ open, onOpenChange, group, onLabCreated
         description: '',
         building: '',
         roomNumber: '',
-        floor: ''
+        floor: '',
+        physicalInstitute: '',
+        labNumber: ''
     })
+
+    const [existingLabs, setExistingLabs] = useState<WorkingLab[]>([])
+
+    useEffect(() => {
+        if (group?.departmentId) {
+            getWorkingLabs({ departmentId: group.departmentId }).then(labs => {
+                if (labs) setExistingLabs(labs)
+            })
+        }
+    }, [group?.departmentId])
+
+    const uniquePhysicalInstitutes = React.useMemo(() => {
+        const institutes = new Set<string>()
+        existingLabs.forEach(l => {
+            if (l.physicalInstitute) institutes.add(l.physicalInstitute)
+        })
+        return Array.from(institutes).sort()
+    }, [existingLabs])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -38,6 +58,8 @@ export function WorkingLabCreateDialog({ open, onOpenChange, group, onLabCreated
                 building: formData.building,
                 roomNumber: formData.roomNumber,
                 floor: formData.floor,
+                physicalInstitute: formData.physicalInstitute,
+                labNumber: formData.labNumber,
 
                 // Hierarchy
                 researchGroupId: group.id,
@@ -64,7 +86,7 @@ export function WorkingLabCreateDialog({ open, onOpenChange, group, onLabCreated
             } as WorkingLab)
 
             // Reset form
-            setFormData({ name: '', description: '', building: '', roomNumber: '', floor: '' })
+            setFormData({ name: '', description: '', building: '', roomNumber: '', floor: '', physicalInstitute: '', labNumber: '' })
         } catch (error) {
             console.error('Failed to create working lab:', error)
         } finally {
@@ -100,9 +122,46 @@ export function WorkingLabCreateDialog({ open, onOpenChange, group, onLabCreated
                         />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="physicalInstitute">Physical Institute</Label>
+                        <Input
+                            id="physicalInstitute"
+                            list="dialog-physical-institutes"
+                            placeholder="e.g. Trinity Translational Medicine Institute"
+                            value={formData.physicalInstitute}
+                            onChange={(e) => setFormData({ ...formData, physicalInstitute: e.target.value })}
+                        />
+                        <datalist id="dialog-physical-institutes">
+                            {uniquePhysicalInstitutes.map((inst) => (
+                                <option key={inst} value={inst} />
+                            ))}
+                        </datalist>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="building">Building</Label>
+                            <Label htmlFor="labNumber">Lab Number</Label>
+                            <Input
+                                id="labNumber"
+                                placeholder="e.g. 2.20"
+                                value={formData.labNumber}
+                                onChange={(e) => setFormData({ ...formData, labNumber: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="room">Room No. (Optional)</Label>
+                            <Input
+                                id="room"
+                                placeholder="2.04"
+                                value={formData.roomNumber}
+                                onChange={(e) => setFormData({ ...formData, roomNumber: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="building">Building (Optional)</Label>
                             <Input
                                 id="building"
                                 placeholder="Science Block A"
@@ -111,21 +170,12 @@ export function WorkingLabCreateDialog({ open, onOpenChange, group, onLabCreated
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="floor">Floor</Label>
+                            <Label htmlFor="floor">Floor (Optional)</Label>
                             <Input
                                 id="floor"
                                 placeholder="2"
                                 value={formData.floor}
                                 onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="room">Room No.</Label>
-                            <Input
-                                id="room"
-                                placeholder="2.04"
-                                value={formData.roomNumber}
-                                onChange={(e) => setFormData({ ...formData, roomNumber: e.target.value })}
                             />
                         </div>
                     </div>

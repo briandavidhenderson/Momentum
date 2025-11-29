@@ -47,6 +47,10 @@ export interface DayToDayTask {
     suggestedQty?: number
     estimatedCost?: number
   }
+
+  // Phase 2: Priority & Blocking
+  priority?: 'critical' | 'high' | 'medium' | 'low'
+  blockedBy?: string[] // IDs of tasks blocking this one
 }
 
 export interface DayToDayColumn {

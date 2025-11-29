@@ -383,7 +383,24 @@ export function subscribeToProfiles(
     logger.error("Error setting up profiles subscription", error)
     // Return a no-op unsubscribe function that calls callback with empty array
     callback([])
-    return () => {}
+    return () => { }
+  }
+}
+
+/**
+ * Get all members of a lab (Department)
+ */
+export async function getLabMembers(labId: string): Promise<PersonProfile[]> {
+  const db = getFirebaseDb()
+  if (!labId) return []
+
+  try {
+    const q = query(collection(db, "personProfiles"), where("labId", "==", labId))
+    const querySnapshot = await getDocs(q)
+    return querySnapshot.docs.map(doc => doc.data() as PersonProfile)
+  } catch (error) {
+    logger.error("Error fetching lab members", error, { labId })
+    return []
   }
 }
 

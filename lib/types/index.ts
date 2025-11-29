@@ -28,6 +28,10 @@ export * from './project.types'
 export * from './workpackage.types'
 export * from './deliverable.types'
 export * from './task.types'
+export * from './protocol.types'
+export * from './protocolExecution.types'
+export * from './task.types'
+export * from './hydrated.types'
 export * from './projectSnapshot'
 
 // Lab Operations
@@ -53,3 +57,12 @@ export * from './ai.types'
 
 // Comments
 export * from './comment.types'
+
+// Visibility
+export * from './visibility.types'
+
+// Training
+export * from './training.types'
+
+// Safety
+export * from './safety.types'
