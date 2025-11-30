@@ -1,0 +1,384 @@
+    // ============================================================================
+    // EVENTS (Calendar)
+    // ============================================================================
+    match /events/{eventId} {
+      // Users can read events they created OR events with lab/org visibility in their lab
+      // Private events are only visible to creator
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        (resource.data.visibility == 'lab' && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
+        (resource.data.visibility == 'organisation')
+      );
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update events they created OR events in same lab (if admin)
+      // External events (read-only) cannot be updated unless isReadOnly is removed
+      allow update: if isAuthenticated() && (
+        (resource.data.createdBy == request.auth.uid &&
+         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true)) ||
+        isAdmin()
+      );
+
+      // External read-only events cannot be deleted
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.createdBy == request.auth.uid &&
+         (!('isReadOnly' in resource.data) || resource.data.isReadOnly != true))
+      );
+    }
+
+    // ============================================================================
+    // CALENDAR EVENTS (Synced from external calendars)
+    // ============================================================================
+    match /calendarEvents/{eventId} {
+      // Users can read events synced to their profile
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.profileId == getUserProfileId()
+      );
+
+      // Only Cloud Functions can create/update calendar events (via sync)
+      // Users cannot directly create external calendar events
+      allow create, update: if false;
+
+      // Users can delete synced events to remove them from their view
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.profileId == getUserProfileId()
+      );
+    }
+
+    // ============================================================================
+    // CALENDAR CONNECTIONS (NEW)
+    // ============================================================================
+    match /calendarConnections/{connectionId} {
+      // Users can only access their own connections
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can create their own connections
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+
+      // Users can update their own connections
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can delete their own connections
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================================
+    // CALENDAR SYNC LOGS (NEW)
+    // ============================================================================
+    match /calendarSyncLogs/{logId} {
+      // Users can read their own logs
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Only Cloud Functions can create logs
+      allow create: if false;
+
+      // No updates or deletes allowed
+      allow update, delete: if false;
+    }
+
+    // ============================================================================
+    // CALENDAR CONFLICTS (NEW)
+    // ============================================================================
+    match /calendarConflicts/{conflictId} {
+      // Users can read their own conflicts
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Users can resolve (update) their own conflicts
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Only Cloud Functions can create conflicts
+      allow create: if false;
+
+      // No deletes allowed
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // CALENDAR TOKENS (NEW - INTERNAL ONLY)
+    // ============================================================================
+    // This collection stores OAuth tokens and should NEVER be accessible from clients
+    // Only Cloud Functions can read/write to this collection
+    match /_calendarTokens/{tokenId} {
+      // No client access - all operations blocked
+      allow read, write: if false;
+    }
+
+    // ============================================================================
+    // DAY-TO-DAY TASKS
+    // ============================================================================
+    // ============================================================================
+    // DAY-TO-DAY TASKS
+    // ============================================================================
+    match /dayToDayTasks/{taskId} {
+      // Users can only read tasks they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create tasks
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update tasks if they created it, are in the lab, or are assigned
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin() ||
+        (resource.data.assigneeIds != null && request.auth.uid in resource.data.assigneeIds)
+      );
+
+      // Users can delete tasks they created or admins can delete any
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // PROTOCOLS (Phase 2)
+    // ============================================================================
+    match /protocols/{protocolId} {
+      // Users can read protocols in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.labId == getUserLab() || 
+        resource.data.isPublic == true ||
+        isAdmin()
+      );
+
+      // Users can create protocols
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // LAB POLLS
+    // ============================================================================
+    match /labPolls/{pollId} {
+      // Users can only read polls they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create polls
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
+    // ELN EXPERIMENTS
+    // ============================================================================
+    match /elnExperiments/{experimentId} {
+      // Users can read experiments they created, in their lab, or linked to their projects
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin() ||
+        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId)) ||
+        (resource.data.sharedWithUsers != null && resource.data.sharedWithUsers.hasAny([request.auth.uid]))
+      );
+
+      // Users can create their own experiments
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update their own experiments
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can delete their own experiments
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // ANNOUNCEMENTS (Lab Communication - Phase 5)
+    // ============================================================================
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.publishedBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.publishedBy == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.publishedBy == request.auth.uid || isAdmin());
+    }
+
+    // ============================================================================
+    // PROTOCOL TEMPLATES (Shared Templates - Phase 5)
+    // ============================================================================
+    match /protocolTemplates/{templateId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isAdmin());
+    }
+
+    // ============================================================================
+    // WHITEBOARDS
+    // ============================================================================
+    match /whiteboards/{whiteboardId} {
+      // Users can only read whiteboards they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create whiteboards
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
+    // RESEARCH BOARDS
+    // ============================================================================
+    match /researchBoards/{boardId} {
+      // Users can read boards if they are:
+      // - A member of the board (explicit membership)
+      // - A member of the lab (backward compatibility during migration)
+      // - An admin
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.creatorId == request.auth.uid ||
+        (resource.data.members != null && resource.data.members.hasAny([request.auth.uid])) ||
+        (resource.data.sharedWithUsers != null && resource.data.sharedWithUsers.hasAny([request.auth.uid])) ||
+        isLabMember(resource.data.labId)
+      );
+
+      // Users can create boards (must be in their lab)
+      allow create: if isAuthenticated() && (
+        request.resource.data.creatorId == request.auth.uid &&
+        isLabMember(request.resource.data.labId)
+      );
+
+      // Members or lab members can update boards
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.members != null && resource.data.members.hasAny([request.auth.uid])) ||
+        isLabMember(resource.data.labId)
+      );
+
+      // Only creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.creatorId == request.auth.uid
+      );
+
+      // ============================================================================
+      // BOARD MESSAGES (Subcollection)
+      // ============================================================================
+      match /messages/{messageId} {
+        // Helper to check board access
+        function canAccessBoard() {
+          let board = get(/databases/$(database)/documents/researchBoards/$(boardId));
+          return board != null && (
+            isAdmin() ||
+            (board.data.members != null && board.data.members.hasAny([request.auth.uid])) ||
+            isLabMember(board.data.labId)
+          );
+        }
+
+        // Messages inherit board-level security
+        allow read: if isAuthenticated() && canAccessBoard();
+
+        // Users can create messages if they can access the board
+        allow create: if isAuthenticated() &&
+          request.resource.data.boardId == boardId &&
+          canAccessBoard();
+      }
+    }
+
+    // ============================================================================
+    // RESEARCH PINS (Research Board)
+    // ============================================================================
+    match /researchPins/{pinId} {
+      // Users can read pins they created OR public/lab pins in their lab
+      // Private pins are only visible to creator
+      allow read: if isAuthenticated() && (
+        resource.data.author.userId == request.auth.uid ||
+        (resource.data.visibility == 'public') ||
+        (resource.data.visibility == 'lab' && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
+        (!('visibility' in resource.data) && resource.data.isPrivate != true && 'labId' in resource.data && isLabMember(resource.data.labId)) ||
+        isAdmin()
+      );
+
+      // Create: Authenticated users (must be the author)
+      allow create: if isAuthenticated() && 
+        request.resource.data.author.userId == request.auth.uid;
+
+      // Update: Creator or admin
+      allow update: if isAuthenticated() && (
+        resource.data.author.userId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Delete: Creator or admin
+      allow delete: if isAuthenticated() && (
+        resource.data.author.userId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // COMMENTS (Threaded discussions on entities)
+    // ============================================================================
+    match /comments/{commentId} {
+      // Allow authenticated users to read non-deleted comments
+      allow read: if isAuthenticated() && resource.data.isDeleted != true;
+
+      // Create: authenticated user creating as their own profile
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == getUserProfileId();
+
+      // Update: author (profile) or admin; authorId cannot change
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.authorId == getUserProfileId() &&
+         request.resource.data.authorId == resource.data.authorId)
+      );
+
+      // Delete: author or admin (soft delete in client)
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.authorId == getUserProfileId()
+      );
+    }

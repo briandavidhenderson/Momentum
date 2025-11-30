@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Deliverable, PersonProfile } from "@/lib/types";
+import { Deliverable, PersonProfile, ProjectTask } from "@/lib/types";
 import { useAppContext } from "@/lib/AppContext";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -38,6 +38,8 @@ interface DeliverableCardProps {
   onDelete: (deliverableId: string) => void;
   onClick?: (deliverable: Deliverable) => void;
   onCreateTask?: (deliverableId: string) => void;
+  onEditTask?: (task: ProjectTask) => void;
+  onDeleteTask?: (taskId: string) => void;
   enableDrag?: boolean; // optional drag support
 }
 
@@ -48,6 +50,8 @@ export function DeliverableCard({
   onDelete,
   onClick,
   onCreateTask,
+  onEditTask,
+  onDeleteTask,
 }: DeliverableCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const { allProfiles = [] } = useAppContext();

@@ -17,16 +17,29 @@ import {
     Presentation,
     Users,
     Wrench,
-    ChevronDown
+    ChevronDown,
+    BarChart3,
+    ShieldAlert,
+    ChevronLeft,
+    TestTube
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
 import { DashboardTile } from './DashboardTile'
 import { TodayOverview } from './TodayOverview'
 import { TaskKanban } from './TaskKanban'
+import DailyAgendaView from '@/components/DailyAgendaView'
+import { ProtocolBenchMode } from '@/components/ProtocolBenchMode'
 import { ProjectExplorerView } from '@/components/projects/ProjectExplorerView'
 import { Task } from '@/lib/types'
+
 import { TaskDetailsPanel } from '@/components/projects/TaskDetailsPanel'
+import { subscribeToLabActiveExecutions } from '@/lib/services/protocolExecutionService'
+import { ProtocolExecution } from '@/lib/types'
+import { DashboardRiskWidget } from './DashboardRiskWidget'
+import { MyWeeklyDigest } from './MyWeeklyDigest'
+import { Sample } from '@/lib/types/sample.types'
+import { LabPulseWidget } from '@/components/dashboard/LabPulseWidget'
 
 export function HomeDashboard() {
     const {
@@ -49,8 +62,10 @@ export function HomeDashboard() {
         whiteboards,
 
         // Other
+        events,
         userBookings,
         currentUserProfile,
+        mainView,
         setMainView,
 
         // Actions
@@ -61,11 +76,11 @@ export function HomeDashboard() {
         .map(board => {
             const owner = allProfiles.find(profile => profile.id === board.createdBy)
             const updatedAt = board.updatedAt?.toDate
-                ? board.updatedAt.toDate()
+                ? (board.updatedAt?.toDate ? board.updatedAt.toDate() : new Date(board.updatedAt || Date.now()))
                 : board.updatedAt instanceof Date
                     ? board.updatedAt
                     : board.createdAt?.toDate
-                        ? board.createdAt.toDate()
+                        ? (board.createdAt?.toDate ? board.createdAt.toDate() : new Date(board.createdAt || Date.now()))
                         : board.createdAt instanceof Date
                             ? board.createdAt
                             : new Date()
@@ -82,6 +97,20 @@ export function HomeDashboard() {
     // State for selected project & task
     const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null)
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+    const [activeExecutions, setActiveExecutions] = useState<ProtocolExecution[]>([])
+
+    // Sample Management State
+    const [selectedSample, setSelectedSample] = useState<Sample | null>(null)
+    const [sampleViewMode, setSampleViewMode] = useState<'list' | 'detail' | 'storage'>('list')
+
+    React.useEffect(() => {
+        if (!currentUserProfile?.labId) return
+        const unsubscribe = subscribeToLabActiveExecutions(currentUserProfile.labId, (executions) => {
+            setActiveExecutions(executions)
+        })
+        return () => unsubscribe()
+    }, [currentUserProfile?.labId])
+
 
     const labProfiles = useMemo(() => {
         const profiles = allProfiles || []
@@ -96,6 +125,14 @@ export function HomeDashboard() {
         })
 
     const getPresenceStatus = (profileId: string) => {
+        const activeExecution = activeExecutions.find(e => e.performedBy === profileId)
+        if (activeExecution) {
+            return {
+                label: `Running ${activeExecution.protocolTitle} (Step ${activeExecution.currentStepIndex + 1})`,
+                className: 'bg-green-100 text-green-700 border-green-200 animate-pulse'
+            }
+        }
+
         const tasks = getMemberTasks(profileId)
         if (tasks.some(task => task.status === 'working')) {
             return { label: 'In lab', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
@@ -163,6 +200,8 @@ export function HomeDashboard() {
         return isNaN(date.getTime()) ? '—' : format(date, 'HH:mm')
     }
 
+
+
     return (
         <div className="space-y-6">
             {/* Top Section: Welcome */}
@@ -177,11 +216,56 @@ export function HomeDashboard() {
                 </div>
             </div>
 
+            {/* Daily Agenda Row (New Phase 2 Feature) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[350px]">
+                <div className="md:col-span-2 h-full">
+                    <DailyAgendaView />
+                </div>
+                <div className="h-full">
+                    <ProtocolBenchMode />
+                </div>
+            </div>
+
             {/* Main Dashboard Grid - 3 Columns */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
 
                 {/* Left Column (20%): Navigation & Status */}
                 <div className="md:col-span-3 space-y-6">
+                    {/* Quick Actions (New Phase 3) */}
+                    <Card>
+                        <CardHeader className="pb-2 py-3">
+                            <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                <Activity className="h-4 w-4 text-indigo-500" />
+                                Quick Actions
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-3 pt-0 grid grid-cols-2 gap-2">
+                            <div onClick={() => setMainView('equipment')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <CalendarIcon className="h-5 w-5 mb-1 text-purple-500" />
+                                <span className="text-[10px] font-medium">Book</span>
+                            </div>
+                            <div onClick={() => setMainView('projects')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <Layout className="h-5 w-5 mb-1 text-blue-500" />
+                                <span className="text-[10px] font-medium">New Project</span>
+                            </div>
+                            <div onClick={() => setMainView('eln')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <FlaskConical className="h-5 w-5 mb-1 text-emerald-500" />
+                                <span className="text-[10px] font-medium">Experiment</span>
+                            </div>
+                            <div onClick={() => setMainView('dashboard')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <BarChart3 className="h-5 w-5 mb-1 text-orange-500" />
+                                <span className="text-[10px] font-medium">Reports</span>
+                            </div>
+                            <div onClick={() => setMainView('dashboard')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <ShieldAlert className="h-5 w-5 mb-1 text-red-500" />
+                                <span className="text-[10px] font-medium">Safety</span>
+                            </div>
+                            <div onClick={() => setMainView('samples')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <TestTube className="h-5 w-5 mb-1 text-pink-500" />
+                                <span className="text-[10px] font-medium">Samples</span>
+                            </div>
+                        </CardContent>
+                    </Card>
                     {/* Experiments Widget */}
                     <Card className="h-[240px] flex flex-col">
                         <CardHeader className="pb-2 py-3">
@@ -321,6 +405,9 @@ export function HomeDashboard() {
                 {/* Center Column (60%): Active Work */}
                 <div className="md:col-span-6 space-y-6">
 
+                    {/* Risk Widget (New Phase 2) */}
+                    <DashboardRiskWidget projects={projects} tasks={dayToDayTasks} orders={orders} />
+
                     {/* Projects Grid */}
                     <Card>
                         <CardHeader className="pb-2 py-3">
@@ -350,6 +437,11 @@ export function HomeDashboard() {
                                                 className={`h-full ${selectedProject?.id === project.id ? 'bg-indigo-600' : 'bg-indigo-500'}`}
                                                 style={{ width: `${project.progress || 0}%` }}
                                             />
+                                        </div>
+                                        <div className="mt-3 flex justify-end">
+                                            <Link href={`/projects/${project.id}/explorer`} className="text-xs text-indigo-600 hover:underline">
+                                                View Project
+                                            </Link>
                                         </div>
                                     </div>
                                 ))}
@@ -425,8 +517,65 @@ export function HomeDashboard() {
 
                 {/* Right Column (20%): Resources */}
                 <div className="md:col-span-3 space-y-6">
+                    {/* Lab Pulse Widget (NEW) */}
+                    <div className="h-[350px]">
+                        <LabPulseWidget />
+                    </div>
+
+                    {/* Weekly Digest (New Phase 2) */}
+                    {currentUserProfile && (
+                        <div className="h-[400px]">
+                            <MyWeeklyDigest
+                                userId={currentUserProfile.id}
+                                tasks={dayToDayTasks}
+                                bookings={userBookings}
+                                events={events}
+                            />
+                        </div>
+                    )}
+
                     {/* Today Overview Widget */}
                     <TodayOverview />
+
+                    {/* Upcoming Events Widget */}
+                    <Card className="h-[300px] flex flex-col">
+                        <CardHeader className="pb-2 py-3">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                    <CalendarIcon className="h-4 w-4 text-rose-500" />
+                                    Upcoming Events
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setMainView('calendar')}>
+                                    View Calendar
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                            <ScrollArea className="h-full">
+                                <div className="space-y-2">
+                                    {events && events.length > 0 ? (
+                                        events
+                                            .filter(e => new Date(e.start) >= new Date())
+                                            .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+                                            .slice(0, 5)
+                                            .map(event => (
+                                                <div key={event.id} className="p-2 border rounded-md text-sm bg-muted/20">
+                                                    <div className="font-medium truncate">{event.title}</div>
+                                                    <div className="text-xs text-muted-foreground mt-1 flex justify-between">
+                                                        <span>{format(new Date(event.start), 'MMM d, HH:mm')}</span>
+                                                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-0 bg-white/50">
+                                                            {event.type}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            ))
+                                    ) : (
+                                        <div className="text-xs text-muted-foreground text-center py-4">No upcoming events</div>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
 
                     {/* Bookings Widget */}
                     <Card className="h-[300px] flex flex-col">

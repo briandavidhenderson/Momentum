@@ -77,14 +77,14 @@ service firebase.storage {
         )
       );
 
-      // Write: Only lab members can upload to their lab's research folder
+      // Write: Allow lab members or pin authors to upload
       allow write: if isAuthenticated() && (
         isAdmin() ||
         (
-          isLabMember(labId) &&
           (
-             !firestore.exists(/databases/(default)/documents/researchPins/$(pinId)) ||
-             firestore.get(/databases/(default)/documents/researchPins/$(pinId)).data.author.userId == request.auth.uid
+            isLabMember(labId) ||
+            (firestore.exists(/databases/(default)/documents/researchPins/$(pinId)) &&
+             firestore.get(/databases/(default)/documents/researchPins/$(pinId)).data.author.userId == request.auth.uid)
           )
         )
       );

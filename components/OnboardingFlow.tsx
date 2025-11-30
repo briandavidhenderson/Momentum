@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,8 +13,12 @@ import {
   PositionLevel,
   POSITION_DISPLAY_NAMES,
   POSITION_CATEGORIES,
+  ResearchGroup,
+  WorkingLab,
+  VisibilityLevel,
+  ProfileProject,
 } from "@/lib/types"
-import { getFirebaseAuth } from "@/lib/firebase"
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase"
 import {
   getOrganisations,
   getInstitutes,
@@ -29,6 +33,14 @@ import {
   updateUser,
   subscribeToProfiles,  // Feature #8: For supervisor selection
 } from "@/lib/firestoreService"
+import {
+  getResearchGroups,
+  getWorkingLabs,
+  addMemberToResearchGroup,
+  addMemberToWorkingLab,
+  createResearchGroup,
+  createWorkingLab
+} from "@/lib/services/researchGroupService"
 import { Building, GraduationCap, BookOpen, Users, Briefcase, CheckCircle2, ChevronRight, ChevronLeft, X } from "lucide-react"
 import { FunderCreationDialog } from "./FunderCreationDialog"
 import { OrcidIcon } from "./OrcidBadge"
@@ -46,6 +58,8 @@ interface OnboardingState {
   selectedOrganisation: Organisation | null
   selectedInstitute: Institute | null
   selectedLab: Lab | null
+  selectedResearchGroups: ResearchGroup[]
+  selectedWorkingLabs: WorkingLab[]
 
   // Step 4: Personal details
   firstName: string
@@ -87,6 +101,8 @@ type OnboardingStep =
   | "organisation"
   | "institute"
   | "lab"
+  | "research-groups"
+  | "working-labs"
   | "personal-details"
   | "position"
   | "orcid"
@@ -158,6 +174,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [labs, setLabs] = useState<Lab[]>([])
   const [funders, setFunders] = useState<Funder[]>([])
   const [profiles, setProfiles] = useState<PersonProfile[]>([])  // Feature #8: For supervisor selection
+  const [availableResearchGroups, setAvailableResearchGroups] = useState<ResearchGroup[]>([])
+  const [availableWorkingLabs, setAvailableWorkingLabs] = useState<WorkingLab[]>([])
 
   // Search/create states
   const [orgSearchTerm, setOrgSearchTerm] = useState("")
@@ -170,39 +188,69 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
   const [showCreateOrg, setShowCreateOrg] = useState(false)
   const [showCreateInst, setShowCreateInst] = useState(false)
   const [showCreateLab, setShowCreateLab] = useState(false)
+  const [showCreateRg, setShowCreateRg] = useState(false)
+  const [showCreateWl, setShowCreateWl] = useState(false)
   const [showCreateFunder, setShowCreateFunder] = useState(false)
+  const [rgSearchTerm, setRgSearchTerm] = useState("")
+  const [wlSearchTerm, setWlSearchTerm] = useState("")
+  const [wlPhysicalInstitute, setWlPhysicalInstitute] = useState("")
+  const [wlLabNumber, setWlLabNumber] = useState("")
   const [selectedCountry, setSelectedCountry] = useState<string>("")
   const [selectedFunderType, setSelectedFunderType] = useState<"public" | "private" | "charity" | "internal" | "government" | "industry" | "eu" | "other">("government")
 
   // Form state
+  // Form state
   const { firstName: initialFirstName, lastName: initialLastName } = splitFullName(user.fullName)
-  const [state, setState] = useState<OnboardingState>({
-    selectedOrganisation: null,
-    selectedInstitute: null,
-    selectedLab: null,
-    firstName: initialFirstName,
-    lastName: initialLastName,
-    email: user.email,
-    phone: "",
-    officeLocation: "",
-    positionLevel: null,
-    isPrincipalInvestigator: false,
-    supervisorId: null,  // Feature #8
-    createProject: false,
-    projectName: "",
-    projectDescription: "",
-    grantName: "",
-    grantNumber: "",
-    funderId: "",
-    funderName: "",
-    totalBudget: "",
-    currency: "EUR", // Default to EUR for Ireland
-    startDate: "",
-    endDate: "",
-    accountNumber: "",
-    accountName: "",
-    accountType: "main",
-  })
+
+  // Load state from sessionStorage if available to handle redirects (e.g. ORCID)
+  const getInitialState = (): OnboardingState => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('onboardingState')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) {
+          console.error('Failed to parse saved onboarding state', e)
+        }
+      }
+    }
+    return {
+      selectedOrganisation: null,
+      selectedInstitute: null,
+      selectedLab: null,
+      selectedResearchGroups: [],
+      selectedWorkingLabs: [],
+      firstName: initialFirstName,
+      lastName: initialLastName,
+      email: user.email,
+      phone: "",
+      officeLocation: "",
+      positionLevel: null,
+      isPrincipalInvestigator: false,
+      supervisorId: null,
+      createProject: false,
+      projectName: "",
+      projectDescription: "",
+      grantName: "",
+      grantNumber: "",
+      funderId: "",
+      funderName: "",
+      totalBudget: "",
+      currency: "EUR",
+      startDate: "",
+      endDate: "",
+      accountNumber: "",
+      accountName: "",
+      accountType: "main",
+    }
+  }
+
+  const [state, setState] = useState<OnboardingState>(getInitialState())
+
+  // Persist state changes
+  useEffect(() => {
+    sessionStorage.setItem('onboardingState', JSON.stringify(state))
+  }, [state])
 
   // ORCID state
   const [orcidConnecting, setOrcidConnecting] = useState(false)
@@ -219,6 +267,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       "organisation",
       "institute",
       "lab",
+      "research-groups",
+      "working-labs",
       "personal-details",
       "position",
       "orcid",
@@ -310,6 +360,35 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       active = false
     }
   }, [state.selectedInstitute])
+
+  // Load research groups when lab (department) selected
+  useEffect(() => {
+    if (!state.selectedLab) return
+    let active = true
+      ; (async () => {
+        const groups = await getResearchGroups(state.selectedLab!.id)
+        if (active && groups) setAvailableResearchGroups(groups)
+      })()
+    return () => {
+      active = false
+    }
+  }, [state.selectedLab])
+
+  // Load working labs when research groups or lab selected
+  useEffect(() => {
+    if (!state.selectedLab) return
+    let active = true
+      ; (async () => {
+        // Fetch all working labs for the department
+        // In a more complex scenario, we might filter by selected research groups
+        // but typically users might want to see all labs in the department
+        const labs = await getWorkingLabs({ departmentId: state.selectedLab!.id })
+        if (active && labs) setAvailableWorkingLabs(labs)
+      })()
+    return () => {
+      active = false
+    }
+  }, [state.selectedLab])
 
   const loadOrganisations = async (): Promise<Organisation[] | null> => {
     try {
@@ -503,6 +582,14 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
     }
   }
 
+  const uniquePhysicalInstitutes = useMemo(() => {
+    const institutes = new Set<string>()
+    availableWorkingLabs.forEach((l) => {
+      if (l.physicalInstitute) institutes.add(l.physicalInstitute)
+    })
+    return Array.from(institutes).sort()
+  }, [availableWorkingLabs])
+
   const handleComplete = async () => {
     // Get a valid user object - try prop first, fall back to Firebase Auth if needed
     let validUser = user
@@ -557,6 +644,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
       const profileData: Omit<PersonProfile, "id"> = {
         firstName: state.firstName,
         lastName: state.lastName,
+        displayName: `${state.firstName} ${state.lastName}`,
         email: state.email,
         phone: state.phone,
         officeLocation: state.officeLocation,
@@ -602,8 +690,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         lab: state.selectedLab.name,
         fundedBy: [],
         reportsTo: null,
-        projects: [],
-        principalInvestigatorProjects: [],
+        projects: [] as ProfileProject[],
+        principalInvestigatorProjects: [] as string[],
 
         // Dates
         startDate: new Date().toISOString().split("T")[0],
@@ -618,14 +706,23 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         profileComplete: true,
         onboardingComplete: true,
         isAdministrator: false,
+
+        // GDPR & Privacy
+        consentGiven: true, // User consents by completing onboarding
+        lastConsentUpdate: new Date().toISOString(),
+        privacySettingsId: "", // Will be created if needed
+        dataExportRequestIds: [],
       }
 
-      const profileId = await createProfile(validUser.uid, profileData)
+      // Generate a profile ID early to use for linking, but don't create the doc yet
+      const { doc, collection } = await import("firebase/firestore")
+      const db = getFirebaseDb()
+      const profileRef = doc(collection(db, "personProfiles"))
+      const profileId = profileRef.id
 
-      // Note: createProfile already updates the user document with profileId
-      // No need to call updateUser again (would be redundant)
+      logger.info("Generated profile ID for setup", { profileId })
 
-      // If creating a project, create it now
+      // If creating a project, create it now (using the pre-generated profileId)
       if (state.createProject && state.projectName) {
         // Parse and validate budget (default to 0 if not provided)
         const budgetValue = state.totalBudget ? parseFloat(state.totalBudget) : 0
@@ -688,8 +785,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         })
 
         // Create account if specified
+        let accountId: string | undefined
         if (state.accountNumber && state.accountName) {
-          const accountId = await createFundingAccount({
+          accountId = await createFundingAccount({
             accountNumber: state.accountNumber,
             accountName: state.accountName,
             funderId: state.funderId,
@@ -704,37 +802,45 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             status: "active",
             createdBy: validUser.uid,
           })
-
-          // Create personal funding allocation for the PI
-          if (accountId && state.isPrincipalInvestigator) {
-            const { createFundingAllocation } = await import("@/lib/services/fundingService")
-            // Allocate 50% of total budget to PI by default (can be adjusted later)
-            const piAllocationAmount = budgetValue * 0.5
-
-            await createFundingAllocation({
-              fundingAccountId: accountId,
-              fundingAccountName: state.accountName,
-              labId: state.selectedLab.id,
-              type: "PERSON",
-              personId: profileId,
-              personName: `${profileData.firstName} ${profileData.lastName}`,
-              allocatedAmount: piAllocationAmount,
-              currentSpent: 0,
-              currentCommitted: 0,
-              remainingBudget: piAllocationAmount,
-              currency: state.currency,
-              status: "active",
-              createdAt: new Date().toISOString(),
-              createdBy: validUser.uid,
-            })
-
-            logger.info("Created PI funding allocation during onboarding", {
-              profileId,
-              accountId,
-              amount: piAllocationAmount,
-            })
-          }
         }
+
+        // FINALLY, create the profile document
+        // This triggers the auth state change in useAuth, so it must be last
+        await createProfile(validUser.uid, profileData, profileId)
+
+        // Create personal funding allocation for the PI
+        if (accountId && state.isPrincipalInvestigator) {
+          const { createFundingAllocation } = await import("@/lib/services/fundingService")
+          // Allocate 50% of total budget to PI by default (can be adjusted later)
+          const piAllocationAmount = budgetValue * 0.5
+
+          await createFundingAllocation({
+            fundingAccountId: accountId,
+            fundingAccountName: state.accountName,
+            labId: state.selectedLab.id,
+            type: "PERSON",
+            personId: profileId,
+            personName: `${profileData.firstName} ${profileData.lastName}`,
+            allocatedAmount: piAllocationAmount,
+            currentSpent: 0,
+            currentCommitted: 0,
+            remainingBudget: piAllocationAmount,
+            currency: state.currency,
+            status: "active",
+            createdAt: new Date().toISOString(),
+            createdBy: validUser.uid,
+          })
+
+          logger.info("Created PI funding allocation during onboarding", {
+            profileId,
+            accountId,
+            amount: piAllocationAmount,
+          })
+        }
+      } else {
+        // If NOT creating a project, we still need to create the profile
+        // This handles the case where user skips project creation
+        await createProfile(validUser.uid, profileData, profileId)
       }
 
       // Call onComplete immediately to update app state
@@ -744,12 +850,114 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         id: profileId,
       } as PersonProfile)
 
+      // Add memberships to Research Groups
+      if (state.selectedResearchGroups.length > 0) {
+        await Promise.all(state.selectedResearchGroups.map(group =>
+          addMemberToResearchGroup(group.id, profileId)
+        ))
+      }
+
+      // Add memberships to Working Labs
+      if (state.selectedWorkingLabs.length > 0) {
+        await Promise.all(state.selectedWorkingLabs.map(lab =>
+          addMemberToWorkingLab(lab.id, profileId)
+        ))
+      }
+
       // Show complete message briefly, then the callback above will transition to app
       setCurrentStep("complete")
       setLoading(false)
     } catch (err) {
       logger.error("Error completing onboarding", err)
       setError("Failed to complete onboarding. Please try again.")
+      setLoading(false)
+    }
+  }
+
+  const handleCreateResearchGroup = async () => {
+    if (!rgSearchTerm || !state.selectedLab || !state.selectedInstitute || !state.selectedOrganisation) return
+    setLoading(true)
+    try {
+      const userUid = getValidUserUid() || ""
+      const groupData = {
+        name: rgSearchTerm,
+        departmentId: state.selectedLab.id,
+        departmentName: state.selectedLab.name,
+        schoolFacultyId: state.selectedInstitute.id,
+        schoolFacultyName: state.selectedInstitute.name,
+        organisationId: state.selectedOrganisation.id,
+        organisationName: state.selectedOrganisation.name,
+        description: "",
+        principalInvestigators: [],
+        coordinatorIds: [],
+        adminIds: [userUid],
+        pendingMemberIds: [],
+        memberIds: [],
+        createdBy: userUid,
+        workingLabIds: [],
+        visibility: 'lab' as VisibilityLevel
+      }
+
+      const newGroupId = await createResearchGroup(groupData)
+
+      const newGroup: ResearchGroup = {
+        ...groupData,
+        id: newGroupId,
+        createdAt: new Date().toISOString(),
+        memberCount: 0,
+        activeProjectCount: 0,
+      }
+      setAvailableResearchGroups([...availableResearchGroups, newGroup])
+      setState(s => ({ ...s, selectedResearchGroups: [...s.selectedResearchGroups, newGroup] }))
+      setShowCreateRg(false)
+      setRgSearchTerm("")
+    } catch (err) {
+      logger.error("Error creating research group", err)
+      setError("Failed to create research group")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateWorkingLab = async () => {
+    if (!wlSearchTerm || !state.selectedLab || !state.selectedInstitute || !state.selectedOrganisation) return
+    setLoading(true)
+    try {
+      const userUid = getValidUserUid() || ""
+      const researchGroupId = state.selectedResearchGroups.length > 0 ? state.selectedResearchGroups[0].id : ""
+      const researchGroupName = state.selectedResearchGroups.length > 0 ? state.selectedResearchGroups[0].name : ""
+
+      const labData = {
+        name: wlSearchTerm,
+        departmentId: state.selectedLab.id,
+        departmentName: state.selectedLab.name,
+        researchGroupId,
+        researchGroupName,
+        description: "",
+        physicalInstitute: wlPhysicalInstitute,
+        labNumber: wlLabNumber,
+        labManagerIds: [userUid],
+        memberIds: [],
+        createdBy: userUid,
+        isActive: true
+      }
+
+      const newLabId = await createWorkingLab(labData)
+
+      const newLab: WorkingLab = {
+        ...labData,
+        id: newLabId,
+        createdAt: new Date().toISOString(),
+        memberCount: 0,
+      }
+      setAvailableWorkingLabs([...availableWorkingLabs, newLab])
+      setState(s => ({ ...s, selectedWorkingLabs: [...s.selectedWorkingLabs, newLab] }))
+      setShowCreateWl(false)
+      setWlSearchTerm("")
+    } catch (err) {
+      logger.error("Error creating working lab", err)
+      setError("Failed to create working lab")
+    } finally {
       setLoading(false)
     }
   }
@@ -762,6 +970,12 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         return !!state.selectedInstitute
       case "lab":
         return !!state.selectedLab
+      case "research-groups":
+        // Optional, can proceed without selection
+        return true
+      case "working-labs":
+        // Optional, can proceed without selection
+        return true
       case "personal-details":
         return !!(state.firstName && state.lastName && state.email)
       case "position":
@@ -811,6 +1025,14 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
   const filteredLabs = labs.filter((lab) => lab.name.toLowerCase().includes(labSearchTerm.toLowerCase()))
 
+  const filteredResearchGroups = availableResearchGroups.filter((group) =>
+    group.name.toLowerCase().includes(rgSearchTerm.toLowerCase())
+  )
+
+  const filteredWorkingLabs = availableWorkingLabs.filter((lab) =>
+    lab.name.toLowerCase().includes(wlSearchTerm.toLowerCase())
+  )
+
   // Render different steps
   const renderStep = () => {
     switch (currentStep) {
@@ -843,7 +1065,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                 </li>
               </ul>
             </div>
-            <Button onClick={handleNext} size="lg" className="mt-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-amber-800">
+                <strong>Important:</strong> Please search carefully for your organization and lab before creating new ones.
+                Duplicate entries can cause data fragmentation and make collaboration difficult.
+              </p>
+            </div>
+            <Button onClick={handleNext} size="lg" className="mt-4 w-full md:w-auto shadow-lg hover:shadow-xl transition-all">
               Get Started <ChevronRight className="ml-2 w-4 h-4" />
             </Button>
           </div>
@@ -853,9 +1081,18 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <Building className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-              <h2 className="text-2xl font-bold">Select Your Organization</h2>
-              <p className="text-gray-600">Choose your university or research institution</p>
+              <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <Building className="w-10 h-10 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">Select Your Organization</h2>
+              <p className="text-slate-600 mt-2">Choose your university or research institution</p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 flex items-start gap-2">
+                <span className="font-bold">Tip:</span>
+                Search for your organization first. Only create a new one if you are certain it doesn&apos;t exist.
+              </p>
             </div>
 
             <div>
@@ -871,10 +1108,11 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
             <div className="max-h-64 overflow-y-auto border rounded-lg">
               {filteredOrganisations.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
-                  <p>No organizations found.</p>
+                <div className="p-8 text-center text-slate-500 bg-slate-50">
+                  <p className="mb-2">No organizations found matching &quot;{orgSearchTerm}&quot;</p>
+                  <p className="text-xs text-slate-400 mb-4">Please check your spelling or try a different variation.</p>
                   {orgSearchTerm && (
-                    <Button variant="outline" size="sm" onClick={() => setShowCreateOrg(true)} className="mt-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateOrg(true)} className="mt-2 border-dashed border-2 hover:border-solid hover:bg-white">
                       Create &quot;{orgSearchTerm}&quot;
                     </Button>
                   )}
@@ -885,11 +1123,16 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     <button
                       key={org.id}
                       onClick={() => setState((s) => ({ ...s, selectedOrganisation: org }))}
-                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${state.selectedOrganisation?.id === org.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
+                      className={`w-full p-4 text-left hover:bg-slate-50 transition-all duration-200 ${state.selectedOrganisation?.id === org.id
+                        ? "bg-blue-50 border-l-4 border-blue-600 shadow-sm"
+                        : "border-l-4 border-transparent"
                         }`}
                     >
-                      <div className="font-medium">{org.name}</div>
-                      <div className="text-sm text-gray-500">{org.country}</div>
+                      <div className="font-semibold text-slate-900">{org.name}</div>
+                      <div className="text-sm text-slate-500 flex items-center gap-1 mt-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-slate-300"></span>
+                        {org.country}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -965,10 +1208,21 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <GraduationCap className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-              <h2 className="text-2xl font-bold">Select Your School/Faculty</h2>
-              <p className="text-gray-600">Choose your school or faculty</p>
-              <p className="text-sm text-gray-500 mt-1">at {state.selectedOrganisation?.name}</p>
+              <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <GraduationCap className="w-10 h-10 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">Select Your School/Faculty</h2>
+              <p className="text-slate-600 mt-2">Choose your school or faculty within</p>
+              <div className="inline-block bg-slate-100 px-3 py-1 rounded-full text-sm font-medium text-slate-700 mt-2">
+                {state.selectedOrganisation?.name}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 flex items-start gap-2">
+                <span className="font-bold">Tip:</span>
+                Search for your school or faculty. Avoid creating duplicates.
+              </p>
             </div>
 
             <div>
@@ -984,10 +1238,11 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
             <div className="max-h-64 overflow-y-auto border rounded-lg">
               {filteredInstitutes.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
-                  <p>No schools/faculties found.</p>
+                <div className="p-8 text-center text-slate-500 bg-slate-50">
+                  <p className="mb-2">No schools/faculties found matching &quot;{instSearchTerm}&quot;</p>
+                  <p className="text-xs text-slate-400 mb-4">Please check your spelling or try a different variation.</p>
                   {instSearchTerm && (
-                    <Button variant="outline" size="sm" onClick={() => setShowCreateInst(true)} className="mt-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateInst(true)} className="mt-2 border-dashed border-2 hover:border-solid hover:bg-white">
                       Create &quot;{instSearchTerm}&quot;
                     </Button>
                   )}
@@ -998,11 +1253,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     <button
                       key={inst.id}
                       onClick={() => setState((s) => ({ ...s, selectedInstitute: inst }))}
-                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${state.selectedInstitute?.id === inst.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
+                      className={`w-full p-4 text-left hover:bg-slate-50 transition-all duration-200 ${state.selectedInstitute?.id === inst.id
+                        ? "bg-blue-50 border-l-4 border-blue-600 shadow-sm"
+                        : "border-l-4 border-transparent"
                         }`}
                     >
-                      <div className="font-medium">{inst.name}</div>
-                      {inst.department && <div className="text-sm text-gray-500">{inst.department}</div>}
+                      <div className="font-semibold text-slate-900">{inst.name}</div>
+                      {inst.department && <div className="text-sm text-slate-500 mt-1">{inst.department}</div>}
                     </button>
                   ))}
                 </div>
@@ -1036,10 +1293,21 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <BookOpen className="w-12 h-12 text-blue-600 mx-auto mb-3" />
-              <h2 className="text-2xl font-bold">Select Your Department</h2>
-              <p className="text-gray-600">Choose your academic department</p>
-              <p className="text-sm text-gray-500 mt-1">at {state.selectedInstitute?.name}</p>
+              <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <BookOpen className="w-10 h-10 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">Select Your Department</h2>
+              <p className="text-slate-600 mt-2">Choose your academic department within</p>
+              <div className="inline-block bg-slate-100 px-3 py-1 rounded-full text-sm font-medium text-slate-700 mt-2">
+                {state.selectedInstitute?.name}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 flex items-start gap-2">
+                <span className="font-bold">Tip:</span>
+                Most departments are already listed. Please search thoroughly.
+              </p>
             </div>
 
             <div>
@@ -1055,10 +1323,11 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
 
             <div className="max-h-64 overflow-y-auto border rounded-lg">
               {filteredLabs.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
-                  <p>No departments found.</p>
+                <div className="p-8 text-center text-slate-500 bg-slate-50">
+                  <p className="mb-2">No departments found matching &quot;{labSearchTerm}&quot;</p>
+                  <p className="text-xs text-slate-400 mb-4">Please check your spelling or try a different variation.</p>
                   {labSearchTerm && (
-                    <Button variant="outline" size="sm" onClick={() => setShowCreateLab(true)} className="mt-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateLab(true)} className="mt-2 border-dashed border-2 hover:border-solid hover:bg-white">
                       Create &quot;{labSearchTerm}&quot;
                     </Button>
                   )}
@@ -1069,11 +1338,13 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     <button
                       key={lab.id}
                       onClick={() => setState((s) => ({ ...s, selectedLab: lab }))}
-                      className={`w-full p-4 text-left hover:bg-gray-50 transition ${state.selectedLab?.id === lab.id ? "bg-blue-50 border-l-4 border-blue-600" : ""
+                      className={`w-full p-4 text-left hover:bg-slate-50 transition-all duration-200 ${state.selectedLab?.id === lab.id
+                        ? "bg-blue-50 border-l-4 border-blue-600 shadow-sm"
+                        : "border-l-4 border-transparent"
                         }`}
                     >
-                      <div className="font-medium">{lab.name}</div>
-                      {lab.description && <div className="text-sm text-gray-500 mt-1">{lab.description}</div>}
+                      <div className="font-semibold text-slate-900">{lab.name}</div>
+                      {lab.description && <div className="text-sm text-slate-500 mt-1">{lab.description}</div>}
                     </button>
                   ))}
                 </div>
@@ -1095,6 +1366,244 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     {loading ? "Creating..." : "Confirm"}
                   </Button>
                   <Button variant="outline" onClick={() => setShowCreateLab(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+
+      case "research-groups":
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <Users className="w-10 h-10 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">Select Research Groups</h2>
+              <p className="text-slate-600 mt-2">Join research groups in</p>
+              <div className="inline-block bg-slate-100 px-3 py-1 rounded-full text-sm font-medium text-slate-700 mt-2">
+                {state.selectedLab?.name}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 flex items-start gap-2">
+                <span className="font-bold">Tip:</span>
+                You can join multiple research groups.
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="rg-search">Search for research groups</Label>
+              <Input
+                id="rg-search"
+                placeholder="e.g., Cancer Biology Group, Neuroimmunology Team"
+                value={rgSearchTerm}
+                onChange={(e) => setRgSearchTerm(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            <div className="max-h-64 overflow-y-auto border rounded-lg">
+              {filteredResearchGroups.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  <p>No research groups found.</p>
+                  {rgSearchTerm && (
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateRg(true)} className="mt-2">
+                      Create &quot;{rgSearchTerm}&quot;
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredResearchGroups.map((group) => {
+                    const isSelected = state.selectedResearchGroups.some(g => g.id === group.id)
+                    return (
+                      <button
+                        key={group.id}
+                        onClick={() => {
+                          if (isSelected) {
+                            setState(s => ({ ...s, selectedResearchGroups: s.selectedResearchGroups.filter(g => g.id !== group.id) }))
+                          } else {
+                            setState(s => ({ ...s, selectedResearchGroups: [...s.selectedResearchGroups, group] }))
+                          }
+                        }}
+                        className={`w-full p-4 text-left hover:bg-slate-50 transition-all duration-200 ${isSelected
+                          ? "bg-blue-50 border-l-4 border-blue-600 shadow-sm"
+                          : "border-l-4 border-transparent"
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold text-slate-900">{group.name}</div>
+                          {isSelected && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
+                        </div>
+                        {group.description && <div className="text-sm text-slate-500 mt-1">{group.description}</div>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {!showCreateRg && rgSearchTerm && filteredResearchGroups.length === 0 && (
+              <Button variant="outline" onClick={() => setShowCreateRg(true)} className="w-full">
+                Create new research group: &quot;{rgSearchTerm}&quot;
+              </Button>
+            )}
+
+            {showCreateRg && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold mb-2">Create New Research Group</h3>
+                <p className="text-sm text-gray-600 mb-4">Name: {rgSearchTerm}</p>
+                <div className="flex gap-2">
+                  <Button onClick={handleCreateResearchGroup} disabled={loading}>
+                    {loading ? "Creating..." : "Confirm"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowCreateRg(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+
+      case "working-labs":
+        return (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <div className="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <Building className="w-10 h-10 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">Select Working Labs</h2>
+              <p className="text-slate-600 mt-2">Select the physical labs you work in</p>
+              <div className="inline-block bg-slate-100 px-3 py-1 rounded-full text-sm font-medium text-slate-700 mt-2">
+                {state.selectedLab?.name}
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-blue-800 flex items-start gap-2">
+                <span className="font-bold">Tip:</span>
+                These are the physical spaces where you conduct your work.
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="wl-search">Search for working labs</Label>
+              <Input
+                id="wl-search"
+                placeholder="e.g., Lab 204, Wet Lab B"
+                value={wlSearchTerm}
+                onChange={(e) => setWlSearchTerm(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            <div className="max-h-64 overflow-y-auto border rounded-lg">
+              {filteredWorkingLabs.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  <p>No working labs found.</p>
+                  {wlSearchTerm && (
+                    <Button variant="outline" size="sm" onClick={() => setShowCreateWl(true)} className="mt-2">
+                      Create &quot;{wlSearchTerm}&quot;
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredWorkingLabs.map((lab) => {
+                    const isSelected = state.selectedWorkingLabs.some(l => l.id === lab.id)
+                    return (
+                      <button
+                        key={lab.id}
+                        onClick={() => {
+                          if (isSelected) {
+                            setState(s => ({ ...s, selectedWorkingLabs: s.selectedWorkingLabs.filter(l => l.id !== lab.id) }))
+                          } else {
+                            setState(s => ({ ...s, selectedWorkingLabs: [...s.selectedWorkingLabs, lab] }))
+                          }
+                        }}
+                        className={`w-full p-4 text-left hover:bg-slate-50 transition-all duration-200 ${isSelected
+                          ? "bg-blue-50 border-l-4 border-blue-600 shadow-sm"
+                          : "border-l-4 border-transparent"
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold text-slate-900">{lab.name}</div>
+                          {isSelected && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
+                        </div>
+                        <div className="text-sm text-slate-500 mt-1">
+                          {lab.physicalInstitute && <span>{lab.physicalInstitute}</span>}
+                          {lab.physicalInstitute && lab.labNumber && <span> • </span>}
+                          {lab.labNumber && <span>Lab {lab.labNumber}</span>}
+                        </div>
+                        {lab.description && <div className="text-xs text-slate-400 mt-1">{lab.description}</div>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {!showCreateWl && wlSearchTerm && filteredWorkingLabs.length === 0 && (
+              <Button variant="outline" onClick={() => setShowCreateWl(true)} className="w-full">
+                Create new working lab: &quot;{wlSearchTerm}&quot;
+              </Button>
+            )}
+
+            {showCreateWl && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold mb-2">Create New Working Lab</h3>
+                <div className="space-y-4 mb-4">
+                  <div>
+                    <Label htmlFor="wl-name">Lab Name</Label>
+                    <Input
+                      id="wl-name"
+                      value={wlSearchTerm}
+                      onChange={(e) => setWlSearchTerm(e.target.value)}
+                      placeholder="e.g., The Immunology Lab"
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="wl-institute">Physical Institute</Label>
+                    <Input
+                      id="wl-institute"
+                      list="physical-institutes"
+                      value={wlPhysicalInstitute}
+                      onChange={(e) => setWlPhysicalInstitute(e.target.value)}
+                      placeholder="e.g., Trinity Translational Medicine Institute"
+                      className="mt-1"
+                    />
+                    <datalist id="physical-institutes">
+                      {uniquePhysicalInstitutes.map((inst) => (
+                        <option key={inst} value={inst} />
+                      ))}
+                    </datalist>
+                    <p className="text-xs text-gray-500 mt-1">The building or institute where the lab is located</p>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="wl-number">Lab Number</Label>
+                    <Input
+                      id="wl-number"
+                      value={wlLabNumber}
+                      onChange={(e) => setWlLabNumber(e.target.value)}
+                      placeholder="e.g., 2.20, 1.11"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={handleCreateWorkingLab} disabled={loading || !wlSearchTerm || !wlPhysicalInstitute || !wlLabNumber}>
+                    {loading ? "Creating..." : "Confirm"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowCreateWl(false)}>
                     Cancel
                   </Button>
                 </div>
@@ -1216,8 +1725,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                         key={pos}
                         onClick={() => setState((s) => ({ ...s, positionLevel: pos }))}
                         className={`w-full p-3 text-left rounded-lg border transition ${state.positionLevel === pos
-                            ? "bg-blue-50 border-blue-600"
-                            : "hover:bg-gray-50 border-gray-200"
+                          ? "bg-blue-50 border-blue-600"
+                          : "hover:bg-gray-50 border-gray-200"
                           }`}
                       >
                         {POSITION_DISPLAY_NAMES[pos]}
@@ -1270,63 +1779,65 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                 <li>Trusted by publishers and institutions worldwide</li>
                 <li>Control your research profile</li>
               </ul>
-            </div>
+            </div >
 
-            {orcidData.orcidId ? (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-                <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
-                <h3 className="font-semibold mb-2">ORCID Connected!</h3>
-                <p className="text-sm text-gray-700">
-                  Your ORCID iD: <strong>{orcidData.orcidId}</strong>
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setOrcidData({})}
-                  className="mt-4"
-                >
-                  Disconnect
-                </Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <Button
-                  onClick={async () => {
-                    try {
-                      setOrcidConnecting(true)
-                      setError(null)
-                      const result = await linkOrcidToCurrentUser()
-                      setOrcidData({
-                        orcidId: result.orcid,
-                        orcidUrl: result.orcidUrl,
-                        verified: true,
-                      })
-                    } catch (err: any) {
-                      logger.error("ORCID linking error", err)
-                      setError(err.message || "Failed to connect ORCID")
-                    } finally {
-                      setOrcidConnecting(false)
-                    }
-                  }}
-                  disabled={orcidConnecting}
-                  className="bg-[#A6CE39] hover:bg-[#8FB82E] text-white"
-                >
-                  {orcidConnecting ? "Connecting..." : "Connect ORCID"}
-                </Button>
+            {
+              orcidData.orcidId ? (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+                  <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
+                  <h3 className="font-semibold mb-2">ORCID Connected!</h3>
+                  <p className="text-sm text-gray-700">
+                    Your ORCID iD: <strong>{orcidData.orcidId}</strong>
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOrcidData({})}
+                    className="mt-4"
+                  >
+                    Disconnect
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        setOrcidConnecting(true)
+                        setError(null)
+                        const result = await linkOrcidToCurrentUser()
+                        setOrcidData({
+                          orcidId: result.orcid,
+                          orcidUrl: result.orcidUrl,
+                          verified: true,
+                        })
+                      } catch (err: any) {
+                        logger.error("ORCID linking error", err)
+                        setError(err.message || "Failed to connect ORCID")
+                      } finally {
+                        setOrcidConnecting(false)
+                      }
+                    }}
+                    disabled={orcidConnecting}
+                    className="bg-[#A6CE39] hover:bg-[#8FB82E] text-white"
+                  >
+                    {orcidConnecting ? "Connecting..." : "Connect ORCID"}
+                  </Button>
 
-                <Button
-                  variant="outline"
-                  onClick={handleNext}
-                >
-                  Skip for Now
-                </Button>
-              </div>
-            )}
+                  <Button
+                    variant="outline"
+                    onClick={handleNext}
+                  >
+                    Skip for Now
+                  </Button>
+                </div>
+              )
+            }
 
-            <p className="text-xs text-center text-gray-500">
+            < p className="text-xs text-center text-gray-500" >
               You can connect ORCID later from your profile settings
-            </p>
-          </div>
+            </p >
+          </div >
         )
 
       case "pi-status":
@@ -1357,8 +1868,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <button
                 onClick={() => setState((s) => ({ ...s, isPrincipalInvestigator: false }))}
                 className={`p-6 rounded-lg border-2 transition ${!state.isPrincipalInvestigator
-                    ? "bg-blue-50 border-blue-600"
-                    : "border-gray-200 hover:border-gray-300"
+                  ? "bg-blue-50 border-blue-600"
+                  : "border-gray-200 hover:border-gray-300"
                   }`}
               >
                 <div className="font-semibold mb-2">No, I&apos;m not a PI</div>
@@ -1420,8 +1931,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <button
                 onClick={() => setSupervisorFilter("all")}
                 className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "all"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
                   }`}
               >
                 All Network
@@ -1429,8 +1940,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <button
                 onClick={() => setSupervisorFilter("org")}
                 className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "org"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
                   }`}
               >
                 My Organisation
@@ -1438,8 +1949,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <button
                 onClick={() => setSupervisorFilter("school")}
                 className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "school"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
                   }`}
               >
                 My School/Faculty
@@ -1447,8 +1958,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
               <button
                 onClick={() => setSupervisorFilter("dept")}
                 className={`px-4 py-2 font-medium border-b-2 transition ${supervisorFilter === "dept"
-                    ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
                   }`}
               >
                 My Department
@@ -1487,8 +1998,8 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                     key={supervisor.id}
                     onClick={() => setState((s) => ({ ...s, supervisorId: supervisor.id }))}
                     className={`w-full p-4 rounded-lg border-2 transition text-left ${state.supervisorId === supervisor.id
-                        ? "bg-blue-50 border-blue-600"
-                        : "border-gray-200 hover:border-gray-300"
+                      ? "bg-blue-50 border-blue-600"
+                      : "border-gray-200 hover:border-gray-300"
                       }`}
                   >
                     <div className="font-semibold">

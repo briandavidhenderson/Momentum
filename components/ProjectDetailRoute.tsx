@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { LogOut } from "lucide-react"
@@ -12,6 +12,7 @@ import OnboardingFlow from "@/components/OnboardingFlow"
 import TopModuleNavigation from "@/components/TopModuleNavigation"
 import { Button } from "@/components/ui/button"
 import { ProjectDetailPage } from "@/components/views/ProjectDetailPage"
+import { ProjectCreationDialog } from "@/components/ProjectCreationDialog"
 import { useAppContext } from "@/lib/AppContext"
 import { logger } from "@/lib/logger"
 import { UserRole } from "@/lib/types"
@@ -22,6 +23,7 @@ export default function ProjectDetailRoute() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const projectId = useMemo(() => params?.id?.toString() || "", [params])
+  const [showEditDialog, setShowEditDialog] = useState(false)
   const {
     currentUserProfile,
     currentUser,
@@ -41,6 +43,7 @@ export default function ProjectDetailRoute() {
     handleCreateDeliverable,
     handleUpdateDeliverable,
     handleDeleteDeliverable,
+    handleUpdateDeliverableTasks,
     allProfiles,
     fundingAccounts,
     mainView,
@@ -87,7 +90,7 @@ export default function ProjectDetailRoute() {
 
   const handleCreateWorkpackageForProject = useCallback(
     async (workpackageData: any) => {
-      if (!project) return
+      if (!project) return undefined
       const workpackageId = await createWorkpackage({
         ...workpackageData,
         projectId: project.id,
@@ -99,6 +102,7 @@ export default function ProjectDetailRoute() {
           workpackageIds: [...(project.workpackageIds || []), workpackageId],
         })
       }
+      return workpackageId
     },
     [createWorkpackage, currentUser?.uid, handleUpdateMasterProject, project]
   )
@@ -116,12 +120,14 @@ export default function ProjectDetailRoute() {
   const handleCreateDeliverableForProject = useCallback(
     async (deliverableData: any) => {
       try {
-        await handleCreateDeliverable({
+        const deliverableId = await handleCreateDeliverable({
           ...deliverableData,
           createdBy: currentUser?.uid || "",
         } as any)
+        return deliverableId
       } catch (error) {
         logger.error("Error creating deliverable", error)
+        return undefined
       }
     },
     [currentUser?.uid, handleCreateDeliverable]
@@ -185,8 +191,11 @@ export default function ProjectDetailRoute() {
         <div className="max-w-4xl mx-auto py-24 px-6 text-center space-y-4">
           <h1 className="text-2xl font-semibold text-slate-900">Project not found</h1>
           <p className="text-muted-foreground">The requested project does not exist or you do not have access.</p>
-          <Button asChild>
-            <Link href="/projects">Back to Projects</Link>
+          <Button onClick={() => {
+            setMainView("projects")
+            router.push("/")
+          }}>
+            Back to Projects
           </Button>
         </div>
       </main>
@@ -200,9 +209,12 @@ export default function ProjectDetailRoute() {
           <div className="px-6 py-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <Link href="/" className="text-2xl font-bold text-slate-900 tracking-tight">
+                <div onClick={() => {
+                  setMainView("dashboard")
+                  router.push("/")
+                }} className="text-2xl font-bold text-slate-900 tracking-tight cursor-pointer">
                   Momentum {currentUserProfile?.position || currentUser?.email}
-                </Link>
+                </div>
               </div>
               <NotificationBell />
               <Button
@@ -235,10 +247,12 @@ export default function ProjectDetailRoute() {
             fundingAccounts={fundingAccounts}
             health={projectHealth}
             budgetSummary={projectBudgetSummary}
-            onBack={() => router.push("/projects")}
-            onEdit={() => {
-              alert("Edit functionality coming soon")
+
+            onBack={() => {
+              setMainView("projects")
+              router.push("/")
             }}
+            onEdit={() => setShowEditDialog(true)}
             onCreateWorkpackage={handleCreateWorkpackageForProject}
             onUpdateWorkpackage={async (workpackageId, updates) => {
               await handleUpdateWorkpackage(workpackageId, updates)
@@ -247,12 +261,37 @@ export default function ProjectDetailRoute() {
             onCreateDeliverable={handleCreateDeliverableForProject}
             onUpdateDeliverable={handleUpdateDeliverableForProject}
             onDeleteDeliverable={handleDeleteDeliverableForProject}
+            onUpdateDeliverableTasks={handleUpdateDeliverableTasks}
           />
         </div>
       </div>
 
+
+      {
+        project && (
+          <ProjectCreationDialog
+            open={showEditDialog}
+            onClose={() => setShowEditDialog(false)}
+            onCreateRegular={() => { }} // Not used in edit mode
+            onCreateMaster={() => { }} // Not used in edit mode
+            onUpdate={async (updatedProject) => {
+              if (project) {
+                await handleUpdateMasterProject(project.id, updatedProject)
+                setShowEditDialog(false)
+              }
+            }}
+            currentUserProfileId={currentUserProfile?.id || null}
+            currentUserId={currentUser?.uid || ""}
+            organisationId={currentUserProfile?.organisationId}
+            labId={currentUserProfile?.labId}
+            project={project}
+            mode="edit"
+          />
+        )
+      }
+
       <CookieConsentBanner />
-    </main>
+    </main >
   )
 }
 

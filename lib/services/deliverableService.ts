@@ -1,26 +1,19 @@
-/**
- * Deliverable Service - Deliverable management
- * Handles operations on the 'deliverables' collection
- *
- * Deliverables are the primary unit of work output in the project hierarchy:
- * Project → Workpackage → Deliverable → (optional) ProjectTask
- */
 
 import {
   collection,
   doc,
-  getDocs,
   getDoc,
+  getDocs,
   setDoc,
   updateDoc,
   deleteDoc,
   query,
   where,
   onSnapshot,
-  Unsubscribe,
-  Timestamp,
   serverTimestamp,
-  Query,
+  Timestamp,
+  Unsubscribe,
+  Query
 } from "firebase/firestore"
 import { getFirebaseDb } from "../firebase"
 import type { Deliverable, DeliverableLink, DeliverableReview, DeliverableMetric } from "../types"
@@ -215,10 +208,15 @@ export async function updateDeliverable(
  */
 export async function deleteDeliverable(deliverableId: string): Promise<void> {
   const db = getFirebaseDb()
-  await deleteDoc(doc(db, "deliverables", deliverableId))
 
-  // TODO: Consider cascade deletion of associated ProjectTasks
-  // This might be handled by a Cloud Function for data integrity
+  // Delete associated ProjectTasks first (Cascade Delete)
+  const tasksQuery = query(collection(db, 'projectTasks'), where('linkedDeliverableId', '==', deliverableId))
+  const tasksSnap = await getDocs(tasksQuery)
+  const deletePromises = tasksSnap.docs.map(doc => deleteDoc(doc.ref))
+  await Promise.all(deletePromises)
+
+  // Delete the deliverable itself
+  await deleteDoc(doc(db, "deliverables", deliverableId))
 }
 
 /**
@@ -249,17 +247,24 @@ export function subscribeToDeliverables(
     q = query(q, where("status", "==", filters.status))
   }
 
-  return onSnapshot(q, (snapshot) => {
-    const deliverables = snapshot.docs.map(doc => {
-      const data = doc.data() as FirestoreDeliverable
-      return {
-        ...data,
-        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-        updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-      } as Deliverable
-    })
-    callback(deliverables)
-  })
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const deliverables = snapshot.docs.map(doc => {
+        const data = doc.data() as FirestoreDeliverable
+        return {
+          ...data,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
+        } as Deliverable
+      })
+      callback(deliverables)
+    },
+    (error) => {
+      console.error("Deliverables snapshot error", error)
+      callback([])
+    }
+  )
 }
 
 /**
@@ -345,8 +350,14 @@ export async function updateDeliverableMetric(
  * Calculate deliverable progress from project tasks
  */
 export async function calculateDeliverableProgress(deliverableId: string): Promise<number> {
-  // TODO: Implement progress calculation based on linked ProjectTasks
-  // This would query all ProjectTasks with deliverableId and average their progress
-  // For now, return 0 as placeholder
-  return 0
+  const db = getFirebaseDb()
+  const tasksQuery = query(collection(db, 'projectTasks'), where('linkedDeliverableId', '==', deliverableId))
+  const tasksSnap = await getDocs(tasksQuery)
+
+  if (tasksSnap.empty) {
+    return 0
+  }
+
+  const totalProgress = tasksSnap.docs.reduce((sum, doc) => sum + (doc.data().progress || 0), 0)
+  return Math.round(totalProgress / tasksSnap.size)
 }

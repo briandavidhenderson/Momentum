@@ -1,0 +1,148 @@
+    // ============================================================================
+    // MASTER PROJECTS
+    // ============================================================================
+    match /masterProjects/{projectId} {
+      // Read: Team members + admins + lab members (backward compatibility)
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        getUserProfileId() in resource.data.principalInvestigatorIds ||
+        getUserProfileId() in resource.data.coPIIds ||
+        getUserProfileId() in resource.data.teamMemberIds ||
+        isLabMember(resource.data.labId)
+      );
+
+      // Create: Lab members can create projects
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isLabMember(request.resource.data.labId)
+      );
+
+      // Update: PIs or admins only
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        getUserProfileId() in resource.data.principalInvestigatorIds
+      );
+
+      // Delete: PIs or admins only
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        getUserProfileId() in resource.data.principalInvestigatorIds
+      );
+    }
+
+    // ============================================================================
+    // PROJECTS COLLECTION (LEGACY)
+    // ============================================================================
+    match /projects/{projectId} {
+      // Users can only read projects they created OR projects in their lab
+      // This ensures proper data privacy - client-side filtering is NOT a security boundary
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Any authenticated user can create a project
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
+    // WORKPACKAGES COLLECTION
+    // ============================================================================
+    match /workpackages/{workpackageId} {
+      // Users can only read workpackages they created OR in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin() ||
+        (resource.data.profileProjectId != null && isProjectTeamMember(resource.data.profileProjectId))
+      );
+
+      // Users can create workpackages
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
+    // DELIVERABLES COLLECTION
+    // ============================================================================
+    // Deliverables are concrete outcomes within workpackages.
+    // They are the primary unit of work output in the project hierarchy:
+    // Project → Workpackage → Deliverable → (optional) ProjectTask
+    match /deliverables/{deliverableId} {
+      // Users can only read deliverables they created, own, or in their lab
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        ('ownerId' in resource.data && resource.data.ownerId == getUserProfileId()) ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create deliverables
+      // The deliverable must belong to a workpackage (workpackageId is required)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.createdBy == request.auth.uid &&
+                       'workpackageId' in request.resource.data;
+
+      // Creator, deliverable owner, or admin can update
+      // This allows both the creator and the assigned owner to update progress
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        ('ownerId' in resource.data && resource.data.ownerId == getUserProfileId())
+      );
+
+      // Creator or admin can delete
+      // Note: Deleting a deliverable should also clean up linked ProjectTasks
+      // (Consider implementing cascade deletion via Cloud Functions)
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
+    // PROJECT FILES (Storage metadata)
+    // ============================================================================
+    match /projectFiles/{fileId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
+        (resource.data.labId != null && isLabMember(resource.data.labId))
+      );
+
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        (request.resource.data.projectId != null && isProjectTeamMember(request.resource.data.projectId)) ||
+        (request.resource.data.labId != null && isLabMember(request.resource.data.labId))
+      );
+
+      allow update, delete: if isAuthenticated() && (
+        isAdmin() ||
+        (resource.data.projectId != null && isProjectTeamMember(resource.data.projectId)) ||
+        (resource.data.labId != null && isLabMember(resource.data.labId))
+      );
+    }

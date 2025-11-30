@@ -22,12 +22,13 @@ import { logger } from "../logger"
 import type { Workpackage, Project, Subtask } from "../types"
 
 // ============================================================================
-// TODO MANAGEMENT (for Task Subtasks)
+// SUBTASK & TODO UPDATES (Legacy Support)
 // ============================================================================
 
 /**
- * Update a workpackage with recalculated progress after todo changes
- * This updates the entire workpackage including nested tasks, subtasks, and todos
+ * Update a workpackage with recalculated progress after todo/subtask changes
+ * This handles the legacy structure where tasks and subtasks are nested directly
+ * within the workpackage document.
  */
 export async function updateWorkpackageWithProgress(wpId: string, workpackage: Workpackage): Promise<void> {
   const db = getFirebaseDb()
@@ -85,8 +86,9 @@ export interface FirestoreDayToDayTask {
   id: string
   title: string
   description?: string
-  status: "todo" | "working" | "done" | "history"
+  status: "todo" | "working" | "done" | "history" | "blocked"
   importance: string
+  priority: "low" | "medium" | "high" | "critical" // NEW
   assigneeId?: string // DEPRECATED: Use assigneeIds instead
   assigneeIds?: string[] // PersonProfile IDs - supports multiple assignees
   dueDate?: Timestamp | null
@@ -98,6 +100,11 @@ export interface FirestoreDayToDayTask {
   linkedTaskId?: string
   order: number
 
+  // Blocking relationships - NEW
+  blockedBy?: string[] // Array of task IDs that must be completed first
+  blockingReason?: string // Description of why task is blocked
+  blocking?: string[] // Array of task IDs that this task blocks
+
   // Completion tracking
   completedBy?: string
   completedAt?: Timestamp
@@ -105,7 +112,11 @@ export interface FirestoreDayToDayTask {
   // Verification tracking
   verifiedBy?: string
   verifiedAt?: Timestamp
+
+  // Lab context
+  labId?: string
 }
+
 
 /**
  * Create a new day-to-day task
@@ -130,6 +141,37 @@ export async function createDayToDayTask(taskData: Omit<any, 'id'>): Promise<str
   )
 
   await setDoc(taskRef, cleanedTask)
+
+  // Send notification if task is assigned to someone
+  if (taskData.assigneeIds && taskData.assigneeIds.length > 0) {
+    try {
+      const { notifyTaskAssignment } = await import('./notificationService')
+      const { getProfile } = await import('./profileService')
+
+      // Get creator's profile for name
+      const creatorProfile = taskData.createdBy ? await getProfile(taskData.createdBy) : null
+      const creatorName = creatorProfile
+        ? `${creatorProfile.firstName} ${creatorProfile.lastName}`.trim() || 'Someone'
+        : 'Someone'
+
+      // Notify each assignee
+      for (const assigneeId of taskData.assigneeIds) {
+        // Don't notify if creator is assigning to themselves
+        if (assigneeId !== taskData.createdBy) {
+          await notifyTaskAssignment({
+            assigneeId,
+            taskId,
+            taskTitle: taskData.title || 'Untitled Task',
+            assignedBy: taskData.createdBy || '',
+            assignedByName: creatorName,
+          })
+        }
+      }
+    } catch (error) {
+      logger.error('Error sending task assignment notification', error, { taskId })
+      // Don't fail task creation if notification fails
+    }
+  }
 
   return taskId
 }
@@ -159,6 +201,34 @@ export async function updateDayToDayTask(taskId: string, updates: Partial<any>):
   )
 
   await updateDoc(taskRef, cleanedUpdate)
+
+  // Send notifications for important updates
+  if (updates.status === 'done' && updates.completedBy && updates.createdBy) {
+    try {
+      const { notifyTaskCompletion } = await import('./notificationService')
+      const { getProfile } = await import('./profileService')
+
+      // Get completer's profile for name
+      const completerProfile = await getProfile(updates.completedBy)
+      const completerName = completerProfile
+        ? `${completerProfile.firstName} ${completerProfile.lastName}`.trim() || 'Someone'
+        : 'Someone'
+
+      // Notify task creator (if not the same person who completed it)
+      if (updates.createdBy !== updates.completedBy) {
+        await notifyTaskCompletion({
+          creatorId: updates.createdBy,
+          taskId,
+          taskTitle: updates.title || 'Untitled Task',
+          completedBy: updates.completedBy,
+          completedByName: completerName,
+        })
+      }
+    } catch (error) {
+      logger.error('Error sending task completion notification', error, { taskId })
+      // Don't fail task update if notification fails
+    }
+  }
 }
 
 /**
@@ -192,11 +262,11 @@ export function subscribeToDayToDayTasks(
           const data = doc.data() as FirestoreDayToDayTask
           return {
             ...data,
-            dueDate: data.dueDate?.toDate() || undefined,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
-            completedAt: data.completedAt?.toDate() || undefined,
-            verifiedAt: data.verifiedAt?.toDate() || undefined,
+            dueDate: data.dueDate?.toDate ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate as any) : undefined),
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt as any) : new Date()),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt as any) : new Date()),
+            completedAt: data.completedAt?.toDate ? data.completedAt.toDate() : (data.completedAt ? new Date(data.completedAt as any) : undefined),
+            verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : (data.verifiedAt ? new Date(data.verifiedAt as any) : undefined),
           }
         })
         callback(tasks)
@@ -210,6 +280,6 @@ export function subscribeToDayToDayTasks(
   } catch (error) {
     logger.error("Error setting up day-to-day tasks subscription", error)
     // Return a no-op unsubscribe function
-    return () => {}
+    return () => { }
   }
 }

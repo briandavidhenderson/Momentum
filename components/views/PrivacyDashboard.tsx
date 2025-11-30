@@ -26,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useToast } from "@/components/ui/toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
@@ -62,6 +63,7 @@ import { logger } from "@/lib/logger"
 
 export function PrivacyDashboard() {
   const { currentUser: user, currentUserProfile: profile } = useAuth()
+  const { toast } = useToast()
 
   // State
   const [loading, setLoading] = useState(false)
@@ -80,7 +82,7 @@ export function PrivacyDashboard() {
     if (!user) return
 
     async function loadData() {
-    const db = getFirebaseDb()
+      const db = getFirebaseDb()
       if (!user) return
 
       try {
@@ -165,7 +167,11 @@ export function PrivacyDashboard() {
       setPrivacySettings(updatedSettings)
     } catch (error) {
       logger.error("Error updating privacy settings", error)
-      alert("Failed to update privacy settings. Please try again.")
+      toast({
+        title: "Update Failed",
+        description: "Failed to update privacy settings. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -195,9 +201,10 @@ export function PrivacyDashboard() {
 
       await addDoc(collection(db, "dataExportRequests"), exportRequest)
 
-      alert(
-        `Data export request submitted successfully! You'll receive an email at ${user.email} when your export is ready. This usually takes 15-30 minutes.`
-      )
+      toast({
+        title: "Export Requested",
+        description: `Data export request submitted successfully! You'll receive an email at ${user.email} when your export is ready. This usually takes 15-30 minutes.`,
+      })
 
       // Reload exports
       const exportsQuery = query(
@@ -213,7 +220,11 @@ export function PrivacyDashboard() {
       setDataExportRequests(exports)
     } catch (error) {
       logger.error("Error requesting data export", error)
-      alert("Failed to request data export. Please try again.")
+      toast({
+        title: "Request Failed",
+        description: "Failed to request data export. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -224,7 +235,11 @@ export function PrivacyDashboard() {
     const db = getFirebaseDb()
     if (!user) return
     if (deleteConfirmation !== "DELETE MY ACCOUNT") {
-      alert('Please type "DELETE MY ACCOUNT" to confirm.')
+      toast({
+        title: "Confirmation Required",
+        description: 'Please type "DELETE MY ACCOUNT" to confirm.',
+        variant: "destructive",
+      })
       return
     }
 
@@ -244,15 +259,10 @@ export function PrivacyDashboard() {
 
       await addDoc(collection(db, "accountDeletionRequests"), deletionRequest)
 
-      alert(
-        `Account deletion request submitted successfully.
-
-Your account and all personal data will be permanently deleted. The deletion process will begin immediately and cannot be reversed.
-
-A confirmation has been sent to ${user.email}.
-
-IMPORTANT: You will be automatically logged out in a few moments.`
-      )
+      toast({
+        title: "Deletion Requested",
+        description: "Account deletion request submitted successfully. You will be logged out shortly.",
+      })
 
       setShowDeleteDialog(false)
       setDeleteConfirmation("")
@@ -264,7 +274,11 @@ IMPORTANT: You will be automatically logged out in a few moments.`
       }, 3000)
     } catch (error) {
       logger.error("Error requesting account deletion", error)
-      alert("Failed to request account deletion. Please try again.")
+      toast({
+        title: "Request Failed",
+        description: "Failed to request account deletion. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -478,15 +492,14 @@ IMPORTANT: You will be automatically logged out in a few moments.`
                       </div>
                       <div className="flex items-center gap-2">
                         <span
-                          className={`px-3 py-1 rounded text-sm ${
-                            request.status === "completed"
-                              ? "bg-green-100 text-green-800"
-                              : request.status === "processing"
+                          className={`px-3 py-1 rounded text-sm ${request.status === "completed"
+                            ? "bg-green-100 text-green-800"
+                            : request.status === "processing"
                               ? "bg-blue-100 text-blue-800"
                               : request.status === "failed"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
+                                ? "bg-red-100 text-red-800"
+                                : "bg-gray-100 text-gray-800"
+                            }`}
                         >
                           {request.status}
                         </span>

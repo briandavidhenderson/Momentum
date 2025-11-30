@@ -59,7 +59,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
  */
 
 // Event type mapping from CalendarEvent to component format
-type ComponentEventType = "meeting" | "deadline" | "training" | "event" | "focus" | "equipment_mine" | "equipment_others"
+type ComponentEventType = "meeting" | "deadline" | "training" | "event" | "focus" | "equipment_mine" | "equipment_others" | "abstract-submission"
 
 interface ComponentEvent {
   id: string
@@ -79,6 +79,7 @@ const CATEGORY_META: Record<ComponentEventType, { label: string; color: string }
   focus: { label: "Focus", color: "bg-violet-100 text-violet-900 border-violet-200" },
   equipment_mine: { label: "My Equipment", color: "bg-indigo-100 text-indigo-900 border-indigo-300 ring-1 ring-indigo-300" },
   equipment_others: { label: "Other Bookings", color: "bg-slate-100 text-slate-600 border-slate-200 opacity-80" },
+  "abstract-submission": { label: "Abstract Submission", color: "bg-purple-100 text-purple-900 border-purple-200" },
 }
 
 const VIEW_TABS = [
@@ -106,6 +107,7 @@ function transformEvent(event: CalendarEvent): ComponentEvent {
   else if (event.type === "meeting") type = "meeting"
   else if (event.type === "deadline") type = "deadline"
   else if (event.type === "training") type = "training"
+  else if (event.type === "abstract-submission") type = "abstract-submission"
   else if (event.type === "milestone" || event.type === "other") type = "event"
   // Check for focus tag
   else if (event.tags?.includes("focus")) type = "focus"
@@ -182,6 +184,7 @@ export function CalendarView({ onEventClick }: CalendarViewProps) {
     focus: true,
     equipment_mine: true,
     equipment_others: true,
+    "abstract-submission": true,
   })
   const [showEquipment, setShowEquipment] = useState(true)
   const [showEventDialog, setShowEventDialog] = useState(false)

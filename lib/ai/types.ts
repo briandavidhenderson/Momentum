@@ -173,6 +173,7 @@ export interface LLMOptions {
   temperature?: number
   model?: string
   systemPrompt?: string
+  responseMimeType?: string
 }
 
 export interface ProtocolOptions extends LLMOptions {

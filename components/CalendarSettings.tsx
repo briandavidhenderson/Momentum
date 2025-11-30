@@ -17,6 +17,7 @@ import { updateCalendarConnection } from '@/lib/services'
 import { syncGoogleCalendar } from '@/lib/calendar/google'
 import { syncMicrosoftCalendar } from '@/lib/calendar/microsoft'
 import { logger } from '@/lib/logger'
+import { useToast } from "@/components/ui/toast"
 
 interface CalendarSettingsProps {
   connection: CalendarConnection
@@ -24,6 +25,7 @@ interface CalendarSettingsProps {
 }
 
 export function CalendarSettings({ connection, onUpdate }: CalendarSettingsProps) {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [calendars, setCalendars] = useState<ConnectedCalendar[]>(connection.calendars)
   const [syncing, setSyncing] = useState(false)
@@ -45,7 +47,8 @@ export function CalendarSettings({ connection, onUpdate }: CalendarSettingsProps
       onUpdate?.()
     } catch (error) {
       logger.error('Error updating calendar selection', error)
-      alert('Failed to update calendar selection')
+      logger.error('Error updating calendar selection', error)
+      toast({ title: 'Failed to update calendar selection', variant: 'destructive' })
       // Revert on error
       setCalendars(connection.calendars)
     } finally {
@@ -58,16 +61,17 @@ export function CalendarSettings({ connection, onUpdate }: CalendarSettingsProps
     try {
       if (connection.provider === 'google') {
         await syncGoogleCalendar(connection.id)
-        alert('Calendar synced successfully!')
+        toast({ title: 'Calendar synced successfully!' })
         onUpdate?.()
       } else if (connection.provider === 'microsoft') {
         await syncMicrosoftCalendar(connection.id)
-        alert('Calendar synced successfully!')
+        toast({ title: 'Calendar synced successfully!' })
         onUpdate?.()
       }
     } catch (error: any) {
       logger.error('Error syncing calendar', error)
-      alert(error.message || 'Failed to sync calendar')
+      logger.error('Error syncing calendar', error)
+      toast({ title: error.message || 'Failed to sync calendar', variant: 'destructive' })
     } finally {
       setSyncing(false)
     }

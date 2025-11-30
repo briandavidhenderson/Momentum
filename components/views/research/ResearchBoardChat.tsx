@@ -1,30 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User as UserIcon, Paperclip } from 'lucide-react';
+import { Send, User as UserIcon, Paperclip, MessageSquareIcon } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useToast } from "@/components/ui/toast";
 import { useAuth } from '@/lib/hooks/useAuth';
 import { subscribeToBoardMessages, sendBoardMessage } from '@/lib/services/researchBoardService';
+import { useResearchBoardDetails } from '@/lib/hooks/useResearchBoards';
 import { BoardMessage } from '@/lib/types';
-import { formatDistanceToNow } from 'date-fns';
-
 interface ResearchBoardChatProps {
     boardId: string;
 }
 
 export function ResearchBoardChat({ boardId }: ResearchBoardChatProps) {
+    const { toast } = useToast();
     const { currentUser, currentUserProfile } = useAuth();
+    const { board } = useResearchBoardDetails(boardId);
     const [messages, setMessages] = useState<BoardMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        // Avoid subscribing if user cannot access the board to prevent permission-denied crashes
+        if (!currentUser || !currentUserProfile) return;
+        const isMember = board?.members?.includes(currentUser.uid) || (board?.labId && board.labId === currentUserProfile.labId);
+        if (!isMember) {
+            setMessages([]);
+            return;
+        }
+
         const unsubscribe = subscribeToBoardMessages(boardId, (msgs) => {
             setMessages(msgs);
         });
         return () => unsubscribe();
-    }, [boardId]);
+    }, [boardId, board?.members, board?.labId, currentUser, currentUserProfile]);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -35,19 +46,40 @@ export function ResearchBoardChat({ boardId }: ResearchBoardChatProps) {
     const handleSendMessage = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!newMessage.trim() || !currentUser || !currentUserProfile) return;
+        // Basic membership gate
+        const isMember = board?.members?.includes(currentUser.uid) || (board?.labId && board.labId === currentUserProfile.labId);
+        if (!isMember) {
+            toast({
+                title: "Permission Denied",
+                description: "You do not have permission to post to this board.",
+                variant: "destructive",
+            });
+            return;
+        }
 
         const content = newMessage;
         setNewMessage(''); // Optimistic clear
 
-        await sendBoardMessage(
-            boardId,
-            content,
-            {
-                userId: currentUser.uid,
-                name: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`,
-                avatar: currentUserProfile.avatarUrl
-            }
-        );
+        try {
+            await sendBoardMessage(
+                boardId,
+                content,
+                {
+                    userId: currentUser.uid,
+                    name: `${currentUserProfile.firstName} ${currentUserProfile.lastName} `,
+                    avatar: currentUserProfile.avatarUrl
+                }
+            );
+        } catch (err) {
+            console.error('Failed to send board message', err);
+            toast({
+                title: "Send Failed",
+                description: "Failed to send message. Please try again.",
+                variant: "destructive",
+            });
+            // Restore text so user can retry
+            setNewMessage(content);
+        }
     };
 
     return (
@@ -78,18 +110,18 @@ export function ResearchBoardChat({ boardId }: ResearchBoardChatProps) {
                         }
 
                         return (
-                            <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+                            <div key={msg.id} className={`flex gap - 2 ${isMe ? 'flex-row-reverse' : ''} `}>
                                 <Avatar className="h-8 w-8 mt-1">
                                     <AvatarImage src={msg.author.avatar} />
                                     <AvatarFallback className="text-[10px] bg-slate-200">
                                         {msg.author.name?.[0] || '?'}
                                     </AvatarFallback>
                                 </Avatar>
-                                <div className={`max-w-[80%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
-                                    <div className={`px-3 py-2 rounded-lg text-sm ${isMe
+                                <div className={`max - w - [80 %] ${isMe ? 'items-end' : 'items-start'} flex flex - col`}>
+                                    <div className={`px - 3 py - 2 rounded - lg text - sm ${isMe
                                         ? 'bg-indigo-600 text-white rounded-tr-none'
                                         : 'bg-slate-100 text-slate-800 rounded-tl-none'
-                                        }`}>
+                                        } `}>
                                         {msg.content}
                                     </div>
                                     <span className="text-[10px] text-slate-400 mt-1">
@@ -119,19 +151,4 @@ export function ResearchBoardChat({ boardId }: ResearchBoardChatProps) {
     );
 }
 
-function MessageSquareIcon({ className }: { className?: string }) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={className}
-        >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-    );
-}
+

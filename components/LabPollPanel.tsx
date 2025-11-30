@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { LabPoll, LabPollResponse } from "@/lib/types"
 import { Plus, MessageSquare, Users, CheckCircle2, X, Trash2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useToast } from "@/components/ui/use-toast"
 
 interface LabPollPanelProps {
   polls: LabPoll[]
@@ -27,6 +28,7 @@ export function LabPollPanel({
   onRespondToPoll,
   onDeletePoll,
 }: LabPollPanelProps) {
+  const { toast } = useToast()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newPoll, setNewPoll] = useState({
     question: '',
@@ -55,7 +57,7 @@ export function LabPollPanel({
     const respondingUserIds = poll.responses
       ?.filter(r => r.selectedOptionIds.includes(optionId))
       .map(r => r.userId) || []
-    
+
     return respondingUserIds
       .map(userId => people.find(p => p.id === userId))
       .filter((p): p is { id: string; name: string } => p !== undefined)
@@ -63,7 +65,11 @@ export function LabPollPanel({
 
   const handleCreatePoll = () => {
     if (!newPoll.question.trim() || newPoll.options.filter(o => o.trim()).length < 2) {
-      alert("Please enter a question and at least 2 options")
+      toast({
+        title: "Invalid Poll",
+        description: "Please enter a question and at least 2 options",
+        variant: "destructive",
+      })
       return
     }
 
@@ -90,7 +96,7 @@ export function LabPollPanel({
     const newSelection = currentSelection.includes(optionId)
       ? currentSelection.filter(id => id !== optionId)
       : [...currentSelection, optionId]
-    
+
     onRespondToPoll(poll.id, newSelection)
   }
 
@@ -100,7 +106,11 @@ export function LabPollPanel({
 
   const handleRemoveOption = (index: number) => {
     if (newPoll.options.length <= 2) {
-      alert("Poll must have at least 2 options")
+      toast({
+        title: "Cannot Remove Option",
+        description: "Poll must have at least 2 options",
+        variant: "destructive",
+      })
       return
     }
     setNewPoll({
@@ -125,7 +135,7 @@ export function LabPollPanel({
             <p className="text-sm text-muted-foreground">Ask questions and gather lab availability or preferences.</p>
           </div>
         </div>
-        <Button 
+        <Button
           className="bg-brand-500 text-white hover:bg-brand-600 gap-2"
           onClick={() => setIsCreateModalOpen(true)}
         >
@@ -145,7 +155,7 @@ export function LabPollPanel({
           labPolls.map((poll) => {
             const userResponse = getUserResponse(poll)
             const totalResponses = poll.responses?.length || 0
-            
+
             return (
               <div
                 key={poll.id}
@@ -182,22 +192,20 @@ export function LabPollPanel({
                     const isSelected = userResponse.includes(option.id)
                     const responseCount = getOptionResponseCount(poll, option.id)
                     const respondents = getOptionRespondents(poll, option.id)
-                    
+
                     return (
                       <div
                         key={option.id}
-                        className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
-                          isSelected
+                        className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${isSelected
                             ? 'bg-brand-50 border-brand-500'
                             : 'bg-gray-50 border-border hover:border-brand-300'
-                        }`}
+                          }`}
                         onClick={() => handleToggleOption(poll, option.id)}
                       >
-                        <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
-                          isSelected
+                        <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected
                             ? 'bg-brand-500 border-brand-500'
                             : 'border-gray-300'
-                        }`}>
+                          }`}>
                           {isSelected && <CheckCircle2 className="h-4 w-4 text-white" />}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -247,7 +255,7 @@ export function LabPollPanel({
           <DialogHeader>
             <DialogTitle>Create New Poll</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <Label>Question *</Label>
@@ -301,7 +309,7 @@ export function LabPollPanel({
               <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={handleCreatePoll}
                 className="bg-brand-500 hover:bg-brand-600 text-white"
               >

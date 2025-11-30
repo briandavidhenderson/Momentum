@@ -105,11 +105,13 @@ export interface ELNReport {
   sourceItemIds: string[] // Which items were used to generate this
 }
 
+import { VisibilitySettings } from './visibility.types';
+
 /**
  * ELNExperiment - Electronic Lab Notebook experiment
  * UPDATED: Now supports multimodal canvas with items and AI report generation
  */
-export interface ELNExperiment {
+export interface ELNExperiment extends VisibilitySettings {
   id: string
   title: string
   description?: string
@@ -119,7 +121,8 @@ export interface ELNExperiment {
   masterProjectName: string       // Cached
 
   // Matrix Structure
-  groupId?: string                // Research Group this experiment is shared with
+  groupId?: string                // Deprecated: Use sharedWithGroups
+
 
   workpackageId?: string          // Optional: specific work package
   taskId?: string                 // Optional: specific task
@@ -141,7 +144,7 @@ export interface ELNExperiment {
 
   // Authorship
   createdBy: string // PersonProfile ID who created the experiment
-  collaborators?: string[]  // Additional PersonProfile IDs
+  collaborators?: string[]  // Deprecated: Use sharedWithUsers
 
   // Metadata
   experimentNumber?: string  // e.g., "EXP-2025-001"
@@ -173,6 +176,20 @@ export interface ELNExperiment {
     unit: string
     batchNumber?: string
     dateUsed?: string
+    deducted?: boolean
+  }>
+
+  samplesUsed?: Array<{
+    sampleId: string
+    sampleName: string
+    quantityUsed?: number
+    unit?: string
+  }>
+
+  protocolsUsed?: Array<{
+    protocolId: string
+    protocolName: string
+    version?: string
   }>
 
   relatedWhiteboards?: string[]      // Whiteboard IDs

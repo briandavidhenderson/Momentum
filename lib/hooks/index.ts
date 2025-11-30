@@ -8,7 +8,7 @@ export { useCalendar } from './useCalendar'
 export { useDayToDayTasks } from './useDayToDayTasks'
 export { useELN } from './useELN'
 export { useEquipment } from './useEquipment'
-export { useEvents } from './useEvents'
+
 export { useFunding } from './useFunding'
 export { useInterface } from './useInterface'
 export { useOrders } from './useOrders'

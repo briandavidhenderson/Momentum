@@ -32,6 +32,7 @@ import { ResearchPinQADialog } from '@/components/dialogs/ResearchPinQADialog';
 import { ResearchBoardChat } from './ResearchBoardChat';
 import { analyzeResearchPin } from '@/lib/services/researchAIService';
 import { logger } from '@/lib/logger';
+import { useToast } from "@/lib/toast";
 
 interface ResearchBoardDetailProps {
   boardId: string;
@@ -39,6 +40,7 @@ interface ResearchBoardDetailProps {
 }
 
 export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDetailProps) {
+  const { error: toastError } = useToast();
   const { pins, loading, searchQuery, setSearchQuery, deletePin } = useResearchBoard(boardId);
   const { board, loading: boardLoading } = useResearchBoardDetails(boardId);
   const { currentUser, currentUserProfile } = useAuth();
@@ -88,7 +90,7 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
       await analyzeResearchPin(pin);
     } catch (error) {
       logger.error('Failed to analyze pin', error);
-      alert('Failed to analyze pin. Please try again.');
+      toastError("Failed to analyze pin. Please try again.");
     }
   };
 
@@ -330,14 +332,16 @@ export default function ResearchBoardDetail({ boardId, onBack }: ResearchBoardDe
                             }
                           }}
                         />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs"
-                          onClick={() => handleOpenQA(pin)}
-                        >
-                          Full Chat
-                        </Button>
+                        {!pin.isThinking && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => handleOpenQA(pin)}
+                          >
+                            Full Chat
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"

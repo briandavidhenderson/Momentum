@@ -24,7 +24,7 @@ export type OrderStatus = "to-order" | "ordered" | "received"
 /**
  * Inventory level indicator
  */
-export type InventoryLevel = "empty" | "low" | "medium" | "full"
+export type InventoryLevel = "empty" | "low" | "medium" | "full" | "out_of_stock"
 
 /**
  * Project visibility levels

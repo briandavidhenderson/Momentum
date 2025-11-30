@@ -1,0 +1,215 @@
+    // ============================================================================
+    // ORDERS COLLECTION
+    // ============================================================================
+    match /orders/{orderId} {
+      // Users can read orders in their lab. During onboarding (no lab yet), allow
+      // users to read records they created so they can complete setup without
+      // exposing the entire collection.
+      allow read: if isAuthenticated() && (
+        (getUserLab() != null && resource.data.labId == getUserLab()) ||
+        (getUserLab() == null && resource.data.createdBy == request.auth.uid)
+      );
+
+      // Users can create orders
+      allow create: if isAuthenticated();
+
+      // Users can update orders if they are in the same lab or created it
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId)
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // ============================================================================
+    // INVENTORY COLLECTION
+    // ============================================================================
+    match /inventory/{itemId} {
+      // Users can read inventory in their lab. During onboarding (no lab yet),
+      // allow users to read records they created so they can complete setup
+      // without exposing the entire collection.
+      allow read: if isAuthenticated() && (
+        (getUserLab() != null && resource.data.labId == getUserLab()) ||
+        (getUserLab() == null && resource.data.createdBy == request.auth.uid)
+      );
+
+      // Users can create inventory items
+      allow create: if isAuthenticated();
+
+      // Creator, admin, or lab member can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId)
+      );
+
+      // Creator, admin, or lab member can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid ||
+        isLabMember(resource.data.labId)
+      );
+    }
+
+    // ============================================================================
+    // EQUIPMENT
+    // ============================================================================
+    match /equipment/{equipmentId} {
+      // Users can only read equipment in their lab
+      allow read: if isAuthenticated() && (
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create equipment
+      allow create: if isAuthenticated();
+
+      // Users or admin can update
+      allow update: if isAuthenticated();
+
+      // Users or admin can delete
+      allow delete: if isAuthenticated();
+    }
+
+    // ============================================================================
+    // EQUIPMENT BOOKINGS
+    // ============================================================================
+    match /equipmentBookings/{bookingId} {
+      // Helper: Check if user is equipment manager
+      function isEquipmentManager(equipmentId) {
+        let equipment = get(/databases/$(database)/documents/equipment/$(equipmentId));
+        let profileId = getUserProfileId();
+        return equipment != null && equipment.data != null && (
+          (equipment.data.managerId != null && equipment.data.managerId == profileId) ||
+          (equipment.data.managerIds != null && profileId in equipment.data.managerIds)
+        );
+      }
+
+      // Users can read bookings if they are authenticated (needed for cross-lab availability)
+      allow read: if isAuthenticated();
+
+      // Users can create bookings if they are authenticated
+      // Must be for themselves
+      allow create: if isAuthenticated() && (
+        request.resource.data.bookedBy == getUserProfileId() &&
+        request.resource.data.createdBy == request.auth.uid
+      );
+
+      // Users can update their own bookings
+      // Admins and equipment managers can update any
+      allow update: if isAuthenticated() && (
+        resource.data.bookedBy == getUserProfileId() ||
+        isAdmin() ||
+        isEquipmentManager(resource.data.equipmentId)
+      );
+
+      // Only booking owner, admin, or equipment manager can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.bookedBy == getUserProfileId() ||
+        isAdmin() ||
+        isEquipmentManager(resource.data.equipmentId)
+      );
+    }
+
+    // ============================================================================
+    // FUNDERS (Shared Reference Data)
+    // ============================================================================
+    match /funders/{funderId} {
+      // All authenticated users can read funders
+      allow read: if isAuthenticated();
+
+      // Any authenticated user can create a funder
+      allow create: if isAuthenticated();
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Only admin can delete
+      allow delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // FUNDING ACCOUNTS
+    // ============================================================================
+    match /accounts/{accountId} {
+      // Users can read accounts for projects they're a member of
+      // Temporary: Allow all authenticated users to read (set up user roles for stricter access)
+      allow read: if isAuthenticated();
+
+      // PIs can create accounts for their projects
+      allow create: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectPI(request.resource.data.masterProjectId)
+      );
+
+      // PIs or admins can update accounts
+      allow update: if isAuthenticated();
+
+      // Only PIs or admins can delete accounts
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        isProjectPI(resource.data.masterProjectId)
+      );
+    }
+
+    // ============================================================================
+    // FUNDING ALLOCATIONS
+    // ============================================================================
+    match /fundingAllocations/{allocationId} {
+      // All authenticated users can read funding allocations
+      // (Matches the pattern used for accounts to avoid permission errors during profile setup)
+      allow read: if isAuthenticated();
+
+      // Users can create allocations for projects they're PI of or admins
+      allow create: if isAuthenticated();
+
+      // PIs or admins can update allocations
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        ('masterProjectId' in resource.data && isProjectPI(resource.data.masterProjectId))
+      );
+
+      // PIs or admins can delete allocations
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        ('masterProjectId' in resource.data && isProjectPI(resource.data.masterProjectId))
+      );
+    }
+
+    // ============================================================================
+    // BUFFERS (Lab-wide buffer recipes)
+    // ============================================================================
+    match /buffers/{bufferId} {
+      // Users can read buffers in their lab
+      allow read: if isAuthenticated() && (
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create buffers in their lab
+      allow create: if isAuthenticated() && (
+        request.resource.data.createdBy == request.auth.uid &&
+        isLabMember(request.resource.data.labId)
+      );
+
+      // Creator or admin can update
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Creator or admin can delete
+      allow delete: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+    }

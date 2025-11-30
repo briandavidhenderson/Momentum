@@ -35,19 +35,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { logger } from "@/lib/logger"
+import { useToast } from "@/components/ui/toast"
+import { createNotification } from "@/lib/services/notificationService"
 
 interface CommentsSectionProps {
   entityType: Comment["entityType"]
   entityId: string
+  entityTitle?: string
+  entityOwnerId?: string
   teamMembers?: { id: string; name: string }[]
 }
 
 export function CommentsSection({
   entityType,
   entityId,
+  entityTitle = "item",
+  entityOwnerId,
   teamMembers = [],
 }: CommentsSectionProps) {
   const { currentUser, currentUserProfile } = useAuth()
+  const { toast } = useToast()
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
@@ -98,7 +105,7 @@ export function CommentsSection({
     )
 
     return () => unsubscribe()
-  }, [entityType, entityId, currentUser?.uid])
+  }, [entityType, entityId, currentUser?.uid, currentUser])
 
   // Organize comments into threads
   const commentThreads = useMemo(() => {
@@ -129,9 +136,51 @@ export function CommentsSection({
       })
 
       setNewComment("")
+
+      // NOTIFICATIONS
+      // 1. Notify owner if not author
+      if (entityOwnerId && entityOwnerId !== currentUserProfile.id) {
+        await createNotification(entityOwnerId, {
+          type: 'comment',
+          title: `New comment on ${entityTitle}`,
+          message: `${currentUserProfile.firstName} commented: "${newComment.trim().substring(0, 50)}..."`,
+          entityType,
+          entityId,
+          link: window.location.pathname, // Best guess for now
+          createdBy: currentUserProfile.id,
+          createdByName: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
+        })
+      }
+
+      // 2. Notify mentioned users
+      // Simple regex for @Name (first name)
+      // In a real app, we'd use a proper mention library with IDs
+      if (teamMembers.length > 0) {
+        const mentions = newComment.match(/@(\w+)/g)
+        if (mentions) {
+          mentions.forEach(async (mention) => {
+            const name = mention.substring(1).toLowerCase()
+            const mentionedUser = teamMembers.find(m => m.name.toLowerCase().includes(name))
+
+            if (mentionedUser && mentionedUser.id !== currentUserProfile.id && mentionedUser.id !== entityOwnerId) {
+              await createNotification(mentionedUser.id, {
+                type: 'mention',
+                title: `You were mentioned in ${entityTitle}`,
+                message: `${currentUserProfile.firstName} mentioned you: "${newComment.trim().substring(0, 50)}..."`,
+                entityType,
+                entityId,
+                link: window.location.pathname,
+                createdBy: currentUserProfile.id,
+                createdByName: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
+              })
+            }
+          })
+        }
+      }
+
     } catch (error) {
       logger.error("Error posting comment", error)
-      alert("Failed to post comment. Please try again.")
+      toast({ title: "Failed to post comment. Please try again.", variant: "destructive" })
     }
   }
 
@@ -160,7 +209,8 @@ export function CommentsSection({
       setReplyingTo(null)
     } catch (error) {
       logger.error("Error posting reply", error)
-      alert("Failed to post reply. Please try again.")
+      logger.error("Error posting reply", error)
+      toast({ title: "Failed to post reply. Please try again.", variant: "destructive" })
     }
   }
 
@@ -180,7 +230,8 @@ export function CommentsSection({
       setEditContent("")
     } catch (error) {
       logger.error("Error editing comment", error)
-      alert("Failed to edit comment. Please try again.")
+      logger.error("Error editing comment", error)
+      toast({ title: "Failed to edit comment. Please try again.", variant: "destructive" })
     }
   }
 
@@ -197,7 +248,8 @@ export function CommentsSection({
       })
     } catch (error) {
       logger.error("Error deleting comment", error)
-      alert("Failed to delete comment. Please try again.")
+      logger.error("Error deleting comment", error)
+      toast({ title: "Failed to delete comment. Please try again.", variant: "destructive" })
     }
   }
 

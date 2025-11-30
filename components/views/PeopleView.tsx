@@ -11,6 +11,9 @@ import { AdvancedNetworkView } from "@/components/AdvancedNetworkView"
 import PositionBadge from "@/components/PositionBadge"
 import { OrcidIcon } from "@/components/OrcidBadge"
 import { logger } from "@/lib/logger"
+import { ProtocolExecution } from "@/lib/types"
+import { subscribeToLabActiveExecutions } from "@/lib/services/protocolExecutionService"
+import { FlaskConical } from "lucide-react"
 
 interface PeopleViewProps {
   currentUserProfile?: PersonProfile | null
@@ -23,6 +26,16 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "orgchart" | "network">("grid")
   const [orcidFilter, setOrcidFilter] = useState<"all" | "with" | "without">("all")
+  const [activeExecutions, setActiveExecutions] = useState<ProtocolExecution[]>([])
+
+  useEffect(() => {
+    if (!currentUserProfile?.labId) return
+    const unsubscribe = subscribeToLabActiveExecutions(currentUserProfile.labId, (executions) => {
+      setActiveExecutions(executions)
+    })
+    return () => unsubscribe()
+  }, [currentUserProfile?.labId])
+
 
   // Filter profiles by lab if currentUserProfile is provided
   // Ensure profiles is always an array to prevent .map() errors
@@ -200,7 +213,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{labs.length}</p>
-              <p className="text-sm text-muted-foreground">Labs</p>
+              <p className="text-sm text-muted-foreground">Departments</p>
             </div>
           </div>
         </div>
@@ -211,7 +224,7 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{institutes.length}</p>
-              <p className="text-sm text-muted-foreground">Institutes</p>
+              <p className="text-sm text-muted-foreground">Schools/Faculties</p>
             </div>
           </div>
         </div>
@@ -322,6 +335,14 @@ export default function PeopleView({ currentUserProfile }: PeopleViewProps = {})
                         <div className="mt-1">
                           <PositionBadge positionLevel={profile.positionLevel} positionDisplayName={profile.positionDisplayName} />
                         </div>
+                        {activeExecutions.find(e => e.performedBy === profile.id) && (
+                          <div className="mt-2">
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-700 animate-pulse flex items-center gap-1 w-fit">
+                              <FlaskConical className="h-3 w-3" />
+                              Running: {activeExecutions.find(e => e.performedBy === profile.id)?.protocolTitle}
+                            </Badge>
+                          </div>
+                        )}
                       </div>
                     </div>
 

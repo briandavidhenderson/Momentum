@@ -8,6 +8,7 @@ import { parseInventoryCSV, ParsedInventoryItem } from "@/lib/utils/csvInventory
 import { createInventoryItem } from "@/lib/services/inventoryService"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { InventoryItem } from "@/lib/types"
+import { useToast } from "@/components/ui/use-toast"
 
 interface ImportInventoryDialogProps {
   open: boolean
@@ -18,6 +19,7 @@ interface ImportInventoryDialogProps {
 
 export function ImportInventoryDialog({ open, onClose, onSuccess, labId }: ImportInventoryDialogProps) {
   const { currentUser, currentUserProfile } = useAuth()
+  const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [file, setFile] = useState<File | null>(null)
@@ -35,7 +37,11 @@ export function ImportInventoryDialog({ open, onClose, onSuccess, labId }: Impor
     if (!selectedFile) return
 
     if (!selectedFile.name.endsWith(".csv")) {
-      alert("Please select a CSV file")
+      toast({
+        title: "Invalid File Type",
+        description: "Please select a CSV file",
+        variant: "destructive",
+      })
       return
     }
 
@@ -83,6 +89,7 @@ export function ImportInventoryDialog({ open, onClose, onSuccess, labId }: Impor
           notes: item.notes,
           labId: labId || currentUserProfile?.labId,
           createdBy: currentUser.uid,
+          visibility: 'lab',
         }
 
         const itemId = await createInventoryItem(itemData)

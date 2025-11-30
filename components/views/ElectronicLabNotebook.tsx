@@ -8,13 +8,21 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, FileText, Download, Upload, Trash2 } from "lucide-react"
+import { Plus, FileText, Download, Upload, Trash2, Lock, Users, Globe, Eye, TestTube2 } from "lucide-react"
+import { VisibilitySelector } from "@/components/ui/VisibilitySelector"
+import { VisibilitySettings } from "@/lib/types/visibility.types"
+import { Badge } from "@/components/ui/badge"
 import { useAppContext } from "@/lib/AppContext"
 import { useToast } from "@/components/ui/toast"
 import { ELNJupyterCanvasV2 } from "@/components/ELNJupyterCanvasV2"
 import { ELNReportGenerator } from "@/components/ELNReportGenerator"
 import { deleteELNFile } from "@/lib/storage"
 import { logger } from "@/lib/logger"
+import { SamplePicker } from "@/components/dialogs/SamplePicker"
+import { ProtocolPicker } from "@/components/dialogs/ProtocolPicker"
+import { MasterProject } from "@/lib/types"
+import { getMasterProjects } from "@/lib/services/projectService"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export function ElectronicLabNotebook({ initialExperimentId }: { initialExperimentId?: string }) {
   const {
@@ -30,9 +38,18 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
 
   const [selectedExperiment, setSelectedExperiment] = useState<ELNExperiment | null>(null)
   const [isCreatingExperiment, setIsCreatingExperiment] = useState(false)
+  const [isSamplePickerOpen, setIsSamplePickerOpen] = useState(false)
+  const [isProtocolPickerOpen, setIsProtocolPickerOpen] = useState(false)
   const [newExperimentTitle, setNewExperimentTitle] = useState("")
   const [newExperimentDescription, setNewExperimentDescription] = useState("")
+  const [availableProjects, setAvailableProjects] = useState<MasterProject[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("")
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>({
+    visibility: 'private',
+    sharedWithUsers: [],
+    sharedWithGroups: []
+  })
 
   // Debug: Log profile and experiments on mount
   useEffect(() => {
@@ -42,6 +59,20 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
       experimentsCount: experiments?.length || 0,
     });
   }, [currentUserProfile, experiments])
+
+  useEffect(() => {
+    if (isCreatingExperiment && currentUserProfile?.labId) {
+      const fetchProjects = async () => {
+        try {
+          const projects = await getMasterProjects({ labId: currentUserProfile.labId })
+          setAvailableProjects(projects)
+        } catch (error) {
+          console.error("Failed to load projects", error)
+        }
+      }
+      fetchProjects()
+    }
+  }, [isCreatingExperiment, currentUserProfile])
 
   // Initialize with first experiment if available
   useEffect(() => {
@@ -71,15 +102,22 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
       return
     }
 
+    const selectedProject = availableProjects.find(p => p.id === selectedProjectId)
+
     const newExperiment: Omit<ELNExperiment, "id" | "createdAt" | "labId" | "createdBy"> = {
       title: newExperimentTitle.trim(),
       description: newExperimentDescription.trim() || undefined,
-      masterProjectId: "temp_project_placeholder",
-      masterProjectName: "No Project Selected",
+      masterProjectId: selectedProjectId || "temp_project_placeholder",
+      masterProjectName: selectedProject?.name || "No Project Selected",
       labName: currentUserProfile?.labName || "Unknown Lab",
       pages: [],
       items: [], // New multimodal items array
-      reports: [] // New reports array
+      reports: [], // New reports array
+      visibility: visibilitySettings.visibility,
+      sharedWithUsers: visibilitySettings.sharedWithUsers,
+      sharedWithGroups: visibilitySettings.sharedWithGroups,
+      collaborators: visibilitySettings.sharedWithUsers || [], // Backward compatibility
+      groupId: visibilitySettings.sharedWithGroups?.[0] // Backward compatibility
     }
 
     try {
@@ -88,6 +126,11 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
       setNewExperimentTitle("")
       setNewExperimentDescription("")
       toast.success("Experiment created successfully!")
+      setVisibilitySettings({
+        visibility: 'private',
+        sharedWithUsers: [],
+        sharedWithGroups: []
+      })
     } catch (error) {
       logger.error("Error creating experiment", error)
       toast.error("Failed to create experiment. Please try again.")
@@ -273,15 +316,36 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
                   <div key={exp.id} className="relative group">
                     <button
                       onClick={() => setSelectedExperiment(exp)}
-                      className={`w-full text-left p-3 rounded-lg transition-colors ${
-                        selectedExperiment?.id === exp.id
-                          ? "bg-brand-500 text-white"
-                          : "hover:bg-gray-100"
-                      }`}
+                      className={`w-full text-left p-3 rounded-lg transition-colors ${selectedExperiment?.id === exp.id
+                        ? "bg-brand-500 text-white"
+                        : "hover:bg-gray-100"
+                        }`}
                     >
                       <div className="font-medium text-sm truncate">{exp.title}</div>
                       <div className={`text-xs mt-1 ${selectedExperiment?.id === exp.id ? "text-white/80" : "text-muted-foreground"}`}>
                         {exp.items?.length || 0} items • {exp.reports?.length || 0} reports
+                      </div>
+                      <div className="flex gap-1 mt-2">
+                        {exp.visibility === 'private' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-slate-100 text-slate-600 border-slate-200">
+                            <Lock className="h-2.5 w-2.5 mr-1" /> Private
+                          </Badge>
+                        )}
+                        {exp.visibility === 'lab' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-indigo-50 text-indigo-600 border-indigo-100">
+                            <Users className="h-2.5 w-2.5 mr-1" /> Lab
+                          </Badge>
+                        )}
+                        {exp.visibility === 'public' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-green-50 text-green-600 border-green-100">
+                            <Globe className="h-2.5 w-2.5 mr-1" /> Public
+                          </Badge>
+                        )}
+                        {exp.visibility === 'shared' && (
+                          <Badge variant="secondary" className="text-[10px] px-1 h-4 bg-amber-50 text-amber-600 border-amber-100">
+                            <Eye className="h-2.5 w-2.5 mr-1" /> Shared
+                          </Badge>
+                        )}
                       </div>
                     </button>
                     {experiments.length > 1 && (
@@ -333,6 +397,7 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
                 <TabsList className="w-fit">
                   <TabsTrigger value="canvas">Canvas</TabsTrigger>
                   <TabsTrigger value="reports">Reports</TabsTrigger>
+                  <TabsTrigger value="resources">Resources</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="canvas" className="flex-1 overflow-y-auto mt-4">
@@ -353,6 +418,118 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
                     reports={selectedExperiment.reports || []}
                     onReportGenerated={handleReportGenerated}
                   />
+                </TabsContent>
+
+                <TabsContent value="resources" className="flex-1 overflow-y-auto mt-4 p-4">
+                  <div className="space-y-6">
+                    {/* Samples Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <TestTube2 className="h-5 w-5 text-blue-500" />
+                          Linked Samples
+                        </h3>
+                        <Button variant="outline" size="sm" onClick={() => setIsSamplePickerOpen(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Link Sample
+                        </Button>
+                      </div>
+
+                      {(!selectedExperiment.samplesUsed || selectedExperiment.samplesUsed.length === 0) ? (
+                        <div className="text-sm text-muted-foreground italic border border-dashed rounded-lg p-8 text-center">
+                          No samples linked to this experiment yet.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {selectedExperiment.samplesUsed.map((sample, index) => (
+                            <div key={`${sample.sampleId}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                  <TestTube2 className="h-4 w-4" />
+                                </div>
+                                <div>
+                                  <div className="font-medium text-sm">{sample.sampleName}</div>
+                                  {sample.quantityUsed && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Used: {sample.quantityUsed} {sample.unit}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  const updatedSamples = selectedExperiment.samplesUsed?.filter((_, i) => i !== index)
+                                  const updatedExp = { ...selectedExperiment, samplesUsed: updatedSamples, updatedAt: new Date().toISOString() }
+                                  handleUpdateExperiment(updatedExp.id, updatedExp)
+                                  setSelectedExperiment(updatedExp)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t my-6" />
+
+                    {/* Protocols Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-purple-500" />
+                          Linked Protocols
+                        </h3>
+                        <Button variant="outline" size="sm" onClick={() => setIsProtocolPickerOpen(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Link Protocol
+                        </Button>
+                      </div>
+
+                      {(!selectedExperiment.protocolsUsed || selectedExperiment.protocolsUsed.length === 0) ? (
+                        <div className="text-sm text-muted-foreground italic border border-dashed rounded-lg p-8 text-center">
+                          No protocols linked to this experiment yet.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {selectedExperiment.protocolsUsed.map((protocol, index) => (
+                            <div key={`${protocol.protocolId}-${index}`} className="flex items-center justify-between p-3 border rounded-lg bg-card">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                                  <FileText className="h-4 w-4" />
+                                </div>
+                                <div>
+                                  <div className="font-medium text-sm">{protocol.protocolName}</div>
+                                  {protocol.version && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Version: {protocol.version}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  const updatedProtocols = selectedExperiment.protocolsUsed?.filter((_, i) => i !== index)
+                                  const updatedExp = { ...selectedExperiment, protocolsUsed: updatedProtocols, updatedAt: new Date().toISOString() }
+                                  handleUpdateExperiment(updatedExp.id, updatedExp)
+                                  setSelectedExperiment(updatedExp)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>
@@ -387,6 +564,30 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
                 placeholder="Brief description of the experiment..."
                 rows={3}
                 className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Project (Optional)</Label>
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select a project..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Project</SelectItem>
+                  {availableProjects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Visibility & Sharing</Label>
+              <VisibilitySelector
+                value={visibilitySettings}
+                onChange={setVisibilitySettings}
+                labId={currentUserProfile?.labId || ""}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -446,6 +647,49 @@ export function ElectronicLabNotebook({ initialExperimentId }: { initialExperime
           </div>
         </DialogContent>
       </Dialog>
+
+      <SamplePicker
+        open={isSamplePickerOpen}
+        onOpenChange={setIsSamplePickerOpen}
+        onSelect={(sample) => {
+          if (!selectedExperiment) return
+          const newLink = {
+            sampleId: sample.id,
+            sampleName: sample.name,
+            quantityUsed: 0, // Default, could prompt for amount
+            unit: sample.unit
+          }
+          const updatedExp = {
+            ...selectedExperiment,
+            samplesUsed: [...(selectedExperiment.samplesUsed || []), newLink],
+            updatedAt: new Date().toISOString()
+          }
+          handleUpdateExperiment(updatedExp.id, updatedExp)
+          setSelectedExperiment(updatedExp)
+          toast.success("Sample linked")
+        }}
+      />
+
+      <ProtocolPicker
+        open={isProtocolPickerOpen}
+        onOpenChange={setIsProtocolPickerOpen}
+        onSelect={(protocol) => {
+          if (!selectedExperiment) return
+          const newLink = {
+            protocolId: protocol.id,
+            protocolName: protocol.title,
+            version: protocol.version?.toString()
+          }
+          const updatedExp = {
+            ...selectedExperiment,
+            protocolsUsed: [...(selectedExperiment.protocolsUsed || []), newLink],
+            updatedAt: new Date().toISOString()
+          }
+          handleUpdateExperiment(updatedExp.id, updatedExp)
+          setSelectedExperiment(updatedExp)
+          toast.success("Protocol linked")
+        }}
+      />
     </div>
   )
 }

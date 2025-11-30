@@ -2,6 +2,7 @@
 // INVENTORY TYPES
 // ============================================================================
 
+import { VisibilitySettings } from './visibility.types'
 import type { InventoryLevel } from './common.types'
 
 /**
@@ -9,7 +10,7 @@ import type { InventoryLevel } from './common.types'
  * All equipment devices link to inventory items for current stock levels.
  * Updated as part of Equipment & Inventory System Integration (Phase 1)
  */
-export interface InventoryItem {
+export interface InventoryItem extends VisibilitySettings {
   id: string
   productName: string
   catNum: string
@@ -18,6 +19,7 @@ export interface InventoryItem {
   // SINGLE SOURCE OF TRUTH - Master quantity and pricing
   currentQuantity: number // Master quantity shared across ALL devices using this item
   priceExVAT: number // Master price for this item
+  unit?: string // Unit of measure (e.g., "ml", "g", "box", "units")
 
   // Reorder parameters
   minQuantity?: number // Global minimum threshold

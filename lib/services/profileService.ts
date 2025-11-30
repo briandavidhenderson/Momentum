@@ -71,7 +71,14 @@ async function repairUserProfileSync(userId: string, profileId: string): Promise
 /**
  * Create a new person profile
  */
-export async function createProfile(userId: string, profileData: Omit<PersonProfile, 'id'>): Promise<string> {
+/**
+ * Create a new person profile
+ */
+export async function createProfile(
+  userId: string,
+  profileData: Omit<PersonProfile, 'id'>,
+  customProfileId?: string
+): Promise<string> {
   const db = getFirebaseDb()
 
   // Log the inputs for debugging
@@ -80,6 +87,7 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
     userIdType: typeof userId,
     userIdLength: userId?.length,
     hasProfileData: !!profileData,
+    customProfileId
   })
 
   // Validate required fields
@@ -163,8 +171,13 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
       logger.info("Profile document updated successfully", { profileId })
     } else {
       // Create new profile
-      profileRef = doc(collection(db, "personProfiles"))
-      profileId = profileRef.id
+      if (customProfileId) {
+        profileId = customProfileId
+        profileRef = doc(db, "personProfiles", profileId)
+      } else {
+        profileRef = doc(collection(db, "personProfiles"))
+        profileId = profileRef.id
+      }
 
       logger.debug("Creating new profile document", { profileId, profileData })
 
@@ -383,7 +396,24 @@ export function subscribeToProfiles(
     logger.error("Error setting up profiles subscription", error)
     // Return a no-op unsubscribe function that calls callback with empty array
     callback([])
-    return () => {}
+    return () => { }
+  }
+}
+
+/**
+ * Get all members of a lab (Department)
+ */
+export async function getLabMembers(labId: string): Promise<PersonProfile[]> {
+  const db = getFirebaseDb()
+  if (!labId) return []
+
+  try {
+    const q = query(collection(db, "personProfiles"), where("labId", "==", labId))
+    const querySnapshot = await getDocs(q)
+    return querySnapshot.docs.map(doc => doc.data() as PersonProfile)
+  } catch (error) {
+    logger.error("Error fetching lab members", error, { labId })
+    return []
   }
 }
 

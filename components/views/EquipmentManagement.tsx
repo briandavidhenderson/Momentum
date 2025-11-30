@@ -27,10 +27,10 @@ export function EquipmentManagement() {
     handleCreateOrder,
     handleCreateDayToDayTask,
     userBookings,
-    selectedEquipmentForBooking,
-    setSelectedEquipmentForBooking,
-    refreshBookings,
   } = useAppContext()
+
+  const [selectedEquipmentForBooking, setSelectedEquipmentForBooking] = useState<EquipmentDevice | null>(null)
+  const refreshBookings = async () => { /* no-op, subscriptions handle updates */ }
 
   const toast = useToast()
 

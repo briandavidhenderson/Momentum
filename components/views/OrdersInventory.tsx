@@ -7,6 +7,7 @@ import { Order, OrderStatus, InventoryItem, InventoryLevel } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Plus, Package, ShoppingCart, CheckCircle, Clock, Archive, AlertCircle, Download, Upload, FileText, Beaker } from "lucide-react"
 import { OrderCard } from "@/components/orders/OrderCard"
+import { useToast } from "@/components/ui/use-toast"
 
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog"
 import { OrderFormDialog } from "@/components/orders/OrderFormDialog"
@@ -57,6 +58,7 @@ function DroppableColumn({
 }
 
 export function OrdersInventory() {
+  const { toast } = useToast()
   const { currentUserProfile } = useAuth()
   const {
     orders,
@@ -132,6 +134,13 @@ export function OrdersInventory() {
 
     if (!over || !currentUserProfile) return
 
+    const columnIds: OrderStatus[] = ['to-order', 'ordered', 'received']
+
+    // Only allow dropping onto a column (not another card)
+    if (!columnIds.includes(over.id as OrderStatus)) {
+      return
+    }
+
     const orderId = active.id as string
     const newStatus = over.id as OrderStatus
 
@@ -162,7 +171,11 @@ export function OrdersInventory() {
 
         if (!validation.valid) {
           logger.error('Order validation failed', { errors: validation.errors })
-          alert(`Cannot reconcile order: ${validation.errors.join(', ')}`)
+          toast({
+            title: "Reconciliation Failed",
+            description: `Cannot reconcile order: ${validation.errors.join(', ')}`,
+            variant: "destructive",
+          })
           return
         }
 
@@ -198,7 +211,11 @@ export function OrdersInventory() {
         }
       } catch (error) {
         logger.error('Failed to reconcile inventory', error)
-        alert('Failed to update inventory. Please try again.')
+        toast({
+          title: "Update Failed",
+          description: "Failed to update inventory. Please try again.",
+          variant: "destructive",
+        })
         return // Don't update order status if inventory reconciliation failed
       }
     }
@@ -298,7 +315,11 @@ export function OrdersInventory() {
   // Handle inventory export
   const handleExportInventory = () => {
     if (!inventory || inventory.length === 0) {
-      alert("No inventory items to export")
+      toast({
+        title: "Export Failed",
+        description: "No inventory items to export",
+        variant: "destructive",
+      })
       return
     }
 
@@ -314,7 +335,7 @@ export function OrdersInventory() {
         <div>
           <h2 className="text-2xl font-bold text-foreground">Orders & Inventory</h2>
           <p className="text-sm text-muted-foreground">
-            Manage lab orders and track inventory levels
+            Manage department orders and track inventory levels
           </p>
         </div>
         <div className="flex gap-2">
@@ -753,7 +774,10 @@ export function OrdersInventory() {
         onClose={() => setShowImportDialog(false)}
         onSuccess={(count) => {
           // Inventory list will automatically update via real-time subscription
-          alert(`Successfully imported ${count} inventory item${count !== 1 ? 's' : ''}!`)
+          toast({
+            title: "Import Successful",
+            description: `Successfully imported ${count} inventory item${count !== 1 ? 's' : ''}!`,
+          })
         }}
         labId={currentUserProfile?.labId}
       />

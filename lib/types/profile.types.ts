@@ -177,6 +177,7 @@ export interface PersonProfile {
   // Basic Information
   firstName: string
   lastName: string
+  displayName: string // ✅ NEW: Full name for display
   email: string
   phone: string
   officeLocation: string
@@ -269,6 +270,9 @@ export interface PersonProfile {
   privacySettingsId?: string           // Link to PrivacySettings
   dataExportRequestIds?: string[]      // Historical data export requests
   lastConsentUpdate?: string           // When user last updated consent
+
+  // Safety & Training (NEW)
+  trainingRecordIds?: string[]         // IDs of TrainingRecords
 
   // Metadata
   createdAt?: string

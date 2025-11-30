@@ -170,51 +170,27 @@ interface OrcidConfig {
 }
 
 function getOrcidConfig(): OrcidConfig {
-  try {
-    // Try to get config from functions.config() (deprecated but still works)
-    let config: any = {}
-    try {
-      config = (functions as any).config() || {}
-    } catch (error) {
-      // functions.config() may fail, use environment variables instead
-      console.warn("functions.config() failed, using environment variables:", error)
-    }
+  const clientId = process.env.ORCID_CLIENT_ID
+  const clientSecret = process.env.ORCID_CLIENT_SECRET
+  const useSandbox = process.env.ORCID_USE_SANDBOX === "true"
 
-    const orcidConfig = config.orcid || {}
+  if (!clientId || !clientSecret) {
+    console.warn("ORCID configuration missing:", {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      useSandbox
+    })
+  }
 
-    // Debug logging
-    console.log("ORCID Config Debug:", {
-      hasFunctionsConfig: !!config.orcid,
-      envClientId: !!process.env.ORCID_CLIENT_ID,
-      envClientSecret: !!process.env.ORCID_CLIENT_SECRET,
-      envUseSandbox: process.env.ORCID_USE_SANDBOX
-    });
+  const baseUrl = useSandbox ? "https://sandbox.orcid.org" : "https://orcid.org"
 
-    const useSandbox = orcidConfig.use_sandbox === "true" || process.env.ORCID_USE_SANDBOX === "true"
-    const baseUrl = useSandbox ? "https://sandbox.orcid.org" : "https://orcid.org"
-
-    const clientId = orcidConfig.client_id || process.env.ORCID_CLIENT_ID || ""
-    const clientSecret = orcidConfig.client_secret || process.env.ORCID_CLIENT_SECRET || ""
-
-    return {
-      clientId,
-      clientSecret,
-      useSandbox,
-      baseUrl,
-      authorizeUrl: `${baseUrl}/oauth/authorize`,
-      tokenUrl: `${baseUrl}/oauth/token`,
-    }
-  } catch (error) {
-    console.error("Error getting ORCID config:", error)
-    // Return default config with empty values to allow proper error handling
-    return {
-      clientId: "",
-      clientSecret: "",
-      useSandbox: false,
-      baseUrl: "https://orcid.org",
-      authorizeUrl: "https://orcid.org/oauth/authorize",
-      tokenUrl: "https://orcid.org/oauth/token",
-    }
+  return {
+    clientId: clientId || "",
+    clientSecret: clientSecret || "",
+    useSandbox,
+    baseUrl,
+    authorizeUrl: `${baseUrl}/oauth/authorize`,
+    tokenUrl: `${baseUrl}/oauth/token`,
   }
 }
 

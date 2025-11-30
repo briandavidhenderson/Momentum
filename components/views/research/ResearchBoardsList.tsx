@@ -5,7 +5,10 @@ import {
     BrainCircuit,
     Users,
     MessageSquare,
-    Clock
+    Clock,
+    Lock,
+    Globe,
+    Eye
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -106,12 +109,34 @@ function BoardCard({ board, onClick }: { board: ResearchBoard; onClick: () => vo
                 <CardDescription className="line-clamp-2 text-xs h-8">
                     {board.description || "No description"}
                 </CardDescription>
+                <div className="flex gap-2 mt-2">
+                    {board.visibility === 'private' && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 h-5 bg-slate-100 text-slate-600 border-slate-200">
+                            <Lock className="h-3 w-3 mr-1" /> Private
+                        </Badge>
+                    )}
+                    {board.visibility === 'lab' && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 h-5 bg-indigo-50 text-indigo-600 border-indigo-100">
+                            <Users className="h-3 w-3 mr-1" /> Lab
+                        </Badge>
+                    )}
+                    {board.visibility === 'public' && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 h-5 bg-green-50 text-green-600 border-green-100">
+                            <Globe className="h-3 w-3 mr-1" /> Public
+                        </Badge>
+                    )}
+                    {board.visibility === 'shared' && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 h-5 bg-amber-50 text-amber-600 border-amber-100">
+                            <Eye className="h-3 w-3 mr-1" /> Shared
+                        </Badge>
+                    )}
+                </div>
             </CardHeader>
             <CardContent className="p-4 pt-2">
                 <div className="flex items-center gap-4 text-xs text-slate-500">
                     <div className="flex items-center gap-1">
                         <Users className="h-3.5 w-3.5" />
-                        {board.members.length} members
+                        {board.members?.length || 0} members
                     </div>
                     <div className="flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" />
@@ -122,16 +147,16 @@ function BoardCard({ board, onClick }: { board: ResearchBoard; onClick: () => vo
             <CardFooter className="p-4 pt-0 flex justify-between items-center">
                 <div className="flex -space-x-2">
                     {/* We would ideally fetch member avatars here, but for now just show placeholders or count */}
-                    {board.members.slice(0, 3).map((memberId, i) => (
+                    {(board.members || []).slice(0, 3).map((memberId, i) => (
                         <Avatar key={memberId} className="h-6 w-6 border-2 border-white">
                             <AvatarFallback className="text-[9px] bg-slate-200">
                                 U
                             </AvatarFallback>
                         </Avatar>
                     ))}
-                    {board.members.length > 3 && (
+                    {(board.members?.length || 0) > 3 && (
                         <div className="h-6 w-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[9px] text-slate-500 font-medium">
-                            +{board.members.length - 3}
+                            +{(board.members?.length || 0) - 3}
                         </div>
                     )}
                 </div>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { WhiteboardEditor } from "@/components/whiteboard/WhiteboardEditor"
-import { WhiteboardData, getWhiteboardsForLab, createWhiteboard, deleteWhiteboard } from "@/lib/whiteboardService"
+import { WhiteboardData, getWhiteboardsForLab, createWhiteboard, deleteWhiteboard, updateWhiteboard } from "@/lib/whiteboardService"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { Plus, Trash2, Layout, Loader2, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/toast"
 import { formatDistanceToNow } from "date-fns"
 
 export function WhiteboardView() {
-    const { currentUser, currentUserProfile } = useAuth()
+    const { currentUser, currentUserProfile, isLoadingProfile } = useAuth()
     const { success, error } = useToast()
     const [whiteboards, setWhiteboards] = useState<WhiteboardData[]>([])
     const [loading, setLoading] = useState(true)
@@ -32,10 +32,14 @@ export function WhiteboardView() {
     }, [error])
 
     useEffect(() => {
+        if (isLoadingProfile) return
+
         if (currentUserProfile?.labId) {
             loadWhiteboards(currentUserProfile.labId)
+        } else {
+            setLoading(false)
         }
-    }, [currentUserProfile, loadWhiteboards])
+    }, [currentUserProfile, isLoadingProfile, loadWhiteboards])
 
     const handleCreate = async () => {
         if (!currentUserProfile?.labId || !currentUser) return
@@ -45,7 +49,8 @@ export function WhiteboardView() {
                 name: `Untitled Whiteboard ${new Date().toLocaleDateString()}`,
                 shapes: [],
                 createdBy: currentUser.uid,
-                labId: currentUserProfile.labId
+                labId: currentUserProfile.labId,
+                visibility: 'private'
             })
             const newBoard: WhiteboardData = {
                 id: newId,
@@ -53,6 +58,7 @@ export function WhiteboardView() {
                 shapes: [],
                 createdBy: currentUser.uid,
                 labId: currentUserProfile.labId,
+                visibility: 'private',
                 createdAt: new Date(),
                 updatedAt: new Date()
             }
@@ -84,15 +90,52 @@ export function WhiteboardView() {
         }
     }
 
+    // Handle browser back button
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            if (event.state?.whiteboardId) {
+                const board = whiteboards.find(b => b.id === event.state.whiteboardId)
+                if (board) setSelectedWhiteboard(board)
+            } else {
+                setSelectedWhiteboard(null)
+            }
+        }
+
+        window.addEventListener('popstate', handlePopState)
+        return () => window.removeEventListener('popstate', handlePopState)
+    }, [whiteboards])
+
+    const handleSelectBoard = (board: WhiteboardData) => {
+        setSelectedWhiteboard(board)
+        window.history.pushState({ whiteboardId: board.id }, '', `#whiteboard=${board.id}`)
+    }
+
+    const handleBack = () => {
+        window.history.back()
+    }
+
     if (selectedWhiteboard) {
         return (
             <div className="h-screen flex flex-col">
                 <div className="bg-white border-b px-4 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedWhiteboard(null)}>
+                        <Button variant="ghost" size="icon" onClick={handleBack}>
                             <ArrowLeft className="h-4 w-4" />
                         </Button>
-                        <h1 className="font-semibold text-lg">{selectedWhiteboard.name}</h1>
+                        <input
+                            className="font-semibold text-lg border rounded px-2 py-1"
+                            value={selectedWhiteboard.name}
+                            onChange={async (e) => {
+                                const name = e.target.value
+                                setSelectedWhiteboard({ ...selectedWhiteboard, name })
+                                try {
+                                    await updateWhiteboard(selectedWhiteboard.id!, { name })
+                                } catch (err) {
+                                    console.error("Failed to rename whiteboard", err)
+                                    error("Failed to rename whiteboard")
+                                }
+                            }}
+                        />
                     </div>
                 </div>
                 <div className="flex-1 overflow-hidden">
@@ -133,9 +176,16 @@ export function WhiteboardView() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {whiteboards.map((board) => (
-                            <Card key={board.id} className="cursor-pointer hover:shadow-md transition-shadow group" onClick={() => setSelectedWhiteboard(board)}>
+                            <Card key={board.id} className="cursor-pointer hover:shadow-md transition-shadow group" onClick={() => handleSelectBoard(board)}>
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-lg font-semibold truncate">{board.name}</CardTitle>
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-lg font-semibold truncate">{board.name}</CardTitle>
+                                        {board.visibility === 'lab' ? (
+                                            <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100 uppercase font-bold tracking-wider">Lab</span>
+                                        ) : (
+                                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase font-bold tracking-wider">Private</span>
+                                        )}
+                                    </div>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="h-32 bg-slate-100 rounded-md flex items-center justify-center relative overflow-hidden">

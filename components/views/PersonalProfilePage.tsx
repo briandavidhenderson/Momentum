@@ -30,6 +30,8 @@ import { updateProfile, updateUser } from "@/lib/firestoreService"
 import { OrcidBadge } from "@/components/OrcidBadge"
 import { linkOrcidToCurrentUser, resyncOrcidProfile } from "@/lib/auth/orcid"
 import { deleteField } from "firebase/firestore"
+import { useToast } from "@/components/ui/toast"
+import { MembershipManager } from "@/components/profile/MembershipManager"
 
 interface PersonalProfilePageProps {
   currentUser: FirestoreUser | null
@@ -38,6 +40,7 @@ interface PersonalProfilePageProps {
 
 export function PersonalProfilePage({ currentUser, currentUserProfile }: PersonalProfilePageProps) {
   const allProfiles = useProfiles(currentUserProfile?.labId || null)
+  const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<Partial<PersonProfile>>({})
   const [editingProject, setEditingProject] = useState<ProfileProject | null>(null)
@@ -65,7 +68,11 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
   const handleSave = async (additionalData?: Partial<PersonProfile>) => {
     if (!currentUserProfile || !formData.firstName || !formData.lastName || !formData.email ||
       !formData.organisation || !formData.institute || !formData.labName) {
-      alert("Please fill in required fields: First Name, Last Name, Email, Organisation, School/Faculty, and Department")
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in required fields: First Name, Last Name, Email, Organisation, School/Faculty, and Department",
+        variant: "destructive",
+      })
       return
     }
 
@@ -73,6 +80,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       const updatedProfileData = {
         firstName: formData.firstName!,
         lastName: formData.lastName!,
+        displayName: `${formData.firstName} ${formData.lastName}`,
         email: formData.email!,
         position: formData.position || "",
         organisation: formData.organisation!,
@@ -109,7 +117,11 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       // No need to reload - Firestore real-time updates will handle it
     } catch (error) {
       logger.error("Error saving profile", error)
-      alert("Error saving profile. Please try again.")
+      toast({
+        title: "Error",
+        description: "Error saving profile. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -169,7 +181,11 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
       // Success - real-time listener will update the UI
     }).catch(error => {
       logger.error("Error saving project", error)
-      alert("Error saving project. Please try again.")
+      toast({
+        title: "Error",
+        description: "Error saving project. Please try again.",
+        variant: "destructive",
+      })
     })
 
     setProjectDialogOpen(false)
@@ -418,7 +434,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               {formData.orcidLastSynced && (
                 <p className="text-xs text-gray-500">
                   Last synced: {typeof formData.orcidLastSynced === 'object' && 'toDate' in formData.orcidLastSynced
-                    ? (formData.orcidLastSynced as any).toDate().toLocaleDateString()
+                    ? (formData.orcidLastSynced as any)?.toDate?.().toLocaleDateString() || new Date().toLocaleDateString()
                     : new Date(formData.orcidLastSynced).toLocaleDateString()}
                 </p>
               )}
@@ -447,10 +463,17 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                   onClick={async () => {
                     try {
                       await resyncOrcidProfile(false)
-                      alert("Profile updated successfully with latest ORCID data (empty fields only)")
+                      toast({
+                        title: "Profile Updated",
+                        description: "Profile updated successfully with latest ORCID data (empty fields only)",
+                      })
                       window.location.reload()
                     } catch (err: any) {
-                      alert(err.message || "Failed to resync ORCID profile")
+                      toast({
+                        title: "Sync Failed",
+                        description: err.message || "Failed to resync ORCID profile",
+                        variant: "destructive",
+                      })
                     }
                   }}
                 >
@@ -463,10 +486,17 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                     if (confirm("This will overwrite your current profile data with information from ORCID. Continue?")) {
                       try {
                         await resyncOrcidProfile(true)
-                        alert("Profile fully updated with latest ORCID data")
+                        toast({
+                          title: "Profile Updated",
+                          description: "Profile fully updated with latest ORCID data",
+                        })
                         window.location.reload()
                       } catch (err: any) {
-                        alert(err.message || "Failed to resync ORCID profile")
+                        toast({
+                          title: "Sync Failed",
+                          description: err.message || "Failed to resync ORCID profile",
+                          variant: "destructive",
+                        })
                       }
                     }
                   }}
@@ -614,7 +644,11 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                     // Reload the page to fetch updated profile with ORCID data
                     window.location.reload()
                   } catch (err: any) {
-                    alert(err.message || "Failed to connect ORCID")
+                    toast({
+                      title: "Connection Failed",
+                      description: err.message || "Failed to connect ORCID",
+                      variant: "destructive",
+                    })
                   }
                 }}
                 className="bg-[#A6CE39] hover:bg-[#8FB82E] text-white"
@@ -794,7 +828,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
             <div className="space-y-2">
               {(formData.projects || []).map((project) => {
                 const isPI = formData.principalInvestigatorProjects?.includes(project.id)
-                const statusColors = {
+                const statusColors: Record<string, string> = {
                   planning: "bg-gray-100 text-gray-700 border-gray-300",
                   active: "bg-green-100 text-green-700 border-green-300",
                   completed: "bg-blue-100 text-blue-700 border-blue-300",
@@ -814,7 +848,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
                               Principal Investigator
                             </Badge>
                           )}
-                          <Badge variant="outline" className={statusColors[project.status] || ""}>
+                          <Badge variant="outline" className={statusColors[project.status || "planning"] || ""}>
                             {project.status}
                           </Badge>
                         </div>
@@ -861,8 +895,20 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
           )}
         </div>
 
+        {/* Memberships Section */}
+        {currentUserProfile && (
+          <div className="card-monday p-6 mt-6">
+            <MembershipManager
+              currentUserProfile={currentUserProfile}
+              onUpdate={() => {
+                window.dispatchEvent(new CustomEvent("profiles-updated"))
+              }}
+            />
+          </div>
+        )}
+
         {/* Notes */}
-        <div className="space-y-4">
+        <div className="space-y-4 mt-6">
           <Label htmlFor="notes">Notes</Label>
           <textarea
             id="notes"
@@ -876,7 +922,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
 
         {/* Save/Cancel Buttons */}
         {isEditing && (
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-end gap-3 pt-4 border-t mt-6">
             <Button variant="outline" onClick={() => {
               // Reset form data
               if (currentUserProfile) {
@@ -933,6 +979,7 @@ function ProjectDialog({
   onSave: (project: ProfileProject) => void
   currentUserProfile: PersonProfile | null
 }) {
+  const { toast } = useToast()
   const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const [formData, setFormData] = useState<ProfileProject>({
     id: "",
@@ -958,7 +1005,11 @@ function ProjectDialog({
 
   const handleSave = () => {
     if (!formData.name || !formData.startDate || !formData.endDate) {
-      alert("Please fill in required fields: Project Name, Start Date, and End Date")
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in required fields: Project Name, Start Date, and End Date",
+        variant: "destructive",
+      })
       return
     }
     onSave(formData)

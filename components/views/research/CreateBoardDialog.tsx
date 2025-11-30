@@ -19,7 +19,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useResearchBoards } from '@/lib/hooks/useResearchBoards';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useProfiles } from '@/lib/useProfiles';
+
+import { VisibilitySelector } from '@/components/ui/VisibilitySelector';
+import { VisibilitySettings } from '@/lib/types/visibility.types';
 
 const formSchema = z.object({
     title: z.string().min(1, 'Title is required'),
@@ -34,9 +36,12 @@ interface CreateBoardDialogProps {
 export function CreateBoardDialog({ open, onOpenChange }: CreateBoardDialogProps) {
     const { createBoard } = useResearchBoards();
     const { currentUser, currentUserProfile } = useAuth();
-    const profiles = useProfiles(currentUserProfile?.labId ?? null);
-    const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>({
+        visibility: 'private',
+        sharedWithUsers: [],
+        sharedWithGroups: []
+    });
 
     const { register, handleSubmit, reset, formState: { errors } } = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -47,32 +52,28 @@ export function CreateBoardDialog({ open, onOpenChange }: CreateBoardDialogProps
 
         setIsSubmitting(true);
 
-        // Ensure creator is a member
-        const members = Array.from(new Set([...selectedMembers, currentUser.uid]));
-
         const success = await createBoard({
             title: data.title,
             description: data.description,
             creatorId: currentUser.uid,
             labId: currentUserProfile.labId,
-            members: members,
+            visibility: visibilitySettings.visibility,
+            sharedWithUsers: visibilitySettings.sharedWithUsers,
+            sharedWithGroups: visibilitySettings.sharedWithGroups,
+            members: visibilitySettings.sharedWithUsers || [], // Backward compatibility
         });
 
         setIsSubmitting(false);
 
         if (success) {
             reset();
-            setSelectedMembers([]);
+            setVisibilitySettings({
+                visibility: 'private',
+                sharedWithUsers: [],
+                sharedWithGroups: []
+            });
             onOpenChange(false);
         }
-    };
-
-    const toggleMember = (userId: string) => {
-        setSelectedMembers(prev =>
-            prev.includes(userId)
-                ? prev.filter(id => id !== userId)
-                : [...prev, userId]
-        );
     };
 
     return (
@@ -98,34 +99,12 @@ export function CreateBoardDialog({ open, onOpenChange }: CreateBoardDialogProps
                     </div>
 
                     <div className="space-y-2">
-                        <Label>Add Members</Label>
-                        <ScrollArea className="h-[200px] border rounded-md p-2">
-                            <div className="space-y-2">
-                                {profiles?.map((profile) => {
-                                    const userIdForProfile = profile.userId || '';
-                                    return (
-                                        <div key={profile.id} className="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded">
-                                            <Checkbox
-                                                id={`member-${profile.id}`}
-                                                checked={selectedMembers.includes(userIdForProfile) || userIdForProfile === currentUser?.uid}
-                                                disabled={userIdForProfile === currentUser?.uid}
-                                                onCheckedChange={() => toggleMember(userIdForProfile)}
-                                            />
-                                            <Label htmlFor={`member-${profile.id}`} className="flex items-center gap-2 cursor-pointer flex-1">
-                                                <Avatar className="h-6 w-6">
-                                                    <AvatarImage src={profile.avatarUrl} />
-                                                    <AvatarFallback className="text-[10px]">{profile.firstName?.[0]}{profile.lastName?.[0]}</AvatarFallback>
-                                                </Avatar>
-                                                <span className="text-sm font-medium">
-                                                    {profile.firstName} {profile.lastName}
-                                                    {userIdForProfile === currentUser?.uid && " (You)"}
-                                                </span>
-                                            </Label>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </ScrollArea>
+                        <Label>Visibility & Sharing</Label>
+                        <VisibilitySelector
+                            value={visibilitySettings}
+                            onChange={setVisibilitySettings}
+                            labId={currentUserProfile?.labId || ""}
+                        />
                     </div>
 
                     <DialogFooter>

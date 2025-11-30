@@ -116,20 +116,28 @@ export function subscribeToEvents(
     )
 
     unsubscribers.push(
-      onSnapshot(labQuery, (snapshot) => {
-        labEvents = snapshot.docs.map((d) => {
-          const data = d.data() as FirestoreCalendarEvent
-          return {
-            ...data,
-            start: data.start?.toDate() || new Date(),
-            end: data.end?.toDate() || new Date(),
-            createdAt: (data.createdAt && (data.createdAt as any).toDate)
-              ? (data.createdAt as any).toDate()
-              : new Date(),
-          } as CalendarEvent
-        })
-        emit()
-      })
+      onSnapshot(
+        labQuery,
+        (snapshot) => {
+          labEvents = snapshot.docs.map((d) => {
+            const data = d.data() as FirestoreCalendarEvent
+            return {
+              ...data,
+              start: data.start?.toDate() || new Date(),
+              end: data.end?.toDate() || new Date(),
+              createdAt: (data.createdAt && (data.createdAt as any).toDate)
+                ? (data.createdAt as any).toDate()
+                : new Date(),
+            } as CalendarEvent
+          })
+          emit()
+        },
+        (error) => {
+          logger.error("Calendar lab events snapshot error", error)
+          labEvents = []
+          emit()
+        }
+      )
     )
   }
 
@@ -141,20 +149,28 @@ export function subscribeToEvents(
     )
 
     unsubscribers.push(
-      onSnapshot(userQuery, (snapshot) => {
-        userEvents = snapshot.docs.map((d) => {
-          const data = d.data() as FirestoreCalendarEvent
-          return {
-            ...data,
-            start: data.start?.toDate() || new Date(),
-            end: data.end?.toDate() || new Date(),
-            createdAt: (data.createdAt && (data.createdAt as any).toDate)
-              ? (data.createdAt as any).toDate()
-              : new Date(),
-          } as CalendarEvent
-        })
-        emit()
-      })
+      onSnapshot(
+        userQuery,
+        (snapshot) => {
+          userEvents = snapshot.docs.map((d) => {
+            const data = d.data() as FirestoreCalendarEvent
+            return {
+              ...data,
+              start: data.start?.toDate() || new Date(),
+              end: data.end?.toDate() || new Date(),
+              createdAt: (data.createdAt && (data.createdAt as any).toDate)
+                ? (data.createdAt as any).toDate()
+                : new Date(),
+            } as CalendarEvent
+          })
+          emit()
+        },
+        (error) => {
+          logger.error("Calendar personal events snapshot error", error)
+          userEvents = []
+          emit()
+        }
+      )
     )
   }
 
@@ -632,4 +648,50 @@ export async function getUserSyncStatus(userId: string): Promise<{
     errorConnections: errors.length,
     lastSyncedAt: lastSynced,
   }
+}
+
+// ============================================================================
+// PROTOCOL SCHEDULING (Phase 3)
+// ============================================================================
+
+/**
+ * Schedules a protocol on the calendar
+ * Creates events for each step based on duration and phase type
+ */
+export async function scheduleProtocol(
+  protocol: { id: string; title: string; steps: any[] },
+  startTime: Date,
+  userId: string
+): Promise<void> {
+  const db = getFirebaseDb()
+  const batch = writeBatch(db)
+
+  let currentTime = new Date(startTime)
+
+  for (const step of protocol.steps) {
+    const durationMinutes = step.expectedDuration || 0
+    if (durationMinutes === 0) continue
+
+    const endTime = new Date(currentTime.getTime() + durationMinutes * 60000)
+    const isPassive = step.phaseType === 'passive'
+
+    const eventRef = doc(collection(db, "events"))
+
+    batch.set(eventRef, {
+      id: eventRef.id,
+      title: `${isPassive ? 'Incubation' : 'Active'}: ${protocol.title} - Step ${step.order} `,
+      start: Timestamp.fromDate(currentTime),
+      end: Timestamp.fromDate(endTime),
+      createdBy: userId,
+      createdAt: serverTimestamp(),
+      type: isPassive ? 'protocol-passive' : 'protocol-active',
+      visibility: isPassive ? 'private' : 'lab', // Passive blocks are private (free time), Active are lab (busy)
+      description: step.instruction,
+      relatedIds: { protocolId: protocol.id, stepId: step.id }
+    })
+
+    currentTime = endTime
+  }
+
+  await batch.commit()
 }

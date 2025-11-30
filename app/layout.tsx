@@ -11,6 +11,11 @@ export const metadata: Metadata = {
 import { AppWrapper } from "@/lib/AppContext";
 import { ToastProvider } from "@/components/ui/toast";
 
+import ClientErrorLogger from "@/components/ClientErrorLogger";
+
+import { CommandPalette } from "@/components/layout/CommandPalette";
+import { MobileFAB } from "@/components/layout/MobileFAB";
+
 export default function RootLayout({
   children,
 }: {
@@ -19,8 +24,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans">
+        <ClientErrorLogger />
         <ToastProvider>
-          <AppWrapper>{children}</AppWrapper>
+          <AppWrapper>
+            <CommandPalette />
+            <MobileFAB />
+            {children}
+          </AppWrapper>
         </ToastProvider>
       </body>
     </html>

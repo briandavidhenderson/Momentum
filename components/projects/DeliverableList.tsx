@@ -1,10 +1,10 @@
 "use client"
 
-import { Deliverable, PersonProfile } from "@/lib/types"
+import { Deliverable, PersonProfile, HydratedDeliverable } from "@/lib/types"
 import { useAppContext } from "@/lib/AppContext"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { User, Calendar, Target, AlertCircle } from "lucide-react"
+import { User, Calendar, Target, AlertCircle, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatStatusLabel } from "@/lib/utils/statusStyles"
 
@@ -14,6 +14,7 @@ interface DeliverableListProps {
     selectedDeliverableId: string | null
     onSelectDeliverable: (delivId: string) => void
     onDeliverableClick?: (deliverable: Deliverable) => void
+    onAdd?: () => void
 }
 
 export function DeliverableList({
@@ -22,6 +23,7 @@ export function DeliverableList({
     selectedDeliverableId,
     onSelectDeliverable,
     onDeliverableClick,
+    onAdd,
 }: DeliverableListProps) {
     const { allProfiles, workpackages } = useAppContext()
 
@@ -65,34 +67,27 @@ export function DeliverableList({
 
     // Calculate progress from tasks
     const calculateProgress = (deliverable: Deliverable): number => {
-        if (!deliverable.projectTaskIds || deliverable.projectTaskIds.length === 0) {
+        // Cast to HydratedDeliverable to access nested tasks
+        const hydratedDeliverable = deliverable as unknown as HydratedDeliverable
+
+        if (!hydratedDeliverable.tasks || hydratedDeliverable.tasks.length === 0) {
             return deliverable.progress || 0
         }
 
-        // Find workpackage to get tasks
-        const workpackage = workpackages.find((wp) => wp.id === deliverable.workpackageId)
-        if (!workpackage || !workpackage.tasks) return deliverable.progress || 0
+        const deliverableTasks = hydratedDeliverable.tasks
+        const completedTasks = deliverableTasks.filter((task) => task.status === "done")
 
-        const deliverableTasks = workpackage.tasks.filter((task) =>
-            deliverable.projectTaskIds?.includes(task.id)
-        )
-
-        if (deliverableTasks.length === 0) return deliverable.progress || 0
-
-        const completedTasks = deliverableTasks.filter((task) => task.status === "completed")
         return Math.round((completedTasks.length / deliverableTasks.length) * 100)
     }
 
     // Check if any tasks are blocked or at-risk
     const hasWarnings = (deliverable: Deliverable): boolean => {
-        const workpackage = workpackages.find((wp) => wp.id === deliverable.workpackageId)
-        if (!workpackage || !workpackage.tasks) return false
+        // Cast to HydratedDeliverable to access nested tasks
+        const hydratedDeliverable = deliverable as unknown as HydratedDeliverable
 
-        const deliverableTasks = workpackage.tasks.filter((task) =>
-            deliverable.projectTaskIds?.includes(task.id)
-        )
+        if (!hydratedDeliverable.tasks) return false
 
-        return deliverableTasks.some(
+        return hydratedDeliverable.tasks.some(
             (task) => task.status === "blocked" || task.status === "at-risk"
         )
     }
@@ -117,9 +112,17 @@ export function DeliverableList({
                 <div className="text-center max-w-sm">
                     <Target className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-30" />
                     <h3 className="text-sm font-semibold mb-1">No Deliverables</h3>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground mb-4">
                         Create a deliverable to track specific outcomes and milestones.
                     </p>
+                    {onAdd && (
+                        <button
+                            onClick={onAdd}
+                            className="text-xs bg-brand-600 text-white px-3 py-1.5 rounded-md hover:bg-brand-700 transition-colors"
+                        >
+                            Create Deliverable
+                        </button>
+                    )}
                 </div>
             </div>
         )
@@ -127,9 +130,20 @@ export function DeliverableList({
 
     return (
         <div className="h-full flex flex-col">
-            <div className="px-4 py-3 border-b border-border bg-surface-2">
-                <h2 className="text-sm font-semibold text-foreground">Deliverables</h2>
-                <p className="text-xs text-muted-foreground">{deliverables.length} total</p>
+            <div className="px-4 py-3 border-b border-border bg-surface-2 flex items-center justify-between">
+                <div>
+                    <h2 className="text-sm font-semibold text-foreground">Deliverables</h2>
+                    <p className="text-xs text-muted-foreground">{deliverables.length} total</p>
+                </div>
+                {onAdd && (
+                    <button
+                        onClick={onAdd}
+                        className="p-1 hover:bg-surface-3 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                        title="Add Deliverable"
+                    >
+                        <Plus className="h-4 w-4" />
+                    </button>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto">

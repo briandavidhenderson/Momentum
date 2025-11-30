@@ -132,17 +132,17 @@ export async function getMasterProjects(filters?: {
   personId?: string  // Returns projects where person is a team member
 }): Promise<MasterProject[]> {
   const db = getFirebaseDb()
-  let q = collection(db, "masterProjects")
+  let q: Query = collection(db, "masterProjects")
 
   if (filters?.labId && filters.labId !== undefined && filters.labId !== null && filters.labId !== "") {
-    q = query(q as any, where("labId", "==", filters.labId)) as any
+    q = query(q, where("labId", "==", filters.labId))
   }
   if (filters?.funderId) {
-    q = query(q as any, where("funderId", "==", filters.funderId)) as any
+    q = query(q, where("funderId", "==", filters.funderId))
   }
   if (filters?.personId) {
     // Query for projects where person is in teamMemberIds array
-    q = query(q as any, where("teamMemberIds", "array-contains", filters.personId)) as any
+    q = query(q, where("teamMemberIds", "array-contains", filters.personId))
   }
 
   const querySnapshot = await getDocs(q)
@@ -165,7 +165,7 @@ export async function getMasterProjects(filters?: {
 export async function updateMasterProject(projectId: string, updates: Partial<MasterProject>): Promise<void> {
   const db = getFirebaseDb()
   const projectRef = doc(db, "masterProjects", projectId)
-  const updateData: any = { ...updates, updatedAt: new Date().toISOString() }
+  const updateData = { ...updates, updatedAt: new Date().toISOString() }
 
   // Remove undefined fields (Firestore doesn't allow undefined, only null or omitted)
   const cleanedUpdate = Object.fromEntries(
@@ -240,6 +240,23 @@ export function subscribeToMasterProjects(
   })
 }
 
+/**
+ * Updates the tasks within a specific deliverable
+ * This handles the nested update logic for the new hierarchy
+ */
+export async function updateDeliverableTasks(
+  deliverableId: string,
+  tasks: any[] // Using any[] for now as ProjectTask type might cause circular dependency issues if imported here
+): Promise<void> {
+  const db = getFirebaseDb()
+  const deliverableRef = doc(db, "deliverables", deliverableId)
+
+  await updateDoc(deliverableRef, {
+    tasks: tasks,
+    updatedAt: serverTimestamp()
+  })
+}
+
 // ============================================================================
 // PROJECT MANAGEMENT (LEGACY)
 // ============================================================================
@@ -266,7 +283,8 @@ export interface FirestoreProject {
 }
 
 export async function createProject(projectData: Omit<Project, 'id'> & {
-  createdBy: string; labId?: string }): Promise<string> {
+  createdBy: string; labId?: string
+}): Promise<string> {
   const db = getFirebaseDb()
   const projectRef = doc(collection(db, "projects"))
   const projectId = projectRef.id
@@ -300,16 +318,16 @@ export async function getProjects(userId: string): Promise<Project[]> {
 
   const querySnapshot = await getDocs(collection(db, "projects"))
   const allProjects = querySnapshot.docs.map(doc => {
-    const data = doc.data() as any
+    const data = doc.data()
     const { type, legacyTypeLabel } = normalizeProjectType(data)
     return {
       ...data,
       type,
       legacyTypeLabel,
       // Convert Firestore timestamps to ISO strings if they exist
-      startDate: data.start ? data.start.toDate().toISOString() : data.startDate,
-      endDate: data.end ? data.end.toDate().toISOString() : data.endDate,
-    } as Project
+      startDate: data.start?.toDate ? data.start.toDate().toISOString() : (data.start || data.startDate),
+      endDate: data.end?.toDate ? data.end.toDate().toISOString() : (data.end || data.endDate),
+    } as unknown as Project
   })
 
   // Filter based on visibility (implement visibility logic here)
@@ -319,7 +337,7 @@ export async function getProjects(userId: string): Promise<Project[]> {
 export async function updateProject(projectId: string, updates: Partial<Project>): Promise<void> {
   const db = getFirebaseDb()
   const projectRef = doc(db, "projects", projectId)
-  const updateData: any = {
+  const updateData = {
     ...updates,
     updatedAt: new Date().toISOString()
   }
@@ -347,7 +365,7 @@ export function subscribeToProjects(
   if (!filters?.userId) {
     logger.warn("subscribeToProjects called with undefined or empty userId")
     // Return a no-op unsubscribe function
-    return () => {}
+    return () => { }
   }
 
   try {
@@ -361,13 +379,13 @@ export function subscribeToProjects(
       q,
       async (snapshot) => {
         const projects = snapshot.docs.map(doc => {
-          const data = doc.data() as any
+          const data = doc.data()
           return {
             ...data,
             // Convert Firestore timestamps to ISO strings if they exist
-            startDate: data.start ? data.start.toDate().toISOString() : data.startDate,
-            endDate: data.end ? data.end.toDate().toISOString() : data.endDate,
-          } as Project
+            startDate: data.start?.toDate ? data.start.toDate().toISOString() : (data.start || data.startDate),
+            endDate: data.end?.toDate ? data.end.toDate().toISOString() : (data.end || data.endDate),
+          } as unknown as Project
         })
         callback(projects)
       },
@@ -380,6 +398,6 @@ export function subscribeToProjects(
   } catch (error) {
     logger.error("Error setting up projects subscription", error)
     // Return a no-op unsubscribe function
-    return () => {}
+    return () => { }
   }
 }

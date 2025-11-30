@@ -22,8 +22,11 @@ import {
   Wallet,
   DollarSign,
   BrainCircuit,
+  Search,
   LucideIcon
 } from "lucide-react"
+import { QRCodeScanner } from "./QRCodeScanner"
+import { NotificationBell } from "./notifications/NotificationBell"
 
 // Type definitions
 type SubItem = {
@@ -41,20 +44,20 @@ type NavCategory = {
   hoverColor: string
   icon: LucideIcon
   subItems: SubItem[]
+  actionId?: string
 }
 
 // Refined, Subtle Color Palette
 export const NAV_ITEMS: NavCategory[] = [
   {
-    id: "home",
-    label: "Home",
+    id: "dashboard",
+    label: "Dashboard",
     // Neutral / Brand Color
     activeColor: "text-slate-900 bg-slate-100 border-slate-200",
     hoverColor: "hover:bg-slate-50 hover:text-slate-900",
     icon: LayoutDashboard,
-    subItems: [
-      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    ]
+    subItems: [],
+    actionId: "dashboard"
   },
   {
     id: "project",
@@ -63,10 +66,8 @@ export const NAV_ITEMS: NavCategory[] = [
     activeColor: "text-blue-600 bg-blue-50 border-blue-200",
     hoverColor: "hover:bg-blue-50/50 hover:text-blue-600",
     icon: Activity,
-    subItems: [
-      { id: "projects", label: "Timeline", icon: Activity },
-      { id: "ledger", label: "My Ledger", icon: Wallet },
-    ]
+    subItems: [],
+    actionId: "projects"
   },
   {
     id: "lab",
@@ -78,7 +79,7 @@ export const NAV_ITEMS: NavCategory[] = [
     subItems: [
       { id: "equipment", label: "Equipment", icon: Wrench },
       { id: "orders", label: "Orders", icon: Package },
-      { id: "eln", label: "Lab Notebook", icon: FileText },
+      { id: "eln", label: "Experiments", icon: FlaskConical },
       { id: "groups", label: "Groups", icon: Users },
       { id: "funding", label: "Funding", icon: DollarSign, roleRestricted: true },
     ]
@@ -91,11 +92,11 @@ export const NAV_ITEMS: NavCategory[] = [
     hoverColor: "hover:bg-violet-50/50 hover:text-violet-600",
     icon: CircleUser,
     subItems: [
-      { id: "myprofile", label: "My Profile", icon: CircleUser },
       { id: "daytoday", label: "Day to Day", icon: Activity },
       { id: "mytasks", label: "My Tasks", icon: ListTodo },
       { id: "calendar", label: "Calendar", icon: Calendar },
       { id: "bookings", label: "My Bookings", icon: Calendar },
+      { id: "training", label: "My Training", icon: Shield },
       { id: "privacy", label: "Privacy", icon: Shield },
     ]
   },
@@ -110,6 +111,7 @@ export const NAV_ITEMS: NavCategory[] = [
       { id: "people", label: "People", icon: Users },
       { id: "whiteboard", label: "Whiteboard", icon: Presentation },
       { id: "research", label: "Research Board", icon: BrainCircuit },
+      { id: "explore", label: "Explore", icon: Search },
       { id: "profiles", label: "All Profiles", icon: Users, adminOnly: true },
     ]
   }
@@ -148,7 +150,7 @@ export function TopModuleNavigation({
         {NAV_ITEMS.map((category) => {
           const isActive = selectedCategory === category.id || hoveredCategory === category.id
           const isSubItemActive = category.subItems.some(sub => sub.id === activeModule)
-          const Icon = category.icon
+          const Icon = category?.icon || Activity // Fallback icon
 
           // Filter subItems based on permissions
           const visibleSubItems = category.subItems.filter(item => {
@@ -157,8 +159,28 @@ export function TopModuleNavigation({
             return true
           })
 
-          // Don't render category if no visible subitems
-          if (visibleSubItems.length === 0) return null
+          // Don't render category if no visible subitems and not a direct link
+          if (visibleSubItems.length === 0 && !category.actionId) return null
+
+          // Direct Link Rendering
+          if (category.actionId) {
+            const isActive = activeModule === category.actionId
+            return (
+              <button
+                key={category.id}
+                onClick={() => onSelect?.(category.actionId!)}
+                className={cn(
+                  "relative flex items-center gap-2 px-4 py-1.5 rounded-md transition-all duration-200 border border-transparent",
+                  "font-medium text-slate-500",
+                  category.hoverColor,
+                  isActive && cn(category.activeColor, "shadow-sm")
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {category.label}
+              </button>
+            )
+          }
 
           return (
             <div
@@ -199,7 +221,7 @@ export function TopModuleNavigation({
                 <div className="bg-white rounded-lg p-1 shadow-lg border border-slate-100 flex flex-col gap-0.5">
                   {visibleSubItems.map((item) => {
                     const isItemActive = activeModule === item.id
-                    const ItemIcon = item.icon
+                    const ItemIcon = item.icon || Activity // Fallback icon
 
                     return (
                       <button
@@ -229,6 +251,10 @@ export function TopModuleNavigation({
             </div>
           )
         })}
+        <div className="ml-2 flex items-center gap-1">
+          <NotificationBell />
+          <QRCodeScanner />
+        </div>
       </div>
     </div>
   )

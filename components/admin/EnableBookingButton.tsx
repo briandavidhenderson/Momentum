@@ -23,11 +23,9 @@ export function EnableBookingButton() {
       const functions = getFunctions(app);
       const enableBooking = httpsCallable(functions, 'enableEquipmentBooking');
 
-      console.log('Calling enableEquipmentBooking function...');
       const response = await enableBooking();
 
       const data = response.data as any;
-      console.log('Success:', data);
 
       if (data.updated === 0 && data.totalEquipment > 0) {
         setResult(`✅ All ${data.totalEquipment} equipment items already have booking enabled.`);

@@ -118,9 +118,9 @@ export function useOptimisticDayToDayTasks() {
       logger.error('No labId found on profile', new Error('Profile missing labId'), {
         profileId: profile?.id,
         userId: profile?.userId,
-        hasLegacyLab: !!profile?.lab
+        hasLegacyLab: !!profile?.labName
       })
-      alert('Cannot create task: Your profile is missing a lab assignment.\n\nPlease contact your administrator or try logging out and logging back in.\n\nIf the problem persists, your profile may need to be updated.')
+      errorToast('Cannot create task: Your profile is missing a lab assignment. Please contact your administrator or try logging out and logging back in.')
       return
     }
 
@@ -248,7 +248,7 @@ export function useOptimisticDayToDayTasks() {
     // Combine back with other columns
     const updatedTasks = [...otherTasks, ...reorderedWithOrder].sort((a, b) => {
       // Sort by status first (todo, working, done, history), then by order
-      const statusOrder = { todo: 0, working: 1, done: 2, history: 3 }
+      const statusOrder = { todo: 0, working: 1, done: 2, history: 3, blocked: 4 }
       if (a.status !== b.status) {
         return statusOrder[a.status] - statusOrder[b.status]
       }

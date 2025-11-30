@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/components/ui/toast"
 import {
   Dialog,
   DialogContent,
@@ -139,6 +140,7 @@ interface ProfileManagementProps {
 }
 
 export function ProfileManagement({ currentUser, currentUserProfile }: ProfileManagementProps = {}) {
+  const { toast } = useToast()
   const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const { handleCreateMasterProject } = useProjects()
   const [selectedProfile, setSelectedProfile] = useState<PersonProfile | null>(null)
@@ -336,7 +338,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
 
   const handleEdit = (profile: PersonProfile) => {
     if (!canEditProfile(profile)) {
-      alert("You can only edit your own profile, or you need administrator privileges to edit other profiles.")
+      toast({
+        title: "Permission Denied",
+        description: "You can only edit your own profile, or you need administrator privileges to edit other profiles.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -385,7 +391,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     const hasLegacyHierarchyFields = formData.organisation && formData.institute && formData.labName
 
     if (!hasRequiredBasicFields || !hasLegacyHierarchyFields) {
-      alert("Please fill in required fields: First Name, Last Name, Email, Organisation, Institute, and Lab")
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in required fields: First Name, Last Name, Email, Organisation, Institute, and Lab",
+        variant: "destructive",
+      })
       return
     }
 
@@ -394,6 +404,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       id: profileId,
       firstName: formData.firstName!,
       lastName: formData.lastName!,
+      displayName: `${formData.firstName} ${formData.lastName}`,
       email: formData.email!,
       phone: formData.phone || "",
       officeLocation: formData.officeLocation || "",
@@ -456,6 +467,12 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       profileComplete: formData.profileComplete !== undefined ? formData.profileComplete : true,
       onboardingComplete: false, // Will be true after new onboarding flow
       isAdministrator: formData.isAdministrator || false,
+
+      // GDPR & Privacy
+      consentGiven: true, // Admin created profiles are assumed to have consent
+      lastConsentUpdate: new Date().toISOString(),
+      privacySettingsId: "", // Will be created if needed
+      dataExportRequestIds: [],
     }
 
     const updatedProfiles = selectedProfile
@@ -493,7 +510,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
     // Don't allow deleting static profiles
     const staticIds = new Set(staticProfiles.map(p => p.id))
     if (staticIds.has(profile.id)) {
-      alert("Cannot delete built-in profiles. These are read-only.")
+      toast({
+        title: "Action Not Allowed",
+        description: "Cannot delete built-in profiles. These are read-only.",
+        variant: "destructive",
+      })
       return
     }
 
@@ -532,7 +553,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
       try {
         const result = e.target?.result as string
         if (!result) {
-          alert("Error reading file. File appears to be empty.")
+          toast({
+            title: "Import Error",
+            description: "Error reading file. File appears to be empty.",
+            variant: "destructive",
+          })
           return
         }
 
@@ -540,7 +565,11 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
 
         // Validate that imported is an array
         if (!Array.isArray(imported)) {
-          alert("Error importing file. Expected an array of profiles.")
+          toast({
+            title: "Import Error",
+            description: "Error importing file. Expected an array of profiles.",
+            variant: "destructive",
+          })
           return
         }
 
@@ -556,15 +585,26 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
         })
 
         saveProfiles(updatedProfiles)
-        alert(`Imported ${imported.length} profile(s)`)
+        toast({
+          title: "Import Successful",
+          description: `Imported ${imported.length} profile(s)`,
+        })
       } catch (error) {
         logger.error('Error importing profiles', error)
-        alert("Error importing file. Please ensure it's valid JSON.")
+        toast({
+          title: "Import Error",
+          description: "Error importing file. Please ensure it's valid JSON.",
+          variant: "destructive",
+        })
       }
     }
     reader.onerror = () => {
       logger.error('Error reading file', reader.error)
-      alert("Error reading file. Please try again.")
+      toast({
+        title: "Read Error",
+        description: "Error reading file. Please try again.",
+        variant: "destructive",
+      })
     }
     reader.readAsText(file)
   }
@@ -670,7 +710,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
           onChange={(e) => setFilterLab(e.target.value)}
           className="px-3 py-2 rounded-md border border-border bg-background"
         >
-          <option value="all">All Labs</option>
+          <option value="all">All Departments</option>
           {labs.map(lab => (
             <option key={lab} value={lab}>{lab}</option>
           ))}
@@ -690,7 +730,7 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
           onChange={(e) => setFilterInstitute(e.target.value)}
           className="px-3 py-2 rounded-md border border-border bg-background"
         >
-          <option value="all">All Institutes</option>
+          <option value="all">All Schools/Faculties</option>
           {institutes.map(inst => (
             <option key={inst} value={inst}>{inst}</option>
           ))}
@@ -976,9 +1016,16 @@ export function ProfileManagement({ currentUser, currentUserProfile }: ProfileMa
                           orcidLastSynced: new Date().toISOString()
                         })
 
-                        alert("ORCID linked successfully!")
+                        toast({
+                          title: "ORCID Linked",
+                          description: "ORCID linked successfully!",
+                        })
                       } catch (error: any) {
-                        alert(`Failed to link ORCID: ${error.message}`)
+                        toast({
+                          title: "Link Failed",
+                          description: `Failed to link ORCID: ${error.message}`,
+                          variant: "destructive",
+                        })
                       }
                     }}
                   >
@@ -1383,6 +1430,7 @@ function ProjectDialog({
   onSave: (project: ProfileProject) => void
   currentUserProfile?: PersonProfile | null
 }) {
+  const { toast } = useToast()
   const allProfiles = useProfiles(currentUserProfile?.labId || null)
   const [formData, setFormData] = useState<ProfileProject>(project)
 
@@ -1392,7 +1440,11 @@ function ProjectDialog({
 
   const handleSave = () => {
     if (!formData.name || !formData.startDate || !formData.endDate) {
-      alert("Please fill in required fields: Project Name, Start Date, and End Date")
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in required fields: Project Name, Start Date, and End Date",
+        variant: "destructive",
+      })
       return
     }
     onSave(formData)

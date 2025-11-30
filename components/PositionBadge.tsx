@@ -145,8 +145,8 @@ export default function PositionBadge({
   showIcon = true,
   isPrincipalInvestigator = false
 }: PositionBadgeProps) {
-  const config = POSITION_CATEGORY_CONFIG[positionLevel]
-  const displayName = positionDisplayName || POSITION_DISPLAY_NAMES[positionLevel]
+  const config = POSITION_CATEGORY_CONFIG[positionLevel] || POSITION_CATEGORY_CONFIG[PositionLevel.RESEARCH_ASSISTANT]
+  const displayName = positionDisplayName || POSITION_DISPLAY_NAMES[positionLevel] || "Unknown Position"
   const Icon = config.icon
 
   const sizeClasses = {

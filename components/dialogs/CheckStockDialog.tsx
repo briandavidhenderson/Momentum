@@ -4,13 +4,14 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useToast } from "@/components/ui/use-toast"
 import { Label } from "@/components/ui/label"
 import { InventoryItem, PersonProfile } from "@/lib/types"
 import { EnrichedSupply } from "@/lib/supplyUtils"
 import { notifyLowStock, notifyCriticalStock, getLabManagers } from "@/lib/notificationUtils"
 import { logger } from "@/lib/logger"
 
-interface CheckStockDialogProps{
+interface CheckStockDialogProps {
   open: boolean
   onClose: () => void
   supply: EnrichedSupply | null
@@ -37,6 +38,7 @@ export function CheckStockDialog({
   allProfiles,
   onInventoryUpdate,
 }: CheckStockDialogProps) {
+  const { toast } = useToast()
   const [tempStockQty, setTempStockQty] = useState<string>("")
 
   // Reset quantity input when supply changes
@@ -51,7 +53,11 @@ export function CheckStockDialog({
 
     const newQty = parseFloat(tempStockQty)
     if (isNaN(newQty) || newQty < 0) {
-      alert("Please enter a valid non-negative quantity")
+      toast({
+        title: "Invalid Quantity",
+        description: "Please enter a valid non-negative quantity",
+        variant: "destructive",
+      })
       return
     }
 

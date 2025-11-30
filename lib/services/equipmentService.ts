@@ -39,7 +39,7 @@ export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>
 export async function updateEquipment(equipmentId: string, updates: Partial<EquipmentDevice>): Promise<void> {
   const db = getFirebaseDb()
   const equipmentRef = doc(db, "equipment", equipmentId)
-  const updateData: any = { ...updates, updatedAt: serverTimestamp() }
+  const updateData: Record<string, any> = { ...updates, updatedAt: serverTimestamp() }
   await updateDoc(equipmentRef, updateData)
 }
 
@@ -53,7 +53,7 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
   if (!labId) {
     logger.warn("subscribeToEquipment called with undefined or empty labId")
     callback([])
-    return () => {}
+    return () => { }
   }
 
   try {
@@ -69,8 +69,8 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
           const data = doc.data()
           return {
             ...data,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt as any).toISOString() : new Date().toISOString()),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt ? new Date(data.updatedAt as any).toISOString() : undefined),
           } as EquipmentDevice
         })
         callback(equipment)
@@ -82,6 +82,6 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
     )
   } catch (error) {
     logger.error("Error setting up equipment subscription", error)
-    return () => {}
+    return () => { }
   }
 }

@@ -34,7 +34,7 @@ export function useELN() {
       ...experimentData,
       createdBy: currentUser.uid,
       labId: profile.labId,
-      createdAt: new Date().toISOString(),
+
     });
     logger.info('ELN experiment created', { experimentId });
     return experimentId;

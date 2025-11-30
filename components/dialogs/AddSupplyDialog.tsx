@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useToast } from "@/components/ui/use-toast"
 import { InventoryItem, EquipmentSupply } from "@/lib/types"
 import { logger } from "@/lib/logger"
 
@@ -35,6 +36,7 @@ export function AddSupplyDialog({
   existingSupplies = [],
   onAdd,
 }: AddSupplyDialogProps) {
+  const { toast } = useToast()
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>("")
   const [minQty, setMinQty] = useState<string>("")
   const [burnPerWeek, setBurnPerWeek] = useState<string>("")
@@ -51,7 +53,11 @@ export function AddSupplyDialog({
 
   const handleSave = async () => {
     if (!selectedInventoryId) {
-      alert("Please select an inventory item")
+      toast({
+        title: "Selection Required",
+        description: "Please select an inventory item",
+        variant: "destructive",
+      })
       return
     }
 
@@ -77,7 +83,11 @@ export function AddSupplyDialog({
       onClose()
     } catch (error) {
       logger.error("Error adding supply", error)
-      alert("Failed to add supply. Please try again.")
+      toast({
+        title: "Error",
+        description: "Failed to add supply. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 

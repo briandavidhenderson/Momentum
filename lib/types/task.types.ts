@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type { ImportanceLevel, WorkStatus } from './common.types'
+import type { Deliverable } from './deliverable.types'
 
 /**
  * ProjectTask - Optional granular step within a deliverable
@@ -100,7 +101,9 @@ export interface Task {
   workpackageId: string       // LEGACY: Will be removed
   importance: ImportanceLevel
   notes?: string
-  deliverables: any[]  // LEGACY: Deliverables are now in deliverable.types.ts
+  updatedAt?: Date
+  deliverableId?: string
+  deliverables?: (Deliverable | string)[]  // LEGACY: Deliverables are now in deliverable.types.ts
   isExpanded?: boolean
   type?: "experiment" | "writing" | "meeting" | "analysis"
   dependencies?: string[]
@@ -128,7 +131,7 @@ export interface Subtask {
   notes?: string
   tags?: string[]
   todos?: Todo[]
-  deliverables?: any[]  // LEGACY: Deliverables are now in deliverable.types.ts
+  deliverables?: Deliverable[]  // LEGACY: Deliverables are now in deliverable.types.ts
   linkedOrderIds?: string[]
   linkedInventoryItemIds?: string[]
   isExpanded?: boolean

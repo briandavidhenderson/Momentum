@@ -8,6 +8,8 @@ import { DeliverableList } from "./DeliverableList"
 import { TaskListView } from "./TaskListView"
 import { TaskDetailsPanel } from "./TaskDetailsPanel"
 import { DeliverableDetailsPanel } from "./DeliverableDetailsPanel"
+import { WorkpackageDialog } from "./WorkpackageDialog"
+import { DeliverableCreationDialog } from "./DeliverableCreationDialog"
 import { ChevronRight } from "lucide-react"
 
 interface ProjectExplorerViewProps {
@@ -22,6 +24,8 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
         handleUpdateWorkpackage,
         handleUpdateDeliverable,
         handleDeleteDeliverable,
+        handleCreateWorkpackage,
+        handleCreateDeliverable,
     } = useAppContext()
 
     // Selection state for 3-column navigation
@@ -31,6 +35,10 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
     // Panel state for editing
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
     const [editingDeliverableId, setEditingDeliverableId] = useState<string | null>(null)
+
+    // Dialog state
+    const [isWorkPackageDialogOpen, setIsWorkPackageDialogOpen] = useState(false)
+    const [isDeliverableDialogOpen, setIsDeliverableDialogOpen] = useState(false)
 
     // Filter data based on selection
     const projectWorkpackages = allWorkpackages.filter((wp) =>
@@ -117,6 +125,66 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
         setEditingDeliverableId(deliverable.id)
     }, [])
 
+    // Creation Handlers
+    const onSaveWorkPackage = async (data: Partial<Workpackage>) => {
+        if (!handleCreateWorkpackage) return
+
+        try {
+            // Ensure required fields for creation
+            if (!data.name || !data.start || !data.end) return
+
+            await handleCreateWorkpackage({
+                projectId: project.id,
+                name: data.name,
+                start: data.start,
+                end: data.end,
+                status: data.status || 'planning',
+                importance: data.importance || 'medium',
+                notes: data.notes,
+                ownerId: data.ownerId,
+                progress: 0,
+                isExpanded: true,
+                tasks: [],
+                deliverableIds: []
+            })
+            setIsWorkPackageDialogOpen(false)
+        } catch (error) {
+            console.error("Failed to create work package:", error)
+        }
+    }
+
+    const onSaveDeliverable = async (data: Partial<Deliverable>) => {
+        if (!handleCreateDeliverable || !selectedWorkPackageId) return
+
+        try {
+            // Ensure required fields
+            if (!data.name || !data.dueDate) return
+
+            await handleCreateDeliverable({
+                name: data.name,
+                description: data.description,
+                status: data.status || 'not-started',
+                importance: data.importance || 'medium',
+                dueDate: data.dueDate,
+                startDate: data.startDate,
+                ownerId: data.ownerId,
+                workpackageId: selectedWorkPackageId,
+                progress: 0,
+                createdBy: 'current-user-id', // Placeholder, need to fix
+                tags: [],
+                linkedOrderIds: [],
+                linkedDayToDayTaskIds: [],
+                linkedDocumentUrls: [],
+                blockers: [],
+                metrics: [],
+                contributorIds: []
+            })
+            setIsDeliverableDialogOpen(false)
+        } catch (error) {
+            console.error("Failed to create deliverable:", error)
+        }
+    }
+
     return (
         <div className="h-full flex flex-col bg-background">
             {/* Breadcrumb Header */}
@@ -150,6 +218,7 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
                         workpackages={projectWorkpackages}
                         selectedWorkPackageId={selectedWorkPackageId}
                         onSelectWorkPackage={handleWorkPackageSelect}
+                        onAdd={() => setIsWorkPackageDialogOpen(true)}
                     />
                 </div>
 
@@ -161,6 +230,7 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
                         selectedDeliverableId={selectedDeliverableId}
                         onSelectDeliverable={handleDeliverableSelect}
                         onDeliverableClick={handleDeliverableClick}
+                        onAdd={() => setIsDeliverableDialogOpen(true)}
                     />
                 </div>
 
@@ -210,6 +280,25 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
                     people={allProfiles}
                 />
             )}
+
+            {/* Dialogs */}
+            <WorkpackageDialog
+                open={isWorkPackageDialogOpen}
+                onOpenChange={setIsWorkPackageDialogOpen}
+                workpackage={null}
+                projectId={project.id}
+                onSave={onSaveWorkPackage}
+                mode="create"
+                availableLeads={allProfiles}
+            />
+
+            <DeliverableCreationDialog
+                open={isDeliverableDialogOpen}
+                onOpenChange={setIsDeliverableDialogOpen}
+                workPackageId={selectedWorkPackageId || ""}
+                onCreate={onSaveDeliverable}
+                availablePeople={allProfiles}
+            />
         </div>
     )
 }

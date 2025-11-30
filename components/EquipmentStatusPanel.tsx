@@ -29,6 +29,10 @@ import { CheckStockDialog } from "@/components/dialogs/CheckStockDialog"
 import { EquipmentEditorDialog } from "@/components/dialogs/EquipmentEditorDialog"
 import { AssignInventoryToEquipmentDialog } from "@/components/dialogs/AssignInventoryToEquipmentDialog"
 import { logger } from "@/lib/logger"
+import { useToast } from "@/components/ui/toast"
+import { BookingDialog } from "@/components/equipment/BookingDialog"
+import { CommentsSection } from "@/components/CommentsSection"
+import { MessageSquare } from "lucide-react"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
@@ -37,7 +41,7 @@ interface EquipmentStatusPanelProps {
   masterProjects: MasterProject[]
   currentUserProfile: PersonProfile | null
   allProfiles: PersonProfile[] // For notification recipients
-  onEquipmentCreate: (equipment: Omit<EquipmentDevice, 'id'>) => void
+  onEquipmentCreate: (equipment: Omit<EquipmentDevice, 'id'>) => Promise<void> | void
   onEquipmentUpdate: (equipmentId: string, updates: Partial<EquipmentDevice>) => void
   onInventoryUpdate: (inventory: InventoryItem[]) => void
   onOrderCreate: (order: Order) => void
@@ -59,27 +63,17 @@ export function EquipmentStatusPanel({
   onTaskCreate,
   onBookEquipment,
 }: EquipmentStatusPanelProps) {
+  const { toast } = useToast()
   const [devices, setDevices] = useState<EquipmentDevice[]>(equipment)
   const [editingDevice, setEditingDevice] = useState<EquipmentDevice | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [showDeviceCreationModal, setShowDeviceCreationModal] = useState(false)
+
   const [checkStockItem, setCheckStockItem] = useState<{ deviceId: string; supplyId: string; currentQty: number } | null>(null)
   const [tempStockQty, setTempStockQty] = useState<string>("")
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
   const [assigningDevice, setAssigningDevice] = useState<EquipmentDevice | null>(null)
-  const [newDeviceForm, setNewDeviceForm] = useState<{
-    name: string
-    make: string
-    model: string
-    serialNumber: string
-    maintenanceDays: number
-  }>({
-    name: '',
-    make: '',
-    model: '',
-    serialNumber: '',
-    maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
-  })
+  const [bookingDevice, setBookingDevice] = useState<EquipmentDevice | null>(null)
+  const [viewingCommentsFor, setViewingCommentsFor] = useState<EquipmentDevice | null>(null)
 
   useEffect(() => {
     setDevices(equipment)
@@ -162,7 +156,7 @@ export function EquipmentStatusPanel({
   }
 
   // Handle save stock - updates inventory quantity
-  const handleSaveStock = () => {
+  const handleSaveStock = async () => {
     if (!checkStockItem) return
 
     const device = devices.find(d => d.id === checkStockItem.deviceId)
@@ -173,7 +167,7 @@ export function EquipmentStatusPanel({
 
     const newQty = parseInt(tempStockQty)
     if (isNaN(newQty) || newQty < 0) {
-      alert('Please enter a valid quantity')
+      toast({ title: 'Please enter a valid quantity', variant: 'destructive' })
       return
     }
 
@@ -184,6 +178,39 @@ export function EquipmentStatusPanel({
         item.id === updatedItem.id ? updatedItem : item
       )
       onInventoryUpdate(updatedInventory)
+
+      // Check for low stock and notify
+      // Calculate weeks remaining based on burn rate
+      // We need to aggregate burn rate for this item across all devices
+      // But for simplicity, we can just check against minQuantity or use the item's inventoryLevel
+      // The updateInventoryQuantity util updates inventoryLevel
+
+      if (updatedItem.inventoryLevel === 'low' || updatedItem.inventoryLevel === 'empty') {
+        const managers = getLabManagers(allProfiles)
+        // Calculate weeks remaining if possible
+        // We can use the utility from equipmentUtils if we had it imported, or just estimate
+        // For now, let's use a simplified check or just notify based on level
+
+        // Re-calculate burn rate to get accurate weeks remaining
+        // This logic is similar to calculateReorderSuggestions but for a single item
+        const devicesUsingItem = devices.filter(d =>
+          d.supplies.some(s => s.inventoryItemId === updatedItem.id)
+        )
+
+        let totalBurnRate = 0
+        devicesUsingItem.forEach(d => {
+          const s = d.supplies.find(s => s.inventoryItemId === updatedItem.id)
+          if (s) totalBurnRate += s.burnPerWeek
+        })
+
+        const weeksRemaining = totalBurnRate > 0 ? updatedItem.currentQuantity / totalBurnRate : 999
+
+        if (updatedItem.inventoryLevel === 'empty') {
+          await notifyCriticalStock(updatedItem, managers)
+        } else if (weeksRemaining < 4) { // Notify if less than 4 weeks
+          await notifyLowStock(updatedItem, managers, weeksRemaining)
+        }
+      }
     }
 
     // Close dialog
@@ -216,6 +243,12 @@ export function EquipmentStatusPanel({
         return false
       }
 
+      if (!silent) {
+        if (!confirm(`Are you sure you want to create a reorder for "${enrichedSupply.name}"?`)) {
+          return false
+        }
+      }
+
       // Create order
       const inventoryItem = supply.inventoryItemId ? inventory.find(i => i.id === supply.inventoryItemId) : null
       const newOrder: Order = {
@@ -240,6 +273,8 @@ export function EquipmentStatusPanel({
         createdDate: new Date(),
         category: inventoryItem?.category,
         subcategory: inventoryItem?.subcategory,
+        visibility: 'lab',
+
         // Legacy field for backward compatibility
         chargeToAccount: inventoryItem?.chargeToAccount,
         // Add provenance for traceability
@@ -252,14 +287,14 @@ export function EquipmentStatusPanel({
       onOrderCreate(newOrder)
 
       if (!silent) {
-        alert(`✓ Order created for "${enrichedSupply.name}"\n\nGo to the Orders tab to complete the order details.`)
+        toast({ title: `Order created for "${enrichedSupply.name}"`, description: "Go to the Orders tab to complete the order details." })
       }
 
       return true
     } catch (error) {
       logger.error('Error creating order', error)
       if (!silent) {
-        alert(`Failed to create order: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        toast({ title: `Failed to create order: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' })
       }
       throw error
     }
@@ -277,7 +312,11 @@ export function EquipmentStatusPanel({
       })
 
       if (missingSupplies.length === 0) {
-        alert(`No missing supplies for ${device.name}`)
+        toast({ title: `No missing supplies for ${device.name}` })
+        return
+      }
+
+      if (!confirm(`Found ${missingSupplies.length} missing supplies for ${device.name}. Create orders for all?`)) {
         return
       }
 
@@ -294,51 +333,36 @@ export function EquipmentStatusPanel({
       }
 
       if (successCount > 0) {
-        alert(`✓ Created ${successCount} order(s) for missing supplies on ${device.name}\n\nGo to the Orders tab to complete the order details.`)
+        toast({ title: `Created ${successCount} order(s) for missing supplies on ${device.name}`, description: "Go to the Orders tab to complete the order details." })
       }
     } catch (error) {
       logger.error('Error creating orders', error)
-      alert(`Failed to create orders: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast({ title: `Failed to create orders: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'destructive' })
     }
   }
 
   // Handle add device - opens modal with empty form
   const handleAddDevice = () => {
-    setShowDeviceCreationModal(true)
-  }
-
-  // Handle create device from modal
-  const handleCreateDevice = () => {
-    if (!newDeviceForm.name.trim()) {
-      alert('Please enter a device name')
-      return
-    }
-
-    const newDevice: Omit<EquipmentDevice, 'id'> = {
-      name: newDeviceForm.name,
-      make: newDeviceForm.make,
-      model: newDeviceForm.model,
-      serialNumber: newDeviceForm.serialNumber,
+    const newDevice: EquipmentDevice = {
+      id: 'new-device', // Temp ID
+      name: '',
+      make: '',
+      model: '',
+      serialNumber: '',
       imageUrl: '',
       type: 'Device',
-      maintenanceDays: newDeviceForm.maintenanceDays,
+      maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
       lastMaintained: toISODateString(new Date()),
       threshold: EQUIPMENT_CONFIG.maintenance.defaultThreshold,
       supplies: [],
       sops: [],
       labId: currentUserProfile?.labId,
       createdAt: new Date().toISOString(),
+      workingLabId: '',
+      workingLabName: ''
     }
-
-    onEquipmentCreate(newDevice)
-    setShowDeviceCreationModal(false)
-    setNewDeviceForm({
-      name: '',
-      make: '',
-      model: '',
-      serialNumber: '',
-      maintenanceDays: EQUIPMENT_CONFIG.maintenance.defaultIntervalDays,
-    })
+    setEditingDevice(newDevice)
+    setIsModalOpen(true)
   }
 
   // Handle edit device
@@ -421,6 +445,7 @@ export function EquipmentStatusPanel({
       chargeToAccount: primaryAccount?.accountId,
       // FIXED: Add provenance for traceability
       sourceInventoryItemId: suggestion.inventoryItemId,
+      visibility: 'lab',
     }
 
     onOrderCreate(newOrder)
@@ -507,35 +532,47 @@ export function EquipmentStatusPanel({
             {devices.map(device => {
               const mh = maintenanceHealth(device)
               const sh = suppliesHealth(device)
-              const mClass = getHealthClass(mh)
-              const sClass = getHealthClass(sh)
+
+              // New color logic for health bars
+              const getBarColor = (val: number) => {
+                if (val <= 25) return 'bg-rose-500'
+                if (val <= 50) return 'bg-amber-500'
+                return 'bg-emerald-500'
+              }
+
+              const mColor = getBarColor(mh)
+              const sColor = getBarColor(sh)
 
               return (
-                <div key={device.id} className="border border-border rounded-lg p-4 bg-card space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {device.imageUrl ? (
-                        <Image src={device.imageUrl} alt={device.name} width={48} height={48} className="w-12 h-12 object-cover rounded" />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">
-                          No Image
-                        </div>
-                      )}
+                <div key={device.id} className="group bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-slate-100 overflow-hidden">
+                  {/* Header Section */}
+                  <div className="p-5 pb-3 flex items-start justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-14 w-14 rounded-lg overflow-hidden bg-slate-50 border border-slate-100 flex-shrink-0">
+                        {device.imageUrl ? (
+                          <Image src={device.imageUrl} alt={device.name} fill className="object-cover" />
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-slate-300">
+                            <Wrench className="h-6 w-6" />
+                          </div>
+                        )}
+                      </div>
                       <div>
-                        <h3 className="font-semibold">{device.name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {device.type} • Every {device.maintenanceDays} days
-                        </p>
+                        <h3 className="font-bold text-lg text-slate-900 leading-tight">{device.name}</h3>
+                        <div className="text-xs text-slate-500 mt-1 font-medium flex items-center gap-2">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600">{device.type}</span>
+                          <span>•</span>
+                          <span>{device.make} {device.model}</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        Last: {device.lastMaintained}
-                      </Badge>
+
+                    {/* Action Menu */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 text-slate-400 hover:text-slate-700"
                         onClick={() => setAssigningDevice(device)}
                         title="Manage Inventory"
                       >
@@ -544,7 +581,7 @@ export function EquipmentStatusPanel({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 text-slate-400 hover:text-slate-700"
                         onClick={() => handleEditDevice(device)}
                       >
                         <Edit2 className="h-4 w-4" />
@@ -552,139 +589,115 @@ export function EquipmentStatusPanel({
                     </div>
                   </div>
 
-                  {/* Maintenance Bar */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs">Maintenance</span>
-                      <Badge className={mClass === 'critical' ? 'bg-red-500' : mClass === 'warning' ? 'bg-orange-500' : 'bg-green-500'}>
-                        {mh}%
-                      </Badge>
+                  {/* Health Indicators */}
+                  <div className="px-5 py-3 grid grid-cols-2 gap-6">
+                    {/* Maintenance Bar */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-end">
+                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Maintenance</span>
+                        <span className={`text-xs font-bold ${mh <= 25 ? 'text-rose-600' : 'text-slate-700'}`}>{mh}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${mColor}`} style={{ width: `${mh}%` }} />
+                      </div>
+                      <div className="text-[10px] text-slate-400 text-right">
+                        Due: {device.lastMaintained}
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-full rounded-full transition-all ${mClass === 'critical' ? 'bg-red-500' :
-                          mClass === 'warning' ? 'bg-orange-500' :
-                            'bg-blue-500'
-                          }`}
-                        style={{ width: `${mh}%` }}
-                      />
-                    </div>
-                  </div>
 
-                  {/* Supplies Bar */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs">Supplies</span>
-                      <Badge className={sClass === 'critical' ? 'bg-red-500' : sClass === 'warning' ? 'bg-orange-500' : 'bg-green-500'}>
-                        {sh}%
-                      </Badge>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-full rounded-full transition-all ${sClass === 'critical' ? 'bg-red-500' :
-                          sClass === 'warning' ? 'bg-orange-500' :
-                            'bg-green-500'
-                          }`}
-                        style={{ width: `${sh}%` }}
-                      />
+                    {/* Supplies Bar */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-end">
+                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Supplies</span>
+                        <span className={`text-xs font-bold ${sh <= 25 ? 'text-rose-600' : 'text-slate-700'}`}>{sh}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${sColor}`} style={{ width: `${sh}%` }} />
+                      </div>
+                      <div className="text-[10px] text-slate-400 text-right">
+                        {device.supplies.length} items linked
+                      </div>
                     </div>
                   </div>
 
-                  {/* Supplies List - Using Enriched Supply Data */}
-                  <div className="flex flex-wrap gap-2">
-                    {enrichDeviceSupplies(device, inventory).map(supply => {
-                      const supplyClass = getHealthClass(supply.healthPercent)
+                  {/* Supplies List (Compact) */}
+                  {device.supplies.length > 0 && (
+                    <div className="px-5 py-3 border-t border-slate-50 bg-slate-50/50">
+                      <div className="space-y-2">
+                        {enrichDeviceSupplies(device, inventory).slice(0, 3).map(supply => {
+                          const supplyColor = getBarColor(supply.healthPercent)
+                          return (
+                            <div key={supply.id} className="flex items-center justify-between text-xs group/supply">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <div className={`w-1.5 h-1.5 rounded-full ${supplyColor} flex-shrink-0`} />
+                                <span className="font-medium text-slate-700 truncate">{supply.name}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-slate-500 font-mono">{supply.currentQuantity}/{supply.minQty}</span>
+                                {supply.currentQuantity === 0 ? (
+                                  <button
+                                    onClick={() => handleReorder(device.id, supply)}
+                                    className="text-rose-600 hover:text-rose-700 font-medium opacity-0 group-hover/supply:opacity-100 transition-opacity"
+                                  >
+                                    Order
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleCheckStock(device.id, supply.id)}
+                                    className="text-blue-600 hover:text-blue-700 font-medium opacity-0 group-hover/supply:opacity-100 transition-opacity"
+                                  >
+                                    Check
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {device.supplies.length > 3 && (
+                          <div className="text-[10px] text-center text-slate-400 pt-1">
+                            + {device.supplies.length - 3} more supplies
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-                      return (
-                        <div
-                          key={supply.id}
-                          className="relative bg-gray-50 border border-border rounded-full px-3 py-1.5 pr-20 text-xs"
-                        >
-                          <div className="flex items-center gap-1">
-                            {supply.healthPercent <= 25 && <AlertTriangle className="h-3 w-3 text-red-500" />}
-                            <span className="font-medium">{supply.name}</span>
-                            <span className="text-muted-foreground">
-                              • Qty {supply.currentQuantity}/{supply.minQty} • Burn {supply.burnPerWeek}/wk
-                            </span>
-                          </div>
-                          <div className={`absolute left-3 right-3 bottom-1 h-0.5 bg-gray-200 rounded-full overflow-hidden`}>
-                            <div
-                              className={`h-full ${supplyClass === 'critical' ? 'bg-red-500' :
-                                supplyClass === 'warning' ? 'bg-orange-500' :
-                                  'bg-green-500'
-                                }`}
-                              style={{ width: `${supply.healthPercent}%` }}
-                            />
-                          </div>
-                          <div className="absolute right-3 bottom-2 text-[10px] text-muted-foreground">
-                            {Math.round(supply.healthPercent)}%
-                          </div>
-                          <div className="absolute right-2 top-0.5 flex gap-1">
-                            {supply.currentQuantity === 0 ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 px-2 text-xs"
-                                onClick={() => handleReorder(device.id, supply)}
-                              >
-                                Reorder
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-5 px-2 text-xs"
-                                onClick={() => handleCheckStock(device.id, supply.id)}
-                              >
-                                Check Stock
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2">
+                  {/* Footer Actions */}
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2">
                     {onBookEquipment && (
                       <Button
                         size="sm"
-                        variant="default"
-                        onClick={() => onBookEquipment(device)}
-                        className="flex-1"
+                        className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-8 text-xs font-medium"
+                        onClick={() => setBookingDevice(device)}
                       >
-                        <Calendar className="mr-2 h-4 w-4" />
-                        Book Now
+                        <Calendar className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                        Book
                       </Button>
                     )}
                     <Button
                       size="sm"
-                      variant="outline"
+                      className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-8 text-xs font-medium"
                       onClick={() => handlePerformMaintenance(device.id)}
-                      className="flex-1"
                     >
-                      <Wrench className="mr-2 h-4 w-4" />
-                      Perform Maintenance
+                      <Wrench className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                      Maintain
                     </Button>
                     <Button
                       size="sm"
-                      variant="outline"
+                      className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-8 text-xs font-medium"
                       onClick={() => handleOrderMissing(device)}
-                      className="flex-1"
                     >
-                      <ShoppingCart className="mr-2 h-4 w-4" />
-                      Order Missing
+                      <ShoppingCart className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                      Order
                     </Button>
-                  </div>
-
-                  {/* Device Info */}
-                  <div className="text-xs text-muted-foreground pt-2 border-t border-border">
-                    <div><strong>Make:</strong> {device.make || 'N/A'}</div>
-                    <div><strong>Model:</strong> {device.model || 'N/A'}</div>
-                    {device.serialNumber && (
-                      <div><strong>Serial:</strong> {device.serialNumber}</div>
-                    )}
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-8 text-xs font-medium"
+                      onClick={() => setViewingCommentsFor(device)}
+                    >
+                      <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                      Discuss
+                    </Button>
                   </div>
                 </div>
               )
@@ -725,80 +738,7 @@ export function EquipmentStatusPanel({
         </div>
       </div>
 
-      {/* Device Creation Modal */}
-      <Dialog open={showDeviceCreationModal} onOpenChange={setShowDeviceCreationModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Device</DialogTitle>
-            <DialogDescription>
-              Add a new equipment device to your lab
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="device-name">Device Name *</Label>
-              <Input
-                id="device-name"
-                value={newDeviceForm.name}
-                onChange={(e) => setNewDeviceForm({ ...newDeviceForm, name: e.target.value })}
-                placeholder="e.g., PCR Thermocycler"
-                className="mt-1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="device-make">Make</Label>
-                <Input
-                  id="device-make"
-                  value={newDeviceForm.make}
-                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, make: e.target.value })}
-                  placeholder="e.g., Applied Biosystems"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="device-model">Model</Label>
-                <Input
-                  id="device-model"
-                  value={newDeviceForm.model}
-                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, model: e.target.value })}
-                  placeholder="e.g., Veriti 96-Well"
-                  className="mt-1"
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="device-serial">Serial Number (Optional)</Label>
-              <Input
-                id="device-serial"
-                value={newDeviceForm.serialNumber}
-                onChange={(e) => setNewDeviceForm({ ...newDeviceForm, serialNumber: e.target.value })}
-                placeholder="Device serial number"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="device-maintenance">Maintenance Interval (days)</Label>
-              <Input
-                id="device-maintenance"
-                type="number"
-                min={1}
-                value={newDeviceForm.maintenanceDays}
-                onChange={(e) => setNewDeviceForm({ ...newDeviceForm, maintenanceDays: parseInt(e.target.value) || 90 })}
-                className="mt-1"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setShowDeviceCreationModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateDevice} className="bg-brand-500 hover:bg-brand-600 text-white">
-                Create Device
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Check Stock Modal */}
       <Dialog open={!!checkStockItem} onOpenChange={() => setCheckStockItem(null)}>
@@ -932,6 +872,27 @@ export function EquipmentStatusPanel({
           }}
         />
       )}
+
+      {/* Comments Dialog */}
+      <Dialog open={!!viewingCommentsFor} onOpenChange={(open) => !open && setViewingCommentsFor(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Discussion: {viewingCommentsFor?.name}</DialogTitle>
+          </DialogHeader>
+          {viewingCommentsFor && (
+            <div className="mt-4">
+              <CommentsSection
+                entityType="equipment"
+                entityId={viewingCommentsFor.id}
+                entityTitle={viewingCommentsFor.name}
+                // Use labId as owner or fallback to current user if undefined
+                entityOwnerId={viewingCommentsFor.labId || currentUserProfile?.id}
+                teamMembers={allProfiles.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }))}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

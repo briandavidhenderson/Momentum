@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Task, PersonProfile, Subtask } from "@/lib/types"
 import { TodoList } from "./TodoList"
 import { calculateTaskProgress } from "@/lib/progressCalculation"
+import { CommentsSection } from "@/components/CommentsSection"
 
 interface TaskDetailPanelProps {
   task: Task
@@ -70,17 +71,16 @@ export function TaskDetailPanel({
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <span className="font-medium">Status:</span>
                 <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    task.status === "done"
-                      ? "bg-green-100 text-green-700"
-                      : task.status === "in-progress"
+                  className={`px-2 py-1 rounded-full text-xs font-medium ${task.status === "done"
+                    ? "bg-green-100 text-green-700"
+                    : task.status === "in-progress"
                       ? "bg-blue-100 text-blue-700"
                       : task.status === "not-started"
-                      ? "bg-gray-100 text-gray-700"
-                      : task.status === "blocked"
-                      ? "bg-red-100 text-red-700"
-                      : "bg-yellow-100 text-yellow-700"
-                  }`}
+                        ? "bg-gray-100 text-gray-700"
+                        : task.status === "blocked"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-yellow-100 text-yellow-700"
+                    }`}
                 >
                   {task.status.replace("-", " ").toUpperCase()}
                 </span>
@@ -143,9 +143,8 @@ export function TaskDetailPanel({
                 >
                   <div className="flex items-center gap-3 flex-1">
                     <svg
-                      className={`w-5 h-5 text-gray-400 transition-transform ${
-                        isExpanded ? "rotate-90" : ""
-                      }`}
+                      className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-90" : ""
+                        }`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -247,6 +246,17 @@ export function TaskDetailPanel({
           </div>
         </div>
       )}
+
+      {/* Comments Section */}
+      <div className="p-6 border-t border-gray-200 bg-gray-50">
+        <CommentsSection
+          entityType="task"
+          entityId={task.id}
+          entityTitle={task.name}
+          entityOwnerId={task.primaryOwner}
+          teamMembers={profiles.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }))}
+        />
+      </div>
     </div>
   )
 }

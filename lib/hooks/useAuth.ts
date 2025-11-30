@@ -1,15 +1,16 @@
-
 import { useState, useEffect, useRef } from 'react';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User as FirebaseUser, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase';
 import { getUser, findUserProfile, FirestoreUser as User } from '@/lib/firestoreService';
 import { PersonProfile } from '@/lib/types';
 import { logger } from '@/lib/logger';
+import { useToast } from '@/components/ui/use-toast';
 
 export type AuthState = 'auth' | 'setup' | 'app';
 
 export function useAuth() {
+  const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<PersonProfile | null>(null);
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
@@ -18,13 +19,20 @@ export function useAuth() {
   const [mounted, setMounted] = useState(false);
   const isMountedRef = useRef(true);
 
+  const [authUser, setAuthUser] = useState<FirebaseUser | null>(null);
+
   useEffect(() => {
     const auth = getFirebaseAuth();
+    // Ensure sessions persist across reload/back navigation
+    setPersistence(auth, browserLocalPersistence).catch((err) => {
+      logger.error('Failed to set auth persistence', err);
+    });
     setMounted(true);
     isMountedRef.current = true;
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         if (!isMountedRef.current) return;
+        setAuthUser(firebaseUser); // Store the raw Firebase user
         setIsLoadingProfile(true);
 
         try {
@@ -87,10 +95,12 @@ export function useAuth() {
 
                     // If we found a profile but user doc didn't have ID, we should probably update user doc
                     // But for now just update local state
-                    if (currentUser && !currentUser.profileId) {
-                      setCurrentUser({ ...currentUser, profileId: profile.id });
-                    }
-
+                    setCurrentUser((prev) => {
+                      if (prev && !prev.profileId) {
+                        return { ...prev, profileId: profile.id };
+                      }
+                      return prev;
+                    });
                     setAuthState('app');
                     setIsLoadingProfile(false);
                   } else if (isMountedRef.current) {
@@ -98,43 +108,27 @@ export function useAuth() {
                     setIsLoadingProfile(false);
                   }
                 }, (error) => {
-                  logger.error("Error subscribing to profile query", error);
+                  logger.error("Error subscribing to profile", error);
                   if (isMountedRef.current) setIsLoadingProfile(false);
                 });
               }
             };
 
-            await setupProfileSubscription();
-
-            // Cleanup profile sub when auth state changes or component unmounts
-            // Note: This is a bit tricky inside the auth listener. 
-            // Ideally we'd store this unsubscribe somewhere, but for now this handles the immediate flow.
-            // A more robust refactor might separate the profile subscription into its own effect.
+            setupProfileSubscription();
 
           } else {
-            // New user (no user doc yet)
-            const tempUser: User = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              fullName: firebaseUser.displayName || '',
-              profileId: null,
-              createdAt: Timestamp.now(),
-              isAdministrator: false,
-            };
-            if (isMountedRef.current) {
-              setCurrentUser(tempUser);
-              setAuthState('setup');
-              setIsLoadingProfile(false);
-            }
+            // User authenticated but no user doc? Should not happen in normal flow
+            // Maybe new user?
+            setAuthState('setup');
+            setIsLoadingProfile(false);
           }
         } catch (error) {
-          if (!isMountedRef.current) return;
-          logger.error('Error loading user data', error);
-          setAuthState('auth');
+          logger.error('Error fetching user data', error);
           setIsLoadingProfile(false);
         }
       } else {
         if (isMountedRef.current) {
+          setAuthUser(null);
           setCurrentUser(null);
           setCurrentUserProfile(null);
           setCurrentUserProfileId(null);
@@ -150,65 +144,47 @@ export function useAuth() {
     };
   }, []);
 
-  const handleLogin = async (uid: string) => {
-    // Re-check user data on login to ensure it's fresh
-    try {
-      const userData = await getUser(uid);
-      if (userData) {
-        const user: User = {
-          uid: userData.uid,
-          email: userData.email,
-          fullName: userData.fullName,
-          profileId: userData.profileId,
-          createdAt: userData.createdAt,
-          isAdministrator: userData.isAdministrator,
-        };
-        setCurrentUser(user);
-
-        const profile = await findUserProfile(userData.uid, userData.profileId);
-        if (profile) {
-          setCurrentUserProfile(profile);
-          setCurrentUserProfileId(profile.id);
-          setAuthState('app');
-        } else {
-          setAuthState('setup');
-        }
-      } else {
-        // Fallback if user data isn't found immediately after login
-        setAuthState('setup');
-      }
-    } catch (error) {
-      logger.error('Error fetching user data on login', error);
-      setAuthState('auth');
-    }
+  const handleLogin = () => {
+    // Logic handled by UI (e.g. redirect to login page or show modal)
+    // This might be a placeholder or used to trigger state change
   };
 
-  const handleSignup = async (uid: string, email: string, fullName: string) => {
-    // Logic is handled by onAuthStateChanged after email verification
+  const handleSignup = () => {
+    // Logic handled by UI
   };
 
   const handleSignOut = async () => {
-    const auth = getFirebaseAuth();
     try {
+      const auth = getFirebaseAuth();
       await signOut(auth);
+      setAuthUser(null);
+      setCurrentUser(null);
+      setCurrentUserProfile(null);
+      setCurrentUserProfileId(null);
+      setAuthState('auth');
     } catch (error) {
-      logger.error('Sign out error', error);
-      alert('Error signing out. Please try again.');
+      logger.error('Error signing out', error);
+      toast({
+        title: "Sign Out Error",
+        description: "Error signing out. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleProfileSetupComplete = (profile: PersonProfile) => {
-    setCurrentUserProfile(profile);
-    setCurrentUserProfileId(profile.id);
     if (currentUser) {
       const updatedUser = { ...currentUser, profileId: profile.id };
       setCurrentUser(updatedUser);
     }
+    setCurrentUserProfile(profile);
+    setCurrentUserProfileId(profile.id);
     setAuthState('app');
     window.dispatchEvent(new CustomEvent('profiles-updated'));
   };
 
   return {
+    authUser, // Expose raw Firebase user
     currentUser,
     currentUserProfile,
     currentUserProfileId,

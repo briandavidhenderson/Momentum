@@ -11,6 +11,8 @@ import { createInventoryItem } from "@/lib/services/inventoryService"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Loader2 } from "lucide-react"
+import { VisibilitySelector } from "@/components/ui/VisibilitySelector"
+import { VisibilitySettings } from "@/lib/types/visibility.types"
 
 // Comprehensive Laboratory Supply Categories
 const LAB_CATEGORIES = {
@@ -168,6 +170,12 @@ export function AddInventoryDialog({ open, onClose, onSuccess, labId }: AddInven
     notes: "",
   })
 
+  const [visibilitySettings, setVisibilitySettings] = useState<VisibilitySettings>({
+    visibility: 'lab',
+    sharedWithUsers: [],
+    sharedWithGroups: []
+  })
+
   const handleChange = (field: string, value: string) => {
     setFormData(prev => {
       // Reset subcategory if category changes
@@ -228,6 +236,10 @@ export function AddInventoryDialog({ open, onClose, onSuccess, labId }: AddInven
         notes: formData.notes.trim() || undefined,
         labId: labId || currentUserProfile?.labId,
         createdBy: currentUser.uid,
+        // Visibility
+        visibility: visibilitySettings.visibility,
+        sharedWithUsers: visibilitySettings.sharedWithUsers,
+        sharedWithGroups: visibilitySettings.sharedWithGroups,
       }
 
       const itemId = await createInventoryItem(itemData)
@@ -244,6 +256,11 @@ export function AddInventoryDialog({ open, onClose, onSuccess, labId }: AddInven
         category: "",
         subcategory: "",
         notes: "",
+      })
+      setVisibilitySettings({
+        visibility: 'lab',
+        sharedWithUsers: [],
+        sharedWithGroups: []
       })
 
       if (onSuccess) {
@@ -432,6 +449,16 @@ export function AddInventoryDialog({ open, onClose, onSuccess, labId }: AddInven
                 </Select>
               </div>
             </div>
+          </div>
+
+          {/* Visibility */}
+          <div className="space-y-2">
+            <Label>Visibility</Label>
+            <VisibilitySelector
+              value={visibilitySettings}
+              onChange={setVisibilitySettings}
+              labId={labId || currentUserProfile?.labId || ""}
+            />
           </div>
 
           {/* Notes */}

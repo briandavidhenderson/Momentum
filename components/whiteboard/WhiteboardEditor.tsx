@@ -9,9 +9,10 @@ import {
     Bold, Italic, Underline, ArrowUpFromLine, ArrowDownFromLine, AlignVerticalJustifyCenter,
     Group, Ungroup, Lock, Unlock, Hand,
     ArrowRight, MoveRight, Spline, CornerDownRight, Activity,
-    Grid3X3, Copy, Layers, ChevronsUp, ChevronsDown, LucideIcon, Save
+    Grid3X3, Copy, Layers, ChevronsUp, ChevronsDown, LucideIcon, Save, Pencil, Image as ImageIcon
 } from "lucide-react"
 import { Shape, createWhiteboard, updateWhiteboard, WhiteboardData } from "@/lib/whiteboardService"
+import { logger } from "@/lib/logger"
 import { WhiteboardCanvas } from "./WhiteboardCanvas"
 import { WhiteboardSidebar } from "./WhiteboardSidebar"
 import { ProtocolPropertiesPanel } from "./ProtocolPropertiesPanel"
@@ -32,11 +33,14 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
+import { VisibilitySelector } from "@/components/ui/VisibilitySelector"
+import { VisibilityLevel, VisibilitySettings } from "@/lib/types/visibility.types"
 
 // --- TYPES ---
 
-type ToolType = "select" | "hand" | "rect" | "circle" | "diamond" | "triangle" | "hexagon" | "star" | "text" | "line" | "arrow" | "elbow" | "curve"
-type ShapeType = "rect" | "circle" | "diamond" | "triangle" | "hexagon" | "star" | "text" | "asset" | "line" | "arrow" | "elbow" | "curve"
+type ToolType = "select" | "hand" | "rect" | "circle" | "diamond" | "triangle" | "hexagon" | "star" | "text" | "line" | "arrow" | "elbow" | "curve" | "pencil" | "image"
+type ShapeType = "rect" | "circle" | "diamond" | "triangle" | "hexagon" | "star" | "text" | "asset" | "line" | "arrow" | "elbow" | "curve" | "path" | "image"
 type ResizeHandle = "nw" | "ne" | "sw" | "se" | null
 type InteractionMode = "none" | "drawing" | "moving" | "resizing" | "panning" | "selecting_area"
 
@@ -107,6 +111,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
     const [clipboard, setClipboard] = useState<Shape[]>([])
     const [isDuplicating, setIsDuplicating] = useState(false)
     const importInputRef = useRef<HTMLInputElement>(null)
+    const imageInputRef = useRef<HTMLInputElement>(null)
 
     const isLineSelected = Array.from(selectedIds).some(id => {
         const s = shapes.find(shape => shape.id === id);
@@ -240,6 +245,12 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
             baseShape.width = 160; baseShape.height = 40; baseShape.fill = "transparent"; baseShape.stroke = "transparent"
         } else if (isLineType) {
             baseShape.fill = "none"
+        } else if (tool === "pencil") {
+            baseShape.type = "path"
+            baseShape.points = [{ x: canvasPos.x, y: canvasPos.y }]
+            baseShape.fill = "none"
+            baseShape.stroke = "#1e293b"
+            baseShape.strokeWidth = 3
         } else {
             baseShape.fill = "#ffffff"
         }
@@ -376,8 +387,21 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                 const s = newShapes[lastIdx]
                 if (!s) return prev
 
-                s.width = canvasPos.x - dragStart.x
-                s.height = canvasPos.y - dragStart.y
+                if (tool === "pencil" && s.type === "path" && s.points) {
+                    // Append new point
+                    s.points = [...s.points, { x: canvasPos.x, y: canvasPos.y }]
+
+                    // Update bounding box for selection
+                    const xs = s.points.map(p => p.x)
+                    const ys = s.points.map(p => p.y)
+                    s.x = Math.min(...xs)
+                    s.y = Math.min(...ys)
+                    s.width = Math.max(...xs) - s.x
+                    s.height = Math.max(...ys) - s.y
+                } else {
+                    s.width = canvasPos.x - dragStart.x
+                    s.height = canvasPos.y - dragStart.y
+                }
                 return newShapes
             })
         }
@@ -532,7 +556,15 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
 
     const handleTextSave = () => {
         if (editingId) {
-            setShapes(prev => prev.map(s => s.id === editingId ? { ...s, text: editText } : s))
+            setShapes(prev => {
+                const next = prev.map(s => s.id === editingId ? { ...s, text: editText } : s)
+                if (whiteboardId) {
+                    updateWhiteboard(whiteboardId, { shapes: next }).catch((err) => {
+                        logger.error("Failed to save text edit", err)
+                    })
+                }
+                return next
+            })
             setEditingId(null)
         }
     }
@@ -715,7 +747,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
     // Debug: confirm hotkeys are wired
     useEffect(() => {
         // Logs once per mount or when text-editing state flips
-        console.log("Whiteboard hotkeys active", { enabled: true, isTextEditing: !!editingId })
+
     }, [editingId])
 
     // Migrate arrow connections on initial load (backward compatibility)
@@ -731,7 +763,59 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                 setShapes(migrated)
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []) // Run only once on mount
+
+    // -- IMAGE UPLOAD --
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onload = (event) => {
+            const src = event.target?.result as string
+            const img = new Image()
+            img.onload = () => {
+                // Calculate size to fit reasonably
+                let width = img.width
+                let height = img.height
+                const maxSize = 400
+                if (width > maxSize || height > maxSize) {
+                    const ratio = width / height
+                    if (width > height) {
+                        width = maxSize
+                        height = maxSize / ratio
+                    } else {
+                        height = maxSize
+                        width = maxSize * ratio
+                    }
+                }
+
+                // Center on screen
+                const centerX = -pan.x / scale + (canvasRef.current?.clientWidth || 800) / (2 * scale)
+                const centerY = -pan.y / scale + (canvasRef.current?.clientHeight || 600) / (2 * scale)
+
+                const newShape: Shape = {
+                    id: generateId(),
+                    type: "image",
+                    x: centerX - width / 2,
+                    y: centerY - height / 2,
+                    width,
+                    height,
+                    fill: "transparent",
+                    stroke: "transparent",
+                    strokeWidth: 0,
+                    src
+                }
+                setShapes(prev => [...prev, newShape])
+                setTool("select")
+            }
+            img.src = src
+        }
+        reader.readAsDataURL(file)
+        // Reset input
+        if (imageInputRef.current) imageInputRef.current.value = ""
+    }
 
     // -- ASSET DRAG --
     const handleDragStart = (e: React.DragEvent, payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer', id: string, name?: string, operationType?: string }) => {
@@ -873,6 +957,14 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                     fill: "#eef2ff", stroke: "#4f46e5", strokeWidth: 1.5,
                     textAlign: 'left', textAlignVertical: 'middle', fontSize: 11,
                     linkedEntityType: 'equipment', linkedEntityId: payload.id,
+                    text: payload.name
+                }
+            } else if (payload.kind === 'buffer') {
+                shape = {
+                    id: newId, type: "asset", x: pos.x - 90, y: pos.y - 32, width: 180, height: 72,
+                    fill: "#ffffff", stroke: "#9333ea", strokeWidth: 1.5,
+                    textAlign: 'left', textAlignVertical: 'middle', fontSize: 11,
+                    linkedEntityType: 'buffer', linkedEntityId: payload.id,
                     text: payload.name
                 }
             } else {
@@ -1137,6 +1229,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
 
     // -- STATE --
     const [whiteboardName, setWhiteboardName] = useState(initialData?.name || "Untitled Whiteboard")
+    const [visibility, setVisibility] = useState<VisibilityLevel>(initialData?.visibility || 'private')
 
     // -- SAVE --
     const handleSave = async () => {
@@ -1146,14 +1239,15 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         }
         try {
             if (whiteboardId) {
-                await updateWhiteboard(whiteboardId, { shapes, name: whiteboardName })
+                await updateWhiteboard(whiteboardId, { shapes, name: whiteboardName, visibility })
                 success("Whiteboard saved successfully")
             } else {
                 const newId = await createWhiteboard({
                     name: whiteboardName,
                     shapes,
                     createdBy: currentUser?.uid || "unknown",
-                    labId: currentUserProfile.labId
+                    labId: currentUserProfile.labId,
+                    visibility
                 })
                 success("New whiteboard created")
                 // In a real app we might redirect or update URL here
@@ -1188,6 +1282,8 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                     { id: "rect", icon: <Square size={20} />, label: "Rectangle" },
                     { id: "circle", icon: <Circle size={20} />, label: "Circle" },
                     { id: "diamond", icon: <Diamond size={20} />, label: "Diamond" },
+                    { id: "pencil", icon: <Pencil size={20} />, label: "Freehand Draw" },
+                    { id: "image", icon: <ImageIcon size={20} />, label: "Insert Image" },
                 ].map((t) => (
                     <button key={t.id} onClick={() => setTool(t.id as ToolType)} className={`p-3 rounded-xl transition-all shrink-0 ${tool === t.id ? "bg-indigo-50 text-indigo-600 shadow-inner" : "text-slate-400 hover:bg-slate-50"}`} title={t.label}> {t.icon} </button>
                 ))}
@@ -1218,6 +1314,27 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                             className="font-semibold text-slate-700 bg-transparent border-none focus:ring-0 p-0 text-lg w-64 hover:bg-slate-50 rounded px-2 transition-colors"
                             placeholder="Untitled Whiteboard"
                         />
+                        <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block" />
+                        {currentUserProfile?.labId && (
+                            <VisibilitySelector
+                                value={{
+                                    visibility: visibility,
+                                    sharedWithUsers: initialData?.sharedWithUsers || [],
+                                    sharedWithGroups: initialData?.sharedWithGroups || []
+                                }}
+                                onChange={(settings: VisibilitySettings) => {
+                                    setVisibility(settings.visibility)
+                                    if (whiteboardId) {
+                                        updateWhiteboard(whiteboardId, {
+                                            visibility: settings.visibility,
+                                            sharedWithUsers: settings.sharedWithUsers,
+                                            sharedWithGroups: settings.sharedWithGroups
+                                        }).catch(console.error)
+                                    }
+                                }}
+                                labId={currentUserProfile.labId}
+                            />
+                        )}
                     </div>
                     <div className="flex items-center gap-3">
                         <button onClick={() => setSnapToGrid(!snapToGrid)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${snapToGrid ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}> <Grid3X3 size={14} /> Snap: {snapToGrid ? 'ON' : 'OFF'}</button>
@@ -1258,6 +1375,96 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                             dragStart={dragStart}
                             lastMousePos={lastMousePos}
                         />
+
+                        {/* Inline text toolbar when editing */}
+                        {editingId && (
+                            <div className="absolute top-4 right-4 z-50 bg-white border rounded shadow-sm flex items-center gap-1 p-1">
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textBold: !s.textBold } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <Bold className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textItalic: !s.textItalic } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <Italic className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textUnderline: !s.textUnderline } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <Underline className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textAlign: 'left' as const } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <AlignLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textAlign: 'center' as const } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <AlignCenter className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                        setShapes(prev => {
+                                            const next = prev.map(s => s.id === editingId ? { ...s, textAlign: 'right' as const } : s)
+                                            if (whiteboardId) updateWhiteboard(whiteboardId, { shapes: next }).catch(logger.error)
+                                            return next
+                                        })
+                                    }}
+                                >
+                                    <AlignRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
 
                         {selectedIds.size > 0 && !editingId && (
                             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white p-3 rounded-2xl shadow-2xl border border-slate-200 flex flex-col gap-4 animate-in slide-in-from-bottom-4 z-50 min-w-[400px]">
@@ -1331,6 +1538,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                 </div>
             </div>
             <input ref={importInputRef} type="file" accept="application/json" className="hidden" onChange={handleProtocolImport} />
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
             <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
@@ -1374,6 +1582,6 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                     </form>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     )
 }

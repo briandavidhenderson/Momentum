@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app"
 import { getAuth, connectAuthEmulator, Auth } from "firebase/auth"
 import { getFirestore, connectFirestoreEmulator, Firestore } from "firebase/firestore"
 import { getStorage, connectStorageEmulator, FirebaseStorage } from "firebase/storage"
+import { getDatabase, connectDatabaseEmulator, Database } from "firebase/database"
 import { logger } from "./logger"
 
 // Firebase configuration from environment variables
@@ -21,8 +22,25 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
 let authInstance: Auth | null = null
 let dbInstance: Firestore | null = null
 let storageInstance: FirebaseStorage | null = null
+let rtdbInstance: Database | null = null
 
 // --- NEW GETTER FUNCTIONS ---
+
+export function getFirebaseRealtimeDb(): Database {
+  if (!rtdbInstance) {
+    rtdbInstance = getDatabase(app)
+    // Connect to emulator in dev if specified
+    if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true") {
+      try {
+        connectDatabaseEmulator(rtdbInstance, "localhost", 9000)
+        logger.info("Connected to Realtime Database emulator")
+      } catch (error) {
+        logger.debug("Realtime Database emulator already connected or not available")
+      }
+    }
+  }
+  return rtdbInstance
+}
 
 export function getFirebaseAuth(): Auth {
   if (!authInstance) {

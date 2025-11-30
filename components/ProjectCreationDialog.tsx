@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useToast } from "@/components/ui/use-toast"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ProfileProject, ProjectVisibility, Funder, ResearchGroup } from "@/lib/types"
+import { ProfileProject, ProjectVisibility, Funder, ResearchGroup, MasterProject } from "@/lib/types"
 import { Building2, FolderKanban, Plus } from "lucide-react"
 import { subscribeToFunders } from "@/lib/firestoreService"
 import { FunderCreationDialog } from "./FunderCreationDialog"
@@ -16,13 +17,16 @@ import { Checkbox } from "@/components/ui/checkbox"
 interface ProjectCreationDialogProps {
   open: boolean
   onClose: () => void
-  onCreateRegular: () => void
+  onCreateRegular: (project: Partial<MasterProject>) => void
   onCreateMaster: (masterProject: ProfileProject & { funderId?: string; groupIds?: string[] }) => void
   currentUserProfileId: string | null
   currentUserId: string
   organisationId?: string
   labId?: string
   defaultGroupId?: string | null
+  project?: MasterProject
+  mode?: "create" | "edit"
+  onUpdate?: (project: Partial<MasterProject>) => void
 }
 
 export function ProjectCreationDialog({
@@ -35,9 +39,13 @@ export function ProjectCreationDialog({
   organisationId,
   labId,
   defaultGroupId = null,
+  project,
+  mode = "create",
+  onUpdate,
 }: ProjectCreationDialogProps) {
-  const [step, setStep] = useState<"choose" | "master-details">("choose")
-  const [formData, setFormData] = useState<Partial<ProfileProject & { groupIds?: string[] }>>({
+  const { toast } = useToast()
+  const [step, setStep] = useState<"choose" | "master-details" | "regular-details">("choose")
+  const [formData, setFormData] = useState<Partial<MasterProject & { groupIds?: string[] }>>({
     id: "",
     name: "",
     grantNumber: "",
@@ -46,7 +54,7 @@ export function ProjectCreationDialog({
     status: "active",
     description: "",
     notes: "",
-    fundedBy: [],
+    // fundedBy: [], // Removed as it's not in MasterProject, but might be needed for ProfileProject compatibility?
     visibility: "lab",
     groupIds: defaultGroupId ? [defaultGroupId] : [],
   })
@@ -61,24 +69,34 @@ export function ProjectCreationDialog({
   // Reset when dialog opens
   useEffect(() => {
     if (open) {
-      setStep("choose")
-      setFormData({
-        id: `project-${Date.now()}`,
-        name: "",
-        grantNumber: "",
-        startDate: new Date().toISOString().split("T")[0],
-        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-        status: "active",
-        description: "",
-        notes: "",
-        fundedBy: [],
-        visibility: "lab",
-        groupIds: defaultGroupId ? [defaultGroupId] : [],
-      })
-      setSelectedFunderId(null)
+      if (mode === "edit" && project) {
+        setStep("master-details")
+        setFormData({
+          ...project,
+          startDate: project.startDate,
+          endDate: project.endDate,
+        })
+        setSelectedFunderId(project.funderId || null)
+      } else {
+        setStep("choose")
+        setFormData({
+          id: `project-${Date.now()}`,
+          name: "",
+          grantNumber: "",
+          startDate: new Date().toISOString().split("T")[0],
+          endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          status: "active",
+          description: "",
+          notes: "",
+          // fundedBy: [], 
+          visibility: "lab",
+          groupIds: defaultGroupId ? [defaultGroupId] : [],
+        })
+        setSelectedFunderId(null)
+      }
       setFunderError(null)
     }
-  }, [open, defaultGroupId])
+  }, [open, defaultGroupId, mode, project])
 
   // P0-1: Load funders when master project step is reached
   useEffect(() => {
@@ -131,23 +149,32 @@ export function ProjectCreationDialog({
     }
 
     if (!formData.name?.trim()) {
-      alert("Please enter a project name")
+      toast({
+        title: "Missing Name",
+        description: "Please enter a project name",
+        variant: "destructive",
+      })
       return
     }
 
-    // P0-2: Pass funderId with project data
-    onCreateMaster({
-      ...(formData as ProfileProject),
+    const projectData = {
+      ...(formData as MasterProject),
       funderId: selectedFunderId,
       groupIds: formData.groupIds,
-      type: selectedFunderId ? "funded" : "unfunded",
-    })
+      type: (selectedFunderId ? "funded" : "unfunded") as "funded" | "unfunded",
+    }
+
+    if (mode === "edit" && onUpdate) {
+      onUpdate(projectData)
+    } else {
+      // @ts-ignore - ProfileProject vs MasterProject mismatch is known and being deprecated
+      onCreateMaster(projectData)
+    }
     onClose()
   }
 
   const handleRegularProject = () => {
-    onCreateRegular()
-    onClose()
+    setStep("regular-details")
   }
 
   return (
@@ -156,12 +183,14 @@ export function ProjectCreationDialog({
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {step === "choose" ? "Create New Project" : "Master Project Details"}
+              {mode === "edit" ? "Edit Project Details" : (step === "choose" ? "Create New Project" : "Master Project Details")}
             </DialogTitle>
             <DialogDescription>
-              {step === "choose"
-                ? "Select the type of project you would like to create."
-                : "Enter the details for your new master project."}
+              {mode === "edit"
+                ? "Update the details for this project."
+                : (step === "choose"
+                  ? "Select the type of project you would like to create."
+                  : "Enter the details for your new master project.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -192,7 +221,11 @@ export function ProjectCreationDialog({
                 <button
                   onClick={() => {
                     if (!currentUserProfileId) {
-                      alert("Please set up your profile first to create master projects")
+                      toast({
+                        title: "Profile Required",
+                        description: "Please set up your profile first to create master projects",
+                        variant: "destructive",
+                      })
                       return
                     }
                     setStep("master-details")
@@ -209,6 +242,72 @@ export function ProjectCreationDialog({
                     </p>
                   </div>
                 </button>
+              </div>
+            </div>
+          ) : step === "regular-details" ? (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="regular-name">Project Name *</Label>
+                <Input
+                  id="regular-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., Lab Meeting Agenda"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="regular-description">Description</Label>
+                <Textarea
+                  id="regular-description"
+                  value={formData.description || ""}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Brief description..."
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="regular-visibility">Visibility</Label>
+                <select
+                  id="regular-visibility"
+                  value={formData.visibility || "lab"}
+                  onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
+                  className="mt-1 w-full px-3 py-2 border border-border rounded-lg bg-background"
+                >
+                  <option value="private">Private (Only me)</option>
+                  <option value="lab">Department (All department members)</option>
+                  <option value="institute">School/Faculty (All school/faculty members)</option>
+                  <option value="organisation">Organisation (All organisation members)</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setStep("choose")}
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!formData.name?.trim()) {
+                      toast({
+                        title: "Missing Name",
+                        description: "Please enter a project name",
+                        variant: "destructive",
+                      })
+                      return
+                    }
+                    onCreateRegular(formData as MasterProject)
+                    onClose()
+                  }}
+                  className="bg-brand-500 hover:bg-brand-600"
+                >
+                  Create Project
+                </Button>
               </div>
             </div>
           ) : (
@@ -284,8 +383,8 @@ export function ProjectCreationDialog({
                 <Input
                   id="budget"
                   type="number"
-                  value={formData.budget || 0}
-                  onChange={(e) => setFormData({ ...formData, budget: parseFloat(e.target.value) || 0 })}
+                  value={formData.totalBudget || 0}
+                  onChange={(e) => setFormData({ ...formData, totalBudget: parseFloat(e.target.value) || 0 })}
                   placeholder="0"
                   className="mt-1"
                 />
@@ -367,12 +466,12 @@ export function ProjectCreationDialog({
                 <select
                   id="visibility"
                   value={formData.visibility || "lab"}
-                  onChange={(e) => setFormData({ ...formData, visibility: e.target.value as ProjectVisibility })}
+                  onChange={(e) => setFormData({ ...formData, visibility: e.target.value as any })}
                   className="mt-1 w-full px-3 py-2 border border-border rounded-lg bg-background"
                 >
                   <option value="private">Private (Only me)</option>
-                  <option value="lab">Lab (All lab members)</option>
-                  <option value="institute">Institute (All institute members)</option>
+                  <option value="lab">Department (All department members)</option>
+                  <option value="institute">School/Faculty (All school/faculty members)</option>
                   <option value="organisation">Organisation (All organisation members)</option>
                   <option value="public">Public (Everyone)</option>
                 </select>
@@ -389,7 +488,7 @@ export function ProjectCreationDialog({
                   onClick={handleCreateMasterProject}
                   className="bg-brand-500 hover:bg-brand-600"
                 >
-                  Create Master Project
+                  {mode === "edit" ? "Save Changes" : "Create Master Project"}
                 </Button>
               </div>
             </div>

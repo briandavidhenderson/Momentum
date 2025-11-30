@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { MasterProject, Workpackage, Deliverable, PersonProfile, Task } from "@/lib/types"
+import { MasterProject, Workpackage, Deliverable, PersonProfile, ProjectTask } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -38,8 +38,9 @@ interface ProjectCardProps {
   onDeleteDeliverable?: (deliverableId: string) => void
   onDeliverableClick?: (deliverable: Deliverable) => void
   onCreateTask?: (deliverableId: string) => void
-  onEditTask?: (task: Task) => void
+  onEditTask?: (task: ProjectTask) => void
   onDeleteTask?: (taskId: string) => void
+  onContextAction?: (action: any) => void
 }
 
 export function ProjectCard({
@@ -59,6 +60,7 @@ export function ProjectCard({
   onCreateTask,
   onEditTask,
   onDeleteTask,
+  onContextAction,
 }: ProjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(project.isExpanded ?? false)
 
@@ -145,6 +147,9 @@ export function ProjectCard({
                     <span className="ml-1 capitalize">{health.status.replace('-', ' ')}</span>
                   </Badge>
                 )}
+                <Button variant="outline" size="sm" className="h-6 text-xs ml-2" asChild>
+                  <a href={`/projects/${project.id}`}>View Project</a>
+                </Button>
               </div>
 
               {/* Funding Source */}
@@ -297,6 +302,8 @@ export function ProjectCard({
                       onDeleteDeliverable={onDeleteDeliverable}
                       onDeliverableClick={onDeliverableClick}
                       onCreateTask={onCreateTask}
+                      onEditTask={onEditTask}
+                      onDeleteTask={onDeleteTask}
                     />
                   )
                 })}
