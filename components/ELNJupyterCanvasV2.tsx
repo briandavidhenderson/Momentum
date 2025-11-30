@@ -52,7 +52,6 @@ const CELL_TYPES: Array<{
     { type: "photo", label: "Image", icon: ImageIcon, accept: "image/*" },
     { type: "voice", label: "Audio", icon: Mic, accept: "audio/*" },
     { type: "data", label: "Data", icon: Database, accept: ".csv,.xlsx,.json,.txt" },
-    { type: "data", label: "Data", icon: Database, accept: ".csv,.xlsx,.json,.txt" },
     { type: "video", label: "Video", icon: Video, accept: "video/*" },
     { type: "file", label: "File / PDF", icon: FileIcon, accept: "*" },
   ]

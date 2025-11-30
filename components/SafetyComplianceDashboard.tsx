@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AlertTriangle, CheckCircle, Clock, FileWarning, TrendingUp, XCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,11 +19,7 @@ export function SafetyComplianceDashboard({ labId }: SafetyComplianceDashboardPr
     const [metrics, setMetrics] = useState<SafetyMetrics | null>(null)
     const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        loadMetrics()
-    }, [labId])
-
-    async function loadMetrics() {
+    const loadMetrics = useCallback(async () => {
         setLoading(true)
         try {
             const data = await getSafetyMetrics(labId)
@@ -46,7 +42,11 @@ export function SafetyComplianceDashboard({ labId }: SafetyComplianceDashboardPr
         } finally {
             setLoading(false)
         }
-    }
+    }, [labId])
+
+    useEffect(() => {
+        loadMetrics()
+    }, [loadMetrics])
 
     if (loading || !metrics) {
         return (

@@ -71,7 +71,14 @@ async function repairUserProfileSync(userId: string, profileId: string): Promise
 /**
  * Create a new person profile
  */
-export async function createProfile(userId: string, profileData: Omit<PersonProfile, 'id'>): Promise<string> {
+/**
+ * Create a new person profile
+ */
+export async function createProfile(
+  userId: string,
+  profileData: Omit<PersonProfile, 'id'>,
+  customProfileId?: string
+): Promise<string> {
   const db = getFirebaseDb()
 
   // Log the inputs for debugging
@@ -80,6 +87,7 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
     userIdType: typeof userId,
     userIdLength: userId?.length,
     hasProfileData: !!profileData,
+    customProfileId
   })
 
   // Validate required fields
@@ -163,8 +171,13 @@ export async function createProfile(userId: string, profileData: Omit<PersonProf
       logger.info("Profile document updated successfully", { profileId })
     } else {
       // Create new profile
-      profileRef = doc(collection(db, "personProfiles"))
-      profileId = profileRef.id
+      if (customProfileId) {
+        profileId = customProfileId
+        profileRef = doc(db, "personProfiles", profileId)
+      } else {
+        profileRef = doc(collection(db, "personProfiles"))
+        profileId = profileRef.id
+      }
 
       logger.debug("Creating new profile document", { profileId, profileData })
 

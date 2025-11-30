@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AlertCircle, CheckCircle, Clock, FlaskConical, Package, XCircle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { getInventory } from '@/lib/services/inventoryService'
 
-interface ResourceRequirement {
+export interface ResourceRequirement {
     type: 'reagent' | 'equipment' | 'sample' | 'consumable'
     id: string
     name: string
@@ -16,14 +17,7 @@ interface ResourceRequirement {
     unit?: string
 }
 
-interface InventoryItem {
-    id: string
-    name: string
-    quantityAvailable: number
-    unit: string
-    reorderLevel: number
-    location?: string
-}
+import { InventoryItem } from '@/lib/types/inventory.types'
 
 interface EquipmentBooking {
     id: string
@@ -66,11 +60,96 @@ export function ResourceAvailabilityChecker({
     const [results, setResults] = useState<ResourceCheckResult[]>([])
     const [overallStatus, setOverallStatus] = useState<'pass' | 'warning' | 'fail'>('pass')
 
-    useEffect(() => {
-        checkResources()
-    }, [requiredResources, scheduledTime])
+    const checkEquipmentAvailability = useCallback(async (
+        resource: ResourceRequirement
+    ): Promise<ResourceCheckResult> => {
+        // TODO: Implement actual booking check
+        // Query bookings collection for conflicts
 
-    async function checkResources() {
+        const mockConflicts: EquipmentBooking[] = []
+
+        // Mock logic - replace with actual query
+        const isBooked = Math.random() > 0.7
+
+        if (isBooked) {
+            mockConflicts.push({
+                id: '1',
+                equipmentId: resource.id,
+                equipmentName: resource.name,
+                startTime: new Date(scheduledTime.getTime() + 30 * 60000),
+                endTime: new Date(scheduledTime.getTime() + 90 * 60000),
+                userId: 'user123',
+                userName: 'Dr. Smith',
+            })
+        }
+
+        return {
+            resource,
+            status: mockConflicts.length > 0 ? 'booked' : 'available',
+            available: mockConflicts.length > 0 ? 0 : 1,
+            conflicts: mockConflicts,
+            message: mockConflicts.length > 0
+                ? `Equipment booked by ${mockConflicts[0].userName}`
+                : 'Equipment available',
+        }
+    }, [scheduledTime])
+
+    const checkInventoryAvailability = useCallback(async (
+        resource: ResourceRequirement
+    ): Promise<ResourceCheckResult> => {
+        try {
+            const inventory = await getInventory()
+            // Case-insensitive match by name since we might not have IDs
+            const item = inventory.find(i =>
+                i.productName.toLowerCase() === resource.name.toLowerCase() ||
+                (resource.id && i.id === resource.id)
+            )
+
+            if (!item) {
+                return {
+                    resource,
+                    status: 'unavailable',
+                    available: 0,
+                    message: `Item not found in inventory`
+                }
+            }
+
+            const quantityAvailable = item.currentQuantity || 0
+            const hasEnough = quantityAvailable >= resource.quantityNeeded
+            const isLow = quantityAvailable < (item.minQuantity || 10) && hasEnough
+
+            let status: ResourceCheckResult['status']
+            let message: string
+
+            if (!hasEnough) {
+                status = 'unavailable'
+                message = `Only ${quantityAvailable} ${item.unit || 'units'} available (need ${resource.quantityNeeded})`
+            } else if (isLow) {
+                status = 'low'
+                message = `Low stock: ${quantityAvailable} ${item.unit || 'units'} remaining`
+            } else {
+                status = 'available'
+                message = `${quantityAvailable} ${item.unit || 'units'} available`
+            }
+
+            return {
+                resource,
+                status,
+                available: quantityAvailable,
+                message,
+            }
+        } catch (error) {
+            console.error("Failed to check inventory", error)
+            return {
+                resource,
+                status: 'unknown',
+                available: 0,
+                message: "Failed to check inventory"
+            }
+        }
+    }, [])
+
+    const checkResources = useCallback(async () => {
         setChecking(true)
         const checkResults: ResourceCheckResult[] = []
 
@@ -105,84 +184,7 @@ export function ResourceAvailabilityChecker({
         } finally {
             setChecking(false)
         }
-    }
-
-    async function checkEquipmentAvailability(
-        resource: ResourceRequirement
-    ): Promise<ResourceCheckResult> {
-        // TODO: Implement actual booking check
-        // Query bookings collection for conflicts
-
-        const mockConflicts: EquipmentBooking[] = []
-
-        // Mock logic - replace with actual query
-        const isBooked = Math.random() > 0.7
-
-        if (isBooked) {
-            mockConflicts.push({
-                id: '1',
-                equipmentId: resource.id,
-                equipmentName: resource.name,
-                startTime: new Date(scheduledTime.getTime() + 30 * 60000),
-                endTime: new Date(scheduledTime.getTime() + 90 * 60000),
-                userId: 'user123',
-                userName: 'Dr. Smith',
-            })
-        }
-
-        return {
-            resource,
-            status: mockConflicts.length > 0 ? 'booked' : 'available',
-            available: mockConflicts.length > 0 ? 0 : 1,
-            conflicts: mockConflicts,
-            message: mockConflicts.length > 0
-                ? `Equipment booked by ${mockConflicts[0].userName}`
-                : 'Equipment available',
-        }
-    }
-
-    async function checkInventoryAvailability(
-        resource: ResourceRequirement
-    ): Promise<ResourceCheckResult> {
-        // TODO: Implement actual inventory check
-        // Query inventory collection
-
-        // Mock data - replace with actual query
-        const mockInventory: InventoryItem = {
-            id: resource.id,
-            name: resource.name,
-            quantityAvailable: Math.floor(Math.random() * 100),
-            unit: resource.unit || 'units',
-            reorderLevel: 20,
-            location: 'Fridge A, Shelf 2',
-        }
-
-        const hasEnough = mockInventory.quantityAvailable >= resource.quantityNeeded
-        const isLow =
-            mockInventory.quantityAvailable < mockInventory.reorderLevel &&
-            mockInventory.quantityAvailable >= resource.quantityNeeded
-
-        let status: ResourceCheckResult['status']
-        let message: string
-
-        if (!hasEnough) {
-            status = 'unavailable'
-            message = `Only ${mockInventory.quantityAvailable} ${mockInventory.unit} available (need ${resource.quantityNeeded})`
-        } else if (isLow) {
-            status = 'low'
-            message = `Low stock: ${mockInventory.quantityAvailable} ${mockInventory.unit} remaining`
-        } else {
-            status = 'available'
-            message = `${mockInventory.quantityAvailable} ${mockInventory.unit} available`
-        }
-
-        return {
-            resource,
-            status,
-            available: mockInventory.quantityAvailable,
-            message,
-        }
-    }
+    }, [requiredResources, checkEquipmentAvailability, checkInventoryAvailability])
 
     const getStatusIcon = (status: ResourceCheckResult['status']) => {
         switch (status) {

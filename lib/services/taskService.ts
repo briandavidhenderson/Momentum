@@ -262,11 +262,11 @@ export function subscribeToDayToDayTasks(
           const data = doc.data() as FirestoreDayToDayTask
           return {
             ...data,
-            dueDate: data.dueDate?.toDate() || undefined,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
-            completedAt: data.completedAt?.toDate() || undefined,
-            verifiedAt: data.verifiedAt?.toDate() || undefined,
+            dueDate: data.dueDate?.toDate ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate as any) : undefined),
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt as any) : new Date()),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt as any) : new Date()),
+            completedAt: data.completedAt?.toDate ? data.completedAt.toDate() : (data.completedAt ? new Date(data.completedAt as any) : undefined),
+            verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : (data.verifiedAt ? new Date(data.verifiedAt as any) : undefined),
           }
         })
         callback(tasks)

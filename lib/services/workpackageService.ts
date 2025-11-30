@@ -71,7 +71,8 @@ export interface FirestoreWorkpackage {
  * @returns The ID of the newly created workpackage
  */
 export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'> & {
-  createdBy: string }): Promise<string> {
+  createdBy: string
+}): Promise<string> {
   const db = getFirebaseDb()
   const wpRef = doc(collection(db, "workpackages"))
   const wpId = wpRef.id
@@ -121,12 +122,12 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
       projectId: data.profileProjectId, // Map old field to new field name
       status: 'active', // Default status for legacy data
       deliverableIds: [], // Default empty array for legacy data
-      start: data.start?.toDate() || new Date(),
-      end: data.end?.toDate() || new Date(),
+      start: data.start?.toDate ? data.start.toDate() : (data.start ? new Date(data.start as any) : new Date()),
+      end: data.end?.toDate ? data.end.toDate() : (data.end ? new Date(data.end as any) : new Date()),
       tasks: data.tasks?.map(task => ({
         ...task,
-        start: task.start?.toDate() || new Date(),
-        end: task.end?.toDate() || new Date(),
+        start: task.start?.toDate ? task.start.toDate() : (task.start ? new Date(task.start as any) : new Date()),
+        end: task.end?.toDate ? task.end.toDate() : (task.end ? new Date(task.end as any) : new Date()),
       })) || [],
     } as Workpackage
   })
@@ -193,12 +194,12 @@ export function subscribeToWorkpackages(
         projectId: data.profileProjectId, // Map old field to new field name
         status: 'active', // Default status for legacy data
         deliverableIds: [], // Default empty array for legacy data
-        start: data.start?.toDate() || new Date(),
-        end: data.end?.toDate() || new Date(),
+        start: data.start?.toDate ? data.start.toDate() : (data.start ? new Date(data.start as any) : new Date()),
+        end: data.end?.toDate ? data.end.toDate() : (data.end ? new Date(data.end as any) : new Date()),
         tasks: data.tasks?.map(task => ({
           ...task,
-          start: task.start?.toDate() || new Date(),
-          end: task.end?.toDate() || new Date(),
+          start: task.start?.toDate ? task.start.toDate() : (task.start ? new Date(task.start as any) : new Date()),
+          end: task.end?.toDate ? task.end.toDate() : (task.end ? new Date(task.end as any) : new Date()),
         })) || [],
       } as Workpackage
     })

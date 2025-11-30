@@ -162,7 +162,7 @@ export function useOptimisticProjects() {
       markError(workpackageId)
       errorToast('Failed to assign person. Please try again.')
     }
-  }, [optimisticWorkpackages, baseUpdateWorkpackage, handleUpdateDeliverableTasks, markSyncing, markSynced, markError, errorToast])
+  }, [optimisticWorkpackages, handleUpdateDeliverableTasks, markSyncing, markSynced, markError, errorToast])
 
   /**
    * Optimistic update task dates (Gantt drag)
@@ -217,7 +217,7 @@ export function useOptimisticProjects() {
       markError(workpackageId)
       errorToast('Failed to update task dates. Please try again.')
     }
-  }, [optimisticWorkpackages, baseUpdateWorkpackage, handleUpdateDeliverableTasks, markSyncing, markSynced, markError, errorToast])
+  }, [optimisticWorkpackages, handleUpdateDeliverableTasks, markSyncing, markSynced, markError, errorToast])
 
   return {
     ...baseHook,

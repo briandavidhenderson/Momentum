@@ -201,7 +201,8 @@
         resource.data.createdBy == request.auth.uid ||
         isLabMember(resource.data.labId) ||
         isAdmin() ||
-        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId))
+        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId)) ||
+        (resource.data.sharedWithUsers != null && resource.data.sharedWithUsers.hasAny([request.auth.uid]))
       );
 
       // Users can create their own experiments
@@ -277,7 +278,9 @@
       // - An admin
       allow read: if isAuthenticated() && (
         isAdmin() ||
+        resource.data.creatorId == request.auth.uid ||
         (resource.data.members != null && resource.data.members.hasAny([request.auth.uid])) ||
+        (resource.data.sharedWithUsers != null && resource.data.sharedWithUsers.hasAny([request.auth.uid])) ||
         isLabMember(resource.data.labId)
       );
 

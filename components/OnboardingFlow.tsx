@@ -18,7 +18,7 @@ import {
   VisibilityLevel,
   ProfileProject,
 } from "@/lib/types"
-import { getFirebaseAuth } from "@/lib/firebase"
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase"
 import {
   getOrganisations,
   getInstitutes,
@@ -714,12 +714,15 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         dataExportRequestIds: [],
       }
 
-      const profileId = await createProfile(validUser.uid, profileData)
+      // Generate a profile ID early to use for linking, but don't create the doc yet
+      const { doc, collection } = await import("firebase/firestore")
+      const db = getFirebaseDb()
+      const profileRef = doc(collection(db, "personProfiles"))
+      const profileId = profileRef.id
 
-      // Note: createProfile already updates the user document with profileId
-      // No need to call updateUser again (would be redundant)
+      logger.info("Generated profile ID for setup", { profileId })
 
-      // If creating a project, create it now
+      // If creating a project, create it now (using the pre-generated profileId)
       if (state.createProject && state.projectName) {
         // Parse and validate budget (default to 0 if not provided)
         const budgetValue = state.totalBudget ? parseFloat(state.totalBudget) : 0
@@ -782,8 +785,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         })
 
         // Create account if specified
+        let accountId: string | undefined
         if (state.accountNumber && state.accountName) {
-          const accountId = await createFundingAccount({
+          accountId = await createFundingAccount({
             accountNumber: state.accountNumber,
             accountName: state.accountName,
             funderId: state.funderId,
@@ -798,37 +802,45 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
             status: "active",
             createdBy: validUser.uid,
           })
-
-          // Create personal funding allocation for the PI
-          if (accountId && state.isPrincipalInvestigator) {
-            const { createFundingAllocation } = await import("@/lib/services/fundingService")
-            // Allocate 50% of total budget to PI by default (can be adjusted later)
-            const piAllocationAmount = budgetValue * 0.5
-
-            await createFundingAllocation({
-              fundingAccountId: accountId,
-              fundingAccountName: state.accountName,
-              labId: state.selectedLab.id,
-              type: "PERSON",
-              personId: profileId,
-              personName: `${profileData.firstName} ${profileData.lastName}`,
-              allocatedAmount: piAllocationAmount,
-              currentSpent: 0,
-              currentCommitted: 0,
-              remainingBudget: piAllocationAmount,
-              currency: state.currency,
-              status: "active",
-              createdAt: new Date().toISOString(),
-              createdBy: validUser.uid,
-            })
-
-            logger.info("Created PI funding allocation during onboarding", {
-              profileId,
-              accountId,
-              amount: piAllocationAmount,
-            })
-          }
         }
+
+        // FINALLY, create the profile document
+        // This triggers the auth state change in useAuth, so it must be last
+        await createProfile(validUser.uid, profileData, profileId)
+
+        // Create personal funding allocation for the PI
+        if (accountId && state.isPrincipalInvestigator) {
+          const { createFundingAllocation } = await import("@/lib/services/fundingService")
+          // Allocate 50% of total budget to PI by default (can be adjusted later)
+          const piAllocationAmount = budgetValue * 0.5
+
+          await createFundingAllocation({
+            fundingAccountId: accountId,
+            fundingAccountName: state.accountName,
+            labId: state.selectedLab.id,
+            type: "PERSON",
+            personId: profileId,
+            personName: `${profileData.firstName} ${profileData.lastName}`,
+            allocatedAmount: piAllocationAmount,
+            currentSpent: 0,
+            currentCommitted: 0,
+            remainingBudget: piAllocationAmount,
+            currency: state.currency,
+            status: "active",
+            createdAt: new Date().toISOString(),
+            createdBy: validUser.uid,
+          })
+
+          logger.info("Created PI funding allocation during onboarding", {
+            profileId,
+            accountId,
+            amount: piAllocationAmount,
+          })
+        }
+      } else {
+        // If NOT creating a project, we still need to create the profile
+        // This handles the case where user skips project creation
+        await createProfile(validUser.uid, profileData, profileId)
       }
 
       // Call onComplete immediately to update app state

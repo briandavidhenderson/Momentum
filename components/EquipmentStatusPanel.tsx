@@ -31,6 +31,8 @@ import { AssignInventoryToEquipmentDialog } from "@/components/dialogs/AssignInv
 import { logger } from "@/lib/logger"
 import { useToast } from "@/components/ui/toast"
 import { BookingDialog } from "@/components/equipment/BookingDialog"
+import { CommentsSection } from "@/components/CommentsSection"
+import { MessageSquare } from "lucide-react"
 
 interface EquipmentStatusPanelProps {
   equipment: EquipmentDevice[]
@@ -71,6 +73,7 @@ export function EquipmentStatusPanel({
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set())
   const [assigningDevice, setAssigningDevice] = useState<EquipmentDevice | null>(null)
   const [bookingDevice, setBookingDevice] = useState<EquipmentDevice | null>(null)
+  const [viewingCommentsFor, setViewingCommentsFor] = useState<EquipmentDevice | null>(null)
 
   useEffect(() => {
     setDevices(equipment)
@@ -687,6 +690,14 @@ export function EquipmentStatusPanel({
                       <ShoppingCart className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
                       Order
                     </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-8 text-xs font-medium"
+                      onClick={() => setViewingCommentsFor(device)}
+                    >
+                      <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
+                      Discuss
+                    </Button>
                   </div>
                 </div>
               )
@@ -861,6 +872,27 @@ export function EquipmentStatusPanel({
           }}
         />
       )}
+
+      {/* Comments Dialog */}
+      <Dialog open={!!viewingCommentsFor} onOpenChange={(open) => !open && setViewingCommentsFor(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Discussion: {viewingCommentsFor?.name}</DialogTitle>
+          </DialogHeader>
+          {viewingCommentsFor && (
+            <div className="mt-4">
+              <CommentsSection
+                entityType="equipment"
+                entityId={viewingCommentsFor.id}
+                entityTitle={viewingCommentsFor.name}
+                // Use labId as owner or fallback to current user if undefined
+                entityOwnerId={viewingCommentsFor.labId || currentUserProfile?.id}
+                teamMembers={allProfiles.map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}` }))}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

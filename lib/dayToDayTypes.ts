@@ -1,6 +1,6 @@
 import { ImportanceLevel, EquipmentTaskType } from "./types"
 
-export type TaskStatus = "todo" | "working" | "done" | "history"
+export type TaskStatus = "todo" | "working" | "done" | "history" | "blocked"
 
 export interface DayToDayTask {
   id: string

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { GitBranch, GitCommit, GitMerge, History } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,11 +19,7 @@ export function ProtocolHistoryView({ protocol, onSelectVersion }: ProtocolHisto
     const [versions, setVersions] = useState<ProtocolVersion[]>([])
     const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        loadVersions()
-    }, [protocol.id])
-
-    async function loadVersions() {
+    const loadVersions = useCallback(async () => {
         setLoading(true)
         try {
             const data = await getProtocolVersions(protocol.id)
@@ -33,7 +29,11 @@ export function ProtocolHistoryView({ protocol, onSelectVersion }: ProtocolHisto
         } finally {
             setLoading(false)
         }
-    }
+    }, [protocol.id])
+
+    useEffect(() => {
+        loadVersions()
+    }, [loadVersions])
 
     if (loading) return <div>Loading history...</div>
 

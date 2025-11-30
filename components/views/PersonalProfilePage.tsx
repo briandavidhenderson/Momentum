@@ -434,7 +434,7 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               {formData.orcidLastSynced && (
                 <p className="text-xs text-gray-500">
                   Last synced: {typeof formData.orcidLastSynced === 'object' && 'toDate' in formData.orcidLastSynced
-                    ? (formData.orcidLastSynced as any).toDate().toLocaleDateString()
+                    ? (formData.orcidLastSynced as any)?.toDate?.().toLocaleDateString() || new Date().toLocaleDateString()
                     : new Date(formData.orcidLastSynced).toLocaleDateString()}
                 </p>
               )}

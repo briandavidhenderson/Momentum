@@ -185,7 +185,7 @@ export async function deductInventory(itemId: string, quantity: number): Promise
       const minQuantity = data.minQuantity || 0
       const newQuantity = Math.max(0, currentQuantity - quantity)
 
-      let newLevel: InventoryLevel = 'good'
+      let newLevel: InventoryLevel = 'medium'
       if (newQuantity === 0) {
         newLevel = 'out_of_stock'
       } else if (newQuantity <= minQuantity) {

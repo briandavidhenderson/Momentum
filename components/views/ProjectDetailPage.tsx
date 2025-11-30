@@ -624,7 +624,14 @@ export function ProjectDetailPage({
   }
 
   const wasTaskUpdatedThisWeek = (task: ProjectTask) => {
-    return false
+    // We don't have an updatedAt field on ProjectTask in the current type definition
+    // But if we did, or if we used start/end dates as a proxy for recent activity:
+    // For now, let's check if start date is within the last 7 days
+    if (!task.start) return false
+    const now = new Date()
+    const diffTime = Math.abs(now.getTime() - new Date(task.start).getTime())
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays <= 7
   }
 
   const hasTaskDependencies = (task: ProjectTask) => Array.isArray(task?.dependencies) && task.dependencies.length > 0

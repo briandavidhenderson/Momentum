@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,14 +18,18 @@ import {
     Camera,
     Mic,
     X,
-    History,
+    History as HistoryIcon,
     Loader2,
-    Save
+    Save,
+    Plus,
+    Edit
 } from 'lucide-react'
 import { useAppContext } from '@/lib/AppContext'
 import { Protocol, ProtocolStep, ProtocolExecution, ProtocolStepExecution } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { ProtocolHistoryView } from './protocols/ProtocolHistoryView'
+import { ProtocolEditor } from './ProtocolEditor'
+import { ResourceAvailabilityChecker, ResourceRequirement } from './ResourceAvailabilityChecker'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
     startProtocolExecution,
@@ -33,12 +38,18 @@ import {
     abortProtocolExecution
 } from '@/lib/services/protocolExecutionService'
 import { deductInventory, getInventory } from '@/lib/services/inventoryService'
+import { scheduleProtocol } from '@/lib/services/calendarService'
 import { uploadFile } from '@/lib/storage'
 import { useToast } from '@/components/ui/use-toast'
 import { Textarea } from '@/components/ui/textarea'
+import { getRiskAssessment } from '@/lib/services/safetyService'
+import { RiskAssessment } from '@/lib/types/safety.types'
+import { CommentsSection } from '@/components/CommentsSection'
+import { cloneProtocol } from '@/lib/services/cloningService'
+import { Copy } from 'lucide-react'
 
 export function ProtocolBenchMode() {
-    const { protocols, currentUserProfile } = useAppContext()
+    const { protocols, currentUserProfile, addProtocol, updateProtocol } = useAppContext()
     const { toast } = useToast()
     const [activeProtocol, setActiveProtocol] = useState<Protocol | null>(null)
     const [activeExecution, setActiveExecution] = useState<ProtocolExecution | null>(null)
@@ -46,11 +57,25 @@ export function ProtocolBenchMode() {
     const [completedSteps, setCompletedSteps] = useState<string[]>([])
     const [sessionTimer, setSessionTimer] = useState(0)
     const [historyProtocol, setHistoryProtocol] = useState<Protocol | null>(null)
+    const [editingProtocol, setEditingProtocol] = useState<Protocol | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [stepNotes, setStepNotes] = useState<Record<string, string>>({})
     const [stepMedia, setStepMedia] = useState<Record<string, string[]>>({})
+    const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null)
+    const [isCheckingResources, setIsCheckingResources] = useState(false)
+    const [requiredResources, setRequiredResources] = useState<ResourceRequirement[]>([])
+    const [pendingProtocolStart, setPendingProtocolStart] = useState<Protocol | null>(null)
 
     const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+    // Fetch Risk Assessment
+    useEffect(() => {
+        if (activeProtocol?.riskAssessmentId) {
+            getRiskAssessment(activeProtocol.riskAssessmentId).then(setRiskAssessment)
+        } else {
+            setRiskAssessment(null)
+        }
+    }, [activeProtocol])
 
     // Timer logic
     useEffect(() => {
@@ -76,15 +101,39 @@ export function ProtocolBenchMode() {
             return
         }
 
+        // Extract required resources
+        const resources: ResourceRequirement[] = []
+        protocol.steps.forEach(step => {
+            step.requiredReagents?.forEach(reagent => {
+                resources.push({
+                    type: 'reagent',
+                    id: '', // We don't have ID yet, checker will match by name
+                    name: reagent.name,
+                    quantityNeeded: parseFloat(reagent.quantity) || 1,
+                    unit: reagent.quantity.replace(/[0-9.]/g, '').trim()
+                })
+            })
+        })
+
+        if (resources.length > 0) {
+            setRequiredResources(resources)
+            setPendingProtocolStart(protocol)
+            setIsCheckingResources(true)
+        } else {
+            executeStartProtocol(protocol)
+        }
+    }
+
+    const executeStartProtocol = async (protocol: Protocol) => {
         setIsSubmitting(true)
         try {
             const executionId = await startProtocolExecution({
                 protocolId: protocol.id,
                 protocolTitle: protocol.title,
                 protocolVersionId: protocol.activeVersionId,
-                performedBy: currentUserProfile.id,
-                performedByName: currentUserProfile.displayName,
-                labId: currentUserProfile.labId
+                performedBy: currentUserProfile!.id,
+                performedByName: currentUserProfile!.displayName,
+                labId: currentUserProfile!.labId
             })
 
             const newExecution: ProtocolExecution = {
@@ -92,9 +141,9 @@ export function ProtocolBenchMode() {
                 protocolId: protocol.id,
                 protocolTitle: protocol.title,
                 protocolVersionId: protocol.activeVersionId,
-                performedBy: currentUserProfile.id,
-                performedByName: currentUserProfile.displayName,
-                labId: currentUserProfile.labId,
+                performedBy: currentUserProfile!.id,
+                performedByName: currentUserProfile!.displayName,
+                labId: currentUserProfile!.labId,
                 startedAt: new Date(),
                 status: 'running',
                 currentStepIndex: 0,
@@ -103,16 +152,6 @@ export function ProtocolBenchMode() {
             }
 
             setActiveExecution(newExecution)
-            setActiveProtocol(protocol)
-            setCurrentStepIndex(0)
-            setCompletedSteps([])
-            setSessionTimer(0)
-            setStepNotes({})
-            setStepMedia({})
-            toast({
-                title: "Protocol started",
-                description: `Started execution of ${protocol.title}`
-            })
         } catch (error) {
             console.error(error)
             toast({
@@ -122,6 +161,8 @@ export function ProtocolBenchMode() {
             })
         } finally {
             setIsSubmitting(false)
+            setIsCheckingResources(false)
+            setPendingProtocolStart(null)
         }
     }
 
@@ -163,6 +204,42 @@ export function ProtocolBenchMode() {
             })
         } finally {
             setIsSubmitting(false)
+        }
+    }
+
+    const handleSaveProtocol = async (updatedProtocol: Protocol) => {
+        try {
+            if (editingProtocol?.id) {
+                await updateProtocol(updatedProtocol.id, updatedProtocol)
+                toast({ title: "Protocol updated" })
+            } else {
+                await addProtocol(updatedProtocol)
+                toast({ title: "Protocol created" })
+            }
+            setEditingProtocol(null)
+        } catch (error) {
+            console.error(error)
+            toast({ title: "Failed to save protocol", variant: "destructive" })
+        }
+    }
+
+    const handleCloneProtocol = async (protocol: Protocol) => {
+        if (!confirm(`Are you sure you want to clone "${protocol.title}"?`)) return
+
+        try {
+            await cloneProtocol(protocol.id)
+            toast({
+                title: "Protocol Cloned",
+                description: "A copy has been created in your library."
+            })
+            // Note: The new protocol will appear automatically via real-time subscription
+        } catch (error) {
+            console.error(error)
+            toast({
+                title: "Cloning Failed",
+                description: "Could not clone the protocol.",
+                variant: "destructive"
+            })
         }
     }
 
@@ -213,13 +290,10 @@ export function ProtocolBenchMode() {
 
             // Inventory Deduction
             if (!isComplete && currentStep.requiredReagents && currentStep.requiredReagents.length > 0) {
-                // Try to find inventory items by name
-                // Note: This is a "best effort" match since we don't have IDs in the protocol step yet
                 const inventory = await getInventory()
                 for (const reagent of currentStep.requiredReagents) {
                     const item = inventory.find(i => i.productName.toLowerCase() === reagent.name.toLowerCase())
                     if (item) {
-                        // Parse quantity (assuming simple number or "10 ul" format - naive parsing)
                         const qty = parseFloat(reagent.quantity) || 1
                         const result = await deductInventory(item.id, qty)
 
@@ -267,8 +341,6 @@ export function ProtocolBenchMode() {
             const file = (e.target as HTMLInputElement).files?.[0]
             if (!file) return
 
-            // const toastId = toast.loading("Uploading photo...") 
-            // shadcn toast doesn't support loading/promise toast easily, so we just show uploading then success
             toast({ title: "Uploading photo..." })
 
             try {
@@ -293,8 +365,6 @@ export function ProtocolBenchMode() {
     }
 
     const handleVoiceNote = async () => {
-        // Real voice note implementation would require MediaRecorder API
-        // For now, we will allow uploading an audio file as a fallback since browser permissions can be tricky
         if (!activeExecution || !currentStep) return
 
         const input = document.createElement('input')
@@ -332,6 +402,16 @@ export function ProtocolBenchMode() {
         return `${mins}:${secs.toString().padStart(2, '0')}`
     }
 
+    if (editingProtocol) {
+        return (
+            <ProtocolEditor
+                protocol={editingProtocol.id ? editingProtocol : undefined}
+                onSave={handleSaveProtocol}
+                onCancel={() => setEditingProtocol(null)}
+            />
+        )
+    }
+
     if (activeProtocol) {
         return (
             <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -352,9 +432,23 @@ export function ProtocolBenchMode() {
                             </div>
                         </div>
                     </div>
-                    <Badge variant={completedSteps.includes(currentStep?.id || '') ? "default" : "outline"}>
-                        {completedSteps.includes(currentStep?.id || '') ? 'Completed' : 'Pending'}
-                    </Badge>
+                    <div className="flex gap-2">
+                        {riskAssessment && (
+                            <Badge variant={riskAssessment.status === 'approved' ? "outline" : "destructive"} className="flex gap-1 items-center">
+                                <AlertTriangle className="h-3 w-3" />
+                                RA: {riskAssessment.status}
+                            </Badge>
+                        )}
+                        <Badge variant={completedSteps.includes(currentStep?.id || '') ? "default" : "outline"}>
+                            {completedSteps.includes(currentStep?.id || '') ? 'Completed' : 'Pending'}
+                        </Badge>
+                    </div>
+                </div>
+
+                {/* Floating Session Timer */}
+                <div className="fixed top-20 right-4 z-50 bg-background/80 backdrop-blur-sm border rounded-full px-4 py-2 shadow-lg flex items-center gap-2 font-mono text-lg font-bold animate-in fade-in slide-in-from-top-4">
+                    <Clock className="h-5 w-5 text-primary" />
+                    {formatTime(sessionTimer)}
                 </div>
 
                 {/* Progress Bar */}
@@ -431,33 +525,52 @@ export function ProtocolBenchMode() {
                                             placeholder="Record any observations or deviations here..."
                                             value={stepNotes[currentStep.id] || ''}
                                             onChange={(e) => setStepNotes({ ...stepNotes, [currentStep.id]: e.target.value })}
-                                            className="bg-background"
+                                            className="min-h-[100px] text-lg"
                                         />
                                     </div>
 
-                                    {/* Media Preview */}
-                                    {stepMedia[currentStep.id]?.length > 0 && (
-                                        <div className="flex gap-2 overflow-x-auto pb-2">
-                                            {stepMedia[currentStep.id].map((url, idx) => (
-                                                <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block h-20 w-20 shrink-0 rounded-md overflow-hidden border">
-                                                    <img src={url} alt="Step media" className="h-full w-full object-cover" />
-                                                </a>
-                                            ))}
-                                        </div>
-                                    )}
+                                    {/* Media Uploads */}
+                                    <div className="flex gap-4">
+                                        <Button variant="outline" size="lg" className="flex-1 h-16" onClick={handlePhotoUpload}>
+                                            <Camera className="mr-2 h-6 w-6" />
+                                            Add Photo
+                                        </Button>
+                                        <Button variant="outline" size="lg" className="flex-1 h-16" onClick={handleVoiceNote}>
+                                            <Mic className="mr-2 h-6 w-6" />
+                                            Add Audio
+                                        </Button>
+                                    </div>
                                 </CardContent>
                             </Card>
 
                             {/* Action Buttons */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <Button variant="outline" className="h-16 text-lg gap-2" onClick={handlePhotoUpload}>
-                                    <Camera className="h-6 w-6" />
-                                    Add Photo
-                                </Button>
-                                <Button variant="outline" className="h-16 text-lg gap-2" onClick={handleVoiceNote}>
-                                    <Mic className="h-6 w-6" />
-                                    Add Audio
-                                </Button>
+                            <div className="flex gap-4">
+                                {currentStepIndex === activeProtocol.steps.length - 1 && completedSteps.includes(currentStep?.id || '') ? (
+                                    <Button
+                                        className="flex-1 h-20 text-xl font-bold shadow-lg bg-green-600 hover:bg-green-700"
+                                        size="lg"
+                                        onClick={finishProtocol}
+                                    >
+                                        <CheckCircle2 className="mr-2 h-8 w-8" />
+                                        Finish Run
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        variant={completedSteps.includes(currentStep?.id || '') ? "default" : "secondary"}
+                                        size="lg"
+                                        className="flex-1 h-20 text-xl font-bold shadow-lg"
+                                        onClick={() => currentStep && toggleStepComplete(currentStep.id)}
+                                    >
+                                        {completedSteps.includes(currentStep?.id || '') ? (
+                                            <>
+                                                <CheckCircle2 className="mr-2 h-8 w-8" />
+                                                Step Complete
+                                            </>
+                                        ) : (
+                                            "Mark Complete"
+                                        )}
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     )}
@@ -469,58 +582,41 @@ export function ProtocolBenchMode() {
                         <Button
                             variant="outline"
                             size="lg"
-                            className="h-14 w-14 rounded-full shrink-0"
+                            className="h-20 w-20 rounded-full shrink-0"
                             onClick={handlePrev}
                             disabled={currentStepIndex === 0}
                         >
-                            <ChevronLeft className="h-6 w-6" />
+                            <ChevronLeft className="h-8 w-8" />
                         </Button>
 
-                        {currentStepIndex === activeProtocol.steps.length - 1 && completedSteps.includes(currentStep?.id || '') ? (
-                            <Button
-                                variant="default"
-                                size="lg"
-                                className="flex-1 h-14 text-lg font-bold shadow-lg bg-green-600 hover:bg-green-700"
-                                onClick={finishProtocol}
-                                disabled={isSubmitting}
-                            >
-                                {isSubmitting ? <Loader2 className="animate-spin" /> : (
-                                    <>
-                                        <Save className="mr-2 h-6 w-6" />
-                                        Finish Protocol
-                                    </>
-                                )}
-                            </Button>
-                        ) : (
-                            <Button
-                                variant={completedSteps.includes(currentStep?.id || '') ? "default" : "secondary"}
-                                size="lg"
-                                className="flex-1 h-14 text-lg font-bold shadow-lg"
-                                onClick={() => currentStep && toggleStepComplete(currentStep.id)}
-                            >
-                                {completedSteps.includes(currentStep?.id || '') ? (
-                                    <>
-                                        <CheckCircle2 className="mr-2 h-6 w-6" />
-                                        Step Complete
-                                    </>
-                                ) : (
-                                    "Mark Complete"
-                                )}
-                            </Button>
-                        )}
+                        <div className="flex-1 text-center">
+                            <span className="text-sm font-medium text-muted-foreground">
+                                Step {currentStepIndex + 1} / {activeProtocol.steps.length}
+                            </span>
+                        </div>
 
                         <Button
                             variant="outline"
                             size="lg"
-                            className="h-14 w-14 rounded-full shrink-0"
+                            className="h-20 w-20 rounded-full shrink-0"
                             onClick={handleNext}
                             disabled={currentStepIndex === activeProtocol.steps.length - 1}
                         >
-                            <ChevronRight className="h-6 w-6" />
+                            <ChevronRight className="h-8 w-8" />
                         </Button>
                     </div>
                 </div>
-            </div>
+                {/* Comments Section */}
+                <div className="p-6 bg-muted/30 border-t">
+                    <CommentsSection
+                        entityType="protocol"
+                        entityId={activeProtocol.id}
+                        entityTitle={activeProtocol.title}
+                        entityOwnerId={activeProtocol.ownerId}
+                        teamMembers={[]} // TODO: Pass team members
+                    />
+                </div>
+            </div >
         )
     }
 
@@ -531,6 +627,10 @@ export function ProtocolBenchMode() {
                     <FlaskConical className="h-5 w-5 text-primary" />
                     Protocol Library
                 </CardTitle>
+                <Button size="sm" onClick={() => setEditingProtocol({} as Protocol)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Protocol
+                </Button>
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
                 <ScrollArea className="h-full">
@@ -554,8 +654,16 @@ export function ProtocolBenchMode() {
                                     </div>
                                 </div>
                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="sm" onClick={() => setEditingProtocol(protocol)}>
+                                        <Edit className="h-4 w-4 mr-1" />
+                                        Edit
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => handleCloneProtocol(protocol)}>
+                                        <Copy className="h-4 w-4 mr-1" />
+                                        Clone
+                                    </Button>
                                     <Button variant="ghost" size="sm" onClick={() => setHistoryProtocol(protocol)}>
-                                        <History className="h-4 w-4 mr-1" />
+                                        <HistoryIcon className="h-4 w-4 mr-1" />
                                         History
                                     </Button>
                                     <Button onClick={() => startProtocol(protocol)} size="sm" disabled={isSubmitting}>
@@ -596,6 +704,16 @@ export function ProtocolBenchMode() {
                             />
                         )}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isCheckingResources} onOpenChange={setIsCheckingResources}>
+                <DialogContent className="max-w-xl">
+                    <ResourceAvailabilityChecker
+                        requiredResources={requiredResources}
+                        onProceed={() => pendingProtocolStart && executeStartProtocol(pendingProtocolStart)}
+                        onCancel={() => setIsCheckingResources(false)}
+                    />
                 </DialogContent>
             </Dialog>
         </Card>

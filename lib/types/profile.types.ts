@@ -271,6 +271,9 @@ export interface PersonProfile {
   dataExportRequestIds?: string[]      // Historical data export requests
   lastConsentUpdate?: string           // When user last updated consent
 
+  // Safety & Training (NEW)
+  trainingRecordIds?: string[]         // IDs of TrainingRecords
+
   // Metadata
   createdAt?: string
   updatedAt?: string

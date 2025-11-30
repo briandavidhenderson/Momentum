@@ -132,8 +132,8 @@ export function subscribeToELNExperiments(
           visibility: data.visibility || 'private',
           sharedWithUsers: data.sharedWithUsers || data.collaborators || [],
           sharedWithGroups: data.sharedWithGroups || (data.groupId ? [data.groupId] : []),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt as any).toISOString() : new Date().toISOString()),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt ? new Date(data.updatedAt as any).toISOString() : undefined),
         } as ELNExperiment
       }).filter(exp => {
         // Client-side visibility check
@@ -173,8 +173,8 @@ export function subscribeToELNExperiment(
         callback({
           ...data,
           id: doc.id,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt as any).toISOString() : new Date().toISOString()),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt ? new Date(data.updatedAt as any).toISOString() : undefined),
         } as ELNExperiment)
       } else {
         callback(null)

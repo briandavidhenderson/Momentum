@@ -30,12 +30,24 @@ import HierarchyExplorer from "@/components/views/HierarchyExplorer"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import { UserRole } from "@/lib/types"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { MobileNav } from "@/components/layout/MobileNav"
+import { MobileDashboard } from "@/components/views/mobile/MobileDashboard"
+import { QRScanner } from "@/components/mobile/QRScanner"
+import { GroupList } from "@/components/groups/GroupList"
+import { TrainingDashboard } from "@/components/training/TrainingDashboard"
+import { CircleUser } from "lucide-react"
+import { useState } from "react"
+
+import { ProtocolBenchMode } from '@/components/ProtocolBenchMode'
+import { ReportsView } from '@/components/views/reports/ReportsView'
+import { SampleListView } from '@/components/views/samples/SampleListView'
 
 export default function Page() {
   const router = useRouter()
   const {
     currentUserProfile,
     currentUser,
+    authUser,
     authState,
     mounted,
     handleLogin,
@@ -47,6 +59,8 @@ export default function Page() {
     mainView,
     setMainView,
   } = useAppContext()
+
+  const [showQRScanner, setShowQRScanner] = useState(false)
 
   // Prevent hydration mismatch - don't render until mounted
   if (!mounted) {
@@ -70,10 +84,17 @@ export default function Page() {
   }
 
   // Show onboarding/setup
-  if (authState === 'setup' && currentUser) {
+  if (authState === 'setup' && (currentUser || authUser)) {
+    // Use Firestore user if available, otherwise fallback to Auth user
+    const userForOnboarding = currentUser || {
+      uid: authUser!.uid,
+      email: authUser!.email || '',
+      fullName: authUser!.displayName || '',
+    }
+
     return (
       <OnboardingFlow
-        user={currentUser}
+        user={userForOnboarding}
         onComplete={handleProfileSetupComplete}
         onCancel={handleSignOut}
       />
@@ -98,34 +119,48 @@ export default function Page() {
       <div className="max-w-[2000px] mx-auto">
         {/* Header */}
         <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 sticky top-0 z-40">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between mb-3">
+          <div className="px-6 py-2">
+            <div className="flex items-center justify-between mb-1">
               <div>
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
                   Momentum {currentUserProfile?.position || currentUser?.email}
                 </h1>
               </div>
-              <NotificationBell />
-              <Button
-                onClick={handleSignOut}
-                variant="ghost"
-                size="sm"
-                className="text-slate-500 hover:text-red-600 hover:bg-red-50"
-                aria-label="Sign out of your account"
-              >
-                <LogOut className="h-4 w-4 mr-1.5" aria-hidden="true" />
-                Sign Out
-              </Button>
+              <div className="flex items-center gap-2">
+                <NotificationBell />
+                <Button
+                  onClick={() => setMainView('myprofile')}
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
+                  aria-label="My Profile"
+                >
+                  <CircleUser className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                  My Profile
+                </Button>
+                <Button
+                  onClick={handleSignOut}
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-500 hover:text-red-600 hover:bg-red-50"
+                  aria-label="Sign out of your account"
+                >
+                  <LogOut className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                  Sign Out
+                </Button>
+              </div>
             </div>
           </div>
 
           {/* New Modern Navigation */}
-          <TopModuleNavigation
-            activeModule={mainView}
-            onSelect={handleNavigationSelect}
-            isAdmin={isAdmin}
-            hasRoleRestriction={hasRoleRestriction}
-          />
+          <div className="hidden md:block">
+            <TopModuleNavigation
+              activeModule={mainView}
+              onSelect={handleNavigationSelect}
+              isAdmin={isAdmin}
+              hasRoleRestriction={hasRoleRestriction}
+            />
+          </div>
         </div>
 
         {/* Render selected view */}
@@ -154,8 +189,39 @@ export default function Page() {
           {mainView === 'profiles' && isAdmin && (
             <ProfileManagement currentUser={currentUser} currentUserProfile={currentUserProfile} />
           )}
+          {mainView === 'groups' && <GroupList />}
+          {mainView === 'training' && <TrainingDashboard />}
+          {mainView === 'training' && <TrainingDashboard />}
+          {mainView === 'mobile_home' && <MobileDashboard onNavigate={handleNavigationSelect} />}
+          {mainView === 'bench' && <ProtocolBenchMode />}
+          {mainView === 'reports' && <ReportsView />}
+          {mainView === 'samples' && <SampleListView onSelectSample={() => { }} onCreateSample={() => { }} />}
         </div>
       </div>
+
+      {/* Mobile Navigation */}
+      <MobileNav
+        currentView={mainView}
+        onNavigate={(view) => {
+          if (view === "scan") {
+            setShowQRScanner(true)
+          } else if (view === "dashboard") {
+            setMainView("mobile_home")
+          } else if (view === "tasks") {
+            setMainView("mytasks")
+          } else if (view === "bookings") {
+            setMainView("bookings")
+          } else {
+            // For menu or other items, maybe show a drawer or switch to dashboard
+            setMainView("dashboard")
+          }
+        }}
+      />
+
+      {/* QR Scanner Overlay */}
+      {showQRScanner && (
+        <QRScanner onClose={() => setShowQRScanner(false)} />
+      )}
 
       {/* GDPR Cookie Consent Banner - ePrivacy Directive Compliance */}
       <CookieConsentBanner />

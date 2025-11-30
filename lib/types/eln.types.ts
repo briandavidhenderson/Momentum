@@ -179,6 +179,19 @@ export interface ELNExperiment extends VisibilitySettings {
     deducted?: boolean
   }>
 
+  samplesUsed?: Array<{
+    sampleId: string
+    sampleName: string
+    quantityUsed?: number
+    unit?: string
+  }>
+
+  protocolsUsed?: Array<{
+    protocolId: string
+    protocolName: string
+    version?: string
+  }>
+
   relatedWhiteboards?: string[]      // Whiteboard IDs
   researchTopics?: string[]          // Research board pin IDs
 }

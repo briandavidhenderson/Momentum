@@ -13,9 +13,10 @@ interface MyWeeklyDigestProps {
     userId: string
     tasks: DayToDayTask[]
     bookings: EquipmentBooking[]
+    events: any[] // Should be CalendarEvent[]
 }
 
-export function MyWeeklyDigest({ userId, tasks, bookings }: MyWeeklyDigestProps) {
+export function MyWeeklyDigest({ userId, tasks, bookings, events }: MyWeeklyDigestProps) {
     const [trainingRecords, setTrainingRecords] = useState<TrainingRecord[]>([])
 
     useEffect(() => {
@@ -48,7 +49,16 @@ export function MyWeeklyDigest({ userId, tasks, bookings }: MyWeeklyDigestProps)
         const expiry = new Date(r.expiryDate)
         const daysUntil = (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
         return daysUntil < 30 // Expired or expiring in 30 days
+        return daysUntil < 30 // Expired or expiring in 30 days
     })
+
+    // 4. Focus Blocks (Active Protocol Phases)
+    // Assuming events with type 'protocol-active' or similar
+    const focusBlocks = (events || []).filter(e =>
+        (e.type === 'protocol-active' || e.title.startsWith('Active:')) &&
+        new Date(e.start) >= today &&
+        new Date(e.start) <= nextWeek
+    )
 
     return (
         <Card className="h-full border-l-4 border-l-indigo-500">
@@ -122,6 +132,23 @@ export function MyWeeklyDigest({ userId, tasks, bookings }: MyWeeklyDigestProps)
                     </div>
                 )}
 
+                {/* Focus Blocks */}
+                {focusBlocks.length > 0 && (
+                    <div>
+                        <h4 className="text-xs font-semibold text-emerald-600 mb-2 flex items-center gap-1">
+                            <CheckSquare className="h-3 w-3" />
+                            Focus Blocks
+                        </h4>
+                        <div className="space-y-1">
+                            {focusBlocks.slice(0, 3).map(block => (
+                                <div key={block.id} className="flex items-center gap-2 text-xs p-1.5 bg-emerald-50 text-emerald-700 rounded border border-emerald-100">
+                                    <span className="truncate">{block.title}</span>
+                                    <span className="text-[10px] opacity-75 ml-auto">{format(new Date(block.start), 'EEE HH:mm')}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </CardContent>
         </Card>
     )

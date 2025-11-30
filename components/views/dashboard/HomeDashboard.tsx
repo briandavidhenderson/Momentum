@@ -18,7 +18,10 @@ import {
     Users,
     Wrench,
     ChevronDown,
-    BarChart3
+    BarChart3,
+    ShieldAlert,
+    ChevronLeft,
+    TestTube
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Link from 'next/link'
@@ -35,8 +38,8 @@ import { subscribeToLabActiveExecutions } from '@/lib/services/protocolExecution
 import { ProtocolExecution } from '@/lib/types'
 import { DashboardRiskWidget } from './DashboardRiskWidget'
 import { MyWeeklyDigest } from './MyWeeklyDigest'
-import { ReportsView } from '../reports/ReportsView'
-import { ChevronLeft } from 'lucide-react'
+import { Sample } from '@/lib/types/sample.types'
+import { LabPulseWidget } from '@/components/dashboard/LabPulseWidget'
 
 export function HomeDashboard() {
     const {
@@ -62,6 +65,7 @@ export function HomeDashboard() {
         events,
         userBookings,
         currentUserProfile,
+        mainView,
         setMainView,
 
         // Actions
@@ -72,11 +76,11 @@ export function HomeDashboard() {
         .map(board => {
             const owner = allProfiles.find(profile => profile.id === board.createdBy)
             const updatedAt = board.updatedAt?.toDate
-                ? board.updatedAt.toDate()
+                ? (board.updatedAt?.toDate ? board.updatedAt.toDate() : new Date(board.updatedAt || Date.now()))
                 : board.updatedAt instanceof Date
                     ? board.updatedAt
                     : board.createdAt?.toDate
-                        ? board.createdAt.toDate()
+                        ? (board.createdAt?.toDate ? board.createdAt.toDate() : new Date(board.createdAt || Date.now()))
                         : board.createdAt instanceof Date
                             ? board.createdAt
                             : new Date()
@@ -94,6 +98,10 @@ export function HomeDashboard() {
     const [selectedProject, setSelectedProject] = useState<typeof projects[0] | null>(null)
     const [selectedTask, setSelectedTask] = useState<Task | null>(null)
     const [activeExecutions, setActiveExecutions] = useState<ProtocolExecution[]>([])
+
+    // Sample Management State
+    const [selectedSample, setSelectedSample] = useState<Sample | null>(null)
+    const [sampleViewMode, setSampleViewMode] = useState<'list' | 'detail' | 'storage'>('list')
 
     React.useEffect(() => {
         if (!currentUserProfile?.labId) return
@@ -119,7 +127,10 @@ export function HomeDashboard() {
     const getPresenceStatus = (profileId: string) => {
         const activeExecution = activeExecutions.find(e => e.performedBy === profileId)
         if (activeExecution) {
-            return { label: 'Running Protocol', className: 'bg-green-100 text-green-700 border-green-200 animate-pulse' }
+            return {
+                label: `Running ${activeExecution.protocolTitle} (Step ${activeExecution.currentStepIndex + 1})`,
+                className: 'bg-green-100 text-green-700 border-green-200 animate-pulse'
+            }
         }
 
         const tasks = getMemberTasks(profileId)
@@ -189,31 +200,7 @@ export function HomeDashboard() {
         return isNaN(date.getTime()) ? '—' : format(date, 'HH:mm')
     }
 
-    import { ReportsView } from '@/components/views/reports/ReportsView'
 
-    // ... inside HomeDashboard component ...
-
-    const {
-        // ... other context ...
-        mainView, // Assuming mainView is available in context, if not need to check AppContext
-        setMainView,
-    } = useAppContext()
-
-    // ...
-
-    if (mainView === 'reports') {
-        return (
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <Button variant="ghost" onClick={() => setMainView('dashboard')} className="gap-2">
-                        <ChevronLeft className="h-4 w-4" />
-                        Back to Dashboard
-                    </Button>
-                </div>
-                <ReportsView />
-            </div>
-        )
-    }
 
     return (
         <div className="space-y-6">
@@ -253,22 +240,30 @@ export function HomeDashboard() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-3 pt-0 grid grid-cols-2 gap-2">
-                            <Link href="/equipment?action=book" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                            <div onClick={() => setMainView('equipment')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
                                 <CalendarIcon className="h-5 w-5 mb-1 text-purple-500" />
                                 <span className="text-[10px] font-medium">Book</span>
-                            </Link>
-                            <Link href="/projects?action=new" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                            </div>
+                            <div onClick={() => setMainView('projects')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
                                 <Layout className="h-5 w-5 mb-1 text-blue-500" />
                                 <span className="text-[10px] font-medium">New Project</span>
-                            </Link>
-                            <Link href="/eln?action=new" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                            </div>
+                            <div onClick={() => setMainView('eln')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
                                 <FlaskConical className="h-5 w-5 mb-1 text-emerald-500" />
                                 <span className="text-[10px] font-medium">Experiment</span>
-                            </Link>
-                            <Link href="/reports" className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors">
+                            </div>
+                            <div onClick={() => setMainView('dashboard')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
                                 <BarChart3 className="h-5 w-5 mb-1 text-orange-500" />
                                 <span className="text-[10px] font-medium">Reports</span>
-                            </Link>
+                            </div>
+                            <div onClick={() => setMainView('dashboard')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <ShieldAlert className="h-5 w-5 mb-1 text-red-500" />
+                                <span className="text-[10px] font-medium">Safety</span>
+                            </div>
+                            <div onClick={() => setMainView('samples')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                <TestTube className="h-5 w-5 mb-1 text-pink-500" />
+                                <span className="text-[10px] font-medium">Samples</span>
+                            </div>
                         </CardContent>
                     </Card>
                     {/* Experiments Widget */}
@@ -411,7 +406,7 @@ export function HomeDashboard() {
                 <div className="md:col-span-6 space-y-6">
 
                     {/* Risk Widget (New Phase 2) */}
-                    <DashboardRiskWidget projects={projects} tasks={dayToDayTasks} />
+                    <DashboardRiskWidget projects={projects} tasks={dayToDayTasks} orders={orders} />
 
                     {/* Projects Grid */}
                     <Card>
@@ -522,6 +517,11 @@ export function HomeDashboard() {
 
                 {/* Right Column (20%): Resources */}
                 <div className="md:col-span-3 space-y-6">
+                    {/* Lab Pulse Widget (NEW) */}
+                    <div className="h-[350px]">
+                        <LabPulseWidget />
+                    </div>
+
                     {/* Weekly Digest (New Phase 2) */}
                     {currentUserProfile && (
                         <div className="h-[400px]">
@@ -529,6 +529,7 @@ export function HomeDashboard() {
                                 userId={currentUserProfile.id}
                                 tasks={dayToDayTasks}
                                 bookings={userBookings}
+                                events={events}
                             />
                         </div>
                     )}

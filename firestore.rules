@@ -388,7 +388,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
         isLabMember(resource.data.labId) ||
-        isAdmin()
+        isAdmin() ||
+        (resource.data.profileProjectId != null && isProjectTeamMember(resource.data.profileProjectId))
       );
 
       // Users can create workpackages
@@ -706,6 +707,29 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.reportedBy == request.auth.uid;
       allow update: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
       allow delete: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+    }
+
+    // ============================================================================
+    // TRAINING RECORDS (Safety - Phase 3)
+    // ============================================================================
+    match /trainingRecords/{recordId} {
+      // Users can read their own training records
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Admins or trainers can create/update records
+      // For now, allow creation if authenticated (to allow seeding/testing), 
+      // but ideally this should be restricted to authorized trainers
+      allow create: if isAuthenticated();
+      
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid // Allow users to update their own records (e.g. status)
+      );
+      
+      allow delete: if isAdmin();
     }
 
 
@@ -1129,6 +1153,16 @@ service cloud.firestore {
     // SAMPLES (Sample Genealogy - Phase 4)
     // ============================================================================
     match /samples/{sampleId} {
+      allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
+    }
+
+    // ============================================================================
+    // STORAGE LOCATIONS (Sample Management - Phase 6)
+    // ============================================================================
+    match /storageLocations/{locationId} {
       allow read: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
       allow update: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());

@@ -19,6 +19,8 @@ export function useAuth() {
   const [mounted, setMounted] = useState(false);
   const isMountedRef = useRef(true);
 
+  const [authUser, setAuthUser] = useState<FirebaseUser | null>(null);
+
   useEffect(() => {
     const auth = getFirebaseAuth();
     // Ensure sessions persist across reload/back navigation
@@ -30,6 +32,7 @@ export function useAuth() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         if (!isMountedRef.current) return;
+        setAuthUser(firebaseUser); // Store the raw Firebase user
         setIsLoadingProfile(true);
 
         try {
@@ -125,6 +128,7 @@ export function useAuth() {
         }
       } else {
         if (isMountedRef.current) {
+          setAuthUser(null);
           setCurrentUser(null);
           setCurrentUserProfile(null);
           setCurrentUserProfileId(null);
@@ -153,6 +157,7 @@ export function useAuth() {
     try {
       const auth = getFirebaseAuth();
       await signOut(auth);
+      setAuthUser(null);
       setCurrentUser(null);
       setCurrentUserProfile(null);
       setCurrentUserProfileId(null);
@@ -179,6 +184,7 @@ export function useAuth() {
   };
 
   return {
+    authUser, // Expose raw Firebase user
     currentUser,
     currentUserProfile,
     currentUserProfileId,

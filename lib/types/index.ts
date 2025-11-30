@@ -66,3 +66,6 @@ export * from './training.types'
 
 // Safety
 export * from './safety.types'
+
+// Notifications
+export * from './notification.types'

@@ -36,16 +36,21 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { logger } from "@/lib/logger"
 import { useToast } from "@/components/ui/toast"
+import { createNotification } from "@/lib/services/notificationService"
 
 interface CommentsSectionProps {
   entityType: Comment["entityType"]
   entityId: string
+  entityTitle?: string
+  entityOwnerId?: string
   teamMembers?: { id: string; name: string }[]
 }
 
 export function CommentsSection({
   entityType,
   entityId,
+  entityTitle = "item",
+  entityOwnerId,
   teamMembers = [],
 }: CommentsSectionProps) {
   const { currentUser, currentUserProfile } = useAuth()
@@ -131,8 +136,49 @@ export function CommentsSection({
       })
 
       setNewComment("")
+
+      // NOTIFICATIONS
+      // 1. Notify owner if not author
+      if (entityOwnerId && entityOwnerId !== currentUserProfile.id) {
+        await createNotification(entityOwnerId, {
+          type: 'comment',
+          title: `New comment on ${entityTitle}`,
+          message: `${currentUserProfile.firstName} commented: "${newComment.trim().substring(0, 50)}..."`,
+          entityType,
+          entityId,
+          link: window.location.pathname, // Best guess for now
+          createdBy: currentUserProfile.id,
+          createdByName: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
+        })
+      }
+
+      // 2. Notify mentioned users
+      // Simple regex for @Name (first name)
+      // In a real app, we'd use a proper mention library with IDs
+      if (teamMembers.length > 0) {
+        const mentions = newComment.match(/@(\w+)/g)
+        if (mentions) {
+          mentions.forEach(async (mention) => {
+            const name = mention.substring(1).toLowerCase()
+            const mentionedUser = teamMembers.find(m => m.name.toLowerCase().includes(name))
+
+            if (mentionedUser && mentionedUser.id !== currentUserProfile.id && mentionedUser.id !== entityOwnerId) {
+              await createNotification(mentionedUser.id, {
+                type: 'mention',
+                title: `You were mentioned in ${entityTitle}`,
+                message: `${currentUserProfile.firstName} mentioned you: "${newComment.trim().substring(0, 50)}..."`,
+                entityType,
+                entityId,
+                link: window.location.pathname,
+                createdBy: currentUserProfile.id,
+                createdByName: `${currentUserProfile.firstName} ${currentUserProfile.lastName}`
+              })
+            }
+          })
+        }
+      }
+
     } catch (error) {
-      logger.error("Error posting comment", error)
       logger.error("Error posting comment", error)
       toast({ title: "Failed to post comment. Please try again.", variant: "destructive" })
     }

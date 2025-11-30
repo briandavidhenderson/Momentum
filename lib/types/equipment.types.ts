@@ -65,6 +65,7 @@ export interface EquipmentBookingSettings {
   allowRecurring: boolean          // Can users create recurring bookings?
   autoBlockMaintenance: boolean    // Auto-block slots when maintenance due?
   requiresTraining: boolean        // Does user need valid training record?
+  requiredTrainingIds?: string[]   // Specific training IDs required (if generic "requiresTraining" isn't enough)
 }
 
 /**
@@ -83,6 +84,7 @@ export interface EquipmentDevice {
   threshold: number // Maintenance threshold percentage (0-100)
   supplies: EquipmentSupply[]
   sops?: EquipmentSOP[] // Standard Operating Procedures
+  riskAssessmentId?: string // Linked Risk Assessment ID
   labId?: string // Associated lab ID (Department)
   workingLabId?: string // Physical location (WorkingLab)
   workingLabName?: string // Cached display name

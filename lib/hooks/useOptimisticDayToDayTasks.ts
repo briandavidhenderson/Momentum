@@ -248,7 +248,7 @@ export function useOptimisticDayToDayTasks() {
     // Combine back with other columns
     const updatedTasks = [...otherTasks, ...reorderedWithOrder].sort((a, b) => {
       // Sort by status first (todo, working, done, history), then by order
-      const statusOrder = { todo: 0, working: 1, done: 2, history: 3 }
+      const statusOrder = { todo: 0, working: 1, done: 2, history: 3, blocked: 4 }
       if (a.status !== b.status) {
         return statusOrder[a.status] - statusOrder[b.status]
       }

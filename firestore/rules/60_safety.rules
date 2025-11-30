@@ -17,3 +17,26 @@
       allow update: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
       allow delete: if isAuthenticated() && (resource.data.labId == getUserLab() || isAdmin());
     }
+
+    // ============================================================================
+    // TRAINING RECORDS (Safety - Phase 3)
+    // ============================================================================
+    match /trainingRecords/{recordId} {
+      // Users can read their own training records
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Admins or trainers can create/update records
+      // For now, allow creation if authenticated (to allow seeding/testing), 
+      // but ideally this should be restricted to authorized trainers
+      allow create: if isAuthenticated();
+      
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid // Allow users to update their own records (e.g. status)
+      );
+      
+      allow delete: if isAdmin();
+    }

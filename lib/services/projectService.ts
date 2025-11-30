@@ -325,8 +325,8 @@ export async function getProjects(userId: string): Promise<Project[]> {
       type,
       legacyTypeLabel,
       // Convert Firestore timestamps to ISO strings if they exist
-      startDate: data.start ? data.start.toDate().toISOString() : data.startDate,
-      endDate: data.end ? data.end.toDate().toISOString() : data.endDate,
+      startDate: data.start?.toDate ? data.start.toDate().toISOString() : (data.start || data.startDate),
+      endDate: data.end?.toDate ? data.end.toDate().toISOString() : (data.end || data.endDate),
     } as unknown as Project
   })
 
@@ -383,8 +383,8 @@ export function subscribeToProjects(
           return {
             ...data,
             // Convert Firestore timestamps to ISO strings if they exist
-            startDate: data.start ? data.start.toDate().toISOString() : data.startDate,
-            endDate: data.end ? data.end.toDate().toISOString() : data.endDate,
+            startDate: data.start?.toDate ? data.start.toDate().toISOString() : (data.start || data.startDate),
+            endDate: data.end?.toDate ? data.end.toDate().toISOString() : (data.end || data.endDate),
           } as unknown as Project
         })
         callback(projects)

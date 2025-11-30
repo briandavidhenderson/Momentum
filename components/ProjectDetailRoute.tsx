@@ -191,8 +191,11 @@ export default function ProjectDetailRoute() {
         <div className="max-w-4xl mx-auto py-24 px-6 text-center space-y-4">
           <h1 className="text-2xl font-semibold text-slate-900">Project not found</h1>
           <p className="text-muted-foreground">The requested project does not exist or you do not have access.</p>
-          <Button asChild>
-            <Link href="/projects">Back to Projects</Link>
+          <Button onClick={() => {
+            setMainView("projects")
+            router.push("/")
+          }}>
+            Back to Projects
           </Button>
         </div>
       </main>
@@ -206,9 +209,12 @@ export default function ProjectDetailRoute() {
           <div className="px-6 py-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <Link href="/" className="text-2xl font-bold text-slate-900 tracking-tight">
+                <div onClick={() => {
+                  setMainView("dashboard")
+                  router.push("/")
+                }} className="text-2xl font-bold text-slate-900 tracking-tight cursor-pointer">
                   Momentum {currentUserProfile?.position || currentUser?.email}
-                </Link>
+                </div>
               </div>
               <NotificationBell />
               <Button
@@ -241,7 +247,11 @@ export default function ProjectDetailRoute() {
             fundingAccounts={fundingAccounts}
             health={projectHealth}
             budgetSummary={projectBudgetSummary}
-            onBack={() => router.push("/projects")}
+
+            onBack={() => {
+              setMainView("projects")
+              router.push("/")
+            }}
             onEdit={() => setShowEditDialog(true)}
             onCreateWorkpackage={handleCreateWorkpackageForProject}
             onUpdateWorkpackage={async (workpackageId, updates) => {

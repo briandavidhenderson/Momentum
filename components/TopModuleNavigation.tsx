@@ -26,6 +26,7 @@ import {
   LucideIcon
 } from "lucide-react"
 import { QRCodeScanner } from "./QRCodeScanner"
+import { NotificationBell } from "./notifications/NotificationBell"
 
 // Type definitions
 type SubItem = {
@@ -65,10 +66,8 @@ export const NAV_ITEMS: NavCategory[] = [
     activeColor: "text-blue-600 bg-blue-50 border-blue-200",
     hoverColor: "hover:bg-blue-50/50 hover:text-blue-600",
     icon: Activity,
-    subItems: [
-      { id: "projects", label: "Timeline", icon: Activity },
-      { id: "ledger", label: "My Ledger", icon: Wallet },
-    ]
+    subItems: [],
+    actionId: "projects"
   },
   {
     id: "lab",
@@ -80,7 +79,7 @@ export const NAV_ITEMS: NavCategory[] = [
     subItems: [
       { id: "equipment", label: "Equipment", icon: Wrench },
       { id: "orders", label: "Orders", icon: Package },
-      { id: "experiments", label: "Experiments", icon: FlaskConical },
+      { id: "eln", label: "Experiments", icon: FlaskConical },
       { id: "groups", label: "Groups", icon: Users },
       { id: "funding", label: "Funding", icon: DollarSign, roleRestricted: true },
     ]
@@ -93,7 +92,6 @@ export const NAV_ITEMS: NavCategory[] = [
     hoverColor: "hover:bg-violet-50/50 hover:text-violet-600",
     icon: CircleUser,
     subItems: [
-      { id: "myprofile", label: "My Profile", icon: CircleUser },
       { id: "daytoday", label: "Day to Day", icon: Activity },
       { id: "mytasks", label: "My Tasks", icon: ListTodo },
       { id: "calendar", label: "Calendar", icon: Calendar },
@@ -152,7 +150,7 @@ export function TopModuleNavigation({
         {NAV_ITEMS.map((category) => {
           const isActive = selectedCategory === category.id || hoveredCategory === category.id
           const isSubItemActive = category.subItems.some(sub => sub.id === activeModule)
-          const Icon = category.icon
+          const Icon = category?.icon || Activity // Fallback icon
 
           // Filter subItems based on permissions
           const visibleSubItems = category.subItems.filter(item => {
@@ -223,7 +221,7 @@ export function TopModuleNavigation({
                 <div className="bg-white rounded-lg p-1 shadow-lg border border-slate-100 flex flex-col gap-0.5">
                   {visibleSubItems.map((item) => {
                     const isItemActive = activeModule === item.id
-                    const ItemIcon = item.icon
+                    const ItemIcon = item.icon || Activity // Fallback icon
 
                     return (
                       <button
@@ -253,7 +251,8 @@ export function TopModuleNavigation({
             </div>
           )
         })}
-        <div className="ml-2">
+        <div className="ml-2 flex items-center gap-1">
+          <NotificationBell />
           <QRCodeScanner />
         </div>
       </div>

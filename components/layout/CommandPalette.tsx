@@ -36,7 +36,8 @@ export function CommandPalette() {
         projects,
         equipment,
         allProfiles,
-        currentUserProfile
+        currentUserProfile,
+        setMainView
     } = useAppContext()
 
     React.useEffect(() => {
@@ -85,21 +86,21 @@ export function CommandPalette() {
 
                     {/* Navigation Group */}
                     <CommandGroup heading="Navigation">
-                        <CommandItem onSelect={() => runCommand(() => router.push('/dashboard'))}>
+                        <CommandItem onSelect={() => runCommand(() => setMainView('dashboard'))}>
                             <Layout className="mr-2 h-4 w-4" />
                             <span>Dashboard</span>
                         </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => router.push('/projects'))}>
+                        <CommandItem onSelect={() => runCommand(() => setMainView('projects'))}>
                             <FileText className="mr-2 h-4 w-4" />
                             <span>Projects</span>
                         </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => router.push('/equipment'))}>
+                        <CommandItem onSelect={() => runCommand(() => setMainView('equipment'))}>
                             <Wrench className="mr-2 h-4 w-4" />
                             <span>Equipment</span>
                         </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => router.push('/inventory'))}>
+                        <CommandItem onSelect={() => runCommand(() => setMainView('orders'))}>
                             <Package className="mr-2 h-4 w-4" />
-                            <span>Inventory</span>
+                            <span>Inventory & Orders</span>
                         </CommandItem>
                     </CommandGroup>
 
@@ -125,7 +126,10 @@ export function CommandPalette() {
                         {equipment.slice(0, 5).map((device) => (
                             <CommandItem
                                 key={device.id}
-                                onSelect={() => runCommand(() => router.push(`/equipment?device=${device.id}`))}
+                                onSelect={() => runCommand(() => {
+                                    setMainView('equipment')
+                                    // Ideally we would also select the device, but for now just go to the view
+                                })}
                             >
                                 <Wrench className="mr-2 h-4 w-4" />
                                 <span>{device.name}</span>
@@ -140,7 +144,7 @@ export function CommandPalette() {
                         {allProfiles.slice(0, 5).map((profile) => (
                             <CommandItem
                                 key={profile.id}
-                                onSelect={() => runCommand(() => router.push(`/people/${profile.id}`))}
+                                onSelect={() => runCommand(() => setMainView('people'))}
                             >
                                 <User className="mr-2 h-4 w-4" />
                                 <span>{profile.firstName} {profile.lastName}</span>
@@ -152,15 +156,15 @@ export function CommandPalette() {
 
                     {/* Actions Group */}
                     <CommandGroup heading="Actions">
-                        <CommandItem onSelect={() => runCommand(() => router.push('/equipment?action=book'))}>
+                        <CommandItem onSelect={() => runCommand(() => setMainView('equipment'))}>
                             <Calendar className="mr-2 h-4 w-4" />
                             <span>Book Equipment</span>
                         </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => router.push('/projects?action=new'))}>
+                        <CommandItem onSelect={() => runCommand(() => setMainView('projects'))}>
                             <FileText className="mr-2 h-4 w-4" />
                             <span>Create Project</span>
                         </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => router.push('/settings'))}>
+                        <CommandItem onSelect={() => runCommand(() => setMainView('myprofile'))}>
                             <Settings className="mr-2 h-4 w-4" />
                             <span>Settings</span>
                         </CommandItem>

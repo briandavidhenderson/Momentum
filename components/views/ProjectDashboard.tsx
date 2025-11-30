@@ -47,6 +47,7 @@ import { GroupSelector } from "@/components/GroupSelector"
 import { ProjectKanbanBoard } from "./ProjectKanbanBoard"
 import { personProfilesToPeople } from "@/lib/personHelpers"
 import { useToast } from "@/lib/toast"
+import { PersonalLedger } from "@/components/PersonalLedger"
 
 export function ProjectDashboard() {
   const { toast, error: toastError } = useToast()
@@ -90,7 +91,7 @@ export function ProjectDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [fundingFilter, setFundingFilter] = useState<string>("all")
   const [healthFilter, setHealthFilter] = useState<string>("all")
-  const [projectView, setProjectView] = useState<"list" | "kanban" | "gantt" | "calendar">("list")
+  const [projectView, setProjectView] = useState<"list" | "kanban" | "gantt" | "calendar" | "ledger">("list")
 
   // Calculate budget summaries for all projects
   const budgetSummaries = useMemo(() => {
@@ -763,165 +764,177 @@ export function ProjectDashboard() {
               <CalendarDays className="h-4 w-4" />
               Calendar
             </TabsTrigger>
+            <TabsTrigger value="ledger" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              Ledger
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 overflow-hidden min-h-0">
-        {/* Personal Tasks Sidebar */}
-        <div className="hidden lg:block overflow-hidden">
-          <PersonalTasksWidget />
-        </div>
+        {projectView === 'ledger' ? (
+          <div className="col-span-1 lg:col-span-2 h-full overflow-hidden">
+            <PersonalLedger />
+          </div>
+        ) : (
+          <>
+            {/* Personal Tasks Sidebar */}
+            <div className="hidden lg:block overflow-hidden">
+              <PersonalTasksWidget />
+            </div>
 
-        {/* Projects Grid/List */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {totalPortfolioCount === 0 ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center max-w-md">
-                <FolderKanban className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-30" />
-                <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Get started by creating your first project or importing an existing one.
-                </p>
-                <div className="flex items-center justify-center gap-2">
-                  <Button onClick={() => setShowProjectDialog(true)} className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Create Project
-                  </Button>
-                  <Button onClick={() => setShowImportDialog(true)} variant="outline" className="gap-2">
-                    <Upload className="h-4 w-4" />
-                    Import Project
-                  </Button>
+            {/* Projects Grid/List */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {totalPortfolioCount === 0 ? (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center max-w-md">
+                    <FolderKanban className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-30" />
+                    <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Get started by creating your first project or importing an existing one.
+                    </p>
+                    <div className="flex items-center justify-center gap-2">
+                      <Button onClick={() => setShowProjectDialog(true)} className="gap-2">
+                        <Plus className="h-4 w-4" />
+                        Create Project
+                      </Button>
+                      <Button onClick={() => setShowImportDialog(true)} variant="outline" className="gap-2">
+                        <Upload className="h-4 w-4" />
+                        Import Project
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          ) : totalProjects === 0 ? (
-            <div className="text-center py-12">
-              <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
-              <h3 className="text-lg font-semibold mb-2">No projects match your filters</h3>
-              <p className="text-sm text-muted-foreground">Try adjusting your search or filter criteria</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {projectView === "list" && (
+              ) : totalProjects === 0 ? (
+                <div className="text-center py-12">
+                  <Filter className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-30" />
+                  <h3 className="text-lg font-semibold mb-2">No projects match your filters</h3>
+                  <p className="text-sm text-muted-foreground">Try adjusting your search or filter criteria</p>
+                </div>
+              ) : (
                 <div className="space-y-6">
-                  {(fundingFilter === "all" || fundingFilter === "funded") && fundedProjects.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-4">
-                        <DollarSign className="h-5 w-5 text-blue-600" />
-                        <h2 className="text-lg font-semibold">Funded Projects</h2>
-                        <Badge variant="secondary">{fundedProjects.length}</Badge>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {fundedProjects.map(renderProjectCard)}
-                      </div>
+                  {projectView === "list" && (
+                    <div className="space-y-6">
+                      {(fundingFilter === "all" || fundingFilter === "funded") && fundedProjects.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <DollarSign className="h-5 w-5 text-blue-600" />
+                            <h2 className="text-lg font-semibold">Funded Projects</h2>
+                            <Badge variant="secondary">{fundedProjects.length}</Badge>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {fundedProjects.map(renderProjectCard)}
+                          </div>
+                        </div>
+                      )}
+
+                      {(fundingFilter === "all" || fundingFilter === "unfunded") && unfundedProjects.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-4">
+                            <FolderKanban className="h-5 w-5 text-gray-600" />
+                            <h2 className="text-lg font-semibold">Internal/Unfunded Projects</h2>
+                            <Badge variant="secondary">{unfundedProjects.length}</Badge>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {unfundedProjects.map(renderProjectCard)}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
+                  {/* Unfunded Projects Section */}
                   {(fundingFilter === "all" || fundingFilter === "unfunded") && unfundedProjects.length > 0 && (
                     <div>
                       <div className="flex items-center gap-2 mb-4">
                         <FolderKanban className="h-5 w-5 text-gray-600" />
-                        <h2 className="text-lg font-semibold">Internal/Unfunded Projects</h2>
+                        <h2 className="text-lg font-semibold">Unfunded Projects</h2>
                         <Badge variant="secondary">{unfundedProjects.length}</Badge>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {unfundedProjects.map(renderProjectCard)}
+                      <div
+                        className={
+                          projectView === "list"
+                            ? "space-y-4"
+                            : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                        }
+                      >
+                        {unfundedProjects.map(project => {
+                          return renderProjectCard(project)
+                        })}
                       </div>
+                    </div>
+                  )}
+
+                  {projectView === "kanban" && (
+                    <div className="h-full overflow-hidden">
+                      <ProjectKanbanBoard
+                        projects={filteredProjects}
+                        workpackages={allWorkpackages}
+                        deliverables={deliverables}
+                        people={allProfiles}
+                        budgetSummaries={budgetSummaries}
+                        projectHealths={projectHealths}
+                        onProjectStatusChange={async (projectId, newStatus) => {
+                          await handleUpdateMasterProject(projectId, { status: newStatus })
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {projectView === "gantt" && (
+                    <div className="h-full overflow-hidden">
+                      <ProjectGanttChart
+                        projects={filteredProjects}
+                        workpackages={allWorkpackages}
+                        people={peopleList}
+                        onTaskClick={(task) => {
+                          setSelectedTask(task)
+                          setShowTaskEditDialog(true)
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {projectView === "calendar" && (
+                    <div className="space-y-3">
+                      {calendarItems.map(item => {
+                        const project = projectLookup.get(item.projectId)
+                        const health = project ? projectHealths.get(project.id) : undefined
+                        const budgetSummary = project ? budgetSummaries.get(project.id) : undefined
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between gap-4 border rounded-lg p-3 bg-white shadow-sm"
+                          >
+                            <div>
+                              <p className="text-sm font-semibold">{item.label}</p>
+                              <p className="text-xs text-muted-foreground">{item.description}</p>
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {project && renderStatusBadge(project.status)}
+                                {renderHealthBadge(health)}
+                                {renderBudgetChip(budgetSummary)}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium">{formatDate(item.date)}</p>
+                              {project && (
+                                <Button asChild variant="ghost" size="sm" className="mt-1">
+                                  <Link href={`/projects/${project.id}`}>View project</Link>
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
               )}
-
-              {/* Unfunded Projects Section */}
-              {(fundingFilter === "all" || fundingFilter === "unfunded") && unfundedProjects.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <FolderKanban className="h-5 w-5 text-gray-600" />
-                    <h2 className="text-lg font-semibold">Unfunded Projects</h2>
-                    <Badge variant="secondary">{unfundedProjects.length}</Badge>
-                  </div>
-                  <div
-                    className={
-                      projectView === "list"
-                        ? "space-y-4"
-                        : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-                    }
-                  >
-                    {unfundedProjects.map(project => {
-                      return renderProjectCard(project)
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {projectView === "kanban" && (
-                <div className="h-full overflow-hidden">
-                  <ProjectKanbanBoard
-                    projects={filteredProjects}
-                    workpackages={allWorkpackages}
-                    deliverables={deliverables}
-                    people={allProfiles}
-                    budgetSummaries={budgetSummaries}
-                    projectHealths={projectHealths}
-                    onProjectStatusChange={async (projectId, newStatus) => {
-                      await handleUpdateMasterProject(projectId, { status: newStatus })
-                    }}
-                  />
-                </div>
-              )}
-
-              {projectView === "gantt" && (
-                <div className="h-full overflow-hidden">
-                  <ProjectGanttChart
-                    projects={filteredProjects}
-                    workpackages={allWorkpackages}
-                    people={peopleList}
-                    onTaskClick={(task) => {
-                      setSelectedTask(task)
-                      setShowTaskEditDialog(true)
-                    }}
-                  />
-                </div>
-              )}
-
-              {projectView === "calendar" && (
-                <div className="space-y-3">
-                  {calendarItems.map(item => {
-                    const project = projectLookup.get(item.projectId)
-                    const health = project ? projectHealths.get(project.id) : undefined
-                    const budgetSummary = project ? budgetSummaries.get(project.id) : undefined
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between gap-4 border rounded-lg p-3 bg-white shadow-sm"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold">{item.label}</p>
-                          <p className="text-xs text-muted-foreground">{item.description}</p>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {project && renderStatusBadge(project.status)}
-                            {renderHealthBadge(health)}
-                            {renderBudgetChip(budgetSummary)}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{formatDate(item.date)}</p>
-                          {project && (
-                            <Button asChild variant="ghost" size="sm" className="mt-1">
-                              <Link href={`/projects/${project.id}`}>View project</Link>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {/* Project Creation Dialog */}

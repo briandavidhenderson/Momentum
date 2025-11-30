@@ -281,7 +281,11 @@ export function BookingForm({ equipmentId, equipmentName, requiresTraining, onSu
                             Cancel
                         </Button>
                     )}
-                    <Button type="submit" disabled={isSubmitting}>
+                    <Button
+                        type="submit"
+                        disabled={isSubmitting || (requiresTraining && trainingStatus?.allowed === false)}
+                        className={requiresTraining && trainingStatus?.allowed === false ? "opacity-50 cursor-not-allowed" : ""}
+                    >
                         {isSubmitting ? 'Booking...' : 'Confirm Booking'}
                     </Button>
                 </div>

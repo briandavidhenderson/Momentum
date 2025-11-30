@@ -649,3 +649,49 @@ export async function getUserSyncStatus(userId: string): Promise<{
     lastSyncedAt: lastSynced,
   }
 }
+
+// ============================================================================
+// PROTOCOL SCHEDULING (Phase 3)
+// ============================================================================
+
+/**
+ * Schedules a protocol on the calendar
+ * Creates events for each step based on duration and phase type
+ */
+export async function scheduleProtocol(
+  protocol: { id: string; title: string; steps: any[] },
+  startTime: Date,
+  userId: string
+): Promise<void> {
+  const db = getFirebaseDb()
+  const batch = writeBatch(db)
+
+  let currentTime = new Date(startTime)
+
+  for (const step of protocol.steps) {
+    const durationMinutes = step.expectedDuration || 0
+    if (durationMinutes === 0) continue
+
+    const endTime = new Date(currentTime.getTime() + durationMinutes * 60000)
+    const isPassive = step.phaseType === 'passive'
+
+    const eventRef = doc(collection(db, "events"))
+
+    batch.set(eventRef, {
+      id: eventRef.id,
+      title: `${isPassive ? 'Incubation' : 'Active'}: ${protocol.title} - Step ${step.order} `,
+      start: Timestamp.fromDate(currentTime),
+      end: Timestamp.fromDate(endTime),
+      createdBy: userId,
+      createdAt: serverTimestamp(),
+      type: isPassive ? 'protocol-passive' : 'protocol-active',
+      visibility: isPassive ? 'private' : 'lab', // Passive blocks are private (free time), Active are lab (busy)
+      description: step.instruction,
+      relatedIds: { protocolId: protocol.id, stepId: step.id }
+    })
+
+    currentTime = endTime
+  }
+
+  await batch.commit()
+}

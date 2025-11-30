@@ -185,9 +185,9 @@ export async function getOrders(): Promise<Order[]> {
     const data = doc.data() as FirestoreOrder
     return {
       ...data,
-      orderedDate: data.orderedDate?.toDate(),
-      receivedDate: data.receivedDate?.toDate(),
-      createdDate: data.createdDate?.toDate() || new Date(),
+      orderedDate: data.orderedDate?.toDate ? data.orderedDate.toDate() : (data.orderedDate ? new Date(data.orderedDate as any) : undefined),
+      receivedDate: data.receivedDate?.toDate ? data.receivedDate.toDate() : (data.receivedDate ? new Date(data.receivedDate as any) : undefined),
+      createdDate: data.createdDate?.toDate ? data.createdDate.toDate() : (data.createdDate ? new Date(data.createdDate as any) : new Date()),
       visibility: data.visibility || 'lab',
       sharedWithUsers: data.sharedWithUsers || [],
       sharedWithGroups: data.sharedWithGroups || [],
@@ -339,9 +339,9 @@ export function subscribeToOrders(
       const data = doc.data() as FirestoreOrder
       return {
         ...data,
-        orderedDate: data.orderedDate?.toDate(),
-        receivedDate: data.receivedDate?.toDate(),
-        createdDate: data.createdDate?.toDate() || new Date(),
+        orderedDate: data.orderedDate?.toDate ? data.orderedDate.toDate() : (data.orderedDate ? new Date(data.orderedDate as any) : undefined),
+        receivedDate: data.receivedDate?.toDate ? data.receivedDate.toDate() : (data.receivedDate ? new Date(data.receivedDate as any) : undefined),
+        createdDate: data.createdDate?.toDate ? data.createdDate.toDate() : (data.createdDate ? new Date(data.createdDate as any) : new Date()),
         visibility: data.visibility || 'lab',
         sharedWithUsers: data.sharedWithUsers || [],
         sharedWithGroups: data.sharedWithGroups || [],

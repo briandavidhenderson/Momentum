@@ -42,6 +42,7 @@ type AppContextType = ReturnType<typeof useAuth> &
   Omit<ReturnType<typeof useFunding>, never> & {
     allProfiles: PersonProfile[]
     people: Person[]
+    authUser: ReturnType<typeof useAuth>['authUser']
   }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -85,6 +86,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     ...protocolsState,
     allProfiles,  // Expose profiles for components that need full profile data
     people,       // Expose people for UI components (assignee dropdowns, etc.)
+    authUser: auth.authUser, // Expose raw Firebase user
   };
 
   return (

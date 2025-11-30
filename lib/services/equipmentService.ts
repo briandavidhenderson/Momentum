@@ -69,8 +69,8 @@ export function subscribeToEquipment(labId: string | null, callback: (equipment:
           const data = doc.data()
           return {
             ...data,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt as any).toISOString() : new Date().toISOString()),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt ? new Date(data.updatedAt as any).toISOString() : undefined),
           } as EquipmentDevice
         })
         callback(equipment)
