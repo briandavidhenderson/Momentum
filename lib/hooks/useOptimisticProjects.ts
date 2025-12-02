@@ -15,6 +15,12 @@ export function useOptimisticProjects() {
   const baseHook = useProjects()
   const { workpackages: firestoreWorkpackages, handleUpdateWorkpackage: baseUpdateWorkpackage, handleUpdateDeliverableTasks } = baseHook
 
+  // DEBUG: Check projects from baseHook
+  useEffect(() => {
+    const target = baseHook.projects.find(p => p.id === 'sZYoShKUAzCeYOGThApb');
+    if (target) console.log("DEBUG: useOptimisticProjects baseHook target", target);
+  }, [baseHook.projects]);
+
   // Cast to HydratedWorkpackage[] for internal use - assuming data fetching layer handles hydration
   const [optimisticWorkpackages, setOptimisticWorkpackages] = useState<HydratedWorkpackage[]>([])
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set())
@@ -227,5 +233,7 @@ export function useOptimisticProjects() {
     handleUpdateTaskHelpers,
     handleUpdateTaskDates,
     projectsSyncStatus: syncStatus,
+    activeProjectId: baseHook.activeProjectId,
+    setActiveProjectId: baseHook.setActiveProjectId,
   }
 }

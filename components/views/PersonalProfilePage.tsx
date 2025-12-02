@@ -32,6 +32,7 @@ import { linkOrcidToCurrentUser, resyncOrcidProfile } from "@/lib/auth/orcid"
 import { deleteField } from "firebase/firestore"
 import { useToast } from "@/components/ui/toast"
 import { MembershipManager } from "@/components/profile/MembershipManager"
+import { IntegrationsSettings } from "@/components/views/IntegrationsSettings"
 
 interface PersonalProfilePageProps {
   currentUser: FirestoreUser | null
@@ -657,6 +658,11 @@ export function PersonalProfilePage({ currentUser, currentUserProfile }: Persona
               </Button>
             </div>
           )}
+        </div>
+
+        {/* Email Integrations */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <IntegrationsSettings />
         </div>
 
         {/* Funding */}

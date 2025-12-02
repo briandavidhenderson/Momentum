@@ -50,7 +50,7 @@ export function TaskCreationDialog({
   const [endDate, setEndDate] = useState("")
   const [status, setStatus] = useState<ProjectTask["status"]>("not-started")
   const [importance, setImportance] = useState<ImportanceLevel>("medium")
-  const [primaryOwner, setPrimaryOwner] = useState<string>("")
+  const [primaryOwner, setPrimaryOwner] = useState<string>("unassigned")
   const [helpers, setHelpers] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -64,7 +64,7 @@ export function TaskCreationDialog({
       setEndDate(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
       setStatus("not-started")
       setImportance("medium")
-      setPrimaryOwner("")
+      setPrimaryOwner("unassigned")
       setHelpers([])
       setError(null)
     }
@@ -90,7 +90,7 @@ export function TaskCreationDialog({
       importance,
       progress: 0,
       deliverableId,
-      primaryOwner: primaryOwner || undefined,
+      primaryOwner: (primaryOwner && primaryOwner !== "unassigned") ? primaryOwner : undefined,
       helpers: helpers.length > 0 ? helpers : undefined,
       todos: [],
     }
@@ -201,7 +201,7 @@ export function TaskCreationDialog({
                 <SelectValue placeholder="Select primary owner (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="unassigned">None</SelectItem>
                 {availablePeople.map((person) => (
                   <SelectItem key={person.id} value={person.id}>
                     {person.firstName} {person.lastName}

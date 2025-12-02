@@ -92,18 +92,24 @@ export function useDeliverables(currentUser: PersonProfile | null) {
    */
   const handleUpdateDeliverable = useCallback(
     async (deliverableId: string, updates: Partial<Deliverable>) => {
+      // Optimistic update
+      const previousDeliverables = deliverables;
+      setDeliverables(prev => prev.map(d => d.id === deliverableId ? { ...d, ...updates } : d));
+
       try {
         setError(null);
         await updateDeliverable(deliverableId, updates);
         logger.info('Deliverable updated successfully', { id: deliverableId });
       } catch (err) {
+        // Rollback
+        setDeliverables(previousDeliverables);
         const error = err instanceof Error ? err : new Error('Failed to update deliverable');
         logger.error('Error updating deliverable', error);
         setError(error);
         throw error;
       }
     },
-    []
+    [deliverables]
   );
 
   /**

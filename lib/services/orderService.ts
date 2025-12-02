@@ -304,6 +304,8 @@ export async function deleteOrder(orderId: string): Promise<void> {
 
   if (orderDoc.exists()) {
     const order = orderDoc.data() as FirestoreOrder
+
+    // 1. Update Account Budget
     if (order.accountId && order.priceExVAT) {
       const { updateAccountBudget } = await import('../budgetUtils')
       await updateAccountBudget(
@@ -312,6 +314,58 @@ export async function deleteOrder(orderId: string): Promise<void> {
         order.status as OrderStatus | null,
         null // deleting order
       )
+    }
+
+    // 2. Update Allocation Budget & Cancel Transactions
+    if (order.fundingAllocationId) {
+      const {
+        getAllocation,
+        updateAllocationBudget
+      } = await import('./fundingService')
+
+      const allocation = await getAllocation(order.fundingAllocationId)
+
+      if (allocation) {
+        let newSpent = allocation.currentSpent
+        let newCommitted = allocation.currentCommitted
+
+        // Reverse the impact based on order status
+        if (order.status === 'ordered') {
+          newCommitted -= (order.priceExVAT || 0)
+        } else if (order.status === 'received') {
+          newSpent -= (order.priceExVAT || 0)
+        }
+
+        // Ensure no negative values
+        newSpent = Math.max(0, newSpent)
+        newCommitted = Math.max(0, newCommitted)
+
+        const newRemaining = (allocation.allocatedAmount || 0) - newSpent - newCommitted
+
+        await updateAllocationBudget(order.fundingAllocationId, {
+          currentSpent: newSpent,
+          currentCommitted: newCommitted,
+          remainingBudget: newRemaining,
+          status: newRemaining <= 0 ? 'exhausted' : 'active' // Reactivate if funds released
+        })
+      }
+
+      // 3. Cancel associated transactions
+      // We don't delete them, we mark them as cancelled to keep audit trail
+      const transactionsQuery = query(
+        collection(db, "fundingTransactions"),
+        where("orderId", "==", orderId)
+      )
+      const transactionsSnapshot = await getDocs(transactionsQuery)
+
+      const updatePromises = transactionsSnapshot.docs.map(doc =>
+        updateDoc(doc.ref, {
+          status: 'CANCELLED',
+          description: `Order deleted: ${order.productName}`,
+          updatedAt: serverTimestamp()
+        })
+      )
+      await Promise.all(updatePromises)
     }
   }
 

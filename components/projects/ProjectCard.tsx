@@ -259,7 +259,16 @@ export function ProjectCard({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => onCreateWorkpackage(project.id)}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                      await onCreateWorkpackage(project.id)
+                    } catch (err) {
+                      console.error("Error creating WP:", err)
+                      alert("Error creating WP: " + err)
+                    }
+                  }}
                 >
                   <Package className="h-3.5 w-3.5 mr-1" />
                   Add Work Package
@@ -311,8 +320,9 @@ export function ProjectCard({
             )}
           </div>
         </CardContent>
-      )}
-    </Card>
+      )
+      }
+    </Card >
   )
 }
 

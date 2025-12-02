@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDocs,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -34,6 +35,21 @@ export async function createEquipment(equipmentData: Omit<EquipmentDevice, 'id'>
   })
 
   return equipmentId
+}
+
+export async function getEquipment(): Promise<EquipmentDevice[]> {
+  const db = getFirebaseDb()
+  const querySnapshot = await getDocs(collection(db, "equipment"))
+
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data()
+    return {
+      ...data,
+      id: doc.id,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt as any).toISOString() : new Date().toISOString()),
+      updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt ? new Date(data.updatedAt as any).toISOString() : undefined),
+    } as EquipmentDevice
+  })
 }
 
 export async function updateEquipment(equipmentId: string, updates: Partial<EquipmentDevice>): Promise<void> {

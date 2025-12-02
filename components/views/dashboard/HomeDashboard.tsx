@@ -202,8 +202,16 @@ export function HomeDashboard() {
 
 
 
+    // Role-Based Logic
+    const isManagementView = currentUserProfile?.isPrincipalInvestigator || currentUserProfile?.userRole === 'lab_manager' || currentUserProfile?.userRole === 'pi'
+
     return (
         <div className="space-y-6">
+            {/* Temporary: Force ProtocolBenchMode visibility for PI */}
+            <div className="h-[400px]">
+                <ProtocolBenchMode />
+            </div>
+
             {/* Top Section: Welcome */}
             <div className="flex flex-col md:flex-row gap-6 items-start justify-between">
                 <div>
@@ -211,464 +219,554 @@ export function HomeDashboard() {
                         Welcome back, {currentUserProfile?.firstName || 'User'}
                     </h2>
                     <p className="text-muted-foreground">
-                        Get your team in motion!
+                        {isManagementView ? "Here's the lab overview." : "Get your team in motion!"}
                     </p>
                 </div>
             </div>
 
-            {/* Daily Agenda Row (New Phase 2 Feature) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[350px]">
-                <div className="md:col-span-2 h-full">
-                    <DailyAgendaView />
-                </div>
-                <div className="h-full">
-                    <ProtocolBenchMode />
-                </div>
-            </div>
-
-            {/* Main Dashboard Grid - 3 Columns */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-
-                {/* Left Column (20%): Navigation & Status */}
-                <div className="md:col-span-3 space-y-6">
-                    {/* Quick Actions (New Phase 3) */}
-                    <Card>
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <Activity className="h-4 w-4 text-indigo-500" />
-                                Quick Actions
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-3 pt-0 grid grid-cols-2 gap-2">
-                            <div onClick={() => setMainView('equipment')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
-                                <CalendarIcon className="h-5 w-5 mb-1 text-purple-500" />
-                                <span className="text-[10px] font-medium">Book</span>
-                            </div>
-                            <div onClick={() => setMainView('projects')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
-                                <Layout className="h-5 w-5 mb-1 text-blue-500" />
-                                <span className="text-[10px] font-medium">New Project</span>
-                            </div>
-                            <div onClick={() => setMainView('eln')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
-                                <FlaskConical className="h-5 w-5 mb-1 text-emerald-500" />
-                                <span className="text-[10px] font-medium">Experiment</span>
-                            </div>
-                            <div onClick={() => setMainView('dashboard')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
-                                <BarChart3 className="h-5 w-5 mb-1 text-orange-500" />
-                                <span className="text-[10px] font-medium">Reports</span>
-                            </div>
-                            <div onClick={() => setMainView('dashboard')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
-                                <ShieldAlert className="h-5 w-5 mb-1 text-red-500" />
-                                <span className="text-[10px] font-medium">Safety</span>
-                            </div>
-                            <div onClick={() => setMainView('samples')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
-                                <TestTube className="h-5 w-5 mb-1 text-pink-500" />
-                                <span className="text-[10px] font-medium">Samples</span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                    {/* Experiments Widget */}
-                    <Card className="h-[240px] flex flex-col">
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <FlaskConical className="h-4 w-4 text-emerald-500" />
-                                Experiments
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-1">
-                                    {elnExperiments.length > 0 ? (
-                                        elnExperiments.slice(0, 5).map(experiment => (
-                                            <DashboardTile
-                                                key={experiment.id}
-                                                href={`/eln?experimentId=${experiment.id}`}
-                                                className="p-2 text-sm border-b last:border-0 rounded-none hover:bg-muted/50"
-                                            >
-                                                <div className="font-medium truncate">{experiment.title}</div>
-                                                {experiment.status && (
-                                                    <Badge variant="outline" className="text-[10px] mt-1 h-4">{experiment.status}</Badge>
-                                                )}
-                                            </DashboardTile>
-                                        ))
-                                    ) : (
-                                        <div className="text-xs text-muted-foreground text-center py-4">No active experiments</div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* Whiteboards Widget */}
-                    <Card className="h-[200px] flex flex-col">
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <Presentation className="h-4 w-4 text-blue-500" />
-                                Whiteboards
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-1">
-                                    {whiteboards.length > 0 ? (
-                                        whiteboards.slice(0, 3).map(whiteboard => (
-                                            <DashboardTile
-                                                key={whiteboard.id}
-                                                href={`/whiteboard?whiteboardId=${whiteboard.id}`}
-                                                className="p-2 text-sm border-b last:border-0 rounded-none hover:bg-muted/50"
-                                            >
-                                                <div className="font-medium truncate">{whiteboard.name}</div>
-                                                <div className="text-[10px] text-muted-foreground">
-                                                    {whiteboard.shapes?.length || 0} shapes
-                                                </div>
-                                            </DashboardTile>
-                                        ))
-                                    ) : (
-                                        <div className="text-xs text-muted-foreground text-center py-4">No whiteboards</div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* Team Widget (Moved from Right) */}
-                    <Card className="h-[360px] flex flex-col">
-                        <CardHeader className="pb-2 py-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <Users className="h-4 w-4 text-amber-500" />
-                                    Team
-                                </CardTitle>
-                                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setMainView('people')}>
-                                    View All
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-2">
-                                    {labProfiles.length > 0 ? (
-                                        labProfiles.map(profile => {
-                                            const presence = getPresenceStatus(profile.id)
-                                            return (
-                                                <div key={profile.id} className="p-2 border rounded-lg bg-card/60 flex items-center gap-2">
-                                                    <Avatar className="h-8 w-8">
-                                                        <AvatarFallback className="text-xs">{getInitials(profile.firstName, profile.lastName)}</AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="font-medium text-xs truncate">
-                                                            {profile.firstName} {profile.lastName}
-                                                        </div>
-                                                        <Badge variant="outline" className={`text-[9px] h-4 px-1 ${presence.className} border-0`}>
-                                                            {presence.label}
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })
-                                    ) : (
-                                        <div className="text-xs text-muted-foreground text-center py-4">No team members</div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* Equipment Health (Moved from Bottom) */}
-                    <Card>
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <Wrench className="h-4 w-4 text-slate-500" />
-                                Equipment Health
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-3 pt-0">
-                            <div className="space-y-2">
-                                {equipment.slice(0, 3).map(eq => {
-                                    const lastMaint = new Date(eq.lastMaintained)
-                                    const nextMaint = new Date(lastMaint)
-                                    nextMaint.setDate(nextMaint.getDate() + eq.maintenanceDays)
-                                    const daysUntil = Math.ceil((nextMaint.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-                                    const isOperational = daysUntil > 0
-
-                                    return (
-                                        <div key={eq.id} className="flex items-center justify-between text-xs border p-2 rounded">
-                                            <span className="truncate max-w-[120px]">{eq.name}</span>
-                                            <div className={`h-2 w-2 rounded-full ${isOperational ? 'bg-green-500' : 'bg-red-500'}`} />
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Center Column (60%): Active Work */}
-                <div className="md:col-span-6 space-y-6">
-
-                    {/* Risk Widget (New Phase 2) */}
-                    <DashboardRiskWidget projects={projects} tasks={dayToDayTasks} orders={orders} />
-
-                    {/* Projects Grid */}
-                    <Card>
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <Layout className="h-4 w-4 text-indigo-500" />
-                                Projects
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                {projects.slice(0, 4).map(project => (
-                                    <div
-                                        key={project.id}
-                                        className={`p-4 border rounded-xl transition-all cursor-pointer ${selectedProject?.id === project.id
-                                            ? 'bg-indigo-50 border-indigo-200 shadow-md ring-1 ring-indigo-200'
-                                            : 'bg-card hover:bg-accent/50 hover:shadow-sm'
-                                            }`}
-                                        onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
-                                    >
-                                        <div className="font-bold text-lg truncate mb-1">{project.name}</div>
-                                        <div className="flex justify-between items-center text-xs text-muted-foreground mb-3">
-                                            <span>{project.status || 'Active'}</span>
-                                            <span>{project.progress || 0}%</span>
-                                        </div>
-                                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full ${selectedProject?.id === project.id ? 'bg-indigo-600' : 'bg-indigo-500'}`}
-                                                style={{ width: `${project.progress || 0}%` }}
-                                            />
-                                        </div>
-                                        <div className="mt-3 flex justify-end">
-                                            <Link href={`/projects/${project.id}/explorer`} className="text-xs text-indigo-600 hover:underline">
-                                                View Project
-                                            </Link>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Task Kanban Board */}
-                    <div className="flex gap-4">
-                        <div className="flex-1">
-                            <Card className="h-full">
-                                <CardHeader className="pb-2 py-3 flex flex-row items-center justify-between">
+            {/* MANAGEMENT VIEW LAYOUT (PI / Lab Manager) */}
+            {isManagementView && (
+                <>
+                    {/* Row 1: High Level Metrics */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[350px]">
+                        {/* Lab Pulse (Left) */}
+                        <div className="h-full">
+                            <LabPulseWidget />
+                        </div>
+                        {/* Risk Widget (Center) */}
+                        <div className="h-full">
+                            <DashboardRiskWidget projects={projects} tasks={dayToDayTasks} orders={orders} />
+                        </div>
+                        {/* Team Widget (Right) */}
+                        <Card className="h-full flex flex-col">
+                            <CardHeader className="pb-2 py-3">
+                                <div className="flex items-center justify-between">
                                     <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                        <Activity className="h-4 w-4 text-orange-500" />
-                                        Task Board
+                                        <Users className="h-4 w-4 text-amber-500" />
+                                        Team Status
                                     </CardTitle>
-                                    <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setMainView('mytasks')}>
-                                        Full Board
+                                    <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setMainView('people')}>
+                                        View All
                                     </Button>
-                                </CardHeader>
-                                <CardContent className="p-0">
-                                    <div className="p-4 pt-0">
-                                        <TaskKanban
-                                            tasks={dayToDayTasks}
-                                            onTaskClick={setSelectedTask}
-                                            onTaskUpdate={handleTaskUpdate}
-                                        />
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                        {/* Task Details Panel (Overlay) */}
-                        {selectedTask && (
-                            <TaskDetailsPanel
-                                task={selectedTask}
-                                workpackageId={selectedTask.workpackageId || ''}
-                                onClose={() => setSelectedTask(null)}
-                                onSave={handleTaskUpdate}
-                                onDelete={handleTaskDeleteWrapper}
-                                availablePeople={allProfiles}
-                            />
-                        )}
-                    </div>
-
-                    {/* Embedded Project Details (Miller Column) */}
-                    {selectedProject && (
-                        <div className="relative animate-in fade-in slide-in-from-top-4 duration-300">
-                            {/* Visual connector arrow */}
-                            <div className="flex justify-center -mt-6 mb-2">
-                                <div className="bg-indigo-600 text-white p-1 rounded-full shadow-lg z-10">
-                                    <ChevronDown className="h-6 w-6" />
                                 </div>
-                            </div>
-
-                            <Card className="border-2 border-indigo-100 shadow-lg overflow-hidden">
-                                <CardHeader className="bg-indigo-50/50 pb-2 py-3 border-b">
-                                    <div className="flex justify-between items-center">
-                                        <CardTitle className="text-sm font-medium flex items-center gap-2 text-indigo-900">
-                                            <Layout className="h-4 w-4" />
-                                            Project Details: {selectedProject.name}
-                                        </CardTitle>
-                                        <Button variant="ghost" size="sm" onClick={() => setSelectedProject(null)}>Close</Button>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="p-0 h-[600px]">
-                                    {/* Embed the Miller Column View */}
-                                    <ProjectExplorerView project={selectedProject} />
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
-                </div>
-
-                {/* Right Column (20%): Resources */}
-                <div className="md:col-span-3 space-y-6">
-                    {/* Lab Pulse Widget (NEW) */}
-                    <div className="h-[350px]">
-                        <LabPulseWidget />
-                    </div>
-
-                    {/* Weekly Digest (New Phase 2) */}
-                    {currentUserProfile && (
-                        <div className="h-[400px]">
-                            <MyWeeklyDigest
-                                userId={currentUserProfile.id}
-                                tasks={dayToDayTasks}
-                                bookings={userBookings}
-                                events={events}
-                            />
-                        </div>
-                    )}
-
-                    {/* Today Overview Widget */}
-                    <TodayOverview />
-
-                    {/* Upcoming Events Widget */}
-                    <Card className="h-[300px] flex flex-col">
-                        <CardHeader className="pb-2 py-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                    <CalendarIcon className="h-4 w-4 text-rose-500" />
-                                    Upcoming Events
-                                </CardTitle>
-                                <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setMainView('calendar')}>
-                                    View Calendar
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-2">
-                                    {events && events.length > 0 ? (
-                                        events
-                                            .filter(e => new Date(e.start) >= new Date())
-                                            .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-                                            .slice(0, 5)
-                                            .map(event => (
-                                                <div key={event.id} className="p-2 border rounded-md text-sm bg-muted/20">
-                                                    <div className="font-medium truncate">{event.title}</div>
-                                                    <div className="text-xs text-muted-foreground mt-1 flex justify-between">
-                                                        <span>{format(new Date(event.start), 'MMM d, HH:mm')}</span>
-                                                        <Badge variant="outline" className="text-[9px] h-4 px-1 border-0 bg-white/50">
-                                                            {event.type}
-                                                        </Badge>
+                            </CardHeader>
+                            <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                                <ScrollArea className="h-full">
+                                    <div className="space-y-2">
+                                        {labProfiles.length > 0 ? (
+                                            labProfiles.map(profile => {
+                                                const presence = getPresenceStatus(profile.id)
+                                                return (
+                                                    <div key={profile.id} className="p-2 border rounded-lg bg-card/60 flex items-center gap-2">
+                                                        <Avatar className="h-8 w-8">
+                                                            <AvatarFallback className="text-xs">{getInitials(profile.firstName, profile.lastName)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-medium text-xs truncate">
+                                                                {profile.firstName} {profile.lastName}
+                                                            </div>
+                                                            <Badge variant="outline" className={`text-[9px] h-4 px-1 ${presence.className} border-0`}>
+                                                                {presence.label}
+                                                            </Badge>
+                                                        </div>
                                                     </div>
+                                                )
+                                            })
+                                        ) : (
+                                            <div className="text-xs text-muted-foreground text-center py-4">No team members</div>
+                                        )}
+                                    </div>
+                                </ScrollArea>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Row 2: Projects & Inventory */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                        {/* Projects (8 cols) */}
+                        <div className="md:col-span-8">
+                            <Card>
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <Layout className="h-4 w-4 text-indigo-500" />
+                                        Active Projects
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {projects.slice(0, 4).map(project => (
+                                            <div
+                                                key={project.id}
+                                                className={`p-4 border rounded-xl transition-all cursor-pointer ${selectedProject?.id === project.id
+                                                    ? 'bg-indigo-50 border-indigo-200 shadow-md ring-1 ring-indigo-200'
+                                                    : 'bg-card hover:bg-accent/50 hover:shadow-sm'
+                                                    }`}
+                                                onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
+                                            >
+                                                <div className="font-bold text-lg truncate mb-1">{project.name}</div>
+                                                <div className="flex justify-between items-center text-xs text-muted-foreground mb-3">
+                                                    <span>{project.status || 'Active'}</span>
+                                                    <span>{project.progress || 0}%</span>
                                                 </div>
-                                            ))
-                                    ) : (
-                                        <div className="text-xs text-muted-foreground text-center py-4">No upcoming events</div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* Bookings Widget */}
-                    <Card className="h-[300px] flex flex-col">
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <CalendarIcon className="h-4 w-4 text-purple-500" />
-                                Bookings
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-2">
-                                    {userBookings.slice(0, 5).map(booking => (
-                                        <div key={booking.id} className="p-2 border rounded-md text-sm bg-muted/20">
-                                            <div className="font-medium truncate">{booking.equipmentName}</div>
-                                            <div className="text-xs text-muted-foreground mt-1 flex justify-between">
-                                                <span>{safeFormatTime(booking.startTime)}</span>
-                                                <span>{safeFormatTime(booking.endTime)}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {userBookings.length === 0 && (
-                                        <div className="text-xs text-muted-foreground text-center py-4">No bookings today</div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* Inventory Widget */}
-                    <Card className="h-[300px] flex flex-col">
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <Package className="h-4 w-4 text-blue-500" />
-                                Inventory
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-2">
-                                    {orders
-                                        .filter(o => o.status === 'to-order' || o.status === 'ordered')
-                                        .slice(0, 5)
-                                        .map(order => (
-                                            <div key={order.id} className="p-2 border rounded-md text-sm flex justify-between items-center bg-muted/20">
-                                                <div className="truncate flex-1 text-xs font-medium">{order.productName}</div>
-                                                <Badge variant="outline" className="text-[9px] h-4 px-1">{order.status}</Badge>
+                                                <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full ${selectedProject?.id === project.id ? 'bg-indigo-600' : 'bg-indigo-500'}`}
+                                                        style={{ width: `${project.progress || 0}%` }}
+                                                    />
+                                                </div>
+                                                <div className="mt-3 flex justify-end">
+                                                    <Link href={`/projects/${project.id}/explorer`} className="text-xs text-indigo-600 hover:underline">
+                                                        View Project
+                                                    </Link>
+                                                </div>
                                             </div>
                                         ))}
-                                    {orders.length === 0 && (
-                                        <div className="text-xs text-muted-foreground text-center py-4">No pending orders</div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* Knowledge Graph (Research Boards) */}
-                    <Card className="h-[260px] flex flex-col">
-                        <CardHeader className="pb-2 py-3">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <BrainCircuit className="h-4 w-4 text-indigo-500" />
-                                Knowledge Graph
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden p-3 pt-0">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-2">
-                                    {researchBoards.slice(0, 5).map(board => (
-                                        <div
-                                            key={board.id}
-                                            onClick={() => setMainView('research')}
-                                            className="w-full text-left p-2 border rounded-md text-sm hover:bg-accent transition-colors cursor-pointer"
-                                        >
-                                            <div className="font-medium truncate text-xs">{board.name}</div>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="secondary" className="text-[9px] h-4 px-1">
-                                                    {board.ownerName}
-                                                </Badge>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            {/* Embedded Project Details */}
+                            {selectedProject && (
+                                <div className="mt-6 relative animate-in fade-in slide-in-from-top-4 duration-300">
+                                    <div className="flex justify-center -mt-6 mb-2">
+                                        <div className="bg-indigo-600 text-white p-1 rounded-full shadow-lg z-10">
+                                            <ChevronDown className="h-6 w-6" />
+                                        </div>
+                                    </div>
+                                    <Card className="border-2 border-indigo-100 shadow-lg overflow-hidden">
+                                        <CardHeader className="bg-indigo-50/50 pb-2 py-3 border-b">
+                                            <div className="flex justify-between items-center">
+                                                <CardTitle className="text-sm font-medium flex items-center gap-2 text-indigo-900">
+                                                    <Layout className="h-4 w-4" />
+                                                    Project Details: {selectedProject.name}
+                                                </CardTitle>
+                                                <Button variant="ghost" size="sm" onClick={() => setSelectedProject(null)}>Close</Button>
                                             </div>
-                                        </div>
-                                    ))}
-                                    {researchBoards.length === 0 && (
-                                        <div className="text-xs text-muted-foreground text-center py-4">
-                                            No graphs yet
-                                        </div>
-                                    )}
+                                        </CardHeader>
+                                        <CardContent className="p-0 h-[600px]">
+                                            <ProjectExplorerView project={selectedProject} />
+                                        </CardContent>
+                                    </Card>
                                 </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
+                            )}
+
+                            {/* Protocol Bench Mode (Added for PI Visibility) */}
+                            <div className="mt-6 h-[400px]">
+                                <ProtocolBenchMode />
+                            </div>
+                        </div>
+
+                        {/* Inventory & Equipment (4 cols) */}
+                        <div className="md:col-span-4 space-y-6">
+                            {/* Equipment Health */}
+                            <Card>
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <Wrench className="h-4 w-4 text-slate-500" />
+                                        Equipment Health
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-3 pt-0">
+                                    <div className="space-y-2">
+                                        {equipment.slice(0, 5).map(eq => {
+                                            const lastMaint = new Date(eq.lastMaintained)
+                                            const nextMaint = new Date(lastMaint)
+                                            nextMaint.setDate(nextMaint.getDate() + eq.maintenanceDays)
+                                            const daysUntil = Math.ceil((nextMaint.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+                                            const isOperational = daysUntil > 0
+
+                                            return (
+                                                <div key={eq.id} className="flex items-center justify-between text-xs border p-2 rounded">
+                                                    <span className="truncate max-w-[120px]">{eq.name}</span>
+                                                    <div className={`h-2 w-2 rounded-full ${isOperational ? 'bg-green-500' : 'bg-red-500'}`} />
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Inventory Widget */}
+                            <Card className="h-[300px] flex flex-col">
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <Package className="h-4 w-4 text-blue-500" />
+                                        Inventory Requests
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                                    <ScrollArea className="h-full">
+                                        <div className="space-y-2">
+                                            {orders
+                                                .filter(o => o.status === 'to-order' || o.status === 'ordered')
+                                                .slice(0, 10)
+                                                .map(order => (
+                                                    <div key={order.id} className="p-2 border rounded-md text-sm flex justify-between items-center bg-muted/20">
+                                                        <div className="truncate flex-1 text-xs font-medium">{order.productName}</div>
+                                                        <Badge variant="outline" className="text-[9px] h-4 px-1">{order.status}</Badge>
+                                                    </div>
+                                                ))}
+                                            {orders.length === 0 && (
+                                                <div className="text-xs text-muted-foreground text-center py-4">No pending orders</div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* RESEARCHER VIEW LAYOUT (Default) */}
+            {!isManagementView && (
+                <>
+                    {/* Daily Agenda Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[350px]">
+                        <div className="md:col-span-2 h-full">
+                            <DailyAgendaView />
+                        </div>
+                        <div className="h-full flex flex-col gap-4">
+                            {/* Low Stock Alert Widget */}
+                            <Card className="flex-1 border-orange-200 bg-orange-50/30">
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-800">
+                                        <ShieldAlert className="h-4 w-4" />
+                                        Attention Needed
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-3 pt-0">
+                                    <ScrollArea className="h-full max-h-[120px]">
+                                        <div className="space-y-2">
+                                            {/* Low Stock Items */}
+                                            {orders.filter(o => o.status === 'to-order').length > 0 && (
+                                                <div className="flex items-center justify-between text-xs p-2 bg-white rounded border border-orange-100">
+                                                    <span className="font-medium text-orange-700">Orders to place</span>
+                                                    <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-200">
+                                                        {orders.filter(o => o.status === 'to-order').length}
+                                                    </Badge>
+                                                </div>
+                                            )}
+                                            {/* Overdue Tasks */}
+                                            {dayToDayTasks.filter(t => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date()).length > 0 && (
+                                                <div className="flex items-center justify-between text-xs p-2 bg-white rounded border border-red-100">
+                                                    <span className="font-medium text-red-700">Overdue Tasks</span>
+                                                    <Badge variant="secondary" className="bg-red-100 text-red-700 hover:bg-red-200">
+                                                        {dayToDayTasks.filter(t => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date()).length}
+                                                    </Badge>
+                                                </div>
+                                            )}
+                                            {orders.filter(o => o.status === 'to-order').length === 0 && dayToDayTasks.filter(t => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date()).length === 0 && (
+                                                <div className="text-xs text-muted-foreground text-center py-2">
+                                                    No urgent alerts
+                                                </div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
+                            {/* Quick Actions (Moved here for better visibility) */}
+                            <Card className="flex-1">
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <Activity className="h-4 w-4 text-indigo-500" />
+                                        Quick Actions
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-3 pt-0 grid grid-cols-2 gap-2">
+                                    <div onClick={() => setMainView('equipment')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                        <CalendarIcon className="h-4 w-4 mb-1 text-purple-500" />
+                                        <span className="text-[10px] font-medium">Book</span>
+                                    </div>
+                                    <div onClick={() => setMainView('eln')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
+                                        <FlaskConical className="h-4 w-4 mb-1 text-emerald-500" />
+                                        <span className="text-[10px] font-medium">Exp</span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+
+                    {/* Main Dashboard Grid - 3 Columns */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+
+                        {/* Left Column (20%): Recent Work */}
+                        <div className="md:col-span-3 space-y-6">
+                            {/* Recent Work (Tabbed) */}
+                            <Card className="h-[460px] flex flex-col">
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <BrainCircuit className="h-4 w-4 text-slate-500" />
+                                        Recent Work
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex-1 overflow-hidden p-0">
+                                    <div className="flex flex-col h-full">
+                                        <div className="flex border-b">
+                                            <button className="flex-1 py-2 text-xs font-medium border-b-2 border-emerald-500 text-emerald-700 bg-emerald-50/50">
+                                                Experiments
+                                            </button>
+                                            <button className="flex-1 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+                                                Whiteboards
+                                            </button>
+                                        </div>
+                                        <ScrollArea className="flex-1 p-3">
+                                            <div className="space-y-1">
+                                                {elnExperiments.length > 0 ? (
+                                                    elnExperiments.slice(0, 8).map(experiment => (
+                                                        <DashboardTile
+                                                            key={experiment.id}
+                                                            href={`/eln?experimentId=${experiment.id}`}
+                                                            className="p-2 text-sm border-b last:border-0 rounded-none hover:bg-muted/50"
+                                                        >
+                                                            <div className="font-medium truncate">{experiment.title}</div>
+                                                            <div className="flex justify-between items-center mt-1">
+                                                                <span className="text-[10px] text-muted-foreground">{safeFormatDate(experiment.updatedAt)}</span>
+                                                                {experiment.status && (
+                                                                    <Badge variant="outline" className="text-[9px] h-4">{experiment.status}</Badge>
+                                                                )}
+                                                            </div>
+                                                        </DashboardTile>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-xs text-muted-foreground text-center py-4">No active experiments</div>
+                                                )}
+                                            </div>
+                                        </ScrollArea>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Center Column (60%): Active Work */}
+                        <div className="md:col-span-6 space-y-6">
+
+                            {/* Task Kanban Board */}
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <Card className="h-full">
+                                        <CardHeader className="pb-2 py-3 flex flex-row items-center justify-between">
+                                            <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                                <Activity className="h-4 w-4 text-orange-500" />
+                                                Task Board
+                                            </CardTitle>
+                                            <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setMainView('mytasks')}>
+                                                Full Board
+                                            </Button>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <div className="p-4 pt-0">
+                                                <TaskKanban
+                                                    tasks={dayToDayTasks}
+                                                    onTaskClick={setSelectedTask}
+                                                    onTaskUpdate={handleTaskUpdate}
+                                                />
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                                {/* Task Details Panel (Overlay) */}
+                                {selectedTask && (
+                                    <TaskDetailsPanel
+                                        task={selectedTask}
+                                        workpackageId={selectedTask.workpackageId || ''}
+                                        onClose={() => setSelectedTask(null)}
+                                        onSave={handleTaskUpdate}
+                                        onDelete={handleTaskDeleteWrapper}
+                                        availablePeople={allProfiles}
+                                    />
+                                )}
+                            </div>
+
+                            {/* Projects Grid (Smaller for Researcher) */}
+                            <Card>
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <Layout className="h-4 w-4 text-indigo-500" />
+                                        My Projects
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {projects.slice(0, 2).map(project => (
+                                            <div
+                                                key={project.id}
+                                                className={`p-4 border rounded-xl transition-all cursor-pointer ${selectedProject?.id === project.id
+                                                    ? 'bg-indigo-50 border-indigo-200 shadow-md ring-1 ring-indigo-200'
+                                                    : 'bg-card hover:bg-accent/50 hover:shadow-sm'
+                                                    }`}
+                                                onClick={() => setSelectedProject(selectedProject?.id === project.id ? null : project)}
+                                            >
+                                                <div className="font-bold text-lg truncate mb-1">{project.name}</div>
+                                                <div className="flex justify-between items-center text-xs text-muted-foreground mb-3">
+                                                    <span>{project.status || 'Active'}</span>
+                                                    <span>{project.progress || 0}%</span>
+                                                </div>
+                                                <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full ${selectedProject?.id === project.id ? 'bg-indigo-600' : 'bg-indigo-500'}`}
+                                                        style={{ width: `${project.progress || 0}%` }}
+                                                    />
+                                                </div>
+                                                <div className="mt-3 flex justify-end">
+                                                    <Link href={`/projects/${project.id}/explorer`} className="text-xs text-indigo-600 hover:underline">
+                                                        View Project
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                            {/* Embedded Project Details (Miller Column) */}
+                            {selectedProject && (
+                                <div className="mt-6 relative animate-in fade-in slide-in-from-top-4 duration-300">
+                                    <div className="flex justify-center -mt-6 mb-2">
+                                        <div className="bg-indigo-600 text-white p-1 rounded-full shadow-lg z-10">
+                                            <ChevronDown className="h-6 w-6" />
+                                        </div>
+                                    </div>
+                                    <Card className="border-2 border-indigo-100 shadow-lg overflow-hidden">
+                                        <CardHeader className="bg-indigo-50/50 pb-2 py-3 border-b">
+                                            <div className="flex justify-between items-center">
+                                                <CardTitle className="text-sm font-medium flex items-center gap-2 text-indigo-900">
+                                                    <Layout className="h-4 w-4" />
+                                                    Project Details: {selectedProject.name}
+                                                </CardTitle>
+                                                <Button variant="ghost" size="sm" onClick={() => setSelectedProject(null)}>Close</Button>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="p-0 h-[600px]">
+                                            <ProjectExplorerView project={selectedProject} />
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            )}
+
+                        </div>
+
+                        {/* Right Column (20%): Resources */}
+                        <div className="md:col-span-3 space-y-6">
+                            {/* Weekly Digest */}
+                            {currentUserProfile && (
+                                <div className="h-[400px]">
+                                    <MyWeeklyDigest
+                                        userId={currentUserProfile.id}
+                                        tasks={dayToDayTasks}
+                                        bookings={userBookings}
+                                        events={events}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Today Overview Widget */}
+                            <TodayOverview />
+
+                            {/* Upcoming Events Widget */}
+                            <Card className="h-[300px] flex flex-col">
+                                <CardHeader className="pb-2 py-3">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                            <CalendarIcon className="h-4 w-4 text-rose-500" />
+                                            Upcoming Events
+                                        </CardTitle>
+                                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setMainView('calendar')}>
+                                            View Calendar
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                                    <ScrollArea className="h-full">
+                                        <div className="space-y-2">
+                                            {events && events.length > 0 ? (
+                                                events
+                                                    .filter(e => new Date(e.start) >= new Date())
+                                                    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+                                                    .slice(0, 5)
+                                                    .map(event => (
+                                                        <div key={event.id} className="p-2 border rounded-md text-sm bg-muted/20">
+                                                            <div className="font-medium truncate">{event.title}</div>
+                                                            <div className="text-xs text-muted-foreground mt-1 flex justify-between">
+                                                                <span>{format(new Date(event.start), 'MMM d, HH:mm')}</span>
+                                                                <Badge variant="outline" className="text-[9px] h-4 px-1 border-0 bg-white/50">
+                                                                    {event.type}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                            ) : (
+                                                <div className="text-xs text-muted-foreground text-center py-4">No upcoming events</div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
+
+                            {/* Bookings Widget */}
+                            <Card className="h-[300px] flex flex-col">
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <CalendarIcon className="h-4 w-4 text-purple-500" />
+                                        Bookings
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                                    <ScrollArea className="h-full">
+                                        <div className="space-y-2">
+                                            {userBookings.slice(0, 5).map(booking => (
+                                                <div key={booking.id} className="p-2 border rounded-md text-sm bg-muted/20">
+                                                    <div className="font-medium truncate">{booking.equipmentName}</div>
+                                                    <div className="text-xs text-muted-foreground mt-1 flex justify-between">
+                                                        <span>{safeFormatTime(booking.startTime)}</span>
+                                                        <span>{safeFormatTime(booking.endTime)}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {userBookings.length === 0 && (
+                                                <div className="text-xs text-muted-foreground text-center py-4">No bookings today</div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
+
+                            {/* Knowledge Graph (Research Boards) */}
+                            <Card className="h-[260px] flex flex-col">
+                                <CardHeader className="pb-2 py-3">
+                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                                        <BrainCircuit className="h-4 w-4 text-indigo-500" />
+                                        Knowledge Graph
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="flex-1 overflow-hidden p-3 pt-0">
+                                    <ScrollArea className="h-full">
+                                        <div className="space-y-2">
+                                            {researchBoards.slice(0, 5).map(board => (
+                                                <div
+                                                    key={board.id}
+                                                    onClick={() => setMainView('research')}
+                                                    className="w-full text-left p-2 border rounded-md text-sm hover:bg-accent transition-colors cursor-pointer"
+                                                >
+                                                    <div className="font-medium truncate text-xs">{board.name}</div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Badge variant="secondary" className="text-[9px] h-4 px-1">
+                                                            {board.ownerName}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {researchBoards.length === 0 && (
+                                                <div className="text-xs text-muted-foreground text-center py-4">
+                                                    No graphs yet
+                                                </div>
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     )
 }

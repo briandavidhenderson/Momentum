@@ -99,7 +99,7 @@ export function enrichDeviceSupplies(
   device: EquipmentDevice,
   inventory: InventoryItem[]
 ): EnrichedSupply[] {
-  return device.supplies
+  return (device.supplies || [] as EquipmentSupply[])
     .map(s => enrichSupply(s, inventory))
     .filter((s): s is EnrichedSupply => s !== null)
 }
@@ -166,7 +166,7 @@ export function getDeviceInventoryItems(
   device: EquipmentDevice,
   inventory: InventoryItem[]
 ): InventoryItem[] {
-  const inventoryItemIds = device.supplies.map(s => s.inventoryItemId)
+  const inventoryItemIds = (device.supplies || [] as EquipmentSupply[]).map(s => s.inventoryItemId)
   return inventory.filter(item => inventoryItemIds.includes(item.id))
 }
 
@@ -182,7 +182,7 @@ export function getDevicesUsingInventoryItem(
   devices: EquipmentDevice[]
 ): EquipmentDevice[] {
   return devices.filter(device =>
-    device.supplies.some(s => s.inventoryItemId === inventoryItemId)
+    (device.supplies || [] as EquipmentSupply[]).some(s => s.inventoryItemId === inventoryItemId)
   )
 }
 
@@ -202,7 +202,7 @@ export function calculateTotalBurnRate(
   devices: EquipmentDevice[]
 ): number {
   return devices.reduce((total, device) => {
-    const supply = device.supplies.find(s => s.inventoryItemId === inventoryItemId)
+    const supply = (device.supplies || [] as EquipmentSupply[]).find(s => s.inventoryItemId === inventoryItemId)
     return total + (supply?.burnPerWeek || 0)
   }, 0)
 }
@@ -221,7 +221,8 @@ export function validateDeviceSupplies(
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = []
 
-  device.supplies.forEach((supply, index) => {
+  const supplies = device.supplies || [] as EquipmentSupply[];
+  supplies.forEach((supply, index) => {
     // Check inventory item exists
     const item = inventory.find(i => i.id === supply.inventoryItemId)
     if (!item) {

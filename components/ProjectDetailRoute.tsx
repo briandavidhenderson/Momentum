@@ -59,7 +59,15 @@ export default function ProjectDetailRoute() {
   const project = useMemo(() => projects?.find(p => p.id === projectId), [projects, projectId])
 
   const projectWorkpackages = useMemo(
-    () => allWorkpackages.filter(wp => project?.workpackageIds.includes(wp.id)),
+    () => {
+      console.log("DEBUG: ProjectDetailRoute filtering WPs", {
+        projectId: project?.id,
+        projectWpIds: project?.workpackageIds,
+        allWpCount: allWorkpackages.length,
+        allWps: allWorkpackages.map(wp => ({ id: wp.id, pid: wp.projectId, ppid: wp.profileProjectId }))
+      });
+      return allWorkpackages.filter(wp => project?.workpackageIds?.includes(wp.id));
+    },
     [allWorkpackages, project]
   )
 

@@ -16,6 +16,7 @@ export function useAuth() {
   const [currentUserProfileId, setCurrentUserProfileId] = useState<string | null>(null);
   const [authState, setAuthState] = useState<AuthState>('auth');
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isAuthCheckComplete, setIsAuthCheckComplete] = useState(false);
   const [mounted, setMounted] = useState(false);
   const isMountedRef = useRef(true);
 
@@ -74,14 +75,19 @@ export function useAuth() {
                     setCurrentUserProfileId(profile.id);
                     setAuthState('app');
                     setIsLoadingProfile(false);
+                    setIsAuthCheckComplete(true);
                   } else if (isMountedRef.current) {
                     // Profile ID exists on user but doc missing? Fallback to setup
                     setAuthState('setup');
                     setIsLoadingProfile(false);
+                    setIsAuthCheckComplete(true);
                   }
                 }, (error) => {
                   logger.error("Error subscribing to profile", error);
-                  if (isMountedRef.current) setIsLoadingProfile(false);
+                  if (isMountedRef.current) {
+                    setIsLoadingProfile(false);
+                    setIsAuthCheckComplete(true);
+                  }
                 });
               } else {
                 // Query by userId if no profileId yet
@@ -103,13 +109,18 @@ export function useAuth() {
                     });
                     setAuthState('app');
                     setIsLoadingProfile(false);
+                    setIsAuthCheckComplete(true);
                   } else if (isMountedRef.current) {
                     setAuthState('setup');
                     setIsLoadingProfile(false);
+                    setIsAuthCheckComplete(true);
                   }
                 }, (error) => {
                   logger.error("Error subscribing to profile", error);
-                  if (isMountedRef.current) setIsLoadingProfile(false);
+                  if (isMountedRef.current) {
+                    setIsLoadingProfile(false);
+                    setIsAuthCheckComplete(true);
+                  }
                 });
               }
             };
@@ -121,10 +132,12 @@ export function useAuth() {
             // Maybe new user?
             setAuthState('setup');
             setIsLoadingProfile(false);
+            setIsAuthCheckComplete(true);
           }
         } catch (error) {
           logger.error('Error fetching user data', error);
           setIsLoadingProfile(false);
+          setIsAuthCheckComplete(true);
         }
       } else {
         if (isMountedRef.current) {
@@ -134,6 +147,7 @@ export function useAuth() {
           setCurrentUserProfileId(null);
           setAuthState('auth');
           setIsLoadingProfile(false);
+          setIsAuthCheckComplete(true);
         }
       }
     });
@@ -190,6 +204,7 @@ export function useAuth() {
     currentUserProfileId,
     authState,
     isLoadingProfile,
+    isAuthCheckComplete,
     mounted,
     handleLogin,
     handleSignup,

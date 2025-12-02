@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { QRCodeScanner } from "./QRCodeScanner"
 import { NotificationBell } from "./notifications/NotificationBell"
+import { useAppContext } from "@/lib/AppContext"
 
 // Type definitions
 type SubItem = {
@@ -134,6 +135,7 @@ export function TopModuleNavigation({
 }: TopModuleNavigationProps) {
   const [hoveredCategory, setHoveredCategory] = React.useState<string | null>(null)
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null)
+  const { setCommandPaletteOpen } = useAppContext()
 
   const handleCategoryClick = (categoryId: string) => {
     if (selectedCategory === categoryId) {
@@ -251,7 +253,15 @@ export function TopModuleNavigation({
             </div>
           )
         })}
-        <div className="ml-2 flex items-center gap-1">
+
+        <div className="ml-2 flex items-center gap-1 pl-2 border-l border-slate-200">
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            title="Search (Cmd+K)"
+          >
+            <Search className="w-4 h-4" />
+          </button>
           <NotificationBell />
           <QRCodeScanner />
         </div>

@@ -39,7 +39,10 @@ import {
   PanelRight,
   LayoutDashboard,
   Trash2,
+  Mail,
 } from "lucide-react"
+import { ProjectEmailRules } from "@/components/views/ProjectEmailRules"
+import { ProjectEmailsPanel } from "@/components/views/ProjectEmailsPanel"
 import { calculateProjectHealth, getHealthStatusColor, ProjectHealth } from "@/lib/utils/projectHealth"
 import { formatCurrency, getBudgetStatusColor, ProjectBudgetSummary } from "@/lib/utils/budgetCalculation"
 import { useAppContext } from "@/lib/AppContext"
@@ -110,6 +113,11 @@ export function ProjectDetailPage({
   onUpdateDeliverableTasks,
 }: ProjectDetailPageProps) {
   const { toast } = useToast()
+
+  useEffect(() => {
+    console.log("DEBUG: ProjectDetailPage project changed", JSON.stringify({ id: project.id, labId: project.labId, keys: Object.keys(project) }));
+  }, [project]);
+
   const [workpackageDialogOpen, setWorkpackageDialogOpen] = useState(false)
   const [selectedWorkpackageDialog, setSelectedWorkpackageDialog] = useState<Workpackage | null>(null)
   const [workpackageDialogMode, setWorkpackageDialogMode] = useState<"create" | "edit" | "view">("view")
@@ -136,6 +144,7 @@ export function ProjectDetailPage({
     resources: false,
     files: false,
     activity: false,
+    emails: false,
   })
   const [newDeliverableNames, setNewDeliverableNames] = useState<Record<string, string>>({})
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([])
@@ -531,8 +540,15 @@ export function ProjectDetailPage({
   }
 
   const handleSaveWorkpackage = (workpackageData: Partial<Workpackage>) => {
+    console.log("DEBUG: handleSaveWorkpackage CALLED. Project state:", JSON.stringify({ id: project.id, labId: project.labId }));
+
     if (workpackageDialogMode === "create" && onCreateWorkpackage) {
-      onCreateWorkpackage(workpackageData)
+      const dataWithLabId = {
+        ...workpackageData,
+        labId: project.labId
+      };
+      console.log("DEBUG: handleSaveWorkpackage creating with", JSON.stringify(dataWithLabId));
+      onCreateWorkpackage(dataWithLabId)
     } else if (workpackageDialogMode === "edit" && selectedWorkpackageDialog && onUpdateWorkpackage) {
       onUpdateWorkpackage(selectedWorkpackageDialog.id, workpackageData)
     }
@@ -1005,6 +1021,15 @@ export function ProjectDetailPage({
           >
             <Activity className="h-4 w-4" />
             Activity
+          </Button>
+          <Button
+            variant={drawerVisibility.emails ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => toggleDrawer("emails")}
+            className="gap-2"
+          >
+            <Mail className="h-4 w-4" />
+            Emails
           </Button>
           {onCreateWorkpackage && (
             <Button onClick={handleCreateWorkpackageClick} size="sm" className="gap-2">
@@ -1548,6 +1573,15 @@ export function ProjectDetailPage({
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {drawerVisibility.emails && (
+        <div className="border-b border-border bg-surface-2 px-6 py-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ProjectEmailRules projectId={project.id} />
+            <ProjectEmailsPanel projectId={project.id} />
+          </div>
         </div>
       )}
 

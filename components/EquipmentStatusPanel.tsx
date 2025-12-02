@@ -135,7 +135,7 @@ export function EquipmentStatusPanel({
     const device = devices.find(d => d.id === deviceId)
     if (!device) return
 
-    const supply = device.supplies.find(s => s.id === supplyId)
+    const supply = (device.supplies || []).find(s => s.id === supplyId)
     if (!supply) return
 
     // Enrich to get current quantity from inventory
@@ -162,7 +162,7 @@ export function EquipmentStatusPanel({
     const device = devices.find(d => d.id === checkStockItem.deviceId)
     if (!device) return
 
-    const supply = device.supplies.find(s => s.id === checkStockItem.supplyId)
+    const supply = (device.supplies || []).find(s => s.id === checkStockItem.supplyId)
     if (!supply || !supply.inventoryItemId) return
 
     const newQty = parseInt(tempStockQty)
@@ -194,12 +194,12 @@ export function EquipmentStatusPanel({
         // Re-calculate burn rate to get accurate weeks remaining
         // This logic is similar to calculateReorderSuggestions but for a single item
         const devicesUsingItem = devices.filter(d =>
-          d.supplies.some(s => s.inventoryItemId === updatedItem.id)
+          (d.supplies || []).some(s => s.inventoryItemId === updatedItem.id)
         )
 
         let totalBurnRate = 0
         devicesUsingItem.forEach(d => {
-          const s = d.supplies.find(s => s.inventoryItemId === updatedItem.id)
+          const s = (d.supplies || []).find(s => s.inventoryItemId === updatedItem.id)
           if (s) totalBurnRate += s.burnPerWeek
         })
 
@@ -304,7 +304,7 @@ export function EquipmentStatusPanel({
   // FIXED: Calculate needed qty from ORIGINAL device state, not mutated
   const handleOrderMissing = async (device: EquipmentDevice) => {
     try {
-      const missingSupplies = device.supplies.filter(supply => {
+      const missingSupplies = (device.supplies || []).filter(supply => {
         const enriched = enrichSupply(supply, inventory)
         if (!enriched) return false
         const neededQty = calculateNeededQuantity(enriched.currentQuantity || 0, supply.minQty || 1)
@@ -615,13 +615,13 @@ export function EquipmentStatusPanel({
                         <div className={`h-full rounded-full ${sColor}`} style={{ width: `${sh}%` }} />
                       </div>
                       <div className="text-[10px] text-slate-400 text-right">
-                        {device.supplies.length} items linked
+                        {(device.supplies || []).length} items linked
                       </div>
                     </div>
                   </div>
 
                   {/* Supplies List (Compact) */}
-                  {device.supplies.length > 0 && (
+                  {(device.supplies || []).length > 0 && (
                     <div className="px-5 py-3 border-t border-slate-50 bg-slate-50/50">
                       <div className="space-y-2">
                         {enrichDeviceSupplies(device, inventory).slice(0, 3).map(supply => {
@@ -653,9 +653,9 @@ export function EquipmentStatusPanel({
                             </div>
                           )
                         })}
-                        {device.supplies.length > 3 && (
+                        {(device.supplies || []).length > 3 && (
                           <div className="text-[10px] text-center text-slate-400 pt-1">
-                            + {device.supplies.length - 3} more supplies
+                            + {(device.supplies || []).length - 3} more supplies
                           </div>
                         )}
                       </div>

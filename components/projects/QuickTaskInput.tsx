@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, Loader2 } from "lucide-react"
 import { TaskCreationDialog } from "./TaskCreationDialog"
 import { useToast } from "@/components/ui/use-toast"
+import { cn } from "@/lib/utils"
 
 interface QuickTaskInputProps {
     deliverable: Deliverable
@@ -22,7 +23,10 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
     const [assigneeId, setAssigneeId] = useState<string>("")
     const [dueDate, setDueDate] = useState<string>("")
     const { currentUser, currentUserProfile } = useAuth()
-    const { handleUpdateDeliverableTasks } = useAppContext()
+    const { handleUpdateDeliverableTasks, workpackages, handleUpdateWorkpackage, handleUpdateDeliverable } = useAppContext()
+
+    // Global debug logger removed
+
 
     const addDays = (date: Date, days: number): Date => {
         const result = new Date(date)
@@ -31,7 +35,9 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
     }
 
     const createTask = async (data: Partial<ProjectTask>) => {
-        if (!currentUser || !handleUpdateDeliverableTasks) return
+        if (!currentUser) {
+            return;
+        }
 
         setIsCreating(true)
 
@@ -45,7 +51,7 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
                     : addDays(now, 2))
 
             // Build task object
-            const newTask: ProjectTask = {
+            const newTask: any = {
                 id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 name: data.name || taskName.trim(),
                 start: data.start || now,
@@ -53,6 +59,7 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
                 progress: data.progress || 0,
                 status: data.status || "not-started",
                 deliverableId: deliverable.id,
+                workpackageId: workpackageId, // Added workpackageId
                 importance: data.importance || "medium",
                 notes: data.notes || "",
                 primaryOwner: data.primaryOwner || assigneeId || (currentUserProfile?.id ? currentUserProfile.id : undefined),
@@ -61,18 +68,32 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
                 dependencies: []
             }
 
-            // Add task to deliverable
-            // We need to cast deliverable to any to access tasks if it's not HydratedDeliverable in types yet, 
-            // but ideally we should update types. For now, assuming deliverable has tasks or we fetch them?
-            // Actually, handleUpdateDeliverableTasks expects the full list.
-            // If 'deliverable' prop doesn't have tasks, we might be overwriting?
-            // 'deliverable' here is likely from 'workpackages' context which might be HydratedWorkpackage -> Deliverable.
-            // Let's assume deliverable.tasks exists if it's hydrated, or default to empty.
+            // Update Workpackage (Legacy/Current View Model)
+            const workpackage = workpackages.find(wp => wp.id === workpackageId)
+            if (workpackage && handleUpdateWorkpackage) {
+                const currentWpTasks = workpackage.tasks || []
+                await handleUpdateWorkpackage(workpackageId, {
+                    tasks: [...currentWpTasks, newTask]
+                })
+            }
 
-            const currentTasks = (deliverable as any).tasks || []
-            const updatedTasks = [...currentTasks, newTask]
+            // Update Deliverable (Linkage)
+            if (handleUpdateDeliverable) {
+                const currentDelivTaskIds = deliverable.projectTaskIds || []
+                await handleUpdateDeliverable(deliverable.id, {
+                    projectTaskIds: [...currentDelivTaskIds, newTask.id]
+                })
+            }
 
-            await handleUpdateDeliverableTasks(deliverable.id, updatedTasks)
+            // Also try the original method just in case, but catch error
+            if (handleUpdateDeliverableTasks) {
+                try {
+                    const currentTasks = (deliverable as any).tasks || []
+                    await handleUpdateDeliverableTasks(deliverable.id, [...currentTasks, newTask])
+                } catch (e) {
+                    console.warn("Legacy update failed, ignoring", e)
+                }
+            }
 
             // Clear input
             setTaskName("")
@@ -99,6 +120,8 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
         setDueDate("")
     }
 
+
+
     const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter") {
             if (e.shiftKey) {
@@ -114,18 +137,21 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
     }
 
     const handleFullDialogCreate = async (taskData: Partial<ProjectTask> & { deliverableId: string }) => {
+
         await createTask(taskData)
         setShowFullDialog(false)
     }
 
     return (
-        <>
-            <div className="flex items-center gap-2">
+        <div className="space-y-3">
+            {/* DEBUG OVERLAY REMOVED */}
+
+            <div className="flex items-center gap-2 w-full">
                 <Input
                     value={taskName}
                     onChange={(e) => setTaskName(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Add a task... (Enter to create, Shift+Enter for details)"
+                    placeholder="Add a task..."
                     className="flex-1 text-sm h-9"
                     disabled={isCreating}
                 />
@@ -171,6 +197,6 @@ export function QuickTaskInput({ deliverable, workpackageId, availableOwners = [
                     availablePeople={availableOwners}
                 />
             )}
-        </>
+        </div>
     )
 }

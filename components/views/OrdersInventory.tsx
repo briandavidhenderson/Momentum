@@ -71,6 +71,13 @@ export function OrdersInventory() {
     handleDeleteInventoryItem,
   } = useOrders()
 
+  useEffect(() => {
+    console.log("OrdersInventory: Inventory updated", {
+      count: inventory?.length,
+      profileLabId: currentUserProfile?.labId
+    })
+  }, [inventory, currentUserProfile])
+
   // Get equipment for reconciliation (linking new inventory to devices)
   // Get deliverables for displaying linked deliverable names
   const { equipment, deliverables } = useAppContext()
@@ -123,6 +130,19 @@ export function OrdersInventory() {
     const received = (orders || []).filter(o => o.status === 'received')
     return { toOrder, ordered, received }
   }, [orders])
+
+  const handleArchiveAll = async () => {
+    if (confirm('Are you sure you want to clear all received orders? This will remove them from the board but they will remain in inventory.')) {
+      const receivedOrders = ordersByStatus.received
+      for (const order of receivedOrders) {
+        await handleDeleteOrder(order.id)
+      }
+      toast({
+        title: "Orders Archived",
+        description: `Cleared ${receivedOrders.length} received orders.`,
+      })
+    }
+  }
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string)
@@ -234,6 +254,74 @@ export function OrdersInventory() {
 
   const handleSaveEdit = async (orderId: string, updates: Partial<Order>) => {
     try {
+      // Check if status is changing to 'received'
+      if (updates.status === 'received' && editingOrder?.status !== 'received') {
+        const updatedOrder = { ...editingOrder, ...updates } as Order
+
+        // Validate order before reconciliation
+        const validation = validateOrderForReconciliation(updatedOrder)
+
+        if (!validation.valid) {
+          logger.error('Order validation failed', { errors: validation.errors })
+          toast({
+            title: "Reconciliation Failed",
+            description: `Cannot reconcile order: ${validation.errors.join(', ')}`,
+            variant: "destructive",
+          })
+          return // Stop save if validation fails
+        }
+
+        // Reconcile with existing inventory
+        try {
+          const result = reconcileReceivedOrder(
+            updatedOrder,
+            inventory || [],
+            equipment || []
+          )
+
+          if (result.action === 'CREATE') {
+            // Create new inventory item
+            await createInventoryItem({
+              ...result.inventoryItem,
+              createdBy: currentUserProfile?.id || 'system',
+            })
+            if (result.message) logger.info(result.message)
+            toast({
+              title: "Inventory Item Created",
+              description: result.message,
+            })
+          } else {
+            // Update existing inventory item
+            await updateInventoryItem(result.inventoryItem.id, result.inventoryItem)
+            if (result.message) logger.info(result.message)
+            toast({
+              title: "Inventory Updated",
+              description: result.message,
+            })
+          }
+
+          // If supply was linked to a device, update the device
+          if (result.updatedDevices) {
+            for (const device of result.updatedDevices) {
+              await updateEquipment(device.id, device)
+              logger.info('Linked inventory item to device', {
+                productName: result.inventoryItem.productName,
+                deviceName: device.name,
+              })
+            }
+          }
+        } catch (error) {
+          logger.error('Failed to reconcile inventory', error)
+          toast({
+            title: "Inventory Update Failed",
+            description: "Failed to update inventory, but order status will be saved.",
+            variant: "destructive",
+          })
+          // We continue to save the order status even if inventory fails, 
+          // but we warned the user.
+        }
+      }
+
       await handleUpdateOrder(orderId, updates)
       setEditingOrder(null)
     } catch (error) {
@@ -337,6 +425,11 @@ export function OrdersInventory() {
           <p className="text-sm text-muted-foreground">
             Manage department orders and track inventory levels
           </p>
+          <div className="bg-yellow-100 p-2 mt-2 text-xs font-mono border border-yellow-300 rounded">
+            DEBUG: Inventory Count: {inventory?.length ?? 'undefined'} |
+            Lab ID: {currentUserProfile?.labId ?? 'undefined'} |
+            Profile ID: {currentUserProfile?.id ?? 'undefined'}
+          </div>
         </div>
         <div className="flex gap-2">
           {activeTab === 'orders' && (
@@ -378,6 +471,8 @@ export function OrdersInventory() {
               <Button
                 onClick={() => setShowInventoryDialog(true)}
                 className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                disabled={!currentUserProfile?.labId}
+                title={!currentUserProfile?.labId ? "Loading profile..." : "Add new inventory item"}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Item
@@ -495,6 +590,16 @@ export function OrdersInventory() {
                       <h3 className="font-semibold text-sm uppercase tracking-wide flex-1">
                         {columnStyles.title}
                       </h3>
+                      {status === 'received' && items.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleArchiveAll}
+                          className="h-6 px-2 text-[10px] bg-white/20 hover:bg-white/30 text-white border-none mr-2"
+                        >
+                          Archive All
+                        </Button>
+                      )}
                       <span className="bg-white/20 px-2.5 py-1 rounded-full text-sm font-bold">
                         {itemCount}
                       </span>

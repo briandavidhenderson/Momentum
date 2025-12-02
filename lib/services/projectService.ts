@@ -225,16 +225,26 @@ export function subscribeToMasterProjects(
   }
 
   return onSnapshot(q, (snapshot) => {
-    const projects = snapshot.docs.map(doc => {
+    const projects = snapshot.docs.map((doc, index) => {
       const data = doc.data() as MasterProject
+      if (doc.id === 'sZYoShKUAzCeYOGThApb') {
+        console.log("DEBUG: TARGET PROJECT FOUND", doc.id, "labId:", data.labId);
+        console.log("DEBUG: DATA KEYS", Object.keys(data));
+      }
+      if (index === 0) console.log("DEBUG: subscribeToMasterProjects first doc", doc.id, "labId:", data.labId);
       const { type, legacyTypeLabel } = normalizeProjectType(data)
-      return {
+      const result = {
         ...data,
+        labId: data.labId, // Explicitly add labId
         type,
         legacyTypeLabel,
         groupIds: data.groupIds || [],
         workpackageIds: data.workpackageIds || [],
       }
+      if (doc.id === 'sZYoShKUAzCeYOGThApb') {
+        console.log("DEBUG: MAPPED PROJECT", result);
+      }
+      return result
     })
     callback(projects)
   })

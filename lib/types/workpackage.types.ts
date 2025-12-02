@@ -28,6 +28,7 @@ export interface Workpackage {
   id: string
   name: string
   projectId: string           // Parent project (changed from profileProjectId)
+  labId?: string              // Lab ID for permission rules
 
   // Dates
   start: Date
@@ -54,6 +55,7 @@ export interface Workpackage {
 
   // Backward compatibility - DEPRECATED
   tasks?: Task[]             // @deprecated Use deliverableIds instead
+  profileProjectId?: string  // @deprecated Use projectId instead
 }
 
 /**

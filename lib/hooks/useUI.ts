@@ -21,6 +21,7 @@ export function useUI() {
   const [projectCreationDialogOpen, setProjectCreationDialogOpen] = useState(false);
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const handleGanttContextAction = (payload: any) => {
     // This will be handled by the individual hooks
@@ -64,6 +65,7 @@ export function useUI() {
     projectCreationDialogOpen,
     eventDialogOpen,
     editingEvent,
+    commandPaletteOpen,
     setActiveTab,
     setOrderDialogOpen,
     setEditingOrder,
@@ -79,6 +81,7 @@ export function useUI() {
     setProjectCreationDialogOpen,
     setEventDialogOpen,
     setEditingEvent,
+    setCommandPaletteOpen,
     handleGanttContextAction,
     handleDragStart,
     handleDragEnd,

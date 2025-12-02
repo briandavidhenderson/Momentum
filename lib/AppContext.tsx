@@ -43,6 +43,7 @@ type AppContextType = ReturnType<typeof useAuth> &
     allProfiles: PersonProfile[]
     people: Person[]
     authUser: ReturnType<typeof useAuth>['authUser']
+    isAuthCheckComplete: boolean
   }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -87,6 +88,7 @@ export function AppWrapper({ children }: { children: React.ReactNode }) {
     allProfiles,  // Expose profiles for components that need full profile data
     people,       // Expose people for UI components (assignee dropdowns, etc.)
     authUser: auth.authUser, // Expose raw Firebase user
+    isAuthCheckComplete: auth.isAuthCheckComplete,
   };
 
   return (

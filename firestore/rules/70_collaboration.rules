@@ -166,6 +166,33 @@
     }
 
     // ============================================================================
+    // PROTOCOL EXECUTIONS
+    // ============================================================================
+    match /protocolExecutions/{executionId} {
+      // Users can read executions in their lab or if they performed it
+      allow read: if isAuthenticated() && (
+        resource.data.performedBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create executions
+      allow create: if isAuthenticated() && request.resource.data.performedBy == request.auth.uid;
+
+      // Users can update executions they performed or if they are admin
+      allow update: if isAuthenticated() && (
+        resource.data.performedBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can delete executions they performed or if they are admin
+      allow delete: if isAuthenticated() && (
+        resource.data.performedBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
     // LAB POLLS
     // ============================================================================
     match /labPolls/{pollId} {

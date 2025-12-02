@@ -6,8 +6,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, Save, X, ArrowUp, ArrowDown, Clock } from "lucide-react"
+import { Plus, Trash2, Save, X, ArrowUp, ArrowDown, Clock, FlaskConical, Package } from "lucide-react"
 import { v4 as uuidv4 } from 'uuid'
+import { InventoryPicker } from "@/components/pickers/InventoryPicker"
+import { EquipmentPicker } from "@/components/pickers/EquipmentPicker"
+import { Badge } from "@/components/ui/badge"
 
 interface ProtocolEditorProps {
     protocol?: Protocol
@@ -27,7 +30,8 @@ export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel }: 
             instruction: "",
             phaseType: 'active',
             expectedDuration: 15,
-            requiredReagents: []
+            requiredReagents: [],
+            requiredEquipment: []
         }
         setSteps([...steps, newStep])
     }
@@ -171,6 +175,87 @@ export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel }: 
                                                         onChange={e => updateStep(step.id, { expectedDuration: parseInt(e.target.value) || 0 })}
                                                         className="pl-9"
                                                     />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Resources Section */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
+                                            <div className="space-y-2">
+                                                <Label className="flex items-center gap-2">
+                                                    <FlaskConical className="h-4 w-4" />
+                                                    Required Equipment
+                                                </Label>
+                                                <div className="space-y-2">
+                                                    {step.requiredEquipment?.map((eq, idx) => (
+                                                        <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2 rounded text-sm">
+                                                            <span className="flex-1">{eq.name}</span>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6 text-destructive"
+                                                                onClick={() => {
+                                                                    const newEq = [...(step.requiredEquipment || [])]
+                                                                    newEq.splice(idx, 1)
+                                                                    updateStep(step.id, { requiredEquipment: newEq })
+                                                                }}
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <EquipmentPicker
+                                                        onSelect={(item) => {
+                                                            const newEq = [...(step.requiredEquipment || []), { id: item.id, name: item.name }]
+                                                            updateStep(step.id, { requiredEquipment: newEq })
+                                                        }}
+                                                        placeholder="Add Equipment..."
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label className="flex items-center gap-2">
+                                                    <Package className="h-4 w-4" />
+                                                    Required Reagents
+                                                </Label>
+                                                <div className="space-y-2">
+                                                    {step.requiredReagents?.map((reagent, idx) => (
+                                                        <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2 rounded text-sm">
+                                                            <div className="flex-1">
+                                                                <div className="font-medium">{reagent.name}</div>
+                                                                <div className="text-xs text-muted-foreground">{reagent.quantity} {reagent.unit}</div>
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-6 w-6 text-destructive"
+                                                                onClick={() => {
+                                                                    const newReagents = [...(step.requiredReagents || [])]
+                                                                    newReagents.splice(idx, 1)
+                                                                    updateStep(step.id, { requiredReagents: newReagents })
+                                                                }}
+                                                            >
+                                                                <X className="h-3 w-3" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1">
+                                                            <InventoryPicker
+                                                                onSelect={(item) => {
+                                                                    const newReagents = [...(step.requiredReagents || []), {
+                                                                        id: item.id,
+                                                                        name: item.productName,
+                                                                        quantity: "1",
+                                                                        unit: item.unit || "unit"
+                                                                    }]
+                                                                    updateStep(step.id, { requiredReagents: newReagents })
+                                                                }}
+                                                                placeholder="Add Reagent..."
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

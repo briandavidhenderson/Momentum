@@ -61,6 +61,7 @@ The `firestore.rules` file is **generated**.
 *   **Build Script:** `scripts/build-rules.js`
 *   **Logic:** The script concatenates the numbered files (e.g., `00_base.rules`, `10_helpers.rules`) in order.
 *   **Action:** If you need to change a permission, find the relevant `.rules` file in `firestore/rules/`, edit it, then run `npm run build:rules`.
+*   **Note:** Updated `workpackages` read rule now checks `profileProjectId` for project‑team membership.
 
 ## 5. Pre-Modification Checklist
 
@@ -108,6 +109,10 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 | `npm run build` | Builds the Next.js frontend. | `next build` |
 | `npm run deploy:all` | The master deployment command. **Does NOT auto-build rules.** | `deploy:rules` && `deploy:functions` && `deploy:hosting` |
 
+### Environments
+*   **Production URL:** [https://momentum-a60c5.web.app](https://momentum-a60c5.web.app) - This is the "true website" and source of truth for the deployed application.
+
+
 ### The Correct Deployment Workflow
 
 1.  **Modify Code:** Make changes to `firestore/rules/*.rules`, `functions/src`, or frontend components.
@@ -116,6 +121,11 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 4.  **Deploy:** Run `npm run deploy:all`.
 
 **Pitfall:** Running `firebase deploy` directly without running `build:rules` first will deploy the *old* `firestore.rules` file, overwriting your changes.
+
+### Deployment Performance Note
+*   **Double Build:** The project uses Firebase Web Frameworks (`"webframeworks": true` in `firebase.json`). This means `firebase deploy` **automatically runs `next build`** to optimize for hosting.
+*   **Consequence:** If you run `npm run build` manually before `firebase deploy`, the app is built **twice**, significantly increasing deployment time.
+*   **Optimization:** For faster deployments, you can rely on the automatic build during deploy, or accept the double-build as a verification step.
 
 ## 3. Architecture Overview
 
@@ -165,6 +175,16 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 *   **Components:** `ProtocolBenchMode.tsx`, `ProtocolEditor.tsx`.
 *   **Scheduling:** `calendarService.ts` handles creating events for active/passive phases.
 *   **Inventory Integration:** `ResourceAvailabilityChecker.tsx` performs pre-flight checks against `InventoryItem` data.
+
+### Email Integration
+*   **Components:** `IntegrationsSettings.tsx` (Profile), `ProjectEmailRules.tsx`, `ProjectEmailsPanel.tsx` (Project).
+*   **Service:** `lib/services/emailService.ts`.
+*   **Backend:**
+    *   **OAuth:** `app/api/oauth/[provider]/route.ts` handles the auth flow for Google and Outlook.
+    *   **Sync:** `firebase/functions/src/emailSync.ts` is a Cloud Function that fetches emails based on user-defined rules.
+*   **Data Model:** `EmailIntegration` (tokens), `EmailRule` (filtering logic), `SyncedEmail` (stored messages).
+*   **Key Workflow:** User connects account -> User adds rule to project -> Sync function runs -> Emails appear in project.
+*   **Spec Reference:** See `email_integration_spec_for_momentum.md` for detailed architecture.
 
 ## 4. Key Workflows & State
 
@@ -274,9 +294,52 @@ Before generating code or running commands, ask:
     }, [loadData]);
     ```
 
-### Routing & View State
-*   **The Problem:** Scattering routing logic across multiple components (e.g., `HomeDashboard` handling views it shouldn't) leads to dead code and unreachable states.
-*   **The Fix:** Consolidate high-level view routing in `app/page.tsx`. Ensure string literals for view states (e.g., `'mobile_home'`) match exactly across all files.
+          ...data,
+          labId: data.labId, // Explicitly preserve critical keys
+          ...otherProps
+        };
+        ```
+    2.  **Layered Verification:** When a property is missing, verify it at EVERY layer:
+        *   **Service:** Log the raw Firestore data AND the return value.
+        *   **Hook:** Log the data received from the service.
+        *   **Component:** Log the props/context received.
+    3.  **Temporary Debug Logs:** Don't be afraid to add `console.log("DEBUG: ...")` during active development. It is better to have noisy logs than invisible bugs. Remove them before final commit.
+    4.  **Firestore Undefined:** Remember that Firestore *drops* fields that are `undefined`. If a field is optional in your Type but missing in Firestore, it won't exist in the data object.
+
+### Lab ID & Profile Synchronization (Critical Lesson)
+*   **The Context:** The `useAuth` hook loads the Firebase User first, then asynchronously fetches the `PersonProfile`.
+*   **The Bug:** Components often check `if (user)` and assume the profile is ready. This leads to `labId` being undefined.
+*   **The Consequence:** Firestore security rules reject writes without a valid `labId`, often silently if the promise isn't caught or if the UI doesn't handle the error state explicitly.
+*   **The Fix Pattern:**
+    1.  **Button States:** Disable action buttons (e.g., "Add Item") until `currentUserProfile?.labId` is truthy.
+    2.  **Tooltip Feedback:** Show "Loading profile..." in the button tooltip while disabled.
+    3.  **Prop Drilling:** If a parent component (`OrdersInventory`) waits for the profile, pass `labId` down to the child dialog (`AddInventoryDialog`) as a prop. Do not rely on the child hook to fetch it again in time.
+
+### Debugging & Resilience Lessons
+1.  **Visual Debugging:** When console logs are swallowed or unreliable (e.g., in server-side rendering or specific browser environments), build **Visual Debug Indicators** directly into the UI.
+    *   *Example:* A temporary banner showing `Inventory Count: 0 | Lab ID: undefined` immediately reveals if the data is missing.
+2.  **Fail Loudly:** Never swallow errors in service calls.
+    *   *Bad:* `catch (e) { console.log(e) }`
+    *   *Good:* `catch (e) { setError(e.message); toast.error("Failed to save: " + e.message); }`
+3.  **Verify "Happy Path" Assumptions:** Just because a form submits doesn't mean the data was written. Always verify the *result* (e.g., the new item ID) or the *side effect* (the item appearing in the list).
+
+### Toast Notifications
+*   **The Problem:** Importing `toast` directly from `components/ui/use-toast` or `components/ui/toast` often fails or behaves unexpectedly.
+*   **The Fix:** Always use the `useToast` hook.
+    ```typescript
+    // BAD
+    import { toast } from "@/components/ui/use-toast";
+    toast({ ... });
+
+    // GOOD
+    import { useToast } from "@/components/ui/use-toast";
+    const { toast } = useToast();
+    toast({ ... });
+    ```
+
+### Firebase Admin Imports
+*   **The Problem:** The Firebase Admin SDK is initialized in `lib/firebaseAdmin.ts` (note the casing). Importing from `firebase-admin` directly in API routes without checking initialization can cause errors.
+*   **The Fix:** Import initialized instances or helpers from `@/lib/firebaseAdmin`.
 
 ## 8. Project Tracker
 
@@ -296,10 +359,148 @@ This section tracks the high-level state of the project to prevent drift.
     -   Refactored `MobileHome` to Functional Component.
     -   Fixed `permission-denied` for Research Boards.
     -   Fixed unsafe `toDate()` calls across all services.
+    -   Fixed `permission-denied` for `protocolExecutions` (Added missing rules).
+    -   Updated `isLabMember` rule to support `workingLabIds`.
     -   Implemented **Protocol-Based Scheduling** (Active/Passive phases).
+    -   Implemented **Unified Global Search** (Command Palette & Direct Navigation).
+    -   Implemented **Role-Based Dashboards** (Management vs Researcher Views).
+    -   Added **Lab Pulse Widget** for real-time lab status.
+    -   Patched **Firebase Admin Initialization** to fix local dev 500 errors.
+    -   **Critical Fixes (Dec 2025):**
+        -   **Login Crash:** Fixed `subscribeToUserTraining` in `trainingService.ts` to handle undefined `userId` gracefully.
+        -   **Inventory Reconciliation:** Implemented client-side reconciliation in `OrdersInventory.tsx` (via `handleSaveEdit` and `handleDragEnd`) to ensure received orders create/update inventory items.
+        -   **UI Patterns:** Adopted compact card designs and whole-card drag-and-drop for better mobile/touch usability in `OrdersInventory`.
+        -   **Resolved `permission-denied` errors** by adding `labId` to `Workpackage` type.
+        -   Fixed `activeProjectId` missing from `AppContext`.
+        -   Fixed `toDate()` crashes in `protocolExecutionService`.
+        -   Resolved syntax errors in `app/page.tsx` and `lib/AppContext.tsx`.
+        -   **Email Integration:** Implemented OAuth (Google/Outlook), Sync Rules, and UI components (`IntegrationsSettings`, `ProjectEmailsPanel`).
+        -   **Funding Fix:** Resolved budget discrepancies by fixing `deleteOrder` logic to correctly reverse allocations and cancel transactions.
 
 ### Completed Milestones
 *   [x] Initial Architecture Setup
 *   [x] Core Services (Auth, Projects, Inventory)
 *   [x] Mobile & Bench Experience
 *   [x] Build & Deploy Pipeline Fixes
+*   [x] Production Runtime Error Resolution
+*   [x] Global Search & Navigation
+*   [x] Role-Based Dashboards
+
+## 9. Strategic Roadmap & User Feedback (2025)
+
+Based on user feedback research, the following themes and recommendations now guide the development of Momentum.
+
+### Cross-Cutting Themes
+1.  **Low Friction & Fast Onboarding:** Scientists need immediate utility with minimal configuration.
+2.  **Flexible Workflows:** Support for custom fields, templates, and modular dashboards to accommodate diverse lab needs.
+3.  **Centralised Search & Linking:** Unified search across projects, samples, protocols, and ELN entries.
+4.  **True Collaboration:** Inline comments, @mentions, and PI review workflows.
+5.  **Hybrid Digital-Paper Workflows:** Seamless integration of physical notes/photos into the digital ELN.
+6.  **Cost vs. Value:** High functionality is expected to justify costs.
+
+### Improvement Recommendations (Prioritized)
+
+#### 1. Streamline Onboarding
+*   **Interactive Walkthrough:** Step-by-step tour on first login.
+*   **Role-Aware Onboarding:** Pre-configured dashboards based on role (PI, Researcher, Bioinformatician).
+*   **Self-Serve Help:** Context-sensitive sidebar with docs and videos.
+
+#### 2. Support Flexible Workflows
+*   **Custom Fields:** Allow admins to define metadata for samples/experiments.
+*   **Templates:** Library of cloneable templates for experiments and protocols.
+*   **Configurable Phases:** Custom statuses for projects and workpackages.
+
+#### 3. Unified Global Search
+*   **Cross-Module Search:** Global search bar indexing all entities (Projects, Samples, ELN, etc.).
+*   **Smart Linking:** Autocomplete for @sample and @protocol references.
+*   **OCR Search:** Search within attached images and PDFs.
+
+#### 4. Enhance Collaboration
+*   **Inline Comments:** Support for comments on tasks, samples, and ELN entries.
+*   **Activity Feeds:** Dashboard widgets showing recent team activity.
+*   **Review Workflows:** Formal sign-off processes for ELN entries and milestones.
+
+#### 5. Mobile & Hybrid Capture
+*   **PWA & Offline Mode:** Robust offline support for lab use.
+*   **Quick Capture:** Mobile-friendly photo upload and annotation.
+*   **Scan-to-Sample:** QR/Barcode scanning for inventory management.
+
+#### 6. Role-Based Dashboards
+*   **Custom Views:** Tailored widgets for PIs (Funding/Health) vs Researchers (Tasks/Experiments).
+*   **Cross-Lab Visibility:** Controlled sharing of resources between labs.
+
+#### 7. Advanced Integrations
+*   **Data Analysis:** Jupyter notebook integration for bioinformatics.
+*   **Instrument APIs:** Automated metadata import from sequencers and other hardware.
+
+## 10. User Validation Script
+
+**CRITICAL:** Before marking a feature as "Complete", you must mentally (or physically) simulate these user stories. If the feature fails any of these checks, it is NOT complete.
+
+### Persona 1: Dr. Aoife Byrne (The PI)
+*   **Goal:** High-level visibility, grant tracking, minimal friction.
+*   **Validation Checks:**
+    *   [ ] **The "Heartbeat" Check:** Can I see what is running *right now* (instruments, protocols) in < 5 seconds?
+    *   [ ] **The "Grant" Check:** Can I link this new entity (experiment/task) to a specific Grant or Work Package?
+    *   [ ] **The "Spam" Check:** Did this action trigger a notification? If yes, was it *absolutely critical*? (Avoid "Task moved to Done" spam).
+    *   [ ] **The "1:1" Check:** Can I see a student's "Passive" phases to schedule a meeting without email tag?
+
+### Persona 2: Dr. Mateo Rossi (The Postdoc Lead)
+*   **Goal:** Deep work protection, complex protocol management.
+*   **Validation Checks:**
+    *   [ ] **The "Deep Work" Check:** Does the scheduler allow blocking out 3-4 hour chunks where *no one* can book me?
+    *   [ ] **The "Slippage" Check:** If I drag an experiment start time by +2 hours, do all dependent steps (incubations, machine bookings) shift automatically?
+    *   [ ] **The "Handover" Check:** If I am sick tomorrow, is there a single view I can screenshot to show my team what needs doing?
+    *   [ ] **The "Glove" Check:** Are the buttons big enough to tap on a tablet while wearing nitrile gloves?
+
+### Persona 3: Priya Nair (The PhD Student)
+*   **Goal:** Bench guidance, simple logging, anxiety reduction.
+*   **Validation Checks:**
+    *   [ ] **The "Reality" Check:** Can I log a result (e.g., "Gel photo") directly from the experiment timeline with 1 tap?
+    *   [ ] **The "Timer" Check:** If I have overlapping incubations, does the UI show me the *next* critical action clearly?
+    *   [ ] **The "Duplicate Entry" Check:** Am I asking the user to type something (e.g., Sample ID) that the system should already know?
+    *   [ ] **The "Night Owl" Check:** Does the scheduler force 9-5, or can I plan an experiment that runs until 2 AM?
+
+### Persona 4: Sarah O’Connell (The Lab Manager)
+*   **Goal:** Resource control, safety, order.
+*   **Validation Checks:**
+    *   [ ] **The "Ghost" Check:** If a user books a machine but doesn't check in, does the system auto-release the slot?
+    *   [ ] **The "Burn Rate" Check:** Does running this protocol automatically decrement the associated inventory counts?
+    *   [ ] **The "Training" Check:** Can a user book this machine *without* the required safety badge? (Should be NO).
+    *   [ ] **The "Incident" Check:** Is the "Report Issue" button visible from the equipment page?
+
+### Persona 5: James Liu (The QC Scientist)
+*   **Goal:** Compliance, reproducibility, audit trails.
+*   **Validation Checks:**
+    *   [ ] **The "Audit" Check:** If I change a parameter in a completed run, is the original value preserved in history?
+    *   [ ] **The "Hard Stop" Check:** Does the system prevent me from proceeding if a critical QC value is missing?
+    *   [ ] **The "Version" Check:** Am I using the *exact* version of the SOP that was active on the day of the experiment?
+
+### Persona 6: Dr. Lena Kovacs (The Data Scientist)
+*   **Goal:** Data linkage, async collaboration.
+*   **Validation Checks:**
+    *   [ ] **The "Linkage" Check:** Can I trace a raw data file back to the specific protocol run and sample ID?
+    *   [ ] **The "Context" Check:** When I view a dataset, can I see the "wet lab" context (temperature, operator, deviations)?
+    *   [ ] **The "Export" Check:** Can I get this data out in a standard format (CSV, JSON) without copy-pasting?
+
+### Persona 7: Emma Gallagher (The COO)
+*   **Goal:** Operational overview, reporting, scalability.
+*   **Validation Checks:**
+    *   [ ] **The "Board Report" Check:** Can I generate a "Weekly Progress" summary without asking staff to write reports?
+    *   [ ] **The "Bottleneck" Check:** Does the dashboard highlight resource constraints (e.g., "FACS machine at 95% capacity")?
+
+### Persona 8: Ciara Murphy (The Clinical Coordinator)
+*   **Goal:** Patient-lab sync, error minimization.
+*   **Validation Checks:**
+    *   [ ] **The "Patient" Check:** Can I view tasks grouped by Patient ID, not just by Project?
+    *   [ ] **The "Window" Check:** Does the system alert me if a sample is approaching its processing time limit?
+
+## 11. The "Hate" List (Anti-Patterns)
+
+**Avoid these at all costs:**
+1.  **The "10-Click" Rule:** If a common action (book machine, log sample) takes > 5 clicks, it is a failure.
+2.  **The "Silo" Effect:** Never create a new data island. Bookings must talk to Inventory. Inventory must talk to Protocols.
+3.  **The "Admin" Trap:** Do not ask users to manually enter data for "management reporting" if it doesn't help *them* do their job.
+4.  **The "Rigid" Flow:** Always allow for exceptions (e.g., "I need to run this *now* even if the booking isn't perfect"). Log the deviation, but don't block the science (unless safety critical).
+5.  **The "Hidden" Info:** Never bury status. If a machine is broken, show it on the home screen, the booking screen, and the protocol screen.
+

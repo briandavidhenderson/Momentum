@@ -43,7 +43,10 @@ service cloud.firestore {
     // Helper function to check if user is member of a specific lab
     function isLabMember(labId) {
       let userProfile = getUserProfile();
-      return userProfile != null && userProfile.data != null && userProfile.data.labId == labId;
+      return userProfile != null && userProfile.data != null && (
+        userProfile.data.labId == labId ||
+        (userProfile.data.workingLabIds != null && userProfile.data.workingLabIds.hasAny([labId]))
+      );
     }
 
     // Helper function to check if user is PI of a master project
@@ -902,6 +905,33 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // PROTOCOL EXECUTIONS
+    // ============================================================================
+    match /protocolExecutions/{executionId} {
+      // Users can read executions in their lab or if they performed it
+      allow read: if isAuthenticated() && (
+        resource.data.performedBy == request.auth.uid ||
+        isLabMember(resource.data.labId) ||
+        isAdmin()
+      );
+
+      // Users can create executions
+      allow create: if isAuthenticated() && request.resource.data.performedBy == request.auth.uid;
+
+      // Users can update executions they performed or if they are admin
+      allow update: if isAuthenticated() && (
+        resource.data.performedBy == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Users can delete executions they performed or if they are admin
+      allow delete: if isAuthenticated() && (
+        resource.data.performedBy == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ============================================================================
     // LAB POLLS
     // ============================================================================
     match /labPolls/{pollId} {
@@ -937,7 +967,8 @@ service cloud.firestore {
         resource.data.createdBy == request.auth.uid ||
         isLabMember(resource.data.labId) ||
         isAdmin() ||
-        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId))
+        (resource.data.masterProjectId != null && isProjectTeamMember(resource.data.masterProjectId)) ||
+        (resource.data.sharedWithUsers != null && resource.data.sharedWithUsers.hasAny([request.auth.uid]))
       );
 
       // Users can create their own experiments
@@ -1013,7 +1044,9 @@ service cloud.firestore {
       // - An admin
       allow read: if isAuthenticated() && (
         isAdmin() ||
+        resource.data.creatorId == request.auth.uid ||
         (resource.data.members != null && resource.data.members.hasAny([request.auth.uid])) ||
+        (resource.data.sharedWithUsers != null && resource.data.sharedWithUsers.hasAny([request.auth.uid])) ||
         isLabMember(resource.data.labId)
       );
 
