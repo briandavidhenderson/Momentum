@@ -142,7 +142,23 @@ function splitFullName(fullName: string | undefined | null): { firstName: string
 }
 
 export default function OnboardingFlow({ user, onComplete, onCancel }: OnboardingFlowProps) {
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome")
+  // Load step from sessionStorage
+  const getInitialStep = (): OnboardingStep => {
+    if (typeof window !== 'undefined') {
+      const savedStep = sessionStorage.getItem('onboardingStep')
+      if (savedStep) {
+        return savedStep as OnboardingStep
+      }
+    }
+    return "welcome"
+  }
+
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>(getInitialStep())
+
+  // Persist step changes
+  useEffect(() => {
+    sessionStorage.setItem('onboardingStep', currentStep)
+  }, [currentStep])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -635,9 +651,6 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
     try {
       setLoading(true)
       setError(null)
-
-      logger.info("Starting profile creation", { userId: validUser.uid })
-
       const positionDisplay = POSITION_DISPLAY_NAMES[state.positionLevel]
 
       // Create profile
@@ -672,7 +685,7 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         // PI Status
         isPrincipalInvestigator: state.isPrincipalInvestigator,
 
-        // ORCID fields (only include if connected to avoid Firestore undefined values)
+        // ORCID fields
         ...(orcidData.orcidId ? {
           orcidId: orcidData.orcidId,
           orcidUrl: orcidData.orcidUrl,
@@ -680,11 +693,11 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
           orcidLastSynced: new Date().toISOString(),
         } : {}),
 
-        // Project membership (will be populated if project created)
+        // Project membership
         masterProjectIds: [],
         masterProjectRoles: {},
 
-        // Legacy fields (backward compatibility)
+        // Legacy fields
         organisation: state.selectedOrganisation.name,
         institute: state.selectedInstitute.name,
         lab: state.selectedLab.name,
@@ -708,9 +721,9 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         isAdministrator: false,
 
         // GDPR & Privacy
-        consentGiven: true, // User consents by completing onboarding
+        consentGiven: true,
         lastConsentUpdate: new Date().toISOString(),
-        privacySettingsId: "", // Will be created if needed
+        privacySettingsId: "",
         dataExportRequestIds: [],
       }
 
@@ -842,6 +855,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
         // This handles the case where user skips project creation
         await createProfile(validUser.uid, profileData, profileId)
       }
+
+      // Clear session storage
+      sessionStorage.removeItem('onboardingState')
+      sessionStorage.removeItem('onboardingStep')
 
       // Call onComplete immediately to update app state
       // Do this BEFORE showing the complete step to ensure state is updated

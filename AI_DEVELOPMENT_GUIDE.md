@@ -381,6 +381,10 @@ This section tracks the high-level state of the project to prevent drift.
         -   **Project Navigation:** Fixed broken "View Project" link on dashboard cards.
         -   **Lab Settings:** Exposed Custom Field Editor via new Settings module for Lab Admins.
         -   **Onboarding:** Fixed "Continue Without Supervisor" navigation flow.
+    -   **Unfinished Work Fixes:**
+        -   **Experiment Templates:** Implemented Project Selector in `TemplateGallery` to allow instantiation.
+        -   **Onboarding Persistence:** Implemented `sessionStorage` persistence for `currentStep` and form data to survive reloads.
+        -   **Code Repair:** Fixed corrupted `handleComplete` function in `OnboardingFlow.tsx`.
 *   [x] Production Runtime Error Resolution
 *   [x] Global Search & Navigation
 *   [x] Role-Based Dashboards

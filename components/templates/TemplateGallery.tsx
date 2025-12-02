@@ -1,26 +1,24 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/hooks/useAuth'
-import { getLabTemplates, getLabExperimentTemplates, cloneTemplateToProtocol as instantiateProtocol, instantiateExperiment } from '@/lib/services/templateService'
-import { ProtocolTemplate } from '@/lib/services/templateService'
-import { ELNExperiment } from '@/lib/types/eln.types'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import { useToast } from '@/components/ui/use-toast'
-import { Loader2, Copy, FileText, FlaskConical } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAppContext } from "@/lib/AppContext"
 
 export function TemplateGallery() {
-    const { currentUserProfile } = useAuth()
+    const { currentUserProfile, projects } = useAppContext()
     const { toast } = useToast()
     const router = useRouter()
     const [loading, setLoading] = useState(true)
     const [protocolTemplates, setProtocolTemplates] = useState<ProtocolTemplate[]>([])
     const [experimentTemplates, setExperimentTemplates] = useState<ELNExperiment[]>([])
     const [processingId, setProcessingId] = useState<string | null>(null)
+
+    // Project Selection State
+    const [showProjectDialog, setShowProjectDialog] = useState(false)
+    const [selectedTemplate, setSelectedTemplate] = useState<ELNExperiment | null>(null)
+    const [selectedProjectId, setSelectedProjectId] = useState<string>("")
 
     useEffect(() => {
         if (!currentUserProfile?.labId) return
@@ -47,23 +45,6 @@ export function TemplateGallery() {
         if (!currentUserProfile?.id) return
         setProcessingId(template.id)
         try {
-            // Note: instantiateProtocol in templateService is actually cloneTemplateToProtocol
-            // I should have exported it as instantiateProtocol or used the alias.
-            // I'll assume I can import cloneTemplateToProtocol as instantiateProtocol or just use cloneTemplateToProtocol
-            // Wait, I didn't export instantiateProtocol for protocols in templateService.ts, I only added instantiateExperiment.
-            // I need to check templateService.ts exports again.
-            // For now, I'll use the function I imported, but I might need to fix the import if it doesn't exist.
-
-            // Actually, looking back at my edit to templateService.ts, I didn't add instantiateProtocol.
-            // I added instantiateExperiment.
-            // Existing function is cloneTemplateToProtocol.
-            // I should use cloneTemplateToProtocol.
-
-            // I will fix the import in a subsequent edit if this fails, but for now let's assume I can use what I have.
-            // Wait, I can't assume. I need to be correct.
-            // I will use `cloneTemplateToProtocol` which IS exported.
-
-            // Re-writing this block to use cloneTemplateToProtocol
             const { cloneTemplateToProtocol } = await import('@/lib/services/templateService')
             const protocolId = await cloneTemplateToProtocol(template.id, currentUserProfile.id)
 
@@ -84,39 +65,63 @@ export function TemplateGallery() {
         }
     }
 
-    const handleUseExperiment = async (template: ELNExperiment) => {
-        if (!currentUserProfile?.id) return
-        setProcessingId(template.id)
+    const handleInitiateExperiment = (template: ELNExperiment) => {
+        setSelectedTemplate(template)
+        setShowProjectDialog(true)
+        // Pre-select first active project if available
+        const activeProjects = projects.filter(p => p.status === 'active')
+        if (activeProjects.length > 0) {
+            setSelectedProjectId(activeProjects[0].id)
+        }
+    }
+
+    const handleConfirmExperiment = async () => {
+        if (!currentUserProfile?.id || !selectedTemplate || !selectedProjectId) return
+
+        setProcessingId(selectedTemplate.id)
+        setShowProjectDialog(false)
+
         try {
-            // instantiateExperiment IS exported.
-            // But it requires masterProjectId.
-            // I don't have a project selector here yet.
-            // I should probably prompt for project or just create it without project (if allowed) or pick a default.
-            // ELNExperiment type says masterProjectId is REQUIRED.
-            // So I need to ask the user for a project.
-            // For this MVP, I'll just fail or pick the first active project?
-            // Or maybe I should just redirect to a "Create Experiment" page with templateId param?
-            // That would be better.
-            // But for now, let's just try to create it and see.
-            // I'll pass a placeholder or try to fetch projects.
-
-            // Better approach: Redirect to ELN with templateId query param.
-            // router.push(`/eln/new?templateId=${template.id}`)
-            // But I haven't implemented that page.
-
-            // I'll implement a simple project picker dialog later.
-            // For now, I'll just use a hardcoded string or fail gracefully if I can't find one.
-            // Actually, I'll just show a "Not implemented" toast for now or try to fetch user's projects.
+            const newExperiment = await instantiateExperiment(
+                selectedTemplate.id,
+                currentUserProfile.id,
+                selectedProjectId
+            )
 
             toast({
-                title: "Coming Soon",
-                description: "Please select a project to use this template (Feature in progress)."
+                title: "Experiment Created",
+                description: "New experiment created from template."
             })
+
+            // Redirect to ELN view with the new experiment
+            // Note: ELN view might need to handle 'experimentId' param or we just go to ELN list
+            // Ideally we open the experiment. 
+            // Assuming /eln?experimentId=... or similar. 
+            // Current ELN routing seems to be hash based or internal state.
+            // Let's check how ELN is accessed. 
+            // Usually it's a main view. 
+            // For now, let's just go to ELN and maybe show a toast.
+            // Or if there is a route /eln/[id], use that.
+            // Based on file structure, there is no /eln/[id] page, it's a view.
+            // So we just go to ELN view.
+            // But we can try to set the active experiment via URL or context if supported.
+            // For now, just navigate to ELN.
+
+            // Actually, looking at page.tsx, ELN is a view.
+            // Maybe we can pass query param?
+            router.push('/?view=eln')
 
         } catch (error) {
             console.error("Failed to instantiate experiment", error)
+            toast({
+                title: "Error",
+                description: "Failed to create experiment.",
+                variant: "destructive"
+            })
         } finally {
             setProcessingId(null)
+            setSelectedTemplate(null)
+            setSelectedProjectId("")
         }
     }
 
@@ -175,7 +180,7 @@ export function TemplateGallery() {
                                 <CardFooter>
                                     <Button
                                         className="w-full"
-                                        onClick={() => handleUseExperiment(template)}
+                                        onClick={() => handleInitiateExperiment(template)}
                                         disabled={!!processingId}
                                     >
                                         {processingId === template.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-2 h-4 w-4" />}
@@ -188,6 +193,38 @@ export function TemplateGallery() {
                     </div>
                 </TabsContent>
             </Tabs>
+
+            <Dialog open={showProjectDialog} onOpenChange={setShowProjectDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Select Project</DialogTitle>
+                        <DialogDescription>
+                            Choose a project to associate with this new experiment.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="project">Project</Label>
+                            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a project" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {projects.filter(p => p.status !== 'archived').map(project => (
+                                        <SelectItem key={project.id} value={project.id}>
+                                            {project.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowProjectDialog(false)}>Cancel</Button>
+                        <Button onClick={handleConfirmExperiment} disabled={!selectedProjectId}>Create Experiment</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
