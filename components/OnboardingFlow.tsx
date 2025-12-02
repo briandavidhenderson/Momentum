@@ -1985,7 +1985,10 @@ export default function OnboardingFlow({ user, onComplete, onCancel }: Onboardin
                   <p>No supervisors found.</p>
                   <p className="text-sm mt-2">Try changing your search or filter settings.</p>
                   <Button
-                    onClick={() => setState((s) => ({ ...s, supervisorId: null }))}
+                    onClick={() => {
+                      setState((s) => ({ ...s, supervisorId: null }))
+                      handleNext()
+                    }}
                     variant="outline"
                     className="mt-4"
                   >
