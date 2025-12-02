@@ -377,6 +377,10 @@ This section tracks the high-level state of the project to prevent drift.
     -   **Flexible Workflows:**
         -   **Custom Fields:** Implemented `CustomFieldEditor` and schema support for Samples, Protocols, and Experiments.
         -   **Templates:** Created `TemplateGallery` and `templateService` for Protocol and Experiment instantiation.
+    -   **Simulation Feedback Fixes:**
+        -   **Project Navigation:** Fixed broken "View Project" link on dashboard cards.
+        -   **Lab Settings:** Exposed Custom Field Editor via new Settings module for Lab Admins.
+        -   **Onboarding:** Fixed "Continue Without Supervisor" navigation flow.
 *   [x] Production Runtime Error Resolution
 *   [x] Global Search & Navigation
 *   [x] Role-Based Dashboards
