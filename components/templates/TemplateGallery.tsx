@@ -1,6 +1,16 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import { getLabTemplates, getLabExperimentTemplates, instantiateExperiment } from '@/lib/services/templateService'
+import { ProtocolTemplate } from '@/lib/services/templateService'
+import { ELNExperiment } from '@/lib/types/eln.types'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
+import { useToast } from '@/components/ui/use-toast'
+import { Loader2, Copy, FileText, FlaskConical } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -210,7 +220,7 @@ export function TemplateGallery() {
                                     <SelectValue placeholder="Select a project" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {projects.filter(p => p.status !== 'archived').map(project => (
+                                    {projects.filter(p => p.status === 'active').map(project => (
                                         <SelectItem key={project.id} value={project.id}>
                                             {project.name}
                                         </SelectItem>
