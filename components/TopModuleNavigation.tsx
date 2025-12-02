@@ -23,6 +23,7 @@ import {
   DollarSign,
   BrainCircuit,
   Search,
+  Settings,
   LucideIcon
 } from "lucide-react"
 import { QRCodeScanner } from "./QRCodeScanner"
@@ -83,6 +84,7 @@ export const NAV_ITEMS: NavCategory[] = [
       { id: "eln", label: "Experiments", icon: FlaskConical },
       { id: "groups", label: "Groups", icon: Users },
       { id: "funding", label: "Funding", icon: DollarSign, roleRestricted: true },
+      { id: "settings", label: "Settings", icon: Settings, roleRestricted: true },
     ]
   },
   {

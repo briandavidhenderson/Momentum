@@ -40,6 +40,7 @@ import { useState, useEffect } from "react"
 import { ProtocolBenchMode } from '@/components/ProtocolBenchMode'
 import { ReportsView } from '@/components/views/reports/ReportsView'
 import { SampleListView } from '@/components/views/samples/SampleListView'
+import { SettingsView } from '@/components/views/SettingsView'
 
 export default function Page() {
   const {
@@ -205,6 +206,7 @@ export default function Page() {
           {mainView === 'bench' && <ProtocolBenchMode />}
           {mainView === 'reports' && <ReportsView />}
           {mainView === 'samples' && <SampleListView onSelectSample={() => { }} onCreateSample={() => { }} />}
+          {mainView === 'settings' && <SettingsView />}
         </div>
       </div>
 

@@ -333,12 +333,7 @@ export function ProjectDashboard() {
     const health = projectHealths.get(project.id)
 
     return (
-      <Link
-        key={project.id}
-        href={`/projects/${project.id}`}
-        className="block"
-        onClick={handleCardLinkClick}
-      >
+      <div key={project.id} className="block">
         <ProjectCard
           project={project}
           workpackages={allWorkpackages as unknown as HydratedWorkpackage[]}
@@ -440,7 +435,7 @@ export function ProjectDashboard() {
             }
           }}
         />
-      </Link>
+      </div>
     )
   }
 
