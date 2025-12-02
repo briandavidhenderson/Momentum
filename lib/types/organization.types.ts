@@ -98,6 +98,13 @@ export interface Lab {
   createdAt: string
   createdBy: string
   updatedAt?: string
+
+  // Custom Fields
+  customFieldDefinitions?: {
+    sample?: import('./customFields.types').CustomFieldDefinition[]
+    protocol?: import('./customFields.types').CustomFieldDefinition[]
+    experiment?: import('./customFields.types').CustomFieldDefinition[]
+  }
 }
 
 /**

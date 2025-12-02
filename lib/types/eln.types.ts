@@ -149,6 +149,8 @@ export interface ELNExperiment extends VisibilitySettings {
   // Metadata
   experimentNumber?: string  // e.g., "EXP-2025-001"
   tags?: string[]
+  customData?: Record<string, any> // User-defined custom fields
+
   status?: "draft" | "in-progress" | "completed" | "archived"
   createdAt: string // ISO date string
   updatedAt?: string // ISO date string
