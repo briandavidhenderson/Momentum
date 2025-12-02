@@ -82,6 +82,7 @@ export async function getInventory(): Promise<InventoryItem[]> {
   const db = getFirebaseDb()
   const querySnapshot = await getDocs(collection(db, "inventory"))
 
+
   return querySnapshot.docs.map(doc => {
     const data = doc.data() as FirestoreInventoryItem
     return {
@@ -94,16 +95,16 @@ export async function getInventory(): Promise<InventoryItem[]> {
       minQuantity: data.minQuantity,
       burnRatePerWeek: data.burnRatePerWeek,
       inventoryLevel: data.inventoryLevel as InventoryLevel,
-      receivedDate: data.receivedDate.toDate(),
-      lastOrderedDate: data.lastOrderedDate ? data.lastOrderedDate.toDate() : undefined,
+      receivedDate: data.receivedDate?.toDate ? data.receivedDate.toDate() : (data.receivedDate ? new Date(data.receivedDate as any) : undefined),
+      lastOrderedDate: data.lastOrderedDate?.toDate ? data.lastOrderedDate.toDate() : (data.lastOrderedDate ? new Date(data.lastOrderedDate as any) : undefined),
       category: data.category,
       subcategory: data.subcategory,
       equipmentDeviceIds: data.equipmentDeviceIds,
       chargeToAccount: data.chargeToAccount,
       notes: data.notes,
       labId: data.labId,
-      createdAt: data.createdAt ? data.createdAt.toDate() : data.createdDate ? data.createdDate.toDate() : undefined,
-      updatedAt: data.updatedAt ? data.updatedAt.toDate() : undefined,
+      createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt as any) : (data.createdDate?.toDate ? data.createdDate.toDate() : undefined)),
+      updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : undefined,
     } as InventoryItem
   })
 }

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ProfileProject, ProjectVisibility, Funder, ResearchGroup, MasterProject } from "@/lib/types"
+import { ProfileProject, ProjectVisibility, Funder, ResearchGroup, MasterProject, ProjectRole } from "@/lib/types"
 import { Building2, FolderKanban, Plus } from "lucide-react"
 import { subscribeToFunders } from "@/lib/firestoreService"
 import { FunderCreationDialog } from "./FunderCreationDialog"
@@ -162,13 +162,17 @@ export function ProjectCreationDialog({
       funderId: selectedFunderId,
       groupIds: formData.groupIds,
       type: (selectedFunderId ? "funded" : "unfunded") as "funded" | "unfunded",
+      // Fix: Set current user as PI and team member
+      principalInvestigatorIds: currentUserProfileId ? [currentUserProfileId] : [],
+      teamMemberIds: currentUserProfileId ? [currentUserProfileId] : [],
+      teamRoles: currentUserProfileId ? { [currentUserProfileId]: "PI" as ProjectRole } : {},
     }
 
     if (mode === "edit" && onUpdate) {
       onUpdate(projectData)
     } else {
       // @ts-ignore - ProfileProject vs MasterProject mismatch is known and being deprecated
-      onCreateMaster(projectData)
+      onCreateMaster(projectData as any)
     }
     onClose()
   }
@@ -507,4 +511,3 @@ export function ProjectCreationDialog({
     </>
   )
 }
-

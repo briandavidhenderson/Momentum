@@ -136,10 +136,24 @@ export function WorkPackageList({
                                     <div className="flex items-center gap-1">
                                         <Calendar className="h-3 w-3" />
                                         <span>
-                                            {new Date(wp.end).toLocaleDateString(undefined, {
-                                                month: "short",
-                                                day: "numeric",
-                                            })}
+                                            {(() => {
+                                                try {
+                                                    const date = wp.end instanceof Date
+                                                        ? wp.end
+                                                        : (wp.end as any)?.toDate
+                                                            ? (wp.end as any).toDate()
+                                                            : new Date(wp.end);
+
+                                                    return isNaN(date.getTime())
+                                                        ? 'No date'
+                                                        : date.toLocaleDateString(undefined, {
+                                                            month: "short",
+                                                            day: "numeric",
+                                                        });
+                                                } catch (e) {
+                                                    return 'Invalid date';
+                                                }
+                                            })()}
                                         </span>
                                     </div>
                                 </div>

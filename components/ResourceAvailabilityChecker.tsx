@@ -63,46 +63,74 @@ export function ResourceAvailabilityChecker({
     const checkEquipmentAvailability = useCallback(async (
         resource: ResourceRequirement
     ): Promise<ResourceCheckResult> => {
-        // TODO: Implement actual booking check
-        // Query bookings collection for conflicts
+        try {
+            // In a real app, we would query a bookings collection.
+            // For now, we'll check the equipment status from the equipment service.
+            // If we had a booking service, we'd call `checkAvailability(id, time, duration)`
 
-        const mockConflicts: EquipmentBooking[] = []
+            // Simulating a check against the equipment list for "Maintenance" status
+            // This is a placeholder for a full booking system check
+            const equipmentList = await import('@/lib/services/equipmentService').then(m => m.getEquipment())
+            const equipment = equipmentList.find(e => e.id === resource.id || e.name === resource.name)
 
-        // Mock logic - replace with actual query
-        const isBooked = Math.random() > 0.7
+            if (!equipment) {
+                return {
+                    resource,
+                    status: 'unavailable',
+                    available: 0,
+                    message: 'Equipment not found'
+                }
+            }
 
-        if (isBooked) {
-            mockConflicts.push({
-                id: '1',
-                equipmentId: resource.id,
-                equipmentName: resource.name,
-                startTime: new Date(scheduledTime.getTime() + 30 * 60000),
-                endTime: new Date(scheduledTime.getTime() + 90 * 60000),
-                userId: 'user123',
-                userName: 'Dr. Smith',
-            })
+            // Check if maintenance is due
+            const maintenanceDue = new Date(equipment.lastMaintained).getTime() + (equipment.maintenanceDays * 86400000) < Date.now()
+
+            if (maintenanceDue) {
+                return {
+                    resource,
+                    status: 'unavailable',
+                    available: 0,
+                    message: 'Maintenance Overdue'
+                }
+            }
+
+            // Check if currently booked (simple check based on device state)
+            if (equipment.currentBookingId) {
+                return {
+                    resource,
+                    status: 'booked',
+                    available: 0,
+                    message: `Currently booked by ${equipment.currentBookingUserId || 'another user'}`
+                }
+            }
+
+            return {
+                resource,
+                status: 'available',
+                available: 1,
+                message: 'Online & Available'
+            }
+
+        } catch (error) {
+            console.error("Failed to check equipment", error)
+            return {
+                resource,
+                status: 'unknown',
+                available: 0,
+                message: 'Failed to check status'
+            }
         }
-
-        return {
-            resource,
-            status: mockConflicts.length > 0 ? 'booked' : 'available',
-            available: mockConflicts.length > 0 ? 0 : 1,
-            conflicts: mockConflicts,
-            message: mockConflicts.length > 0
-                ? `Equipment booked by ${mockConflicts[0].userName}`
-                : 'Equipment available',
-        }
-    }, [scheduledTime])
+    }, [])
 
     const checkInventoryAvailability = useCallback(async (
         resource: ResourceRequirement
     ): Promise<ResourceCheckResult> => {
         try {
             const inventory = await getInventory()
-            // Case-insensitive match by name since we might not have IDs
+            // Prefer ID match, fallback to name
             const item = inventory.find(i =>
-                i.productName.toLowerCase() === resource.name.toLowerCase() ||
-                (resource.id && i.id === resource.id)
+                (resource.id && i.id === resource.id) ||
+                i.productName.toLowerCase() === resource.name.toLowerCase()
             )
 
             if (!item) {

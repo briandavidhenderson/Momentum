@@ -7,6 +7,7 @@
  * - Populates Inventory and Equipment
  * - Creates a Complex Master Project ("Cancer Immunotherapy Initiative")
  * - Seeds Protocols, ELN Experiments, and Day-to-Day Tasks
+ * - Ensures full profile onboarding and status
  * 
  * USAGE:
  *   npx tsx scripts/seed_collaboration_story.ts
@@ -17,6 +18,25 @@ import * as fs from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 
 // --- Configuration ---
+
+// Position Levels (mapped from lib/types/profile.types.ts)
+const POSITIONS = {
+    HEAD_OF_DEPARTMENT: "head_of_department",
+    POSTDOC_RESEARCH_FELLOW: "postdoc_research_fellow",
+    PHD_STUDENT: "phd_student",
+    PROFESSOR: "professor",
+    LAB_TECHNICIAN: "lab_technician",
+    RESEARCH_FELLOW: "research_fellow"
+}
+
+// User Roles (mapped from lib/types/user.types.ts)
+const ROLES = {
+    PI: "pi",
+    RESEARCHER: "researcher",
+    ASSISTANT: "assistant",
+    LAB_MANAGER: "lab_manager"
+}
+
 const USERS = [
     // Existing Users
     {
@@ -25,7 +45,10 @@ const USERS = [
         firstName: 'Sarah',
         lastName: 'Chen',
         displayName: 'Dr. Sarah Chen',
-        role: 'principal_investigator',
+        userRole: ROLES.PI,
+        positionLevel: POSITIONS.HEAD_OF_DEPARTMENT,
+        positionDisplayName: 'Head of Department',
+        isPI: true,
         labName: 'Cellular Biology Core',
         labDescription: 'Focuses on cell viability and biological protocols.',
         department: 'Biology'
@@ -36,7 +59,10 @@ const USERS = [
         firstName: 'Markus',
         lastName: 'Weber',
         displayName: 'Markus Weber',
-        role: 'postdoc',
+        userRole: ROLES.RESEARCHER,
+        positionLevel: POSITIONS.POSTDOC_RESEARCH_FELLOW,
+        positionDisplayName: 'Postdoctoral Research Fellow',
+        isPI: false,
         labName: 'Advanced Materials Lab',
         labDescription: 'Focuses on synthesizing conductive hydrogels.',
         department: 'Chemistry'
@@ -47,7 +73,10 @@ const USERS = [
         firstName: 'Alex',
         lastName: 'Rivera',
         displayName: 'Alex Rivera',
-        role: 'phd_student',
+        userRole: ROLES.RESEARCHER,
+        positionLevel: POSITIONS.PHD_STUDENT,
+        positionDisplayName: 'PhD Student',
+        isPI: false,
         labName: 'Micro-Devices Lab',
         labDescription: 'Focuses on 3D printing and sensor assembly.',
         department: 'Engineering'
@@ -59,7 +88,10 @@ const USERS = [
         firstName: 'Emily',
         lastName: 'Zhang',
         displayName: 'Dr. Emily Zhang',
-        role: 'principal_investigator',
+        userRole: ROLES.PI,
+        positionLevel: POSITIONS.PROFESSOR,
+        positionDisplayName: 'Professor',
+        isPI: true,
         labName: 'Genomics Core',
         labDescription: 'High-throughput sequencing and genomic analysis.',
         department: 'Genetics'
@@ -70,7 +102,10 @@ const USERS = [
         firstName: 'James',
         lastName: 'Miller',
         displayName: 'James Miller',
-        role: 'lab_technician',
+        userRole: ROLES.ASSISTANT,
+        positionLevel: POSITIONS.LAB_TECHNICIAN,
+        positionDisplayName: 'Lab Technician',
+        isPI: false,
         labName: 'Genomics Core', // Same lab as Emily
         labDescription: 'High-throughput sequencing and genomic analysis.',
         department: 'Genetics'
@@ -81,7 +116,10 @@ const USERS = [
         firstName: 'Linda',
         lastName: 'Johnson',
         displayName: 'Linda Johnson',
-        role: 'bioinformatician',
+        userRole: ROLES.RESEARCHER,
+        positionLevel: POSITIONS.RESEARCH_FELLOW,
+        positionDisplayName: 'Research Fellow',
+        isPI: false,
         labName: 'Bioinformatics Unit',
         labDescription: 'Data analysis and computational biology.',
         department: 'Computational Biology'
@@ -204,7 +242,7 @@ async function createLab(name: string, description: string, ownerId: string) {
 }
 
 async function updateProfile(uid: string, userData: any, labId: string) {
-    // 1. Create PersonProfile
+    // 1. Create PersonProfile with FULL status
     const profileRef = db.collection('personProfiles').doc(uid) // Use uid as profileId for simplicity in seeding
     await profileRef.set({
         id: uid,
@@ -213,20 +251,45 @@ async function updateProfile(uid: string, userData: any, labId: string) {
         firstName: userData.firstName,
         lastName: userData.lastName,
         displayName: userData.displayName,
-        role: userData.role,
-        labId,
+
+        // Organizational Hierarchy
+        organisationId: 'org-001',
+        organisationName: 'Momentum Research',
+        instituteId: 'inst-001',
+        instituteName: 'Momentum Institute',
+        labId: labId,
+        labName: userData.labName,
         department: userData.department,
+
+        // Dynamic Memberships
+        workingLabIds: [labId],
+        researchGroupIds: [],
+
+        // Position & Role
+        positionLevel: userData.positionLevel,
+        positionDisplayName: userData.positionDisplayName,
+        userRole: userData.userRole,
+        isPrincipalInvestigator: userData.isPI,
+
+        // Status Flags
+        profileComplete: true,
+        onboardingComplete: true,
+        consentGiven: true,
+
+        // Research Profile
         researchInterests: [],
         qualifications: [],
         fundedBy: [],
-        researchGroupIds: [],
-        workingLabIds: [],
-        organisationId: 'org-001', // Placeholder
-        instituteId: 'inst-001', // Placeholder
+
+        // Project Membership (Initialized empty)
+        masterProjectIds: [],
+        masterProjectRoles: {},
+
+        startDate: new Date().toISOString(),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true })
-    console.log(`  ✓ Created PersonProfile: ${userData.displayName}`)
+    console.log(`  ✓ Created/Updated PersonProfile: ${userData.displayName}`)
 
     // 2. Create User Document (linking to profile)
     const userRef = db.collection('users').doc(uid)
@@ -236,10 +299,12 @@ async function updateProfile(uid: string, userData: any, labId: string) {
         fullName: userData.displayName,
         profileId: uid, // Link to the profile we just created
         isAdministrator: false,
+        userRole: userData.userRole,
+        gdprCompliant: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true })
-    console.log(`  ✓ Created User Document: ${userData.displayName}`)
+    console.log(`  ✓ Created/Updated User Document: ${userData.displayName}`)
 }
 
 async function seedInventory(labId: string, labName: string) {
@@ -281,9 +346,23 @@ async function seedEquipment(labId: string, labName: string) {
     console.log(`  ✓ Seeded ${items.length} equipment items for ${labName}`)
 }
 
+async function addProjectToProfile(profileId: string, projectId: string, role: string) {
+    const profileRef = db.collection('personProfiles').doc(profileId)
+    await profileRef.update({
+        masterProjectIds: admin.firestore.FieldValue.arrayUnion(projectId),
+        [`masterProjectRoles.${projectId}`]: role
+    })
+    console.log(`    -> Linked project ${projectId} to profile ${profileId} as ${role}`)
+}
+
 async function createMasterProject(piUser: any, piUid: string, labId: string, teamMemberUids: string[]) {
     const projectId = uuidv4()
     const projectRef = db.collection('masterProjects').doc(projectId)
+
+    const teamRoles: Record<string, string> = {
+        [piUid]: 'PI',
+        ...teamMemberUids.reduce((acc, uid) => ({ ...acc, [uid]: 'Researcher' }), {})
+    }
 
     await projectRef.set({
         id: projectId,
@@ -291,9 +370,9 @@ async function createMasterProject(piUser: any, piUid: string, labId: string, te
         description: 'Developing novel CAR-T cell therapies using advanced hydrogel scaffolds.',
         labId: labId,
         labName: piUser.labName,
-        instituteId: 'inst-001', // Placeholder
+        instituteId: 'inst-001',
         instituteName: 'Momentum Institute',
-        organisationId: 'org-001', // Placeholder
+        organisationId: 'org-001',
         organisationName: 'Momentum Research',
         type: 'funded',
         grantName: 'NIH R01 CA123456',
@@ -307,10 +386,7 @@ async function createMasterProject(piUser: any, piUid: string, labId: string, te
         principalInvestigatorIds: [piUid],
         coPIIds: [],
         teamMemberIds: teamMemberUids,
-        teamRoles: {
-            [piUid]: 'PI',
-            ...teamMemberUids.reduce((acc, uid) => ({ ...acc, [uid]: 'Researcher' }), {})
-        },
+        teamRoles,
         workpackageIds: [],
         status: 'active',
         progress: 15,
@@ -319,6 +395,13 @@ async function createMasterProject(piUser: any, piUid: string, labId: string, te
         createdBy: piUid
     })
     console.log(`  ✓ Created Master Project: Cancer Immunotherapy Initiative (${projectId})`)
+
+    // Link back to profiles
+    await addProjectToProfile(piUid, projectId, 'PI')
+    for (const memberUid of teamMemberUids) {
+        await addProjectToProfile(memberUid, projectId, 'Researcher')
+    }
+
     return projectId
 }
 
@@ -532,6 +615,10 @@ async function main() {
                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
                     createdBy: sarahUid
                 })
+
+                // Link profiles
+                await addProjectToProfile(sarahUid, projectId, 'PI')
+                await addProjectToProfile(markusUid, projectId, 'Co-PI')
 
                 // Create Workpackage
                 const wpId = uuidv4()

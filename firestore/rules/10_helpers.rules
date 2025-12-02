@@ -26,7 +26,10 @@
     // Helper function to check if user is member of a specific lab
     function isLabMember(labId) {
       let userProfile = getUserProfile();
-      return userProfile != null && userProfile.data != null && userProfile.data.labId == labId;
+      return userProfile != null && userProfile.data != null && (
+        userProfile.data.labId == labId ||
+        (userProfile.data.workingLabIds != null && userProfile.data.workingLabIds.hasAny([labId]))
+      );
     }
 
     // Helper function to check if user is PI of a master project

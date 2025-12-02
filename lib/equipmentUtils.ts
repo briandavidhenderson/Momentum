@@ -6,6 +6,7 @@
 import {
   InventoryItem,
   EquipmentDevice,
+  EquipmentSupply,
   ReorderSuggestion,
   EquipmentTaskType,
   MasterProject,
@@ -32,9 +33,10 @@ export function calculateReorderSuggestions(
     }
 
     // Find all equipment devices that use this inventory item
-    const devicesUsingItem = equipment.filter(device =>
-      device.supplies.some(supply => supply.inventoryItemId === item.id)
-    )
+    const devicesUsingItem = equipment.filter(device => {
+      const supplies = device.supplies || [] as EquipmentSupply[];
+      return supplies.some(supply => supply.inventoryItemId === item.id)
+    })
 
     if (devicesUsingItem.length === 0) {
       return // Item not linked to any equipment
@@ -45,7 +47,8 @@ export function calculateReorderSuggestions(
     const equipmentUsage: Array<{ deviceId: string; deviceName: string; burnRate: number; projectId?: string }> = []
 
     devicesUsingItem.forEach(device => {
-      const supply = device.supplies.find(s => s.inventoryItemId === item.id)
+      const supplies = device.supplies || [] as EquipmentSupply[];
+      const supply = supplies.find(s => s.inventoryItemId === item.id)
       if (supply) {
         totalBurnRate += supply.burnPerWeek
         equipmentUsage.push({

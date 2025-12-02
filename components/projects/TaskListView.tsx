@@ -26,6 +26,13 @@ export function TaskListView({
 }: TaskListViewProps) {
     const { allProfiles, handleUpdateWorkpackage } = useAppContext()
 
+    console.log("DEBUG: TaskListView props", {
+        deliverableId,
+        hasDeliverable: !!deliverable,
+        workpackageId,
+        tasksCount: tasks.length
+    });
+
     const getOwner = (ownerId?: string): PersonProfile | undefined => {
         return allProfiles.find((p) => p.id === ownerId)
     }

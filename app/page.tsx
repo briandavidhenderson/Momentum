@@ -4,7 +4,7 @@ import { useAppContext } from "@/lib/AppContext"
 import { AuthPage } from "@/components/AuthPage"
 import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
-import { LogOut } from "lucide-react"
+import { LogOut, CircleUser, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 import PeopleView from "@/components/views/PeopleView"
@@ -35,43 +35,52 @@ import { MobileDashboard } from "@/components/views/mobile/MobileDashboard"
 import { QRScanner } from "@/components/mobile/QRScanner"
 import { GroupList } from "@/components/groups/GroupList"
 import { TrainingDashboard } from "@/components/training/TrainingDashboard"
-import { CircleUser } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 import { ProtocolBenchMode } from '@/components/ProtocolBenchMode'
 import { ReportsView } from '@/components/views/reports/ReportsView'
 import { SampleListView } from '@/components/views/samples/SampleListView'
 
 export default function Page() {
-  const router = useRouter()
   const {
-    currentUserProfile,
     currentUser,
-    authUser,
+    currentUserProfile,
     authState,
-    mounted,
+    isLoadingProfile,
+    isAuthCheckComplete,
     handleLogin,
     handleSignup,
     handleSignOut,
     handleProfileSetupComplete,
-
-    // UI state
     mainView,
     setMainView,
-  } = useAppContext()
+    activeProjectId,
+    setActiveProjectId,
+    authUser,
+  } = useAppContext();
 
+  const router = useRouter();
   const [showQRScanner, setShowQRScanner] = useState(false)
 
-  // Prevent hydration mismatch - don't render until mounted
-  if (!mounted) {
+  // Handle routing based on auth state
+  useEffect(() => {
+    if (!isAuthCheckComplete) return;
+
+    if (authState === 'auth' && !currentUser) {
+      // Stay on auth page (handled by render)
+    } else if (authState === 'setup') {
+      // Stay on setup page (handled by render)
+    } else if (authState === 'app' && currentUser) {
+      // User is authenticated and setup, ready for app
+    }
+  }, [authState, currentUser, isAuthCheckComplete]);
+
+  if (!isAuthCheckComplete) {
     return (
-      <main className="min-h-screen bg-background p-4 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="h1 text-foreground mb-2">Momentum Lab Management</h1>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </main>
-    )
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
+      </div>
+    );
   }
 
   // Show auth page

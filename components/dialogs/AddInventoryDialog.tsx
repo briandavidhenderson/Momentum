@@ -219,6 +219,11 @@ export function AddInventoryDialog({ open, onClose, onSuccess, labId }: AddInven
       return
     }
 
+    if (!labId && !currentUserProfile?.labId) {
+      setError("Lab ID is missing. Please refresh the page or contact support.")
+      return
+    }
+
     setLoading(true)
 
     try {

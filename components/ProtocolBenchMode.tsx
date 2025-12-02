@@ -22,7 +22,9 @@ import {
     Loader2,
     Save,
     Plus,
-    Edit
+    Edit,
+    AlertOctagon,
+    Flag
 } from 'lucide-react'
 import { useAppContext } from '@/lib/AppContext'
 import { Protocol, ProtocolStep, ProtocolExecution, ProtocolStepExecution } from '@/lib/types'
@@ -30,7 +32,9 @@ import { cn } from '@/lib/utils'
 import { ProtocolHistoryView } from './protocols/ProtocolHistoryView'
 import { ProtocolEditor } from './ProtocolEditor'
 import { ResourceAvailabilityChecker, ResourceRequirement } from './ResourceAvailabilityChecker'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import {
     startProtocolExecution,
     updateProtocolExecution,
@@ -38,6 +42,7 @@ import {
     abortProtocolExecution
 } from '@/lib/services/protocolExecutionService'
 import { deductInventory, getInventory } from '@/lib/services/inventoryService'
+import { getEquipment } from '@/lib/services/equipmentService'
 import { scheduleProtocol } from '@/lib/services/calendarService'
 import { uploadFile } from '@/lib/storage'
 import { useToast } from '@/components/ui/use-toast'
@@ -65,6 +70,12 @@ export function ProtocolBenchMode() {
     const [isCheckingResources, setIsCheckingResources] = useState(false)
     const [requiredResources, setRequiredResources] = useState<ResourceRequirement[]>([])
     const [pendingProtocolStart, setPendingProtocolStart] = useState<Protocol | null>(null)
+    const [isReportingIssue, setIsReportingIssue] = useState(false)
+    const [issueDescription, setIssueDescription] = useState("")
+    const [flaggedSteps, setFlaggedSteps] = useState<string[]>([])
+    const [resourceStatus, setResourceStatus] = useState<Record<string, { status: 'ok' | 'warning' | 'error', message: string }>>({})
+
+
 
     const timerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -91,6 +102,63 @@ export function ProtocolBenchMode() {
         }
     }, [activeExecution])
 
+    const currentStep = activeProtocol?.steps[currentStepIndex]
+    const progress = activeProtocol ? ((currentStepIndex) / activeProtocol.steps.length) * 100 : 0
+
+    // Poll for resource status
+    useEffect(() => {
+        if (!activeExecution || !currentStep) return
+
+        const checkStatus = async () => {
+            const newStatus: Record<string, { status: 'ok' | 'warning' | 'error', message: string }> = {}
+
+            // Check Equipment
+            if (currentStep.requiredEquipment) {
+                const equipmentList = await getEquipment()
+                for (const eq of currentStep.requiredEquipment) {
+                    const item = equipmentList.find(e => e.id === eq.id || e.name === eq.name)
+                    if (!item) {
+                        newStatus[`eq-${eq.name}`] = { status: 'error', message: 'Not Found' }
+                        continue
+                    }
+                    // Check maintenance
+                    const maintenanceDue = new Date(item.lastMaintained).getTime() + (item.maintenanceDays * 86400000) < Date.now()
+                    if (maintenanceDue) {
+                        newStatus[`eq-${eq.name}`] = { status: 'error', message: 'Maintenance Due' }
+                    } else if (item.currentBookingId) {
+                        newStatus[`eq-${eq.name}`] = { status: 'warning', message: 'Booked' }
+                    } else {
+                        newStatus[`eq-${eq.name}`] = { status: 'ok', message: 'Online' }
+                    }
+                }
+            }
+
+            // Check Reagents
+            if (currentStep.requiredReagents) {
+                const inventory = await getInventory()
+                for (const r of currentStep.requiredReagents) {
+                    const item = inventory.find(i => (r.id && i.id === r.id) || i.productName === r.name)
+                    if (!item) {
+                        newStatus[`reagent-${r.name}`] = { status: 'error', message: 'Not Found' }
+                        continue
+                    }
+                    if (item.inventoryLevel === 'out_of_stock') {
+                        newStatus[`reagent-${r.name}`] = { status: 'error', message: 'Out of Stock' }
+                    } else if (item.inventoryLevel === 'low') {
+                        newStatus[`reagent-${r.name}`] = { status: 'warning', message: 'Low Stock' }
+                    } else {
+                        newStatus[`reagent-${r.name}`] = { status: 'ok', message: 'In Stock' }
+                    }
+                }
+            }
+            setResourceStatus(newStatus)
+        }
+
+        checkStatus()
+        const interval = setInterval(checkStatus, 30000) // Check every 30s
+        return () => clearInterval(interval)
+    }, [activeExecution, currentStep])
+
     const startProtocol = async (protocol: Protocol) => {
         if (!currentUserProfile) {
             toast({
@@ -107,10 +175,18 @@ export function ProtocolBenchMode() {
             step.requiredReagents?.forEach(reagent => {
                 resources.push({
                     type: 'reagent',
-                    id: '', // We don't have ID yet, checker will match by name
+                    id: reagent.id || '',
                     name: reagent.name,
                     quantityNeeded: parseFloat(reagent.quantity) || 1,
-                    unit: reagent.quantity.replace(/[0-9.]/g, '').trim()
+                    unit: reagent.unit || reagent.quantity.replace(/[0-9.]/g, '').trim()
+                })
+            })
+            step.requiredEquipment?.forEach(eq => {
+                resources.push({
+                    type: 'equipment',
+                    id: eq.id,
+                    name: eq.name,
+                    quantityNeeded: 1
                 })
             })
         })
@@ -243,8 +319,60 @@ export function ProtocolBenchMode() {
         }
     }
 
-    const currentStep = activeProtocol?.steps[currentStepIndex]
-    const progress = activeProtocol ? ((currentStepIndex) / activeProtocol.steps.length) * 100 : 0
+
+    // Poll for resource status
+    useEffect(() => {
+        if (!activeExecution || !currentStep) return
+
+        const checkStatus = async () => {
+            const newStatus: Record<string, { status: 'ok' | 'warning' | 'error', message: string }> = {}
+
+            // Check Equipment
+            if (currentStep.requiredEquipment) {
+                const equipmentList = await getEquipment()
+                for (const eq of currentStep.requiredEquipment) {
+                    const item = equipmentList.find(e => e.id === eq.id || e.name === eq.name)
+                    if (!item) {
+                        newStatus[`eq-${eq.name}`] = { status: 'error', message: 'Not Found' }
+                        continue
+                    }
+                    // Check maintenance
+                    const maintenanceDue = new Date(item.lastMaintained).getTime() + (item.maintenanceDays * 86400000) < Date.now()
+                    if (maintenanceDue) {
+                        newStatus[`eq-${eq.name}`] = { status: 'error', message: 'Maintenance Due' }
+                    } else if (item.currentBookingId) {
+                        newStatus[`eq-${eq.name}`] = { status: 'warning', message: 'Booked' }
+                    } else {
+                        newStatus[`eq-${eq.name}`] = { status: 'ok', message: 'Online' }
+                    }
+                }
+            }
+
+            // Check Reagents
+            if (currentStep.requiredReagents) {
+                const inventory = await getInventory()
+                for (const r of currentStep.requiredReagents) {
+                    const item = inventory.find(i => (r.id && i.id === r.id) || i.productName === r.name)
+                    if (!item) {
+                        newStatus[`reagent-${r.name}`] = { status: 'error', message: 'Not Found' }
+                        continue
+                    }
+                    if (item.inventoryLevel === 'out_of_stock') {
+                        newStatus[`reagent-${r.name}`] = { status: 'error', message: 'Out of Stock' }
+                    } else if (item.inventoryLevel === 'low') {
+                        newStatus[`reagent-${r.name}`] = { status: 'warning', message: 'Low Stock' }
+                    } else {
+                        newStatus[`reagent-${r.name}`] = { status: 'ok', message: 'In Stock' }
+                    }
+                }
+            }
+            setResourceStatus(newStatus)
+        }
+
+        checkStatus()
+        const interval = setInterval(checkStatus, 30000) // Check every 30s
+        return () => clearInterval(interval)
+    }, [activeExecution, currentStep])
 
     const handleNext = () => {
         if (!activeProtocol) return
@@ -396,6 +524,30 @@ export function ProtocolBenchMode() {
         input.click()
     }
 
+    const handleReportIssue = async () => {
+        if (!activeExecution || !currentStep) return
+        if (!issueDescription.trim()) return
+
+        try {
+            // In a real app, we would save this to an 'issues' collection or similar
+            // For now, we'll add it to the step notes and flag the step
+            const newNotes = (stepNotes[currentStep.id] || "") + `\n[ISSUE REPORTED]: ${issueDescription}`
+            setStepNotes({ ...stepNotes, [currentStep.id]: newNotes })
+            setFlaggedSteps([...flaggedSteps, currentStep.id])
+
+            toast({
+                title: "Issue Reported",
+                description: "The issue has been logged and the step flagged.",
+                variant: "destructive"
+            })
+            setIsReportingIssue(false)
+            setIssueDescription("")
+        } catch (error) {
+            console.error("Failed to report issue", error)
+            toast({ title: "Failed to report issue", variant: "destructive" })
+        }
+    }
+
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60)
         const secs = seconds % 60
@@ -500,21 +652,65 @@ export function ProtocolBenchMode() {
                                         </div>
                                     )}
 
-                                    {/* Reagents List */}
-                                    {currentStep.requiredReagents && currentStep.requiredReagents.length > 0 && (
-                                        <div className="bg-muted/50 p-4 rounded-lg">
-                                            <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                                <FlaskConical className="h-4 w-4" />
-                                                Required Reagents
-                                            </h4>
-                                            <ul className="space-y-2">
-                                                {currentStep.requiredReagents.map((reagent, idx) => (
-                                                    <li key={idx} className="flex justify-between text-sm border-b border-border/50 last:border-0 pb-2 last:pb-0">
-                                                        <span>{reagent.name}</span>
-                                                        <span className="font-mono text-muted-foreground">{reagent.quantity}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
+                                    {/* Resources List (Equipment & Reagents) */}
+                                    {(currentStep.requiredReagents?.length || 0) + (currentStep.requiredEquipment?.length || 0) > 0 && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* Equipment List */}
+                                            {currentStep.requiredEquipment && currentStep.requiredEquipment.length > 0 && (
+                                                <div className="bg-slate-50 p-4 rounded-lg border">
+                                                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-slate-700">
+                                                        <FlaskConical className="h-4 w-4" />
+                                                        Equipment List
+                                                    </h4>
+                                                    <ul className="space-y-2">
+                                                        {currentStep.requiredEquipment.map((eq, idx) => {
+                                                            const status = resourceStatus[`eq-${eq.name}`] || { status: 'ok', message: 'Checking...' }
+                                                            const colorClass = status.status === 'ok' ? 'bg-green-500' : status.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                                                            const badgeVariant = status.status === 'ok' ? 'outline' : 'destructive'
+
+                                                            return (
+                                                                <li key={idx} className="flex items-center justify-between text-sm bg-white p-2 rounded border">
+                                                                    <span>{eq.name}</span>
+                                                                    <Badge variant={badgeVariant} className={cn("text-[10px] flex gap-1 items-center", status.status === 'ok' && "bg-green-50 text-green-700 border-green-200")}>
+                                                                        <div className={cn("h-1.5 w-1.5 rounded-full", colorClass)} />
+                                                                        {status.message}
+                                                                    </Badge>
+                                                                </li>
+                                                            )
+                                                        })}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            {/* Reagent List */}
+                                            {currentStep.requiredReagents && currentStep.requiredReagents.length > 0 && (
+                                                <div className="bg-slate-50 p-4 rounded-lg border">
+                                                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-slate-700">
+                                                        <FlaskConical className="h-4 w-4" />
+                                                        Reagent List
+                                                    </h4>
+                                                    <ul className="space-y-2">
+                                                        {currentStep.requiredReagents.map((reagent, idx) => {
+                                                            const status = resourceStatus[`reagent-${reagent.name}`] || { status: 'ok', message: 'Checking...' }
+                                                            const colorClass = status.status === 'ok' ? 'bg-green-500' : status.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                                                            const badgeVariant = status.status === 'ok' ? 'outline' : 'destructive'
+
+                                                            return (
+                                                                <li key={idx} className="flex items-center justify-between text-sm bg-white p-2 rounded border">
+                                                                    <span>{reagent.name}</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-mono text-muted-foreground text-xs">{reagent.quantity} {reagent.unit}</span>
+                                                                        <Badge variant={badgeVariant} className={cn("text-[10px] flex gap-1 items-center", status.status === 'ok' && "bg-green-50 text-green-700 border-green-200")}>
+                                                                            <div className={cn("h-1.5 w-1.5 rounded-full", colorClass)} />
+                                                                            {status.message}
+                                                                        </Badge>
+                                                                    </div>
+                                                                </li>
+                                                            )
+                                                        })}
+                                                    </ul>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -538,6 +734,10 @@ export function ProtocolBenchMode() {
                                         <Button variant="outline" size="lg" className="flex-1 h-16" onClick={handleVoiceNote}>
                                             <Mic className="mr-2 h-6 w-6" />
                                             Add Audio
+                                        </Button>
+                                        <Button variant="destructive" size="lg" className="flex-1 h-16" onClick={() => setIsReportingIssue(true)}>
+                                            <AlertOctagon className="mr-2 h-6 w-6" />
+                                            Report Issue
                                         </Button>
                                     </div>
                                 </CardContent>
@@ -714,6 +914,28 @@ export function ProtocolBenchMode() {
                         onProceed={() => pendingProtocolStart && executeStartProtocol(pendingProtocolStart)}
                         onCancel={() => setIsCheckingResources(false)}
                     />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isReportingIssue} onOpenChange={setIsReportingIssue}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Report Issue</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Issue Description</Label>
+                            <Textarea
+                                value={issueDescription}
+                                onChange={(e) => setIssueDescription(e.target.value)}
+                                placeholder="Describe the problem..."
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setIsReportingIssue(false)}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleReportIssue}>Report Issue</Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </Card>

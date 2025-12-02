@@ -88,48 +88,45 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
       ref={setNodeRef}
       style={style}
       {...attributes}
-      className="order-card relative overflow-hidden group"
+      {...listeners}
+      className="order-card relative overflow-hidden group bg-white rounded-lg border border-border shadow-sm hover:shadow-md transition-all p-3 cursor-grab active:cursor-grabbing"
     >
       <div
-        className="absolute inset-x-5 top-0 h-1 rounded-full"
+        className="absolute inset-x-0 top-0 h-1"
         style={{ background: "var(--accent-gradient)" }}
       />
+
       {/* Header with Title and Menu */}
-      <div className="flex items-start justify-between pb-3 mb-3 border-b border-border/70">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-accent rounded-md flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <GripVertical className="h-5 w-5 text-gray-400" />
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="h-8 w-8 rounded-lg bg-accent text-brand-700 grid place-items-center shadow-subtle flex-shrink-0">
+            <Package className="h-4 w-4" />
           </div>
-          <div className="h-9 w-9 rounded-xl bg-accent text-brand-700 grid place-items-center shadow-subtle flex-shrink-0">
-            <Package className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-foreground text-base truncate">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-foreground text-sm truncate leading-tight">
               {order.productName || 'Unnamed Product'}
             </h3>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={getStatusPillClass(order.status || 'to-order')}>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className={`${getStatusPillClass(order.status || 'to-order')} text-[10px] px-1.5 py-0.5 h-auto`}>
                 {formatStatusLabel(order.status || 'to-order')}
               </span>
-              <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal gap-1 text-muted-foreground border-border/60">
+              <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal gap-1 text-muted-foreground border-border/60">
                 {getVisibilityIcon(order.visibility)}
                 {getVisibilityLabel(order.visibility)}
               </Badge>
             </div>
           </div>
         </div>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 ml-2 flex-shrink-0 hover:bg-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+              className="h-6 w-6 p-0 ml-1 flex-shrink-0 hover:bg-secondary transition-opacity"
               onClick={(e) => e.stopPropagation()}
             >
-              <MoreVertical className="h-4 w-4 text-gray-600" />
+              <MoreVertical className="h-3 w-3 text-gray-500" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40">
@@ -157,58 +154,38 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
         </DropdownMenu>
       </div>
 
-      {/* Metadata Section - Cleaner grouped layout */}
-      <div className="space-y-4 mb-3">
-        {/* Supplier and Catalog */}
-        <div className="space-y-1.5 text-sm text-gray-600">
+      {/* Metadata Section - Compact */}
+      <div className="space-y-1.5">
+        {/* Price & Supplier Row */}
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1 font-semibold text-gray-900">
+            <DollarSign className="h-3 w-3 text-brand-600" />
+            <span>
+              {order.currency || 'GBP'} {order.priceExVAT?.toFixed(2) || '0.00'}
+            </span>
+          </div>
           {order.supplier && (
-            <div className="flex justify-between items-center">
-              <span>Supplier</span>
-              <span className="font-semibold text-gray-900 truncate ml-2">{order.supplier}</span>
-            </div>
+            <span className="text-gray-500 truncate max-w-[100px]">{order.supplier}</span>
           )}
+        </div>
+
+        {/* Cat# & Date Row */}
+        <div className="flex items-center justify-between text-[10px] text-gray-500">
           {order.catNum && (
-            <div className="flex justify-between items-center">
-              <span>Cat#</span>
-              <span className="font-semibold text-gray-900 truncate ml-2">{order.catNum}</span>
-            </div>
+            <span className="font-mono bg-slate-50 px-1 rounded border border-slate-100">{order.catNum}</span>
           )}
-        </div>
-
-        {/* Price */}
-        <div className="flex items-center gap-1.5 text-xl font-semibold text-gray-900">
-          <DollarSign className="h-5 w-5 text-brand-600" />
-          <span className="tabular-nums">
-            {order.currency || 'GBP'} {order.priceExVAT?.toFixed(2) || '0.00'}
-          </span>
-        </div>
-
-        {/* Dates */}
-        <div className="space-y-1.5 text-xs text-gray-600">
           {order.expectedDeliveryDate && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3 text-brand-600" />
-              <span>Due: {new Date(order.expectedDeliveryDate).toLocaleDateString()}</span>
+              <span>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</span>
             </div>
           )}
         </div>
 
         {/* Account Info */}
         {order.accountName && (
-          <div className="pt-3 border-t border-border/70 space-y-1">
-            <div className="text-xs text-gray-500">Account</div>
-            <div className="text-sm font-semibold text-gray-800 truncate">{order.accountName}</div>
-          </div>
-        )}
-
-        {/* Linked Deliverable */}
-        {deliverableName && (
-          <div className="pt-3 border-t border-border/70 space-y-1">
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <Target className="h-3 w-3 text-brand-600" />
-              <span>Linked Deliverable</span>
-            </div>
-            <div className="text-sm font-semibold text-brand-700 truncate">{deliverableName}</div>
+          <div className="pt-1.5 border-t border-border/50 flex items-center gap-1 text-[10px] text-gray-500">
+            <span className="font-medium text-gray-700 truncate">{order.accountName}</span>
           </div>
         )}
       </div>

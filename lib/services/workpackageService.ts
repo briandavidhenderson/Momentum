@@ -102,6 +102,7 @@ export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'>
     createdAt: serverTimestamp(),
   })
 
+  console.log("DEBUG: createWorkpackage payload", JSON.stringify(payload));
   await setDoc(wpRef, payload)
 
   return wpId

@@ -24,12 +24,15 @@ export function useProjects() {
   const [projects, setProjects] = useState<MasterProject[]>([]);
   const [workpackages, setWorkpackages] = useState<Workpackage[]>([]);
   const [workpackagesMap, setWorkpackagesMap] = useState<Map<string, Workpackage>>(new Map());
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile?.labId) {
       const unsubscribe = subscribeToMasterProjects(
         { labId: profile.labId },
         async (newProjects) => {
+          const target = newProjects.find(p => p.id === 'sZYoShKUAzCeYOGThApb');
+          if (target) console.log("DEBUG: useProjects received target", target);
           setProjects(newProjects);
 
           // Fetch workpackages for all new projects
@@ -78,6 +81,13 @@ export function useProjects() {
     workpackageData: Omit<Workpackage, 'id'>
   ) => {
     if (!user) return;
+
+    // DEBUG: Check for labId
+    if (!workpackageData.labId) {
+      console.error("Missing labId in workpackageData", workpackageData);
+      throw new Error("Missing labId in workpackageData. Keys: " + Object.keys(workpackageData).join(", "));
+    }
+
     const workpackageId = await createWorkpackageInFirestore({
       ...workpackageData,
       createdBy: user.uid,
@@ -97,14 +107,23 @@ export function useProjects() {
   };
 
   const handleUpdateDeliverableTasks = async (deliverableId: string, tasks: any[]) => {
-    const { updateDeliverableTasks } = await import('@/lib/services/projectService');
-    await updateDeliverableTasks(deliverableId, tasks);
+    console.log("DEBUG: handleUpdateDeliverableTasks called", { deliverableId, tasksCount: tasks?.length });
+    try {
+      const { updateDeliverableTasks } = await import('@/lib/services/projectService');
+      await updateDeliverableTasks(deliverableId, tasks);
+      console.log("DEBUG: updateDeliverableTasks completed");
+    } catch (error) {
+      console.error("DEBUG: Error in handleUpdateDeliverableTasks", error);
+      throw error;
+    }
   };
 
   return {
     projects,
     workpackages,
     workpackagesMap,
+    activeProjectId,
+    setActiveProjectId,
     handleCreateMasterProject,
     handleUpdateMasterProject,
     handleDeleteMasterProject,

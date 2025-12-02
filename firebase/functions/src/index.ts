@@ -150,6 +150,8 @@ export {
   fixCalendarTokenPermissionsHTTP,
 }
 
+export { syncEmails } from "./emailSync"
+
 export { importProtocolFromPdf } from "./protocol-import"
 
 /**

@@ -41,8 +41,15 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
     const [isDeliverableDialogOpen, setIsDeliverableDialogOpen] = useState(false)
 
     // Filter data based on selection
+    console.log("DEBUG: ProjectExplorerView filtering", {
+        projectId: project.id,
+        projectWpIds: project.workpackageIds,
+        allWpCount: allWorkpackages.length,
+        allWps: allWorkpackages.map(wp => ({ id: wp.id, pid: wp.projectId, ppid: wp.profileProjectId }))
+    });
+
     const projectWorkpackages = allWorkpackages.filter((wp) =>
-        project.workpackageIds.includes(wp.id)
+        project.workpackageIds?.includes(wp.id)
     )
 
     const selectedWorkpackage = selectedWorkPackageId
@@ -135,6 +142,8 @@ export function ProjectExplorerView({ project }: ProjectExplorerViewProps) {
 
             await handleCreateWorkpackage({
                 projectId: project.id,
+                profileProjectId: project.id, // Ensure both are set for compatibility
+                labId: project.labId, // Required for permission rules
                 name: data.name,
                 start: data.start,
                 end: data.end,

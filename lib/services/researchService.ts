@@ -33,8 +33,8 @@ function deriveVisibility(pin: { visibility?: ResearchPinVisibility; isPrivate?:
 
 function mapResearchPin(docSnap: any): ResearchPin {
   const data = docSnap.data()
-  const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt || new Date())
-  const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt
+  const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt || new Date())
+  const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
 
   const visibility = deriveVisibility(data)
 

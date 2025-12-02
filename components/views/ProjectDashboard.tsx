@@ -48,7 +48,6 @@ import { ProjectKanbanBoard } from "./ProjectKanbanBoard"
 import { personProfilesToPeople } from "@/lib/personHelpers"
 import { useToast } from "@/lib/toast"
 import { PersonalLedger } from "@/components/PersonalLedger"
-
 export function ProjectDashboard() {
   const { toast, error: toastError } = useToast()
   const { currentUser: user, currentUserProfile: profile } = useAuth()
@@ -70,6 +69,8 @@ export function ProjectDashboard() {
     people,
     handleUpdateDeliverableTasks,
   } = useAppContext()
+
+  console.log("DEBUG: ProjectDashboard projects", projects?.map(p => ({ id: p.id, labId: p.labId })));
 
   // Get selected group for filtering
   const { selectedGroupId } = useGroupContext()
@@ -327,6 +328,7 @@ export function ProjectDashboard() {
   }
 
   const renderProjectCard = (project: MasterProject) => {
+    console.log("DEBUG: renderProjectCard", project.id, "project.labId:", project.labId, "profile.labId:", profile?.labId);
     const budgetSummary = budgetSummaries.get(project.id)
     const health = projectHealths.get(project.id)
 
@@ -348,6 +350,11 @@ export function ProjectDashboard() {
             const workpackageId = await createWorkpackage({
               name: "New Work Package",
               projectId,
+              labId: (() => {
+                console.log("DEBUG: Creating WP for project", project.id, "labId:", project.labId, project);
+                if (!project.labId) alert("Missing labId for project " + project.name);
+                return project.labId;
+              })(), // Fix: Pass labId for permissions
               start: new Date(),
               end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
               status: "planning",
