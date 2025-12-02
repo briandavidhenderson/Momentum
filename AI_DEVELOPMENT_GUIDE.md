@@ -374,6 +374,9 @@ This section tracks the high-level state of the project to prevent drift.
             -   **Live Resource Status:** Implemented polling for equipment and inventory status in `ProtocolBenchMode`.
             -   **Issue Persistence:** Integrated `incidentService` to persist reported issues to Firestore.
             -   **Real Booking Checks:** Updated `ResourceAvailabilityChecker` to check for actual booking conflicts using `equipmentBookingService`.
+    -   **Flexible Workflows:**
+        -   **Custom Fields:** Implemented `CustomFieldEditor` and schema support for Samples, Protocols, and Experiments.
+        -   **Templates:** Created `TemplateGallery` and `templateService` for Protocol and Experiment instantiation.
 *   [x] Production Runtime Error Resolution
 *   [x] Global Search & Navigation
 *   [x] Role-Based Dashboards
