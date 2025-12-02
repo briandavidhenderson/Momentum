@@ -51,6 +51,7 @@ import { getRiskAssessment } from '@/lib/services/safetyService'
 import { RiskAssessment } from '@/lib/types/safety.types'
 import { CommentsSection } from '@/components/CommentsSection'
 import { cloneProtocol } from '@/lib/services/cloningService'
+import { createIncident } from '@/lib/services/incidentService'
 import { Copy } from 'lucide-react'
 
 export function ProtocolBenchMode() {
@@ -529,16 +530,31 @@ export function ProtocolBenchMode() {
         if (!issueDescription.trim()) return
 
         try {
-            // In a real app, we would save this to an 'issues' collection or similar
-            // For now, we'll add it to the step notes and flag the step
+            // Create incident in Firestore
+            await createIncident({
+                title: `Issue in Protocol: ${activeProtocol.title}`,
+                description: issueDescription,
+                type: 'other', // Default type, could be enhanced with a selector
+                severity: 'moderate', // Default severity
+                labId: currentUserProfile?.labId || '',
+                reportedBy: currentUserProfile?.id || '',
+                reportedByName: currentUserProfile?.displayName || '',
+                peopleInvolved: [currentUserProfile?.id || ''],
+                location: 'Bench Mode',
+                dateOccurred: new Date().toISOString(),
+                relatedEntityId: activeExecution.id,
+                relatedEntityType: 'protocol_execution',
+                stepIndex: currentStepIndex
+            })
+
+            // Update local state
             const newNotes = (stepNotes[currentStep.id] || "") + `\n[ISSUE REPORTED]: ${issueDescription}`
             setStepNotes({ ...stepNotes, [currentStep.id]: newNotes })
             setFlaggedSteps([...flaggedSteps, currentStep.id])
 
             toast({
                 title: "Issue Reported",
-                description: "The issue has been logged and the step flagged.",
-                variant: "destructive"
+                description: "The issue has been logged to the incident system.",
             })
             setIsReportingIssue(false)
             setIssueDescription("")
@@ -581,6 +597,12 @@ export function ProtocolBenchMode() {
                                     <Clock className="h-3 w-3" />
                                     {formatTime(sessionTimer)}
                                 </span>
+                                {flaggedSteps.includes(currentStep?.id || '') && (
+                                    <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4 flex items-center">
+                                        <Flag className="h-3 w-3 mr-1" />
+                                        Issue
+                                    </Badge>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -370,18 +370,10 @@ This section tracks the high-level state of the project to prevent drift.
         -   **Login Crash:** Fixed `subscribeToUserTraining` in `trainingService.ts` to handle undefined `userId` gracefully.
         -   **Inventory Reconciliation:** Implemented client-side reconciliation in `OrdersInventory.tsx` (via `handleSaveEdit` and `handleDragEnd`) to ensure received orders create/update inventory items.
         -   **UI Patterns:** Adopted compact card designs and whole-card drag-and-drop for better mobile/touch usability in `OrdersInventory`.
-        -   **Resolved `permission-denied` errors** by adding `labId` to `Workpackage` type.
-        -   Fixed `activeProjectId` missing from `AppContext`.
-        -   Fixed `toDate()` crashes in `protocolExecutionService`.
-        -   Resolved syntax errors in `app/page.tsx` and `lib/AppContext.tsx`.
-        -   **Email Integration:** Implemented OAuth (Google/Outlook), Sync Rules, and UI components (`IntegrationsSettings`, `ProjectEmailsPanel`).
-        -   **Funding Fix:** Resolved budget discrepancies by fixing `deleteOrder` logic to correctly reverse allocations and cancel transactions.
-
-### Completed Milestones
-*   [x] Initial Architecture Setup
-*   [x] Core Services (Auth, Projects, Inventory)
-*   [x] Mobile & Bench Experience
-*   [x] Build & Deploy Pipeline Fixes
+        -   **Protocol Builder Integration:**
+            -   **Live Resource Status:** Implemented polling for equipment and inventory status in `ProtocolBenchMode`.
+            -   **Issue Persistence:** Integrated `incidentService` to persist reported issues to Firestore.
+            -   **Real Booking Checks:** Updated `ResourceAvailabilityChecker` to check for actual booking conflicts using `equipmentBookingService`.
 *   [x] Production Runtime Error Resolution
 *   [x] Global Search & Navigation
 *   [x] Role-Based Dashboards

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { getInventory } from '@/lib/services/inventoryService'
+import { checkConflicts } from '@/lib/services/equipmentBookingService'
 
 export interface ResourceRequirement {
     type: 'reagent' | 'equipment' | 'sample' | 'consumable'
@@ -94,13 +95,25 @@ export function ResourceAvailabilityChecker({
                 }
             }
 
-            // Check if currently booked (simple check based on device state)
-            if (equipment.currentBookingId) {
+            // Check for booking conflicts
+            const endTime = new Date(scheduledTime.getTime() + estimatedDuration * 60000)
+            const conflicts = await checkConflicts(resource.id, scheduledTime, endTime)
+
+            if (conflicts.length > 0) {
                 return {
                     resource,
                     status: 'booked',
                     available: 0,
-                    message: `Currently booked by ${equipment.currentBookingUserId || 'another user'}`
+                    conflicts: conflicts.map(c => ({
+                        id: c.id,
+                        equipmentId: c.equipmentId,
+                        equipmentName: c.equipmentName,
+                        startTime: c.startTime,
+                        endTime: c.endTime,
+                        userId: c.bookedBy,
+                        userName: c.bookedByName
+                    })),
+                    message: `Equipment booked during this time`
                 }
             }
 
@@ -120,7 +133,7 @@ export function ResourceAvailabilityChecker({
                 message: 'Failed to check status'
             }
         }
-    }, [])
+    }, [estimatedDuration, scheduledTime])
 
     const checkInventoryAvailability = useCallback(async (
         resource: ResourceRequirement
