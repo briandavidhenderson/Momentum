@@ -11,14 +11,16 @@ import { v4 as uuidv4 } from 'uuid'
 import { InventoryPicker } from "@/components/pickers/InventoryPicker"
 import { EquipmentPicker } from "@/components/pickers/EquipmentPicker"
 import { Badge } from "@/components/ui/badge"
+import { SmartStepEditor } from "@/components/SmartStepEditor"
 
 interface ProtocolEditorProps {
     protocol?: Protocol
     onSave: (protocol: Protocol) => void
     onCancel: () => void
+    labId?: string
 }
 
-export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel }: ProtocolEditorProps) {
+export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel, labId }: ProtocolEditorProps) {
     const [title, setTitle] = useState(initialProtocol?.title || "")
     const [description, setDescription] = useState(initialProtocol?.description || "")
     const [steps, setSteps] = useState<ProtocolStep[]>(initialProtocol?.steps || [])
@@ -140,11 +142,13 @@ export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel }: 
                                     <div className="flex-1 space-y-4">
                                         <div className="space-y-2">
                                             <Label>Instruction</Label>
-                                            <Textarea
-                                                value={step.instruction}
-                                                onChange={e => updateStep(step.id, { instruction: e.target.value })}
-                                                placeholder="Describe the step..."
+                                            <SmartStepEditor
+                                                id={`step-instruction-${index}`}
+                                                step={step}
+                                                onUpdate={(updates: Partial<ProtocolStep>) => updateStep(step.id, updates)}
+                                                placeholder="Describe the step... (Type @ to add resources)"
                                                 className="min-h-[80px]"
+                                                labId={labId}
                                             />
                                         </div>
 
@@ -253,6 +257,7 @@ export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel }: 
                                                                     updateStep(step.id, { requiredReagents: newReagents })
                                                                 }}
                                                                 placeholder="Add Reagent..."
+                                                                labId={labId}
                                                             />
                                                         </div>
                                                     </div>

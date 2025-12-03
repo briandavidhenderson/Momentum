@@ -315,6 +315,11 @@ Before generating code or running commands, ask:
     2.  **Tooltip Feedback:** Show "Loading profile..." in the button tooltip while disabled.
     3.  **Prop Drilling:** If a parent component (`OrdersInventory`) waits for the profile, pass `labId` down to the child dialog (`AddInventoryDialog`) as a prop. Do not rely on the child hook to fetch it again in time.
 
+### Protocol Creation & Security Rules
+*   **The Problem:** Firestore rules often require `resource.data.createdBy == request.auth.uid`.
+*   **The Pitfall:** Using `currentUserProfile.id` for `createdBy` can fail if the profile ID doesn't match the Auth UID (though they should match in this app) or if the profile is not yet loaded.
+*   **The Fix:** Always use `authUser.uid` (from `useAuth` or `useAppContext`) for the `createdBy` field when creating new documents. Use `currentUserProfile.id` for application-level fields like `ownerId` or `profileId`.
+
 ### Debugging & Resilience Lessons
 1.  **Visual Debugging:** When console logs are swallowed or unreliable (e.g., in server-side rendering or specific browser environments), build **Visual Debug Indicators** directly into the UI.
     *   *Example:* A temporary banner showing `Inventory Count: 0 | Lab ID: undefined` immediately reveals if the data is missing.
@@ -435,6 +440,12 @@ Based on user feedback research, the following themes and recommendations now gu
 #### 7. Advanced Integrations
 *   **Data Analysis:** Jupyter notebook integration for bioinformatics.
 *   **Instrument APIs:** Automated metadata import from sequencers and other hardware.
+
+#### 8. Smart Editor Patterns
+*   **Component:** `SmartStepEditor.tsx`.
+*   **Pattern:** Use `cmdk` for mention menus (@inventory, @equipment) within text areas.
+*   **Data Handling:** Store plain text in the instruction field, but side-effect populate the `requiredReagents` or `requiredEquipment` arrays when an item is selected.
+*   **Parsing:** Use regex in `useEffect` to detect durations or other structured data from natural language input.
 
 ## 10. User Validation Script
 

@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Package, Edit, Trash2, Calendar, DollarSign, GripVertical, MoreVertical, Target, Lock, Globe, Eye, Users } from "lucide-react"
+import { Package, Edit, Trash2, Calendar, DollarSign, GripVertical, MoreVertical, Target, Lock, Globe, Eye, Users, CheckCircle } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
@@ -147,8 +147,29 @@ export function OrderCard({ order, onEdit, onDelete, deliverableName }: OrderCar
               }}
               className="cursor-pointer text-red-600 focus:text-red-600"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
               Delete
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit({ ...order, status: 'ordered' })
+              }}
+              className="cursor-pointer"
+              disabled={order.status === 'ordered' || order.status === 'received'}
+            >
+              <Target className="h-4 w-4 mr-2" />
+              Mark Ordered
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit({ ...order, status: 'received' })
+              }}
+              className="cursor-pointer"
+              disabled={order.status === 'received'}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Mark Received
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

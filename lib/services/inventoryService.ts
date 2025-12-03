@@ -78,9 +78,17 @@ export async function createInventoryItem(itemData: Omit<InventoryItem, 'id'> & 
   return itemId
 }
 
-export async function getInventory(): Promise<InventoryItem[]> {
+export async function getInventory(filters?: { labId?: string, userId?: string }): Promise<InventoryItem[]> {
   const db = getFirebaseDb()
-  const querySnapshot = await getDocs(collection(db, "inventory"))
+  let q: Query = collection(db, "inventory")
+
+  if (filters?.labId) {
+    q = query(q, where("labId", "==", filters.labId))
+  } else if (filters?.userId) {
+    q = query(q, where("createdBy", "==", filters.userId))
+  }
+
+  const querySnapshot = await getDocs(q)
 
 
   return querySnapshot.docs.map(doc => {

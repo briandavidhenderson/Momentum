@@ -26,18 +26,25 @@ interface InventoryPickerProps {
     onSelect: (item: InventoryItem) => void
     placeholder?: string
     className?: string
+    labId?: string
 }
 
-export function InventoryPicker({ value, onSelect, placeholder = "Select item...", className }: InventoryPickerProps) {
+import { useAppContext } from "@/lib/AppContext"
+
+export function InventoryPicker({ value, onSelect, placeholder = "Select item...", className, labId }: InventoryPickerProps) {
     const [open, setOpen] = useState(false)
     const [items, setItems] = useState<InventoryItem[]>([])
     const [loading, setLoading] = useState(false)
+    const { currentUserProfile } = useAppContext()
 
     useEffect(() => {
         const loadInventory = async () => {
             setLoading(true)
             try {
-                const data = await getInventory()
+                const data = await getInventory({
+                    labId: labId || currentUserProfile?.labId,
+                    userId: currentUserProfile?.id
+                })
                 setItems(data)
             } catch (error) {
                 console.error("Failed to load inventory", error)
@@ -45,10 +52,10 @@ export function InventoryPicker({ value, onSelect, placeholder = "Select item...
                 setLoading(false)
             }
         }
-        if (open) {
+        if (open && currentUserProfile) {
             loadInventory()
         }
-    }, [open])
+    }, [open, currentUserProfile])
 
     const selectedItem = items.find((item) => item.id === value)
 
@@ -82,7 +89,10 @@ export function InventoryPicker({ value, onSelect, placeholder = "Select item...
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0" align="start">
-                <Command>
+                <Command filter={(value, search) => {
+                    if (value.toLowerCase().includes(search.toLowerCase())) return 1
+                    return 0
+                }}>
                     <CommandInput placeholder="Search inventory..." />
                     <CommandList>
                         <CommandEmpty>No item found.</CommandEmpty>

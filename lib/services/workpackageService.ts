@@ -112,6 +112,7 @@ export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'>
  * Get all workpackages for a profile project
  */
 export async function getWorkpackages(profileProjectId: string): Promise<Workpackage[]> {
+  if (!profileProjectId) return []
   const db = getFirebaseDb()
   const q = query(collection(db, "workpackages"), where("profileProjectId", "==", profileProjectId))
   const querySnapshot = await getDocs(q)

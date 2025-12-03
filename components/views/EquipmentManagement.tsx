@@ -108,6 +108,11 @@ export function EquipmentManagement() {
 
       </div>
 
+      {/* Debug Info */}
+      <div className="bg-red-100 p-2 border border-red-300 rounded text-xs text-red-800 mb-4">
+        DEBUG: activeTab={activeTab}, selectedEquipment={selectedEquipmentForTimeline?.name || 'null'}, equipmentCount={equipment?.length || 0}
+      </div>
+
       {/* My Bookings Summary Card */}
       {userBookings && userBookings.length > 0 && (
         <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center justify-between">
