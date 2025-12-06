@@ -142,7 +142,9 @@ export async function getMasterProjects(filters?: {
   }
   if (filters?.personId) {
     // Query for projects where person is in teamMemberIds array
-    q = query(q, where("teamMemberIds", "array-contains", filters.personId))
+    if (filters.personId) {
+      q = query(q, where("teamMemberIds", "array-contains", filters.personId))
+    }
   }
 
   const querySnapshot = await getDocs(q)
@@ -227,11 +229,6 @@ export function subscribeToMasterProjects(
   return onSnapshot(q, (snapshot) => {
     const projects = snapshot.docs.map((doc, index) => {
       const data = doc.data() as MasterProject
-      if (doc.id === 'sZYoShKUAzCeYOGThApb') {
-        console.log("DEBUG: TARGET PROJECT FOUND", doc.id, "labId:", data.labId);
-        console.log("DEBUG: DATA KEYS", Object.keys(data));
-      }
-      if (index === 0) console.log("DEBUG: subscribeToMasterProjects first doc", doc.id, "labId:", data.labId);
       const { type, legacyTypeLabel } = normalizeProjectType(data)
       const result = {
         ...data,
@@ -240,9 +237,6 @@ export function subscribeToMasterProjects(
         legacyTypeLabel,
         groupIds: data.groupIds || [],
         workpackageIds: data.workpackageIds || [],
-      }
-      if (doc.id === 'sZYoShKUAzCeYOGThApb') {
-        console.log("DEBUG: MAPPED PROJECT", result);
       }
       return result
     })
@@ -335,8 +329,8 @@ export async function getProjects(userId: string): Promise<Project[]> {
       type,
       legacyTypeLabel,
       // Convert Firestore timestamps to ISO strings if they exist
-      startDate: data.start?.toDate ? data.start.toDate().toISOString() : (data.start || data.startDate),
-      endDate: data.end?.toDate ? data.end.toDate().toISOString() : (data.end || data.endDate),
+      startDate: data.start?.toDate?.() ? data.start.toDate().toISOString() : (data.start || data.startDate),
+      endDate: data.end?.toDate?.() ? data.end.toDate().toISOString() : (data.end || data.endDate),
     } as unknown as Project
   })
 
@@ -393,8 +387,8 @@ export function subscribeToProjects(
           return {
             ...data,
             // Convert Firestore timestamps to ISO strings if they exist
-            startDate: data.start?.toDate ? data.start.toDate().toISOString() : (data.start || data.startDate),
-            endDate: data.end?.toDate ? data.end.toDate().toISOString() : (data.end || data.endDate),
+            startDate: data.start?.toDate?.() ? data.start.toDate().toISOString() : (data.start || data.startDate),
+            endDate: data.end?.toDate?.() ? data.end.toDate().toISOString() : (data.end || data.endDate),
           } as unknown as Project
         })
         callback(projects)

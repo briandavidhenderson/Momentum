@@ -48,7 +48,15 @@ export function CreateBoardDialog({ open, onOpenChange }: CreateBoardDialogProps
     });
 
     const onSubmit = async (data: z.infer<typeof formSchema>) => {
-        if (!currentUser?.uid || !currentUserProfile?.labId) return;
+        if (!currentUser?.uid || !currentUserProfile?.labId) {
+            console.error("CreateResearchBoard: Missing user context", {
+                uid: currentUser?.uid,
+                labId: currentUserProfile?.labId,
+                profileId: currentUserProfile?.id
+            });
+            alert("Cannot create board: User profile or Lab ID is missing. Please try refreshing the page.");
+            return;
+        }
 
         setIsSubmitting(true);
 

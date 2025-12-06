@@ -6,15 +6,15 @@ import OnboardingFlow from "@/components/OnboardingFlow"
 import { Button } from "@/components/ui/button"
 import { LogOut, CircleUser, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 
 import PeopleView from "@/components/views/PeopleView"
 import { DayToDayBoard } from "@/components/views/DayToDayBoard"
 import { MyTasksView } from "@/components/views/MyTasksView"
-import { ElectronicLabNotebook } from "@/components/views/ElectronicLabNotebook"
 import { EnhancedProfilePage } from "@/components/profile/EnhancedProfilePage"
 import { ProfileManagement } from "@/components/views/ProfileManagement"
 import { OrdersInventory } from "@/components/views/OrdersInventory"
-import { EquipmentManagement } from "@/components/views/EquipmentManagement"
+
 import { CalendarEvents } from "@/components/views/CalendarEvents"
 import { CookieConsentBanner } from "@/components/CookieConsentBanner"
 import { PrivacyDashboard } from "@/components/views/PrivacyDashboard"
@@ -24,9 +24,6 @@ import { HomeDashboard } from "@/components/views/dashboard/HomeDashboard"
 import { NotificationBell } from "@/components/NotificationBell"
 import TopModuleNavigation from "@/components/TopModuleNavigation"
 import { MyBookingsView } from "@/components/equipment/MyBookingsView"
-import { WhiteboardView } from "@/components/views/WhiteboardView"
-import ResearchBoard from "@/components/views/ResearchBoard"
-import HierarchyExplorer from "@/components/views/HierarchyExplorer"
 import { ProjectDashboard } from "@/components/views/ProjectDashboard"
 import { UserRole } from "@/lib/types"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
@@ -36,10 +33,65 @@ import { QRScanner } from "@/components/mobile/QRScanner"
 import { GroupList } from "@/components/groups/GroupList"
 import { TrainingDashboard } from "@/components/training/TrainingDashboard"
 import { useState, useEffect } from "react"
-
-import { ProtocolBenchMode } from '@/components/ProtocolBenchMode'
-import { ReportsView } from '@/components/views/reports/ReportsView'
 import { SampleListView } from '@/components/views/samples/SampleListView'
+import { SettingsView } from '@/components/views/SettingsView'
+
+// Dynamic Imports for Heavy Views
+const LoadingFallback = () => (
+  <div className="flex h-[50vh] w-full items-center justify-center">
+    <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+  </div>
+)
+
+const ElectronicLabNotebook = dynamic(
+  () => import("@/components/views/ElectronicLabNotebook").then((mod) => mod.ElectronicLabNotebook),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const WhiteboardView = dynamic(
+  () => import("@/components/views/WhiteboardView").then((mod) => mod.WhiteboardView),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const ResearchBoard = dynamic(
+  () => import("@/components/views/ResearchBoard"),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const HierarchyExplorer = dynamic(
+  () => import("@/components/views/HierarchyExplorer"),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const ProtocolBenchMode = dynamic(
+  () => import("@/components/ProtocolBenchMode").then((mod) => mod.ProtocolBenchMode),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const ReportsView = dynamic(
+  () => import("@/components/views/reports/ReportsView").then((mod) => mod.ReportsView),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const HealthWellbeingView = dynamic(
+  () => import("@/components/views/HealthWellbeingView").then((mod) => mod.HealthWellbeingView),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const ProjectDetailContainer = dynamic(
+  () => import("@/components/views/ProjectDetailContainer").then((mod) => mod.ProjectDetailContainer),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const AuthorNetworkView = dynamic(
+  () => import("@/components/views/network/AuthorNetworkView").then((mod) => mod.AuthorNetworkView),
+  { loading: LoadingFallback, ssr: false }
+)
+
+const EquipmentManagement = dynamic(
+  () => import("@/components/views/EquipmentManagement").then((mod) => mod.EquipmentManagement),
+  { loading: LoadingFallback, ssr: false }
+)
 
 export default function Page() {
   const {
@@ -130,10 +182,13 @@ export default function Page() {
         <div className="bg-white/80 backdrop-blur-sm border-b border-slate-100 sticky top-0 z-40">
           <div className="px-6 py-2">
             <div className="flex items-center justify-between mb-1">
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                  Momentum {currentUserProfile?.position || currentUser?.email}
+              <div className="flex flex-col">
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight leading-none">
+                  Momentum
                 </h1>
+                <span className="text-xs text-slate-500 font-medium">
+                  {currentUserProfile?.position || currentUser?.email}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <NotificationBell />
@@ -175,7 +230,16 @@ export default function Page() {
         {/* Render selected view */}
         <div className="p-6">
           {mainView === 'dashboard' && <HomeDashboard />}
-          {mainView === 'projects' && <ProjectDashboard />}
+          {mainView === 'projects' && (
+            activeProjectId ? (
+              <ProjectDetailContainer
+                projectId={activeProjectId}
+                onBack={() => setActiveProjectId(null)}
+              />
+            ) : (
+              <ProjectDashboard />
+            )
+          )}
           {mainView === 'people' && <PeopleView currentUserProfile={currentUserProfile} />}
           {mainView === 'daytoday' && <DayToDayBoard />}
           {mainView === 'mytasks' && <MyTasksView />}
@@ -200,11 +264,15 @@ export default function Page() {
           )}
           {mainView === 'groups' && <GroupList />}
           {mainView === 'training' && <TrainingDashboard />}
-          {mainView === 'training' && <TrainingDashboard />}
+
           {mainView === 'mobile_home' && <MobileDashboard onNavigate={handleNavigationSelect} />}
           {mainView === 'bench' && <ProtocolBenchMode />}
           {mainView === 'reports' && <ReportsView />}
           {mainView === 'samples' && <SampleListView onSelectSample={() => { }} onCreateSample={() => { }} />}
+          {mainView === 'settings' && <SettingsView />}
+          {mainView === 'settings' && <SettingsView />}
+          {mainView === 'health' && <HealthWellbeingView />}
+          {mainView === 'authornetwork' && <AuthorNetworkView />}
         </div>
       </div>
 

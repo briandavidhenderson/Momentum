@@ -42,7 +42,7 @@ export function useAuth() {
 
           if (userData) {
             const user: User = {
-              uid: userData.uid,
+              uid: firebaseUser.uid, // ALWAYS use the Auth UID, not the document ID if they differ
               email: userData.email,
               fullName: userData.fullName,
               profileId: userData.profileId,

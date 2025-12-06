@@ -55,7 +55,7 @@ import { createIncident } from '@/lib/services/incidentService'
 import { Copy } from 'lucide-react'
 
 export function ProtocolBenchMode() {
-    const { protocols, currentUserProfile, addProtocol, updateProtocol } = useAppContext()
+    const { protocols, currentUserProfile, addProtocol, updateProtocol, authUser } = useAppContext()
     const { toast } = useToast()
     const [activeProtocol, setActiveProtocol] = useState<Protocol | null>(null)
     const [activeExecution, setActiveExecution] = useState<ProtocolExecution | null>(null)
@@ -207,7 +207,7 @@ export function ProtocolBenchMode() {
             const executionId = await startProtocolExecution({
                 protocolId: protocol.id,
                 protocolTitle: protocol.title,
-                protocolVersionId: protocol.activeVersionId,
+                protocolVersionId: protocol.activeVersionId || 'v1',
                 performedBy: currentUserProfile!.id,
                 performedByName: currentUserProfile!.displayName,
                 labId: currentUserProfile!.labId
@@ -217,7 +217,7 @@ export function ProtocolBenchMode() {
                 id: executionId,
                 protocolId: protocol.id,
                 protocolTitle: protocol.title,
-                protocolVersionId: protocol.activeVersionId,
+                protocolVersionId: protocol.activeVersionId || 'v1',
                 performedBy: currentUserProfile!.id,
                 performedByName: currentUserProfile!.displayName,
                 labId: currentUserProfile!.labId,
@@ -286,11 +286,18 @@ export function ProtocolBenchMode() {
 
     const handleSaveProtocol = async (updatedProtocol: Protocol) => {
         try {
+            const protocolToSave = {
+                ...updatedProtocol,
+                ownerId: currentUserProfile?.id || updatedProtocol.ownerId,
+                createdBy: authUser?.uid || updatedProtocol.createdBy,
+                labId: currentUserProfile?.labId || updatedProtocol.labId
+            }
+
             if (editingProtocol?.id) {
-                await updateProtocol(updatedProtocol.id, updatedProtocol)
+                await updateProtocol(updatedProtocol.id, protocolToSave)
                 toast({ title: "Protocol updated" })
             } else {
-                await addProtocol(updatedProtocol)
+                await addProtocol(protocolToSave)
                 toast({ title: "Protocol created" })
             }
             setEditingProtocol(null)
@@ -576,6 +583,7 @@ export function ProtocolBenchMode() {
                 protocol={editingProtocol.id ? editingProtocol : undefined}
                 onSave={handleSaveProtocol}
                 onCancel={() => setEditingProtocol(null)}
+                labId={currentUserProfile?.labId}
             />
         )
     }

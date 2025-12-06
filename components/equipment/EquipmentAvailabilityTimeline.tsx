@@ -8,7 +8,7 @@ import { EquipmentDevice, AvailabilitySlot } from "@/lib/types"
 import { getAvailability } from "@/lib/services/equipmentBookingService"
 import { logger } from "@/lib/logger"
 import { Calendar, AlertTriangle, Wrench, UserCircle } from "lucide-react"
-import { addDays, format, startOfDay, endOfDay, differenceInHours } from "date-fns"
+import { addDays, format, startOfDay, endOfDay, differenceInHours, differenceInMinutes } from "date-fns"
 
 interface EquipmentAvailabilityTimelineProps {
   equipment: EquipmentDevice
@@ -111,6 +111,32 @@ export function EquipmentAvailabilityTimeline({
         </div>
       )
     }
+
+    return (
+      <div className="relative h-12 bg-gray-100 rounded overflow-hidden border border-gray-200">
+        {daySlots.map((slot, idx) => {
+          const dayStart = startOfDay(addDays(new Date(), dayIndex))
+          const slotStart = slot.start < dayStart ? dayStart : slot.start
+          const slotEnd = slot.end > endOfDay(dayStart) ? endOfDay(dayStart) : slot.end
+
+          const startOffset = differenceInMinutes(slotStart, dayStart)
+          const duration = differenceInMinutes(slotEnd, slotStart)
+          const totalMinutes = 24 * 60
+
+          const left = (startOffset / totalMinutes) * 100
+          const width = (duration / totalMinutes) * 100
+
+          return (
+            <div
+              key={idx}
+              className={`absolute top-0 bottom-0 border-r ${getSlotColor(slot.type)}`}
+              style={{ left: `${left}%`, width: `${width}%` }}
+              title={`${getSlotLabel(slot.type)}: ${format(slot.start, 'HH:mm')} - ${format(slot.end, 'HH:mm')}`}
+            />
+          )
+        })}
+      </div>
+    )
   }
 
   return (

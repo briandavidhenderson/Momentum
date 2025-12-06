@@ -172,9 +172,20 @@ interface OrcidConfig {
 }
 
 function getOrcidConfig(): OrcidConfig {
-  const clientId = process.env.ORCID_CLIENT_ID
-  const clientSecret = process.env.ORCID_CLIENT_SECRET
-  const useSandbox = process.env.ORCID_USE_SANDBOX === "true"
+  // Try process.env first (local dev)
+  let clientId = process.env.ORCID_CLIENT_ID
+  let clientSecret = process.env.ORCID_CLIENT_SECRET
+  let useSandbox = process.env.ORCID_USE_SANDBOX === "true"
+
+  // Fallback to functions.config() (production)
+  if (!clientId || !clientSecret) {
+    const config = (functions as any).config().orcid
+    if (config) {
+      clientId = config.client_id
+      clientSecret = config.client_secret
+      useSandbox = config.use_sandbox === "true" || config.use_sandbox === true
+    }
+  }
 
   if (!clientId || !clientSecret) {
     console.warn("ORCID configuration missing:", {

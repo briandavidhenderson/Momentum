@@ -50,7 +50,7 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
   useEffect(() => {
     async function checkConsent() {
       const db = getFirebaseDb()
-      if (!user) {
+      if (!user || !user.uid) {
         setLoading(false)
         return
       }
@@ -59,7 +59,13 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
         const consentDoc = await getDoc(doc(db, "userConsents", user.uid))
 
         if (consentDoc.exists()) {
-          const data = sanitizeForFirestore(consentDoc.data())
+          const rawData = consentDoc.data()
+          if (!rawData) {
+            setShowBanner(true)
+            return
+          }
+
+          const data = sanitizeForFirestore(rawData)
 
           // Validate and sanitize consent data to handle any corrupted documents
           if (!data || typeof data !== 'object') {
@@ -103,7 +109,9 @@ export function CookieConsentBanner({ onConsentChange }: CookieConsentBannerProp
           setShowBanner(true)
         }
       } catch (error) {
-        logger.error("Error checking consent", error)
+        // Log error but don't crash the app
+        console.error("Error checking consent (safely caught):", error)
+        // Fallback to showing banner if check fails
         setShowBanner(true)
       } finally {
         setLoading(false)

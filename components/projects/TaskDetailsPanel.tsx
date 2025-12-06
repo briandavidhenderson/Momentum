@@ -233,12 +233,13 @@ export function TaskDetailsPanel({
                     <div>
                         <Label htmlFor="task-owner">Primary Owner (Assignee)</Label>
                         <Select
-                            value={primaryOwner}
+                            value={primaryOwner || "unassigned"}
                             onValueChange={(value) => {
-                                setPrimaryOwner(value)
+                                const val = value === "unassigned" ? "" : value
+                                setPrimaryOwner(val)
                                 // Remove from helpers if selected as primary owner
-                                if (value && helpers.includes(value)) {
-                                    setHelpers(helpers.filter((id) => id !== value))
+                                if (val && helpers.includes(val)) {
+                                    setHelpers(helpers.filter((id) => id !== val))
                                 }
                             }}
                         >
@@ -246,7 +247,7 @@ export function TaskDetailsPanel({
                                 <SelectValue placeholder="Select primary owner (optional)" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">None</SelectItem>
+                                <SelectItem value="unassigned">None</SelectItem>
                                 {availablePeople.map((person) => (
                                     <SelectItem key={person.id} value={person.id}>
                                         {person.firstName} {person.lastName}

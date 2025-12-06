@@ -41,6 +41,7 @@ interface ProjectCardProps {
   onEditTask?: (task: ProjectTask) => void
   onDeleteTask?: (taskId: string) => void
   onContextAction?: (action: any) => void
+  onViewProject?: (projectId: string) => void
 }
 
 export function ProjectCard({
@@ -61,6 +62,7 @@ export function ProjectCard({
   onEditTask,
   onDeleteTask,
   onContextAction,
+  onViewProject,
 }: ProjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(project.isExpanded ?? false)
 
@@ -147,8 +149,16 @@ export function ProjectCard({
                     <span className="ml-1 capitalize">{health.status.replace('-', ' ')}</span>
                   </Badge>
                 )}
-                <Button variant="outline" size="sm" className="h-6 text-xs ml-2" asChild>
-                  <a href={`/projects/${project.id}`}>View Project</a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-xs ml-2"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onViewProject?.(project.id)
+                  }}
+                >
+                  View Project
                 </Button>
               </div>
 

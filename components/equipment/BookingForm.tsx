@@ -62,7 +62,7 @@ export function BookingForm({ equipmentId, equipmentName, requiresTraining, onSu
     // Check training on mount
     React.useEffect(() => {
         async function checkTraining() {
-            if (requiresTraining && currentUser) {
+            if (requiresTraining && currentUser && equipmentId) {
                 const status = await checkEquipmentTraining(currentUser.uid, equipmentId)
                 setTrainingStatus(status)
             }

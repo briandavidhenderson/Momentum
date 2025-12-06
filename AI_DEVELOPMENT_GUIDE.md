@@ -26,6 +26,10 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 | `npm run build:functions` | Compiles TypeScript Cloud Functions. | `cd firebase/functions && npm run build` |
 | `npm run build` | Builds the Next.js frontend. | `next build` |
 | `npm run deploy:all` | The master deployment command. **Does NOT auto-build rules.** | `deploy:rules` && `deploy:functions` && `deploy:hosting` |
+| `npm run seed:users` | Seeds the database with test users/profiles. Requires `.env.local`. | `ts-node scripts/seed-users.ts` |
+| `npm run check:db` | Diagnostic tool to dump masterProjects and Profiles. | `node scripts/check-db.js` |
+| `npm run auth:wipe` | **New.** Wipes all Firebase Authentication users. | `ts-node scripts/wipe-auth.ts` |
+| `npm run db:wipe` | **Dangerous.** Wipes Auth Users AND all Firestore collections. | `npm run auth:wipe && firebase firestore:delete` |
 
 ### The Correct Deployment Workflow
 
@@ -38,11 +42,19 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 
 ## 3. Architecture Overview
 
+**For a complete index of all files, services, and components, see [WebApp_Context.md](WebApp_Context.md).**
+
 ### Frontend (Next.js)
 *   **`components/views/`**: Major page views (e.g., `ProfileManagement.tsx`, `HomeDashboard.tsx`).
 *   **`components/ui/`**: Reusable UI components (mostly Shadcn UI).
 *   **`lib/hooks/`**: Custom hooks for logic encapsulation (e.g., `useAuth`, `useELN`).
 *   **`lib/services/`**: Firestore interaction layers. **Do not put business logic in components if it belongs here.**
+
+### UI Architecture (Styling & Components)
+*   **Tailwind CSS:** The project uses Tailwind CSS for all styling. Styles are defined centrally in `tailwind.config.ts` and `app/globals.css`. Avoid creating separate CSS files; use utility classes.
+*   **shadcn/ui:** The components in `components/ui/` (e.g., `button.tsx`, `card.tsx`) are from the **shadcn/ui** library.
+    *   **Ownership:** These components are *copied* into the codebase, not installed as a dependency. This gives us full control to customize them.
+    *   **Usage:** Always use these atomic components to build larger features. Do not build raw HTML buttons or inputs.
 
 ### Backend (Firebase)
 *   **Firestore:** NoSQL database. Security rules are modularized in `firestore/rules/`.
@@ -54,6 +66,8 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 *   **Flow:** `useAuth` hook manages the user session.
 *   **Onboarding:** `OnboardingFlow.tsx` manages complex multi-step forms.
 *   **Persistence:** Because ORCID linking requires a redirect, onboarding state MUST be persisted to `sessionStorage` to survive the round-trip.
+*   **Error Handling:** Firebase now uses `auth/invalid-credential` for both "user not found" and "wrong password" (Email Enumeration Protection). The UI must handle this generic code by prompting the user to check credentials or sign up.
+*   **Robustness:** If a user exists in Auth but has no Profile (e.g. wiped DB), `useAuth` correctly redirects to `OnboardingFlow`. If the user is deleted (wiped Auth), they must Sign Up again; Login will fail.
 
 ### Firestore Rules Generation
 The `firestore.rules` file is **generated**.
@@ -62,6 +76,7 @@ The `firestore.rules` file is **generated**.
 *   **Logic:** The script concatenates the numbered files (e.g., `00_base.rules`, `10_helpers.rules`) in order.
 *   **Action:** If you need to change a permission, find the relevant `.rules` file in `firestore/rules/`, edit it, then run `npm run build:rules`.
 *   **Note:** Updated `workpackages` read rule now checks `profileProjectId` for project‑team membership.
+*   **Feature:** `AuthorNetworkView` uses `react-force-graph-3d`. Ensure `ForceGraphWrapper` is used for dynamic imports to avoid SSR issues with window object.
 
 ## 5. Pre-Modification Checklist
 
@@ -151,8 +166,9 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 
 ### Whiteboards
 *   **Component:** `WhiteboardView.tsx` & `WhiteboardEditor.tsx`.
-*   **Service:** `lib/whiteboardService.ts`.
+*   **Service:** `lib/whiteboardService.ts` (Includes execution widget support).
 *   **Usage:** Free-form diagramming for protocols and workflows. Supports shapes, text, and connectors.
+*   **Protocol Integration:** Supports `execution_widget` to visualize active protocol runs directly on the canvas.
 
 ### Research Boards
 *   **Component:** `components/views/research/ResearchBoardDetail.tsx`.
@@ -175,6 +191,8 @@ The `package.json` defines the orchestration of builds and deployments. Understa
 *   **Components:** `ProtocolBenchMode.tsx`, `ProtocolEditor.tsx`.
 *   **Scheduling:** `calendarService.ts` handles creating events for active/passive phases.
 *   **Inventory Integration:** `ResourceAvailabilityChecker.tsx` performs pre-flight checks against `InventoryItem` data.
+*   **Chemicals:** `lib/bufferService.ts` manages buffer/solution definitions. UI via `BufferManager.tsx` and `BufferEditor.tsx`.
+*   **Execution Tracking:** `lib/types/protocolExecution.types.ts` defines the schema for running protocols. Implemented in `ProtocolBenchMode.tsx`.
 
 ### Email Integration
 *   **Components:** `IntegrationsSettings.tsx` (Profile), `ProjectEmailRules.tsx`, `ProjectEmailsPanel.tsx` (Project).
@@ -206,6 +224,7 @@ The `firestore.rules` file is **generated**.
 *   **Data Integrity:** When seeding users, you MUST create both a `users` document (for auth mapping) and a `personProfiles` document (for application data).
 *   **Linking:** The `users` document must contain a `profileId` field that matches the ID of the `personProfiles` document.
 *   **Ids:** For simplicity in seeding, it is recommended to use the User UID as the `profileId`.
+*   **Tooling:** Use `npm run seed:users` to automate this process correctly.
 
 ### SPA Navigation & Routing
 *   **Single Page Application:** The application is a SPA. Most "pages" (e.g., Equipment, Reports) are actually views rendered within `app/page.tsx` based on state.
@@ -244,6 +263,11 @@ Before generating code or running commands, ask:
     start: data.start?.toDate ? data.start.toDate() : (data.start || new Date())
     ```
 
+### UI Component Safety
+*   **Select.Item Empty Values:** Radix UI `Select.Item` throws if `value` is an empty string. Use a placeholder like "unassigned" and convert back in `onValueChange`.
+*   **Null Safety:** Always check parent existence before accessing children (e.g., `selectedWorkpackage?.tasks`). Don't assume an object is non-null just because the UI shows it.
+*   **Context Safety (labId):** When creating entities (Orders, Inventory), always fallback to `currentUserProfile.labId` if the source object (e.g., an Order) might be missing it. Missing `labId` makes items invisible to queries.
+*   **Empty States:** Never show a blank list. Use specific messages explaining *why* it's empty and *how* to fix it (e.g., "No Funding Accounts found. Ask your admin to create one.").
 ### Firestore Indexes
 *   **Composite Indexes:** Complex queries (e.g., filtering by multiple fields or sorting) require composite indexes.
 *   **Error Message:** `FirebaseError: The query requires an index.`
@@ -315,6 +339,11 @@ Before generating code or running commands, ask:
     2.  **Tooltip Feedback:** Show "Loading profile..." in the button tooltip while disabled.
     3.  **Prop Drilling:** If a parent component (`OrdersInventory`) waits for the profile, pass `labId` down to the child dialog (`AddInventoryDialog`) as a prop. Do not rely on the child hook to fetch it again in time.
 
+### Protocol Creation & Security Rules
+*   **The Problem:** Firestore rules often require `resource.data.createdBy == request.auth.uid`.
+*   **The Pitfall:** Using `currentUserProfile.id` for `createdBy` can fail if the profile ID doesn't match the Auth UID (though they should match in this app) or if the profile is not yet loaded.
+*   **The Fix:** Always use `authUser.uid` (from `useAuth` or `useAppContext`) for the `createdBy` field when creating new documents. Use `currentUserProfile.id` for application-level fields like `ownerId` or `profileId`.
+
 ### Debugging & Resilience Lessons
 1.  **Visual Debugging:** When console logs are swallowed or unreliable (e.g., in server-side rendering or specific browser environments), build **Visual Debug Indicators** directly into the UI.
     *   *Example:* A temporary banner showing `Inventory Count: 0 | Lab ID: undefined` immediately reveals if the data is missing.
@@ -341,10 +370,9 @@ Before generating code or running commands, ask:
 *   **The Problem:** The Firebase Admin SDK is initialized in `lib/firebaseAdmin.ts` (note the casing). Importing from `firebase-admin` directly in API routes without checking initialization can cause errors.
 *   **The Fix:** Import initialized instances or helpers from `@/lib/firebaseAdmin`.
 
-## 8. Project Tracker
-
-This section tracks the high-level state of the project to prevent drift.
-
+### Next.js 16 / Turbopack Compatibility
+*   **The Problem:** Next.js 16 uses Turbopack by default. The legacy `webpack` config in `next.config.js` for excluding firebase-admin causes build failures.
+*   **The Fix:** Use `serverExternalPackages: ['firebase-admin', 'firebase-functions']` in `next.config.js` instead.
 ### Current Phase: Post-Deployment Stabilization
 *   **Goal:** Resolve runtime errors (`permission-denied`, crashes) and ensure stability in the production environment.
 
@@ -377,9 +405,66 @@ This section tracks the high-level state of the project to prevent drift.
     -   **Flexible Workflows:**
         -   **Custom Fields:** Implemented `CustomFieldEditor` and schema support for Samples, Protocols, and Experiments.
         -   **Templates:** Created `TemplateGallery` and `templateService` for Protocol and Experiment instantiation.
+    -   **Simulation Feedback Fixes:**
+        -   **Project Navigation:** Fixed broken "View Project" link on dashboard cards.
+        -   **Lab Settings:** Exposed Custom Field Editor via new Settings module for Lab Admins.
+        -   **Onboarding:** Fixed "Continue Without Supervisor" navigation flow.
+    -   **Unfinished Work Fixes:**
+        -   **Experiment Templates:** Implemented Project Selector in `TemplateGallery` to allow instantiation.
+        -   **Onboarding Persistence:** Implemented `sessionStorage` persistence for `currentStep` and form data to survive reloads.
+        -   **Code Repair:** Fixed corrupted `handleComplete` function in `OnboardingFlow.tsx`.
+    -   **Health & Wellbeing Module:**
+        -   **New Module:** Implemented `HealthWellbeingView` with Dashboard, Planner, and Logger.
+        -   **Data Model:** Added `HealthProfile`, `WorkoutPlan`, `WorkoutSession` types.
+        -   **Service:** Created `healthService.ts` for managing health data.
+        -   **UI:** Added "Health" tab to global navigation.
+        -   **Community Features:** Implemented `healthCommunityService.ts` and Leaderboard UI.
+        -   **Wellness Logging:** Added `LogWellnessDialog` and Recovery Score calculation.
+    -   **Email Integration:**
+        -   **Verified:** Confirmed functionality of `ProjectEmailRules` and `ProjectEmailsPanel`.
+        -   **Status:** Feature is production-ready.
+    -   **Critical Fixes (Dec 4, 2025):**
+        -   **Onboarding Loop:** Fixed infinite redirection for seeded users by ensuring `users` document creation (via `seed:users`).
+        -   **Dashboard Visibility:** Fixed race condition in Project/Task fetching (`useProjects`) by propagating `labId` from `AppContext`.
+        -   **UI:** Fixed hidden input fields in Onboarding creation forms.
+        -   **Training Service Crash:** Fixed `checkEquipmentTraining` to guard against undefined IDs.
+        -   **Consent Banner Crash:** Added defensive checks in `CookieConsentBanner` to prevent login crashes.
+        -   **Consent Banner Crash:** Added defensive checks in `CookieConsentBanner` to prevent login crashes.
+        -   **Invalid Query:** Resolved "Unsupported field value: undefined" in Firestore queries.
+        -   **Whiteboard Integration:** Implemented Protocol Execution Widget for live status tracking on whiteboards.
+        -   **Security Update (Dec 5, 2025):**
+        -   **Tech Stack:** Upgraded to React 19.2.1 and Next.js 16.0.7 to resolve CVE-2025-55182.
+        -   **Config:** Migrated `next.config.js` to use `serverExternalPackages` (Turbopack support).
+        -   **PWA:** Temporarily disabled PWA features for compatibility.
+        -   **Breaking Change:** Updated API routes to handle async `params` in Next.js 15+.
 *   [x] Production Runtime Error Resolution
 *   [x] Global Search & Navigation
 *   [x] Role-Based Dashboards
+*   [x] Health Module Completion
+*   [x] Inventory Navigation Improvement (Renamed to "Orders & Inventory")
+*   [x] Whiteboard "Runs" Tab Verification (Confirmed present and functional)
+*   [x] Console Error Fixes:
+    *   Added missing `workoutSessions` index.
+    *   Fixed Health module permissions (`exercises`, `healthMetrics`, `workoutPlans`).
+    *   Fixed Workpackage permissions for legacy projects (`isProjectTeamMember` update).
+*   [x] Refactored Project Navigation:
+    *   Switched from URL-based routing (`/projects/[id]`) to state-based navigation (`activeProjectId`).
+    *   Eliminated page reloads when viewing projects.
+    *   Created `ProjectDetailContainer` to handle project detail view logic.
+*   [x] **Performance Optimization (Dec 5, 2025):**
+    *   Implemented **Lazy Loading** for heavy views (`ElectronicLabNotebook`, `WhiteboardView`, `ResearchBoard`, `ProtocolBenchMode`, `ReportsView`, `HealthWellbeingView`, `ProjectDetailContainer`, `EquipmentManagement`) in `app/page.tsx`.
+    *   Added `LoadingFallback` spinner for better UX during module switches.
+    *   Cleaned up `app/page.tsx` header typography and removed duplicate renders.
+
+    -   **Critical Fixes (Dec 5, 2025):**
+        -   **Dashboard Refactor:** Implemented "Bench Mode" and removed `ProtocolBenchMode` from the top of the dashboard.
+        -   **Permission Fixes:** Resolved `workpackages` (projectId check) and `trainingRecords` (userId check) permission errors.
+        -   **Indexing:** Added missing composite indexes for `healthMetrics` and `workoutSessions`.
+        -   **Accessibility:** Added `DialogDescription` to `LogWellnessDialog` and `AddInventoryDialog`.
+        -   **Planner Fix:** Wired "Plan a Workout" button to correct tab navigation.
+
+    -   **Known Issues (Active Investigation)**
+        -   **Favicon:** Missing `favicon.ico` (User action required).
 
 ## 9. Strategic Roadmap & User Feedback (2025)
 
@@ -427,6 +512,12 @@ Based on user feedback research, the following themes and recommendations now gu
 #### 7. Advanced Integrations
 *   **Data Analysis:** Jupyter notebook integration for bioinformatics.
 *   **Instrument APIs:** Automated metadata import from sequencers and other hardware.
+
+#### 8. Smart Editor Patterns
+*   **Component:** `SmartStepEditor.tsx`.
+*   **Pattern:** Use `cmdk` for mention menus (@inventory, @equipment) within text areas.
+*   **Data Handling:** Store plain text in the instruction field, but side-effect populate the `requiredReagents` or `requiredEquipment` arrays when an item is selected.
+*   **Parsing:** Use regex in `useEffect` to detect durations or other structured data from natural language input.
 
 ## 10. User Validation Script
 

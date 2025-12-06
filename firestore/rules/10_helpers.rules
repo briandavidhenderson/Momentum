@@ -42,11 +42,18 @@
 
     function isProjectTeamMember(projectId) {
       let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      let legacyProject = get(/databases/$(database)/documents/projects/$(projectId));
       let profileId = getUserProfileId();
-      return profileId != null && project != null && project.data != null && (
-        (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
-        (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
-        (project.data.coPIIds != null && profileId in project.data.coPIIds)
+      
+      return (
+        // Check Master Project
+        (project != null && project.data != null && profileId != null && (
+          (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
+          (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
+          (project.data.coPIIds != null && profileId in project.data.coPIIds)
+        )) ||
+        // Check Legacy Project
+        (legacyProject != null && legacyProject.data != null && legacyProject.data.labId == getUserLab())
       );
     }
 

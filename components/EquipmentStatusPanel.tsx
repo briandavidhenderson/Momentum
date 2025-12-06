@@ -281,6 +281,7 @@ export function EquipmentStatusPanel({
         sourceDeviceId: deviceId,
         sourceSupplyId: supply.id,
         sourceInventoryItemId: supply.inventoryItemId,
+        labId: currentUserProfile?.labId,
       }
 
       logger.info(`Creating order for ${enrichedSupply.name}`)
@@ -668,7 +669,13 @@ export function EquipmentStatusPanel({
                       <Button
                         size="sm"
                         className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm h-8 text-xs font-medium"
-                        onClick={() => setBookingDevice(device)}
+                        onClick={() => {
+                          if (onBookEquipment) {
+                            onBookEquipment(device)
+                          } else {
+                            setBookingDevice(device)
+                          }
+                        }}
                       >
                         <Calendar className="mr-1.5 h-3.5 w-3.5 text-slate-500" />
                         Book

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -288,6 +288,11 @@ export function AddInventoryDialog({ open, onClose, onSuccess, labId }: AddInven
             <Plus className="h-5 w-5 text-brand-500" />
             Add to Inventory
           </DialogTitle>
+          <div className="sr-only">
+            <DialogDescription>
+              Form to add new items to the inventory, including details like product name, quantity, and categorization.
+            </DialogDescription>
+          </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

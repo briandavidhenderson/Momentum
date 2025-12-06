@@ -112,6 +112,7 @@ export async function createWorkpackage(workpackageData: Omit<Workpackage, 'id'>
  * Get all workpackages for a profile project
  */
 export async function getWorkpackages(profileProjectId: string): Promise<Workpackage[]> {
+  if (!profileProjectId) return []
   const db = getFirebaseDb()
   const q = query(collection(db, "workpackages"), where("profileProjectId", "==", profileProjectId))
   const querySnapshot = await getDocs(q)
@@ -123,9 +124,9 @@ export async function getWorkpackages(profileProjectId: string): Promise<Workpac
       projectId: data.profileProjectId, // Map old field to new field name
       status: 'active', // Default status for legacy data
       deliverableIds: [], // Default empty array for legacy data
-      start: data.start?.toDate ? data.start.toDate() : (data.start ? new Date(data.start as any) : new Date()),
-      end: data.end?.toDate ? data.end.toDate() : (data.end ? new Date(data.end as any) : new Date()),
-      tasks: data.tasks?.map(task => ({
+      start: data.start?.toDate?.() ? data.start.toDate() : (data.start ? new Date(data.start as any) : new Date()),
+      end: data.end?.toDate?.() ? data.end.toDate() : (data.end ? new Date(data.end as any) : new Date()),
+      tasks: (data.tasks || []).map(task => ({
         ...task,
         start: task.start?.toDate ? task.start.toDate() : (task.start ? new Date(task.start as any) : new Date()),
         end: task.end?.toDate ? task.end.toDate() : (task.end ? new Date(task.end as any) : new Date()),
@@ -195,9 +196,9 @@ export function subscribeToWorkpackages(
         projectId: data.profileProjectId, // Map old field to new field name
         status: 'active', // Default status for legacy data
         deliverableIds: [], // Default empty array for legacy data
-        start: data.start?.toDate ? data.start.toDate() : (data.start ? new Date(data.start as any) : new Date()),
-        end: data.end?.toDate ? data.end.toDate() : (data.end ? new Date(data.end as any) : new Date()),
-        tasks: data.tasks?.map(task => ({
+        start: data.start?.toDate?.() ? data.start.toDate() : (data.start ? new Date(data.start as any) : new Date()),
+        end: data.end?.toDate?.() ? data.end.toDate() : (data.end ? new Date(data.end as any) : new Date()),
+        tasks: (data.tasks || []).map(task => ({
           ...task,
           start: task.start?.toDate ? task.start.toDate() : (task.start ? new Date(task.start as any) : new Date()),
           end: task.end?.toDate ? task.end.toDate() : (task.end ? new Date(task.end as any) : new Date()),

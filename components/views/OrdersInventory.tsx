@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Plus, Package, ShoppingCart, CheckCircle, Clock, Archive, AlertCircle, Download, Upload, FileText, Beaker } from "lucide-react"
 import { OrderCard } from "@/components/orders/OrderCard"
 import { useToast } from "@/components/ui/use-toast"
+import { BufferManager } from "@/components/buffers/BufferManager"
 
 import { OrderEditDialog } from "@/components/orders/OrderEditDialog"
 import { OrderFormDialog } from "@/components/orders/OrderFormDialog"
@@ -87,7 +88,7 @@ export function OrdersInventory() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'orders' | 'inventory'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'inventory' | 'buffers'>('orders')
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -210,6 +211,7 @@ export function OrdersInventory() {
           // Create new inventory item
           await createInventoryItem({
             ...result.inventoryItem,
+            labId: result.inventoryItem.labId || currentUserProfile.labId,
             createdBy: currentUserProfile.id,
           })
           if (result.message) logger.info(result.message)
@@ -283,6 +285,7 @@ export function OrdersInventory() {
             // Create new inventory item
             await createInventoryItem({
               ...result.inventoryItem,
+              labId: result.inventoryItem.labId || currentUserProfile?.labId,
               createdBy: currentUserProfile?.id || 'system',
             })
             if (result.message) logger.info(result.message)
@@ -499,6 +502,14 @@ export function OrdersInventory() {
         >
           <Package className="h-4 w-4 mr-2" />
           Inventory
+        </Button>
+        <Button
+          variant={activeTab === 'buffers' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('buffers')}
+          className={activeTab === 'buffers' ? 'bg-brand-500 text-white' : ''}
+        >
+          <Beaker className="h-4 w-4 mr-2" />
+          Buffers & Solutions
         </Button>
       </div>
 
@@ -850,6 +861,11 @@ export function OrdersInventory() {
       )}
 
 
+
+      {/* Buffers Tab */}
+      {activeTab === 'buffers' && (
+        <BufferManager />
+      )}
 
       {/* Dialogs */}
       {showOrderDialog && (

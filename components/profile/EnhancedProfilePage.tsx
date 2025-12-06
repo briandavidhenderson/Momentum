@@ -44,6 +44,7 @@ import {
 import { logger } from "@/lib/logger"
 import { useToast } from "@/lib/toast"
 import { PositionLevel, POSITION_DISPLAY_NAMES } from "@/lib/types"
+import { CollaboratorsList } from "@/components/profile/CollaboratorsList"
 
 interface EnhancedProfilePageProps {
   currentUser: FirestoreUser
@@ -191,7 +192,7 @@ export function EnhancedProfilePage({
     setIsSyncingOrcid(true)
     try {
       const result = await linkOrcidToCurrentUser()
-      
+
       // Update profile with ORCID info
       await updateProfile(profile.id, {
         orcidId: result.orcid,
@@ -224,7 +225,7 @@ export function EnhancedProfilePage({
       if (profile.orcidId) {
         // Sync ORCID record
         await syncOrcidRecord(profile.orcidId, undefined, currentUser.uid)
-        
+
         // Also trigger backend resync
         await resyncOrcidProfile(true)
 
@@ -246,6 +247,110 @@ export function EnhancedProfilePage({
     } finally {
       setIsSyncingOrcid(false)
     }
+  }
+
+  const handleImportNBIB = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const text = e.target?.result as string
+      try {
+        const importedWorks = parseNBIB(text)
+        if (importedWorks.length === 0) {
+          toastError("No valid references found in NBIB file")
+          return
+        }
+
+        // Merge with existing works
+        // We'll append them to orcidWorks for now, filtering duplicates by title/doi if possible
+        const existingWorks = profile.orcidWorks || []
+        const newWorks = [...existingWorks]
+        let addedCount = 0
+
+        importedWorks.forEach(work => {
+          // Simple duplicate check by title or DOI
+          const exists = existingWorks.some((w: any) =>
+            (w.doi && w.doi === work.doi) ||
+            (w.title && w.title.toLowerCase() === work.title.toLowerCase())
+          )
+          if (!exists) {
+            newWorks.push({
+              ...work,
+              source: 'manual-nbib-import',
+              importedAt: new Date().toISOString()
+            })
+            addedCount++
+          }
+        })
+
+        if (addedCount > 0) {
+          await updateProfile(profile.id, {
+            orcidWorks: newWorks,
+            updatedAt: new Date().toISOString()
+          })
+          setProfile({ ...profile, orcidWorks: newWorks })
+          toastSuccess(`Imported ${addedCount} new reference(s)`)
+        } else {
+          toastSuccess("No new references to import (duplicates skipped)")
+        }
+
+      } catch (err) {
+        console.error("NBIB Import Error", err)
+        toastError("Failed to parse NBIB file")
+      }
+    }
+    reader.readAsText(file)
+  }
+
+  const parseNBIB = (text: string) => {
+    const lines = text.split('\n')
+    const works: any[] = []
+    let currentWork: any = {}
+    let currentTag = ''
+
+    lines.forEach(line => {
+      const match = line.match(/^([A-Z]{2,4})\s*-(.*)/)
+      if (match) {
+        currentTag = match[1].trim()
+        const value = match[2].trim()
+
+        if (currentTag === 'PMID') {
+          if (Object.keys(currentWork).length > 0) {
+            works.push(currentWork)
+            currentWork = {}
+          }
+          currentWork.pmid = value
+        } else if (currentTag === 'TI') {
+          currentWork.title = value
+        } else if (currentTag === 'AB') {
+          currentWork.abstract = value
+        } else if (currentTag === 'FAU') { // Full Author Name
+          if (!currentWork.authors) currentWork.authors = []
+          currentWork.authors.push(value)
+        } else if (currentTag === 'DP') {
+          currentWork.publicationDate = value
+        } else if (currentTag === 'TA' || currentTag === 'JT') {
+          currentWork.journal = value
+        } else if (currentTag === 'LID') {
+          if (value.includes('[doi]')) {
+            currentWork.doi = value.replace('[doi]', '').trim()
+          }
+        }
+      } else {
+        // Continuation lines
+        if (currentTag && ['TI', 'AB'].includes(currentTag)) {
+          const cleanLine = line.trim()
+          if (cleanLine) {
+            if (currentTag === 'TI') currentWork.title += ' ' + cleanLine
+            if (currentTag === 'AB') currentWork.abstract += ' ' + cleanLine
+          }
+        }
+      }
+    })
+    if (Object.keys(currentWork).length > 0) works.push(currentWork)
+    return works
   }
 
   const addArrayItem = (field: "researchInterests" | "qualifications") => {
@@ -582,6 +687,40 @@ export function EnhancedProfilePage({
               </CardContent>
             </Card>
 
+            {/* Collaborators List */}
+            {profile.orcidData?.works && profile.orcidData.works.length > 0 && (
+              <CollaboratorsList works={profile.orcidData.works} />
+            )}
+
+            {/* Manual Import Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Import References</CardTitle>
+                <CardDescription>
+                  Import citations from PubMed (NBIB) or other formats to populate your network if ORCID sync is incomplete.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <Button variant="outline" className="relative cursor-pointer" asChild>
+                    <label>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Import .nbib File
+                      <input
+                        type="file"
+                        accept=".nbib,.txt"
+                        className="hidden"
+                        onChange={handleImportNBIB}
+                      />
+                    </label>
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Supports standard Medline/PubMed NBIB format.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Editable Profile Information */}
             {isEditing ? (
               <Card>
@@ -774,7 +913,7 @@ export function EnhancedProfilePage({
           </div>
         </div>
       </div>
-    </div>
+    </div >
   )
 }
 

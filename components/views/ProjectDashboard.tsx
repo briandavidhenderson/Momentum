@@ -68,6 +68,7 @@ export function ProjectDashboard() {
     allProfiles,
     people,
     handleUpdateDeliverableTasks,
+    setActiveProjectId,
   } = useAppContext()
 
   console.log("DEBUG: ProjectDashboard projects", projects?.map(p => ({ id: p.id, labId: p.labId })));
@@ -333,12 +334,7 @@ export function ProjectDashboard() {
     const health = projectHealths.get(project.id)
 
     return (
-      <Link
-        key={project.id}
-        href={`/projects/${project.id}`}
-        className="block"
-        onClick={handleCardLinkClick}
-      >
+      <div key={project.id} className="block">
         <ProjectCard
           project={project}
           workpackages={allWorkpackages as unknown as HydratedWorkpackage[]}
@@ -346,6 +342,7 @@ export function ProjectDashboard() {
           people={allProfiles}
           budgetSummary={budgetSummary}
           health={health}
+          onViewProject={(id) => setActiveProjectId(id)}
           onCreateWorkpackage={async (projectId) => {
             const workpackageId = await createWorkpackage({
               name: "New Work Package",
@@ -440,7 +437,7 @@ export function ProjectDashboard() {
             }
           }}
         />
-      </Link>
+      </div>
     )
   }
 

@@ -14,7 +14,7 @@ import {
 import { Shape, createWhiteboard, updateWhiteboard, WhiteboardData } from "@/lib/whiteboardService"
 import { logger } from "@/lib/logger"
 import { WhiteboardCanvas } from "./WhiteboardCanvas"
-import { WhiteboardSidebar } from "./WhiteboardSidebar"
+import { WhiteboardSidebar, DragPayload } from "./WhiteboardSidebar"
 import { ProtocolPropertiesPanel } from "./ProtocolPropertiesPanel"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useToast } from "@/components/ui/toast"
@@ -818,7 +818,8 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
     }
 
     // -- ASSET DRAG --
-    const handleDragStart = (e: React.DragEvent, payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer', id: string, name?: string, operationType?: string }) => {
+    // -- ASSET DRAG --
+    const handleDragStart = (e: React.DragEvent, payload: DragPayload) => {
         e.dataTransfer.setData("application/x-protocolviz", JSON.stringify(payload))
     }
 
@@ -861,7 +862,7 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
         const raw = e.dataTransfer.getData("application/x-protocolviz")
         if (!raw) return
 
-        let payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer', id: string, name?: string, operationType?: string }
+        let payload: { kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer' | 'execution', id: string, name?: string, operationType?: string }
         try { payload = JSON.parse(raw) } catch { return }
 
         const pos = getCanvasPos(e as unknown as React.MouseEvent)
@@ -965,6 +966,14 @@ export function WhiteboardEditor({ initialData, whiteboardId }: WhiteboardEditor
                     fill: "#ffffff", stroke: "#9333ea", strokeWidth: 1.5,
                     textAlign: 'left', textAlignVertical: 'middle', fontSize: 11,
                     linkedEntityType: 'buffer', linkedEntityId: payload.id,
+                    text: payload.name
+                }
+            } else if (payload.kind === 'execution') {
+                shape = {
+                    id: newId, type: "execution_widget", x: pos.x - 120, y: pos.y - 40, width: 240, height: 80,
+                    fill: "#ffffff", stroke: "#16a34a", strokeWidth: 1.5,
+                    textAlign: 'left', textAlignVertical: 'middle', fontSize: 12,
+                    executionId: payload.id,
                     text: payload.name
                 }
             } else {

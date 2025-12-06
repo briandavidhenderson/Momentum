@@ -26,18 +26,26 @@ interface InventoryPickerProps {
     onSelect: (item: InventoryItem) => void
     placeholder?: string
     className?: string
+    labId?: string
+    trigger?: React.ReactNode
 }
 
-export function InventoryPicker({ value, onSelect, placeholder = "Select item...", className }: InventoryPickerProps) {
+import { useAppContext } from "@/lib/AppContext"
+
+export function InventoryPicker({ value, onSelect, placeholder = "Select item...", className, labId, trigger }: InventoryPickerProps) {
     const [open, setOpen] = useState(false)
     const [items, setItems] = useState<InventoryItem[]>([])
     const [loading, setLoading] = useState(false)
+    const { currentUserProfile } = useAppContext()
 
     useEffect(() => {
         const loadInventory = async () => {
             setLoading(true)
             try {
-                const data = await getInventory()
+                const data = await getInventory({
+                    labId: labId || currentUserProfile?.labId,
+                    userId: currentUserProfile?.id
+                })
                 setItems(data)
             } catch (error) {
                 console.error("Failed to load inventory", error)
@@ -45,10 +53,10 @@ export function InventoryPicker({ value, onSelect, placeholder = "Select item...
                 setLoading(false)
             }
         }
-        if (open) {
+        if (open && currentUserProfile) {
             loadInventory()
         }
-    }, [open])
+    }, [open, currentUserProfile])
 
     const selectedItem = items.find((item) => item.id === value)
 
@@ -64,25 +72,30 @@ export function InventoryPicker({ value, onSelect, placeholder = "Select item...
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className={cn("w-full justify-between", className)}
-                >
-                    {selectedItem ? (
-                        <div className="flex items-center gap-2 truncate">
-                            <div className={cn("h-2 w-2 rounded-full", getStatusColor(selectedItem.inventoryLevel))} />
-                            {selectedItem.productName}
-                        </div>
-                    ) : (
-                        <span className="text-muted-foreground">{placeholder}</span>
-                    )}
-                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
+                {trigger || (
+                    <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={open}
+                        className={cn("w-full justify-between", className)}
+                    >
+                        {selectedItem ? (
+                            <div className="flex items-center gap-2 truncate">
+                                <div className={cn("h-2 w-2 rounded-full", getStatusColor(selectedItem.inventoryLevel))} />
+                                {selectedItem.productName}
+                            </div>
+                        ) : (
+                            <span className="text-muted-foreground">{placeholder}</span>
+                        )}
+                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                )}
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0" align="start">
-                <Command>
+                <Command filter={(value, search) => {
+                    if (value.toLowerCase().includes(search.toLowerCase())) return 1
+                    return 0
+                }}>
                     <CommandInput placeholder="Search inventory..." />
                     <CommandList>
                         <CommandEmpty>No item found.</CommandEmpty>

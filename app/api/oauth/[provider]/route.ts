@@ -11,8 +11,9 @@ const getBaseUrl = (req: NextRequest) => {
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { provider: string } }
+    props: { params: Promise<{ provider: string }> }
 ) {
+    const params = await props.params;
     const provider = params.provider;
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get("code");
@@ -154,8 +155,9 @@ export async function GET(
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { provider: string } }
+    props: { params: Promise<{ provider: string }> }
 ) {
+    const params = await props.params;
     const provider = params.provider as "google" | "outlook";
     const { userId } = await request.json();
 

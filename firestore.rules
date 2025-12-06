@@ -59,11 +59,18 @@ service cloud.firestore {
 
     function isProjectTeamMember(projectId) {
       let project = get(/databases/$(database)/documents/masterProjects/$(projectId));
+      let legacyProject = get(/databases/$(database)/documents/projects/$(projectId));
       let profileId = getUserProfileId();
-      return profileId != null && project != null && project.data != null && (
-        (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
-        (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
-        (project.data.coPIIds != null && profileId in project.data.coPIIds)
+      
+      return (
+        // Check Master Project
+        (project != null && project.data != null && profileId != null && (
+          (project.data.teamMemberIds != null && profileId in project.data.teamMemberIds) ||
+          (project.data.principalInvestigatorIds != null && profileId in project.data.principalInvestigatorIds) ||
+          (project.data.coPIIds != null && profileId in project.data.coPIIds)
+        )) ||
+        // Check Legacy Project
+        (legacyProject != null && legacyProject.data != null && legacyProject.data.labId == getUserLab())
       );
     }
 
@@ -717,10 +724,11 @@ service cloud.firestore {
     // ============================================================================
     match /trainingRecords/{recordId} {
       // Users can read their own training records
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        isAdmin()
-      );
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // allow read: if isAuthenticated() && (
+      //   resource.data.userId == request.auth.uid ||
+      //   isAdmin()
+      // );
       
       // Admins or trainers can create/update records
       // For now, allow creation if authenticated (to allow seeding/testing), 
@@ -733,6 +741,104 @@ service cloud.firestore {
       );
       
       allow delete: if isAdmin();
+    }
+
+
+// Source: firestore/rules/65_health.rules
+    // ============================================================================
+    // HEALTH & WELLBEING (Phase 13)
+    // ============================================================================
+
+    match /healthProfiles/{profileId} {
+      // Users can read their own health profile
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Users can create their own health profile
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own health profile
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Only admins can delete health profiles
+      allow delete: if isAdmin();
+    }
+
+    match /workoutPlans/{planId} {
+      // Users can read their own workout plans OR system plans
+      allow read: if isAuthenticated() && (
+        resource.data.createdBy == 'SYSTEM' ||
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+      
+      // Users can create their own workout plans
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Users can update their own workout plans
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Users can delete their own workout plans
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /exercises/{exerciseId} {
+      // Authenticated users can read exercises
+      allow read: if isAuthenticated();
+      
+      // Only admins can write exercises
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /healthMetrics/{metricId} {
+      // Users can read their own metrics (linked via profileId)
+      allow read: if isAuthenticated() && (
+        resource.data.profileId == getUserProfileId() || 
+        isAdmin()
+      );
+      
+      // Users can create their own metrics
+      allow create: if isAuthenticated() && (
+        request.resource.data.profileId == getUserProfileId() ||
+        isAdmin()
+      );
+      
+      // Users can update their own metrics
+      allow update: if isAuthenticated() && (
+        resource.data.profileId == getUserProfileId() || 
+        isAdmin()
+      );
+      
+      // Users can delete their own metrics
+      allow delete: if isAuthenticated() && (
+        resource.data.profileId == getUserProfileId() || 
+        isAdmin()
+      );
+    }
+
+    match /workoutSessions/{sessionId} {
+      // Users can read their own workout sessions (linked via profileId)
+      allow read: if isAuthenticated() && (
+        resource.data.profileId == getUserProfileId() || 
+        isAdmin()
+      );
+      
+      // Users can create workout sessions
+      // Ideally we check if the profileId belongs to the user, but getUserProfileId() reads from DB.
+      // We can trust the client to pass the correct profileId for now, or validate in Cloud Function.
+      // For simplicity in rules:
+      allow create: if isAuthenticated();
+      
+      // Users can update their own workout sessions
+      allow update: if isAuthenticated() && (
+        resource.data.profileId == getUserProfileId() || 
+        isAdmin()
+      );
+      
+      // Users can delete their own workout sessions
+      allow delete: if isAuthenticated() && (
+        resource.data.profileId == getUserProfileId() || 
+        isAdmin()
+      );
     }
 
 

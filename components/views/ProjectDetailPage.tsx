@@ -692,6 +692,17 @@ export function ProjectDetailPage({
 
   const handleQuickAddTask = () => {
     if (!selectedWorkpackage || !onUpdateWorkpackage) return
+
+    // Safety check: Cannot add task if no deliverable is selected
+    if (!selectedDeliverable) {
+      toast({
+        title: "No Deliverable Selected",
+        description: "Please select a deliverable to add tasks.",
+        variant: "destructive"
+      })
+      return
+    }
+
     const name = newTaskName.trim()
     if (!name) return
 
