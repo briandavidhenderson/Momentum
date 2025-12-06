@@ -53,6 +53,7 @@ export interface Shape {
     parallelGroupId?: string  // ID of parallel group this protocol node belongs to
     points?: { x: number, y: number }[] // For freehand drawing (pencil)
     src?: string // For images (base64 or URL)
+    executionId?: string // For protocol execution widgets
 }
 
 export interface WhiteboardData extends VisibilitySettings {

@@ -65,6 +65,7 @@ export function HomeDashboard() {
         events,
         userBookings,
         currentUserProfile,
+        authUser,
         mainView,
         setMainView,
 
@@ -205,13 +206,28 @@ export function HomeDashboard() {
     // Role-Based Logic
     const isManagementView = currentUserProfile?.isPrincipalInvestigator || currentUserProfile?.userRole === 'lab_manager' || currentUserProfile?.userRole === 'pi'
 
+    // If Bench Mode is active, render only the protocol runner
+    if (mainView === 'bench') {
+        return (
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-bold tracking-tight">Bench Mode</h2>
+                    <Button variant="outline" onClick={() => setMainView('dashboard')}>
+                        <Layout className="w-4 h-4 mr-2" />
+                        Exit Bench Mode
+                    </Button>
+                </div>
+                <Card className="h-[calc(100vh-150px)]">
+                    <CardContent className="p-0 h-full">
+                        <ProtocolBenchMode />
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
-            {/* Temporary: Force ProtocolBenchMode visibility for PI */}
-            <div className="h-[400px]">
-                <ProtocolBenchMode />
-            </div>
-
             {/* Top Section: Welcome */}
             <div className="flex flex-col md:flex-row gap-6 items-start justify-between">
                 <div>
@@ -349,10 +365,7 @@ export function HomeDashboard() {
                                 </div>
                             )}
 
-                            {/* Protocol Bench Mode (Added for PI Visibility) */}
-                            <div className="mt-6 h-[400px]">
-                                <ProtocolBenchMode />
-                            </div>
+                            {/* Replaced ProtocolBenchMode with shortcut in Quick Actions */}
                         </div>
 
                         {/* Inventory & Equipment (4 cols) */}
@@ -480,6 +493,10 @@ export function HomeDashboard() {
                                     <div onClick={() => setMainView('eln')} className="flex flex-col items-center justify-center p-2 bg-muted/30 hover:bg-muted rounded border text-center transition-colors cursor-pointer">
                                         <FlaskConical className="h-4 w-4 mb-1 text-emerald-500" />
                                         <span className="text-[10px] font-medium">Exp</span>
+                                    </div>
+                                    <div onClick={() => setMainView('bench')} className="col-span-2 flex flex-row items-center justify-center p-2 bg-indigo-50 hover:bg-indigo-100 rounded border border-indigo-200 text-center transition-colors cursor-pointer gap-2">
+                                        <TestTube className="h-4 w-4 text-indigo-600" />
+                                        <span className="text-[10px] font-medium text-indigo-700">Open Bench Mode</span>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -650,7 +667,7 @@ export function HomeDashboard() {
                             {currentUserProfile && (
                                 <div className="h-[400px]">
                                     <MyWeeklyDigest
-                                        userId={currentUserProfile.id}
+                                        userId={authUser?.uid || ''}
                                         tasks={dayToDayTasks}
                                         bookings={userBookings}
                                         events={events}

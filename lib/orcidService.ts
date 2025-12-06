@@ -91,7 +91,7 @@ function parseAffiliations(
 /**
  * Parse works/publications from ORCID record
  */
-function parseWorks(worksGroup: any): OrcidWorkSummary[] {
+export function parseWorks(worksGroup: any): OrcidWorkSummary[] {
   if (!worksGroup || !Array.isArray(worksGroup)) {
     return []
   }
@@ -116,6 +116,8 @@ function parseWorks(worksGroup: any): OrcidWorkSummary[] {
       const doiId = externalIds.find((id: any) => id.type === "doi")
       const doi = doiId?.value
 
+      const contributors = parseContributors(workSummary.contributors)
+
       const work: OrcidWorkSummary = {
         putCode: workSummary["put-code"]?.toString() || "",
         title,
@@ -128,11 +130,25 @@ function parseWorks(worksGroup: any): OrcidWorkSummary[] {
         doi,
         url: workSummary.url?.value || undefined,
         externalIds,
+        contributors,
       }
 
       return work
     })
     .filter((w): w is OrcidWorkSummary => w !== null)
+}
+
+/**
+ * Parse contributors from work summary
+ */
+function parseContributors(contributorsGroup: any): string[] {
+  if (!contributorsGroup?.contributor || !Array.isArray(contributorsGroup.contributor)) {
+    return []
+  }
+
+  return contributorsGroup.contributor
+    .map((c: any) => c["credit-name"]?.value)
+    .filter((name: any) => typeof name === "string" && name.length > 0)
 }
 
 /**

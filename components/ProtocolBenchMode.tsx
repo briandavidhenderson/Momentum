@@ -207,7 +207,7 @@ export function ProtocolBenchMode() {
             const executionId = await startProtocolExecution({
                 protocolId: protocol.id,
                 protocolTitle: protocol.title,
-                protocolVersionId: protocol.activeVersionId,
+                protocolVersionId: protocol.activeVersionId || 'v1',
                 performedBy: currentUserProfile!.id,
                 performedByName: currentUserProfile!.displayName,
                 labId: currentUserProfile!.labId
@@ -217,7 +217,7 @@ export function ProtocolBenchMode() {
                 id: executionId,
                 protocolId: protocol.id,
                 protocolTitle: protocol.title,
-                protocolVersionId: protocol.activeVersionId,
+                protocolVersionId: protocol.activeVersionId || 'v1',
                 performedBy: currentUserProfile!.id,
                 performedByName: currentUserProfile!.displayName,
                 labId: currentUserProfile!.labId,

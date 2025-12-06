@@ -35,6 +35,7 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
   const {
     currentUserProfile,
     fundingAccounts,
+    fundingAccountsLoading,
     fundingAllocations,
     deliverables
   } = useAppContext()
@@ -285,15 +286,22 @@ export function OrderFormDialog({ open, onOpenChange, onSave, order, mode = "cre
                     fundingAllocationId: '' // Reset allocation when account changes
                   })}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || fundingAccountsLoading}
                 >
-                  <option value="">Select funding account...</option>
+                  <option value="">
+                    {fundingAccountsLoading ? "Loading accounts..." : "Select funding account..."}
+                  </option>
                   {fundingAccounts.map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.funderName} - {account.masterProjectName}
                     </option>
                   ))}
                 </select>
+                {!fundingAccountsLoading && fundingAccounts.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No funding accounts found. You may need to ask a lab admin to create one.
+                  </p>
+                )}
               </div>
 
               {/* Funding Allocation Selection (Optional) */}

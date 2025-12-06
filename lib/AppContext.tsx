@@ -50,7 +50,7 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export function AppWrapper({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
-  const projectsAndWorkpackages = useOptimisticProjects();
+  const projectsAndWorkpackages = useOptimisticProjects(auth.currentUserProfile?.labId);
   const orders = useOrders();
   const dayToDayTasks = useOptimisticDayToDayTasks();
   const equipment = useEquipment();

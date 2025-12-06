@@ -19,20 +19,21 @@ import {
 import { useAuth } from './useAuth';
 import { logger } from '@/lib/logger';
 
-export function useProjects() {
-  const { currentUser: user, currentUserProfile: profile } = useAuth();
+export function useProjects(labId?: string) { // Accept labId prop
+  const { currentUser: user, currentUserProfile: profile } = useAuth(); // Keep for create/update usage 
+  // Actually, let's keep internal useAuth for userId/auth actions, but use passed labId for fetching.
+  // Better yet, pass everything to avoid duplicate listeners.
+
   const [projects, setProjects] = useState<MasterProject[]>([]);
   const [workpackages, setWorkpackages] = useState<Workpackage[]>([]);
   const [workpackagesMap, setWorkpackagesMap] = useState<Map<string, Workpackage>>(new Map());
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (profile?.labId) {
+    if (labId) {
       const unsubscribe = subscribeToMasterProjects(
-        { labId: profile.labId },
+        { labId: labId },
         async (newProjects) => {
-          const target = newProjects.find(p => p.id === 'sZYoShKUAzCeYOGThApb');
-          if (target) console.log("DEBUG: useProjects received target", target);
           setProjects(newProjects);
 
           // Fetch workpackages for all new projects

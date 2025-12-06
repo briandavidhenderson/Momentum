@@ -27,11 +27,12 @@ interface InventoryPickerProps {
     placeholder?: string
     className?: string
     labId?: string
+    trigger?: React.ReactNode
 }
 
 import { useAppContext } from "@/lib/AppContext"
 
-export function InventoryPicker({ value, onSelect, placeholder = "Select item...", className, labId }: InventoryPickerProps) {
+export function InventoryPicker({ value, onSelect, placeholder = "Select item...", className, labId, trigger }: InventoryPickerProps) {
     const [open, setOpen] = useState(false)
     const [items, setItems] = useState<InventoryItem[]>([])
     const [loading, setLoading] = useState(false)
@@ -71,22 +72,24 @@ export function InventoryPicker({ value, onSelect, placeholder = "Select item...
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    className={cn("w-full justify-between", className)}
-                >
-                    {selectedItem ? (
-                        <div className="flex items-center gap-2 truncate">
-                            <div className={cn("h-2 w-2 rounded-full", getStatusColor(selectedItem.inventoryLevel))} />
-                            {selectedItem.productName}
-                        </div>
-                    ) : (
-                        <span className="text-muted-foreground">{placeholder}</span>
-                    )}
-                    <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
+                {trigger || (
+                    <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={open}
+                        className={cn("w-full justify-between", className)}
+                    >
+                        {selectedItem ? (
+                            <div className="flex items-center gap-2 truncate">
+                                <div className={cn("h-2 w-2 rounded-full", getStatusColor(selectedItem.inventoryLevel))} />
+                                {selectedItem.productName}
+                            </div>
+                        ) : (
+                            <span className="text-muted-foreground">{placeholder}</span>
+                        )}
+                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                )}
             </PopoverTrigger>
             <PopoverContent className="w-[400px] p-0" align="start">
                 <Command filter={(value, search) => {

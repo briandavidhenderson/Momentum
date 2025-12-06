@@ -183,13 +183,13 @@ export function DeliverableCreationDialog({
 
                     <div>
                         <Label htmlFor="deliv-owner">Owner</Label>
-                        <Select value={ownerId} onValueChange={setOwnerId}>
+                        <Select value={ownerId || "unassigned"} onValueChange={(val) => setOwnerId(val === "unassigned" ? "" : val)}>
                             <SelectTrigger className="mt-1">
                                 <SelectValue placeholder="Select owner (optional)" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="">None</SelectItem>
-                                {availablePeople.map((person) => (
+                                <SelectItem value="unassigned">None</SelectItem>
+                                {availablePeople.filter(p => p.id).map((person) => (
                                     <SelectItem key={person.id} value={person.id}>
                                         {person.firstName} {person.lastName}
                                     </SelectItem>
@@ -208,6 +208,6 @@ export function DeliverableCreationDialog({
                     </Button>
                 </DialogFooter>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     )
 }

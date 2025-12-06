@@ -11,15 +11,9 @@ import { useToast } from '@/lib/toast'
 
 export type ProjectsSyncStatus = 'synced' | 'syncing' | 'error'
 
-export function useOptimisticProjects() {
-  const baseHook = useProjects()
+export function useOptimisticProjects(labId?: string) {
+  const baseHook = useProjects(labId)
   const { workpackages: firestoreWorkpackages, handleUpdateWorkpackage: baseUpdateWorkpackage, handleUpdateDeliverableTasks } = baseHook
-
-  // DEBUG: Check projects from baseHook
-  useEffect(() => {
-    const target = baseHook.projects.find(p => p.id === 'sZYoShKUAzCeYOGThApb');
-    if (target) console.log("DEBUG: useOptimisticProjects baseHook target", target);
-  }, [baseHook.projects]);
 
   // Cast to HydratedWorkpackage[] for internal use - assuming data fetching layer handles hydration
   const [optimisticWorkpackages, setOptimisticWorkpackages] = useState<HydratedWorkpackage[]>([])

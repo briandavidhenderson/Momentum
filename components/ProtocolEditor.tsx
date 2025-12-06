@@ -10,6 +10,7 @@ import { Plus, Trash2, Save, X, ArrowUp, ArrowDown, Clock, FlaskConical, Package
 import { v4 as uuidv4 } from 'uuid'
 import { InventoryPicker } from "@/components/pickers/InventoryPicker"
 import { EquipmentPicker } from "@/components/pickers/EquipmentPicker"
+import { BufferPicker } from "@/components/pickers/BufferPicker"
 import { Badge } from "@/components/ui/badge"
 import { SmartStepEditor } from "@/components/SmartStepEditor"
 
@@ -221,7 +222,7 @@ export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel, la
                                             <div className="space-y-2">
                                                 <Label className="flex items-center gap-2">
                                                     <Package className="h-4 w-4" />
-                                                    Required Reagents
+                                                    Required Reagents & Buffers
                                                 </Label>
                                                 <div className="space-y-2">
                                                     {step.requiredReagents?.map((reagent, idx) => (
@@ -257,6 +258,21 @@ export function ProtocolEditor({ protocol: initialProtocol, onSave, onCancel, la
                                                                     updateStep(step.id, { requiredReagents: newReagents })
                                                                 }}
                                                                 placeholder="Add Reagent..."
+                                                                labId={labId}
+                                                            />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <BufferPicker
+                                                                onSelect={(buffer) => {
+                                                                    const newReagents = [...(step.requiredReagents || []), {
+                                                                        id: buffer.id,
+                                                                        name: buffer.name,
+                                                                        quantity: "1",
+                                                                        unit: buffer.finalVolumeUnit || "unit"
+                                                                    }]
+                                                                    updateStep(step.id, { requiredReagents: newReagents })
+                                                                }}
+                                                                placeholder="Add Buffer..."
                                                                 labId={labId}
                                                             />
                                                         </div>

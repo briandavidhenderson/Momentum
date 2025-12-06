@@ -1,0 +1,172 @@
+PMID- 39105395
+OWN - NLM
+STAT- MEDLINE
+DCOM- 20250708
+LR  - 20250710
+IS  - 1878-0261 (Electronic)
+IS  - 1574-7891 (Print)
+IS  - 1574-7891 (Linking)
+VI  - 19
+IP  - 7
+DP  - 2025 Jul
+TI  - A comparative study of circulating tumor cell isolation and enumeration 
+      technologies in lung cancer.
+PG  - 2014-2037
+LID - 10.1002/1878-0261.13705 [doi]
+AB  - Circulating tumor cells (CTCs) have potential as diagnostic, prognostic, and 
+      predictive biomarkers in solid tumors. Despite Food and Drug Administration (FDA) 
+      approval of CTC devices in various cancers, the rarity and heterogeneity of CTCs 
+      in lung cancer make them technically challenging to isolate and analyze, 
+      hindering their clinical integration. Establishing a consensus through 
+      comparative analysis of different CTC systems is warranted. This study aimed to 
+      evaluate seven different CTC enrichment methods across five technologies using a 
+      standardized spike-in protocol: the CellMag™ (EpCAM-dependent enrichment), 
+      EasySep™ and RosetteSep™ (blood cell depletion), and the Parsortix® PR1 and the 
+      new design Parsortix® Prototype (PP) (size- and deformability-based enrichment). 
+      The Parsortix® systems were also evaluated for any differences in recovery rates 
+      between cell harvest versus in-cassette staining. Healthy donor blood (5 mL) was 
+      spiked with 100 fluorescently labeled EpCAM(high) H1975 cells, processed through 
+      each system, and the isolation efficiency was calculated. The CellMag™ had the 
+      highest recovery rate (70 ± 14%), followed by Parsortix® PR1 in-cassette 
+      staining, while the EasySep™ had the lowest recovery (18 ± 8%). Additional 
+      spike-in experiments were performed with EpCAM(moderate) A549 and EpCAM(low) 
+      H1299 cells using the CellMag™ and Parsortix® PR1 in-cassette staining. The 
+      recovery rate of CellMag™ significantly reduced to 35 ± 14% with A549 cells and 
+      1 ± 1% with H1299 cells. However, the Parsortix® PR1 in-cassette staining showed 
+      cell phenotype-independent and consistent recovery rates among all lung cancer 
+      cell lines: H1975 (49 ± 2%), A549 (47 ± 10%), and H1299 (52 ± 10%). Furthermore, 
+      we demonstrated that the Parsortix® PR1 in-cassette staining method is capable of 
+      isolating heterogeneous single CTCs and cell clusters from patient samples. The 
+      Parsortix® PR1 in-cassette staining, capable of isolating different phenotypes of 
+      CTCs as either single cells or cell clusters with consistent recovery rates, is 
+      considered optimal for CTC enrichment for lung cancer, albeit needing further 
+      optimization and validation.
+CI  - © 2024 The Author(s). Molecular Oncology published by John Wiley & Sons Ltd on 
+      behalf of Federation of European Biochemical Societies.
+FAU - M Saini, Volga
+AU  - M Saini V
+AD  - Thoracic Oncology Research Group, Trinity Translational Medicine Institute, St 
+      James's Hospital, Dublin, Ireland.
+AD  - Department of Clinical Medicine, School of Medicine, Trinity College Dublin, 
+      Ireland.
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+FAU - Oner, Ezgi
+AU  - Oner E
+AUID- ORCID: 0000-0002-4684-8221
+AD  - Thoracic Oncology Research Group, Trinity Translational Medicine Institute, St 
+      James's Hospital, Dublin, Ireland.
+AD  - Department of Clinical Medicine, School of Medicine, Trinity College Dublin, 
+      Ireland.
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+FAU - Ward, Mark P
+AU  - Ward MP
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - Department of Obstetrics and Gynaecology, School of Medicine, Trinity College 
+      Dublin, Ireland.
+AD  - Department of Histopathology and Morbid Anatomy, School of Medicine, Trinity 
+      College Dublin, Ireland.
+FAU - Hurley, Sinead
+AU  - Hurley S
+AD  - Thoracic Oncology Research Group, Trinity Translational Medicine Institute, St 
+      James's Hospital, Dublin, Ireland.
+AD  - Department of Clinical Medicine, School of Medicine, Trinity College Dublin, 
+      Ireland.
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - Department of Obstetrics and Gynaecology, School of Medicine, Trinity College 
+      Dublin, Ireland.
+FAU - Henderson, Brian David
+AU  - Henderson BD
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - Department of Obstetrics and Gynaecology, School of Medicine, Trinity College 
+      Dublin, Ireland.
+AD  - Department of Histopathology and Morbid Anatomy, School of Medicine, Trinity 
+      College Dublin, Ireland.
+FAU - Lewis, Faye
+AU  - Lewis F
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - Department of Obstetrics and Gynaecology, School of Medicine, Trinity College 
+      Dublin, Ireland.
+AD  - Department of Histopathology and Morbid Anatomy, School of Medicine, Trinity 
+      College Dublin, Ireland.
+FAU - Finn, Stephen P
+AU  - Finn SP
+AD  - Thoracic Oncology Research Group, Trinity Translational Medicine Institute, St 
+      James's Hospital, Dublin, Ireland.
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - Department of Histopathology and Morbid Anatomy, School of Medicine, Trinity 
+      College Dublin, Ireland.
+FAU - Fitzmaurice, Gerard J
+AU  - Fitzmaurice GJ
+AD  - Department of Cardiothoracic Surgery, St James's Hospital, Dublin, Ireland.
+FAU - O'Leary, John J
+AU  - O'Leary JJ
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - Department of Histopathology and Morbid Anatomy, School of Medicine, Trinity 
+      College Dublin, Ireland.
+FAU - O'Toole, Sharon
+AU  - O'Toole S
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - Department of Obstetrics and Gynaecology, School of Medicine, Trinity College 
+      Dublin, Ireland.
+AD  - Department of Histopathology and Morbid Anatomy, School of Medicine, Trinity 
+      College Dublin, Ireland.
+FAU - O'Driscoll, Lorraine
+AU  - O'Driscoll L
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+AD  - School of Pharmacy and Pharmaceutical Sciences, Trinity College Dublin, Ireland.
+AD  - Trinity Biomedical Sciences Institute, Trinity College Dublin, Ireland.
+FAU - Gately, Kathy
+AU  - Gately K
+AUID- ORCID: 0000-0002-9616-424X
+AD  - Thoracic Oncology Research Group, Trinity Translational Medicine Institute, St 
+      James's Hospital, Dublin, Ireland.
+AD  - Department of Clinical Medicine, School of Medicine, Trinity College Dublin, 
+      Ireland.
+AD  - Trinity St. James's Cancer Institute, Trinity College Dublin, Ireland.
+LA  - eng
+GR  - Higher Education Authority/
+GR  - The University of Dublin Trinity College/
+GR  - IReL gold OA 2022/
+PT  - Comparative Study
+PT  - Journal Article
+DEP - 20240806
+PL  - United States
+TA  - Mol Oncol
+JT  - Molecular oncology
+JID - 101308230
+RN  - 0 (Epithelial Cell Adhesion Molecule)
+RN  - 0 (Biomarkers, Tumor)
+SB  - IM
+MH  - Humans
+MH  - *Neoplastic Cells, Circulating/pathology/metabolism
+MH  - *Lung Neoplasms/pathology/blood
+MH  - *Cell Separation/methods
+MH  - Cell Line, Tumor
+MH  - Cell Count/methods
+MH  - Epithelial Cell Adhesion Molecule/metabolism
+MH  - Biomarkers, Tumor
+PMC - PMC12234383
+OTO - NOTNLM
+OT  - CellMag™
+OT  - EasySep™
+OT  - Parsortix®
+OT  - RosetteSep™
+OT  - circulating tumor cells
+OT  - non–small cell lung cancer
+COIS- The authors declare no conflict of interest.
+EDAT- 2024/08/06 12:43
+MHDA- 2025/07/08 06:26
+PMCR- 2024/08/06
+CRDT- 2024/08/06 06:13
+PHST- 2024/06/17 00:00 [revised]
+PHST- 2024/02/05 00:00 [received]
+PHST- 2024/07/19 00:00 [accepted]
+PHST- 2025/07/08 06:26 [medline]
+PHST- 2024/08/06 12:43 [pubmed]
+PHST- 2024/08/06 06:13 [entrez]
+PHST- 2024/08/06 00:00 [pmc-release]
+AID - MOL213705 [pii]
+AID - 10.1002/1878-0261.13705 [doi]
+PST - ppublish
+SO  - Mol Oncol. 2025 Jul;19(7):2014-2037. doi: 10.1002/1878-0261.13705. Epub 2024 Aug 
+      6.

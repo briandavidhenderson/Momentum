@@ -68,6 +68,7 @@ export function ProjectDashboard() {
     allProfiles,
     people,
     handleUpdateDeliverableTasks,
+    setActiveProjectId,
   } = useAppContext()
 
   console.log("DEBUG: ProjectDashboard projects", projects?.map(p => ({ id: p.id, labId: p.labId })));
@@ -341,6 +342,7 @@ export function ProjectDashboard() {
           people={allProfiles}
           budgetSummary={budgetSummary}
           health={health}
+          onViewProject={(id) => setActiveProjectId(id)}
           onCreateWorkpackage={async (projectId) => {
             const workpackageId = await createWorkpackage({
               name: "New Work Package",

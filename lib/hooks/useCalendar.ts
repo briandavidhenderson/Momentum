@@ -19,6 +19,7 @@ export function useCalendar(projects: Project[] = [], workpackages: Workpackage[
     const unsubscribe = subscribeToEvents({
       labId: profile?.labId,
       userId: currentUser?.uid,
+      profileId: profile?.id,
     }, (newEvents) => {
       setFirestoreEvents(newEvents);
     });

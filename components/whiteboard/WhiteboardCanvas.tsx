@@ -2,11 +2,14 @@
 
 import React, { useRef, useEffect } from "react"
 import { Shape } from "@/lib/whiteboardService"
-import { Lock, Ban, Beaker, AlertTriangle, FileText, Activity, ArrowRight, Circle, Minus, CheckCircle2, XCircle } from "lucide-react"
+import { Lock, Ban, Beaker, AlertTriangle, FileText, Activity, ArrowRight, Circle, Minus, CheckCircle2, XCircle, PlayCircle, Clock, PauseCircle } from "lucide-react"
 import { ASSETS } from "./WhiteboardSidebar"
 import { UnitOperation } from "@/lib/protocol/types"
 import { getOperationDefinition } from "./protocolConfig"
 import { useAppContext } from "@/lib/AppContext"
+import { getDoc, doc } from "firebase/firestore"
+import { getFirebaseDb } from "@/lib/firebase"
+import { ProtocolExecution } from "@/lib/types"
 
 interface WhiteboardCanvasProps {
     shapes: Shape[]
@@ -32,6 +35,56 @@ interface WhiteboardCanvasProps {
     textInputRef: React.RefObject<HTMLTextAreaElement>
     dragStart: { x: number, y: number } | null
     lastMousePos: { x: number, y: number } | null
+}
+
+function ExecutionWidget({ shape }: { shape: Shape }) {
+    const [execution, setExecution] = React.useState<ProtocolExecution | null>(null)
+    const [loading, setLoading] = React.useState(true)
+
+    React.useEffect(() => {
+        if (!shape.executionId) return
+        const db = getFirebaseDb()
+        getDoc(doc(db, 'protocolExecutions', shape.executionId)).then(snap => {
+            if (snap.exists()) {
+                setExecution({ id: snap.id, ...snap.data() } as ProtocolExecution)
+            }
+            setLoading(false)
+        }).catch(err => {
+            console.error(err)
+            setLoading(false)
+        })
+    }, [shape.executionId])
+
+    if (loading) return <div className="p-2 text-xs text-slate-400">Loading...</div>
+    if (!execution) return <div className="p-2 text-xs text-red-400">Execution not found</div>
+
+    const statusColor = execution.status === 'running' ? 'text-green-600' : execution.status === 'completed' ? 'text-blue-600' : 'text-slate-500'
+    const StatusIcon = execution.status === 'running' ? PlayCircle : execution.status === 'completed' ? CheckCircle2 : PauseCircle
+
+    return (
+        <div className="w-full h-full flex flex-col justify-between p-3 bg-white rounded-lg">
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-700 truncate">{execution.protocolTitle}</div>
+                    <div className="text-[10px] text-slate-500 truncate">Run by {execution.performedByName}</div>
+                </div>
+                <StatusIcon className={`w-4 h-4 ${statusColor}`} />
+            </div>
+
+            <div className="space-y-1">
+                <div className="flex justify-between text-[10px] text-slate-500">
+                    <span>Step {execution.currentStepIndex + 1}</span>
+                    <span className="capitalize font-medium" style={{ color: execution.status === 'running' ? '#16a34a' : undefined }}>{execution.status}</span>
+                </div>
+                <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                    <div
+                        className="h-full bg-green-500 transition-all duration-500"
+                        style={{ width: `${(execution.currentStepIndex / (execution.steps.length || 1)) * 100}%` }}
+                    />
+                </div>
+            </div>
+        </div>
+    )
 }
 
 export function WhiteboardCanvas({
@@ -527,6 +580,16 @@ export function WhiteboardCanvas({
                         <g transform={`translate(${x}, ${y})`} className={commonProps.className} onMouseDown={commonProps.onMouseDown} onDoubleClick={commonProps.onDoubleClick}>
                             <rect width={w} height={h} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} rx={8} />
                             <foreignObject width={w} height={h} className="pointer-events-none"> {assetContent} </foreignObject>
+                        </g>
+                    )
+                }
+                {
+                    shape.type === "execution_widget" && (
+                        <g transform={`translate(${x}, ${y})`} className={commonProps.className} onMouseDown={commonProps.onMouseDown} onDoubleClick={commonProps.onDoubleClick}>
+                            <rect width={w} height={h} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} rx={8} />
+                            <foreignObject width={w} height={h} className="pointer-events-none">
+                                <ExecutionWidget shape={shape} />
+                            </foreignObject>
                         </g>
                     )
                 }

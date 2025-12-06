@@ -815,97 +815,29 @@
       ]
     },
     {
-      "collectionGroup": "elnExperiments",
+      "collectionGroup": "healthMetrics",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "masterProjectId",
+          "fieldPath": "profileId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "projectFiles",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "projectId",
+          "fieldPath": "date",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "uploadedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "comments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "entityType",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "entityId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isDeleted",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "trainingRecords",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
         },
         {
           "fieldPath": "__name__",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "elnExperiments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "labId",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "protocolExecutions",
+      "collectionGroup": "workoutSessions",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "labId",
+          "fieldPath": "profileId",
           "order": "ASCENDING"
         },
         {
@@ -913,8 +845,12 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "startedAt",
-          "order": "DESCENDING"
+          "fieldPath": "scheduledAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
         }
       ]
     }

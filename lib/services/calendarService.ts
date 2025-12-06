@@ -90,17 +90,18 @@ export async function getEvents(): Promise<CalendarEvent[]> {
 }
 
 export function subscribeToEvents(
-  filters: { labId?: string; userId?: string } | null,
+  filters: { labId?: string; userId?: string; profileId?: string } | null,
   callback: (events: CalendarEvent[]) => void
 ): Unsubscribe {
   const db = getFirebaseDb()
   const unsubscribers: Unsubscribe[] = []
   let labEvents: CalendarEvent[] = []
   let userEvents: CalendarEvent[] = []
+  let workoutEvents: CalendarEvent[] = []
 
   // Emit merged events without duplicates
   const emit = () => {
-    const merged = [...labEvents, ...userEvents].reduce((acc, evt) => {
+    const merged = [...labEvents, ...userEvents, ...workoutEvents].reduce((acc, evt) => {
       acc.set(evt.id, evt)
       return acc
     }, new Map<string, CalendarEvent>())
@@ -174,6 +175,49 @@ export function subscribeToEvents(
     )
   }
 
+  // Workout Sessions
+  if (filters?.profileId) {
+    const workoutQuery: Query = query(
+      collection(db, "workoutSessions"),
+      where("profileId", "==", filters.profileId)
+    )
+
+    unsubscribers.push(
+      onSnapshot(
+        workoutQuery,
+        (snapshot) => {
+          workoutEvents = snapshot.docs.map((d) => {
+            const data = d.data();
+            const start = new Date(data.scheduledAt);
+            // Default duration 60 mins if not specified
+            const end = data.completedAt ? new Date(data.completedAt) : new Date(start.getTime() + (data.totalDurationMinutes || 60) * 60000);
+
+            return {
+              id: d.id,
+              title: `Workout: ${data.name}`,
+              start: start,
+              end: end,
+              type: 'workout',
+              notes: data.notes,
+              createdBy: data.profileId, // Using profileId as creator for now
+              createdAt: new Date(data.createdAt),
+              visibility: 'private', // Workouts are private by default
+              relatedIds: { workoutSessionId: d.id },
+              attendees: [], // Workouts don't have attendees yet
+              location: 'Gym' // Default location
+            } as CalendarEvent
+          })
+          emit()
+        },
+        (error) => {
+          logger.error("Calendar workout events snapshot error", error)
+          workoutEvents = []
+          emit()
+        }
+      )
+    )
+  }
+
   // Return a combined unsubscribe
   return () => {
     unsubscribers.forEach((unsub) => unsub())
@@ -208,6 +252,7 @@ export async function createCalendarConnection(
  * Gets calendar connections for a specific user
  */
 export async function getCalendarConnections(userId: string): Promise<CalendarConnection[]> {
+  if (!userId) return []
   const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarConnections"),
@@ -315,6 +360,10 @@ export function subscribeToCalendarConnections(
   userId: string,
   callback: (connections: CalendarConnection[]) => void
 ): Unsubscribe {
+  if (!userId) {
+    callback([])
+    return () => { }
+  }
   const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarConnections"),
@@ -391,6 +440,7 @@ export async function getUnresolvedConflicts(connectionId: string): Promise<Cale
 export async function getUserCalendarConflicts(
   userId: string
 ): Promise<CalendarConflict[]> {
+  if (!userId) return []
   const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarConflicts"),
@@ -464,6 +514,10 @@ export function subscribeToCalendarConflicts(
   userId: string,
   callback: (conflicts: CalendarConflict[]) => void
 ): Unsubscribe {
+  if (!userId) {
+    callback([])
+    return () => { }
+  }
   const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarConflicts"),
@@ -564,6 +618,7 @@ export async function getUserSyncLogs(
   userId: string,
   limitCount: number = 50
 ): Promise<CalendarSyncLog[]> {
+  if (!userId) return []
   const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarSyncLogs"),
@@ -588,6 +643,7 @@ export async function getUserCalendarConnectionByProvider(
   userId: string,
   provider: 'google' | 'microsoft'
 ): Promise<CalendarConnection | null> {
+  if (!userId) return null
   const db = getFirebaseDb()
   const q = query(
     collection(db, "calendarConnections"),

@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFirestore } from "firebase-admin/firestore";
 import { initAdminApp } from "@/lib/firebaseAdmin";
 
-const app = initAdminApp();
-const db = app ? getFirestore(app) : null;
-
 export async function POST(req: NextRequest) {
     try {
+        const app = initAdminApp();
+        const db = app ? getFirestore(app) : null;
+
         if (!db) {
             // If Firebase Admin failed to initialize (e.g. local dev without credentials),
             // just ignore the log request to prevent 500 errors in console.
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
     } catch (err) {
         // Don't throw – this is just logging
+        console.error("Error logging client error:", err);
         return NextResponse.json({ ok: false }, { status: 200 });
     }
 }

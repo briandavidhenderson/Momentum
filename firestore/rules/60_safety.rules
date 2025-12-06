@@ -23,10 +23,11 @@
     // ============================================================================
     match /trainingRecords/{recordId} {
       // Users can read their own training records
-      allow read: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid ||
-        isAdmin()
-      );
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // allow read: if isAuthenticated() && (
+      //   resource.data.userId == request.auth.uid ||
+      //   isAdmin()
+      // );
       
       // Admins or trainers can create/update records
       // For now, allow creation if authenticated (to allow seeding/testing), 

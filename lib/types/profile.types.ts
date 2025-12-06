@@ -242,7 +242,10 @@ export interface PersonProfile {
   orcidClaims?: {
     name?: string | null              // Name from ORCID
     email?: string | null             // Email from ORCID
+    bio?: string | null               // Biography from ORCID (if available in claims)
   }
+  orcidBio?: string                   // Biography from ORCID Profile
+  orcidWorks?: any[]                  // Array of works/publications from ORCID
 
   // Calendar Integration
   calendarConnections?: {
@@ -273,6 +276,10 @@ export interface PersonProfile {
 
   // Safety & Training (NEW)
   trainingRecordIds?: string[]         // IDs of TrainingRecords
+
+  // Health & Wellbeing (NEW)
+  healthProfileId?: string             // Link to HealthProfile
+
 
   // Metadata
   createdAt?: string

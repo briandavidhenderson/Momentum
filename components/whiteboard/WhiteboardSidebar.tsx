@@ -1,12 +1,15 @@
 "use client"
 
 import React, { useState } from "react"
-import { Beaker, AlertTriangle, FileText, Activity, Ban, Search, Users, FolderKanban, TestTube2 } from "lucide-react"
+import { Beaker, AlertTriangle, FileText, Activity, Ban, Search, Users, FolderKanban, TestTube2, PlayCircle } from "lucide-react"
 import { LucideIcon } from "lucide-react"
 import { useAppContext } from "@/lib/AppContext"
 import { useProjects, usePeople } from "@/lib/store"
 import { useBuffers } from "@/lib/hooks/useBuffers"
 import { PROTOCOL_OPERATIONS } from "./protocolConfig"
+import { subscribeToLabActiveExecutions } from "@/lib/services/protocolExecutionService"
+import { ProtocolExecution } from "@/lib/types"
+import { useAuth } from "@/lib/hooks/useAuth"
 
 export interface AssetDef {
     id: string
@@ -20,8 +23,8 @@ export const ASSETS: AssetDef[] = [
     { id: "note", Icon: FileText, label: "Protocol" },
 ]
 
-type DragPayload = {
-    kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer'
+export type DragPayload = {
+    kind: 'asset' | 'inventory' | 'equipment' | 'project' | 'person' | 'protocol' | 'buffer' | 'execution'
     id: string
     name?: string
     operationType?: string
@@ -32,8 +35,18 @@ interface WhiteboardSidebarProps {
 }
 
 export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
-    const [assetTab, setAssetTab] = useState<'protocol' | 'assets' | 'inventory' | 'equipment' | 'buffers' | 'projects' | 'people'>('assets')
+    const [assetTab, setAssetTab] = useState<'protocol' | 'assets' | 'inventory' | 'equipment' | 'buffers' | 'projects' | 'people' | 'executions'>('assets')
     const [assetSearch, setAssetSearch] = useState("")
+    const [activeExecutions, setActiveExecutions] = useState<ProtocolExecution[]>([])
+    const { currentUserProfile } = useAuth()
+
+    React.useEffect(() => {
+        if (!currentUserProfile?.labId) return
+        const unsubscribe = subscribeToLabActiveExecutions(currentUserProfile.labId, (executions) => {
+            setActiveExecutions(executions)
+        })
+        return () => unsubscribe()
+    }, [currentUserProfile?.labId])
 
     const { inventory, equipment } = useAppContext()
     const projects = useProjects()
@@ -46,7 +59,9 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
     const filteredProjects = projects.filter(p => p.name.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredPeople = people.filter(p => p.name.toLowerCase().includes(assetSearch.toLowerCase()))
     const filteredProtocolOps = PROTOCOL_OPERATIONS.filter(op => op.label.toLowerCase().includes(assetSearch.toLowerCase()) || op.description.toLowerCase().includes(assetSearch.toLowerCase()))
+    const filteredExecutions = activeExecutions.filter(ex => ex.protocolTitle.toLowerCase().includes(assetSearch.toLowerCase()))
 
+    console.log("Rendering WhiteboardSidebar. Active executions:", activeExecutions.length)
     return (
         <div className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col z-10 h-full">
             <div className="border-b border-slate-200">
@@ -60,7 +75,8 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
                             { id: "equipment", label: "Equip" },
                             { id: "buffers", label: "Buffers" },
                             { id: "projects", label: "Proj" },
-                            { id: "people", label: "Ppl" }
+                            { id: "people", label: "Ppl" },
+                            { id: "executions", label: "Runs" }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -231,6 +247,33 @@ export function WhiteboardSidebar({ onDragStart }: WhiteboardSidebarProps) {
                                 <div className="text-[10px] text-slate-500">{p.role}</div>
                             </div>
                         ))}
+                    </div>
+                )}
+                {assetTab === "executions" && (
+                    <div className="space-y-2">
+                        {filteredExecutions.length === 0 ? (
+                            <div className="text-center py-8 text-xs text-slate-400">
+                                No active executions found
+                            </div>
+                        ) : (
+                            filteredExecutions.map((ex) => (
+                                <div
+                                    key={ex.id}
+                                    draggable
+                                    onDragStart={(e) => onDragStart(e, { kind: "execution", id: ex.id, name: ex.protocolTitle })}
+                                    className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm hover:shadow-md cursor-grab flex flex-col gap-1 text-xs"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <PlayCircle className="w-4 h-4 text-green-600" />
+                                        <span className="font-medium truncate">{ex.protocolTitle}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[10px] text-slate-500">
+                                        <span>Step {ex.currentStepIndex + 1}</span>
+                                        <span className="capitalize">{ex.status}</span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 )}
             </div>

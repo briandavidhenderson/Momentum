@@ -94,6 +94,8 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
         setError("Invalid email address.")
       } else if (error.code === "auth/weak-password") {
         setError("Password is too weak. Please use at least 6 characters.")
+      } else if (error.code === "auth/invalid-credential") {
+        setError("Invalid email or password. If you haven't created an account yet, please Sign Up.")
       } else if (error.code === "auth/network-request-failed") {
         setError("Network error. Please check your connection.")
       } else {
@@ -148,74 +150,74 @@ export function AuthPage({ onLogin, onSignup }: AuthPageProps) {
 
           {!verificationSent && (
             <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+              {!isLogin && (
+                <div>
+                  <Label htmlFor="fullName" className="flex items-center gap-2 mb-2">
+                    <User className="h-4 w-4" />
+                    Full Name
+                  </Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="John Doe"
+                    required={!isLogin}
+                    autoComplete="name"
+                  />
+                </div>
+              )}
+
               <div>
-                <Label htmlFor="fullName" className="flex items-center gap-2 mb-2">
-                  <User className="h-4 w-4" />
-                  Full Name
+                <Label htmlFor="email" className="flex items-center gap-2 mb-2">
+                  <Mail className="h-4 w-4" />
+                  Email Address
                 </Label>
                 <Input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="John Doe"
-                  required={!isLogin}
-                  autoComplete="name"
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="john.doe@lab.org"
+                  required
+                  autoComplete="email"
                 />
               </div>
-            )}
 
-            <div>
-              <Label htmlFor="email" className="flex items-center gap-2 mb-2">
-                <Mail className="h-4 w-4" />
-                Email Address
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="john.doe@lab.org"
-                required
-                autoComplete="email"
-              />
-            </div>
+              <div>
+                <Label htmlFor="password" className="flex items-center gap-2 mb-2">
+                  <Lock className="h-4 w-4" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                />
+              </div>
 
-            <div>
-              <Label htmlFor="password" className="flex items-center gap-2 mb-2">
-                <Lock className="h-4 w-4" />
-                Password
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                autoComplete={isLogin ? "current-password" : "new-password"}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full bg-brand-500 hover:bg-brand-600 text-white py-6 text-lg font-semibold"
-            >
-              {isLogin ? (
-                <>
-                  <LogIn className="h-5 w-5 mr-2" />
-                  Sign In
-                </>
-              ) : (
-                <>
-                  <UserPlus className="h-5 w-5 mr-2" />
-                  Create Account
-                </>
-              )}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                className="w-full bg-brand-500 hover:bg-brand-600 text-white py-6 text-lg font-semibold"
+              >
+                {isLogin ? (
+                  <>
+                    <LogIn className="h-5 w-5 mr-2" />
+                    Sign In
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-5 w-5 mr-2" />
+                    Create Account
+                  </>
+                )}
+              </Button>
+            </form>
           )}
 
           {!verificationSent && (

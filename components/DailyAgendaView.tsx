@@ -4,7 +4,7 @@ import React, { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Calendar as CalendarIcon, CheckSquare, Clock, AlertCircle } from 'lucide-react'
+import { Calendar as CalendarIcon, CheckSquare, Clock, AlertCircle, Activity } from 'lucide-react'
 import { format, isToday, isTomorrow, parseISO } from 'date-fns'
 import { useAppContext } from '@/lib/AppContext'
 import { Task, CalendarEvent, EquipmentBooking as Booking, ELNExperiment as Experiment } from '@/lib/types'
@@ -90,6 +90,7 @@ export default function DailyAgendaView() {
             case 'event': return <CalendarIcon className="h-4 w-4 text-purple-500" />
             case 'booking': return <Clock className="h-4 w-4 text-orange-500" />
             case 'experiment': return <AlertCircle className="h-4 w-4 text-emerald-500" />
+            case 'workout': return <Activity className="h-4 w-4 text-red-500" />
             default: return <AlertCircle className="h-4 w-4" />
         }
     }

@@ -47,6 +47,8 @@ type NavCategory = {
   icon: LucideIcon
   subItems: SubItem[]
   actionId?: string
+  description?: string
+  path?: string
 }
 
 // Refined, Subtle Color Palette
@@ -80,12 +82,33 @@ export const NAV_ITEMS: NavCategory[] = [
     icon: FlaskConical,
     subItems: [
       { id: "equipment", label: "Equipment", icon: Wrench },
-      { id: "orders", label: "Orders", icon: Package },
+      { id: "orders", label: "Orders & Inventory", icon: Package },
       { id: "eln", label: "Experiments", icon: FlaskConical },
       { id: "groups", label: "Groups", icon: Users },
       { id: "funding", label: "Funding", icon: DollarSign, roleRestricted: true },
-      { id: "settings", label: "Settings", icon: Settings, roleRestricted: true },
     ]
+  },
+  {
+    id: "health",
+    label: "Health",
+    activeColor: "text-red-600 bg-red-50 border-red-200", // Example color for Health
+    hoverColor: "hover:bg-red-50/50 hover:text-red-600",
+    icon: Activity,
+    subItems: [],
+    description: "Wellness & Fitness",
+    path: "/health",
+    actionId: "health"
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    activeColor: "text-gray-600 bg-gray-50 border-gray-200", // Example color for Settings
+    hoverColor: "hover:bg-gray-50/50 hover:text-gray-600",
+    icon: Settings,
+    subItems: [],
+    description: "App configuration",
+    path: "/settings",
+    actionId: "settings"
   },
   {
     id: "me",
@@ -115,6 +138,7 @@ export const NAV_ITEMS: NavCategory[] = [
       { id: "whiteboard", label: "Whiteboard", icon: Presentation },
       { id: "research", label: "Research Board", icon: BrainCircuit },
       { id: "explore", label: "Explore", icon: Search },
+      { id: "authornetwork", label: "Author Graph", icon: Share2 },
       { id: "profiles", label: "All Profiles", icon: Users, adminOnly: true },
     ]
   }
